@@ -1,0 +1,900 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-light.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-semibold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Text";
+  src: url("/fonts/sf-pro/sf-pro-text-heavy.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-thin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-ultralight.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-light.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-semibold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-heavy.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/sf-pro/sf-pro-display-black.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "SF Pro Text";
+  --font-mono: "SF Pro Text";
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #020617;
+  color: #f8fafc;
+  font-family: "SF Pro Text";
+}
+
+:root {
+  --behance-blue: #3d5afe;
+  --behance-light-bg: #fafafa;
+  --behance-dark-bg: #1d1d1d;
+}
+
+.dashboard-theme-dark {
+  --dashboard-bg: #0e0e0e;
+  --dashboard-text: #ffffff;
+}
+
+.dashboard-theme-light {
+  --dashboard-bg: #f4f6fb;
+  --dashboard-text: #0f172a;
+}
+
+.dashboard-shell {
+  isolation: isolate;
+  --profile-sheet-overlay: rgb(2 6 23 / 0.66);
+  --profile-sheet-bg: linear-gradient(168deg, rgb(11 18 30 / 0.93) 0%, rgb(17 24 39 / 0.9) 100%);
+  --profile-sheet-border: rgb(255 255 255 / 0.14);
+  --profile-sheet-border-strong: rgb(255 255 255 / 0.22);
+  --profile-sheet-surface: rgb(255 255 255 / 0.08);
+  --profile-sheet-surface-soft: rgb(255 255 255 / 0.05);
+  --profile-sheet-surface-strong: rgb(255 255 255 / 0.13);
+  --profile-sheet-text: rgb(248 250 252 / 0.97);
+  --profile-sheet-title: rgb(255 255 255 / 0.98);
+  --profile-sheet-muted: rgb(203 213 225 / 0.78);
+  --profile-sheet-shadow: rgb(2 6 23 / 0.62);
+  --profile-sheet-shadow-soft: rgb(8 47 73 / 0.34);
+  --profile-sheet-accent-rgb: 122 205 255;
+  --profile-sheet-accent-rgb-2: 124 138 255;
+}
+
+.dashboard-theme-light {
+  --profile-sheet-overlay: rgb(15 23 42 / 0.36);
+  --profile-sheet-bg: linear-gradient(166deg, rgb(255 255 255 / 0.95) 0%, rgb(242 247 255 / 0.93) 100%);
+  --profile-sheet-border: rgb(148 163 184 / 0.34);
+  --profile-sheet-border-strong: rgb(148 163 184 / 0.5);
+  --profile-sheet-surface: rgb(255 255 255 / 0.72);
+  --profile-sheet-surface-soft: rgb(255 255 255 / 0.55);
+  --profile-sheet-surface-strong: rgb(255 255 255 / 0.88);
+  --profile-sheet-text: rgb(15 23 42 / 0.94);
+  --profile-sheet-title: rgb(2 6 23 / 0.98);
+  --profile-sheet-muted: rgb(71 85 105 / 0.78);
+  --profile-sheet-shadow: rgb(15 23 42 / 0.18);
+  --profile-sheet-shadow-soft: rgb(30 64 175 / 0.2);
+  --profile-sheet-accent-rgb: 96 165 250;
+  --profile-sheet-accent-rgb-2: 56 189 248;
+}
+
+.dashboard-wallpaper-home-hub {
+  --profile-sheet-accent-rgb: 255 184 86;
+  --profile-sheet-accent-rgb-2: 140 197 255;
+}
+
+.dashboard-wallpaper-ocean-mist {
+  --profile-sheet-accent-rgb: 122 205 255;
+  --profile-sheet-accent-rgb-2: 124 138 255;
+}
+
+.dashboard-wallpaper-sunset-amber {
+  --profile-sheet-accent-rgb: 252 173 71;
+  --profile-sheet-accent-rgb-2: 236 116 85;
+}
+
+.dashboard-wallpaper-forest-glass {
+  --profile-sheet-accent-rgb: 108 199 168;
+  --profile-sheet-accent-rgb-2: 82 140 255;
+}
+
+.dashboard-wallpaper-total-white {
+  --profile-sheet-accent-rgb: 148 163 184;
+  --profile-sheet-accent-rgb-2: 96 165 250;
+}
+
+.dashboard-wallpaper-total-black {
+  --profile-sheet-accent-rgb: 71 85 105;
+  --profile-sheet-accent-rgb-2: 100 116 139;
+}
+
+.dashboard-wallpaper-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dashboard-wallpaper-layer::before {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  z-index: 1;
+  pointer-events: none;
+  filter: blur(72px) saturate(1.18);
+  transform: scale(1.08);
+  opacity: 0.9;
+  background-position: center;
+  background-size: cover;
+}
+
+.dashboard-wallpaper-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(160deg, rgb(5 8 14 / 0.2) 0%, rgb(5 8 14 / 0.5) 100%),
+    radial-gradient(circle at 8% 12%, rgb(255 255 255 / 0.15), transparent 35%),
+    radial-gradient(circle at 84% 80%, rgb(255 197 123 / 0.14), transparent 36%);
+}
+
+.dashboard-theme-light .dashboard-wallpaper-layer::after {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / 0.24) 0%, rgb(236 242 255 / 0.5) 100%),
+    radial-gradient(circle at 8% 12%, rgb(255 255 255 / 0.45), transparent 35%),
+    radial-gradient(circle at 84% 80%, rgb(255 199 129 / 0.24), transparent 36%);
+}
+
+.dashboard-wallpaper-home-hub .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 72% 88%, rgb(255 184 86 / 0.52), transparent 40%),
+    radial-gradient(circle at 22% 16%, rgb(140 197 255 / 0.48), transparent 42%),
+    linear-gradient(160deg, rgb(34 52 77 / 0.72), rgb(22 28 42 / 0.5)),
+    url("/wallpapers/apple-home-hub.webp");
+}
+
+.dashboard-wallpaper-ocean-mist .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 22% 24%, rgb(122 205 255 / 0.62), transparent 45%),
+    radial-gradient(circle at 78% 72%, rgb(124 138 255 / 0.5), transparent 44%),
+    linear-gradient(155deg, rgb(14 36 72 / 0.72), rgb(10 24 54 / 0.52));
+}
+
+.dashboard-wallpaper-sunset-amber .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 24% 72%, rgb(252 173 71 / 0.66), transparent 44%),
+    radial-gradient(circle at 78% 28%, rgb(236 116 85 / 0.5), transparent 42%),
+    linear-gradient(160deg, rgb(74 35 24 / 0.7), rgb(44 24 34 / 0.56));
+}
+
+.dashboard-wallpaper-forest-glass .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 19% 31%, rgb(108 199 168 / 0.58), transparent 44%),
+    radial-gradient(circle at 78% 78%, rgb(82 140 255 / 0.46), transparent 42%),
+    linear-gradient(160deg, rgb(17 47 41 / 0.76), rgb(20 29 53 / 0.58));
+}
+
+.dashboard-wallpaper-total-white .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.98), transparent 45%),
+    radial-gradient(circle at 80% 75%, rgb(237 242 255 / 0.95), transparent 48%),
+    linear-gradient(160deg, rgb(255 255 255 / 0.99), rgb(248 250 255 / 0.98));
+}
+
+.dashboard-wallpaper-total-black .dashboard-wallpaper-layer::before {
+  background-image:
+    radial-gradient(circle at 22% 24%, rgb(18 18 18 / 0.92), transparent 42%),
+    radial-gradient(circle at 82% 72%, rgb(32 32 32 / 0.86), transparent 44%),
+    linear-gradient(160deg, rgb(8 8 8 / 0.98), rgb(3 3 3 / 0.98));
+}
+
+.profile-wallpaper-thumb {
+  background-position: center;
+  background-size: cover;
+  filter: blur(20px) saturate(1.16);
+  transform: scale(1.18);
+}
+
+.profile-wallpaper-thumb-home-hub {
+  background-image:
+    radial-gradient(circle at 72% 88%, rgb(255 184 86 / 0.62), transparent 42%),
+    radial-gradient(circle at 22% 16%, rgb(140 197 255 / 0.56), transparent 44%),
+    linear-gradient(160deg, rgb(34 52 77 / 0.78), rgb(22 28 42 / 0.56)),
+    url("/wallpapers/apple-home-hub.webp");
+}
+
+.profile-wallpaper-thumb-ocean-mist {
+  background-image:
+    radial-gradient(circle at 22% 24%, rgb(122 205 255 / 0.72), transparent 47%),
+    radial-gradient(circle at 78% 72%, rgb(124 138 255 / 0.58), transparent 46%),
+    linear-gradient(155deg, rgb(14 36 72 / 0.8), rgb(10 24 54 / 0.58));
+}
+
+.scene-car-icon {
+  display: inline-flex;
+  will-change: transform, opacity, filter;
+}
+
+.scene-car-icon-running {
+  animation: scene-car-running 1.05s ease-in-out infinite;
+}
+
+.scene-car-icon-completing {
+  animation: scene-car-exit 620ms cubic-bezier(0.18, 0.9, 0.24, 1) forwards;
+}
+
+@keyframes scene-car-running {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  18% {
+    transform: translateX(1.5px) translateY(-0.4px) rotate(1deg);
+  }
+  40% {
+    transform: translateX(3.6px) translateY(0) rotate(1.8deg);
+  }
+  62% {
+    transform: translateX(2.2px) translateY(0.1px) rotate(0.8deg);
+  }
+  82% {
+    transform: translateX(0.8px) translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes scene-car-exit {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  42% {
+    transform: translateX(7px) translateY(-0.8px) rotate(2deg) scale(1.02);
+    opacity: 0.95;
+    filter: blur(0);
+  }
+  76% {
+    transform: translateX(13px) translateY(-1.5px) rotate(3.2deg) scale(0.94);
+    opacity: 0.35;
+    filter: blur(0.25px);
+  }
+  100% {
+    transform: translateX(18px) translateY(-2px) rotate(4deg) scale(0.9);
+    opacity: 0;
+    filter: blur(0.45px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-car-icon-running,
+  .scene-car-icon-completing {
+    animation: none;
+  }
+}
+
+.profile-wallpaper-thumb-sunset-amber {
+  background-image:
+    radial-gradient(circle at 24% 72%, rgb(252 173 71 / 0.74), transparent 46%),
+    radial-gradient(circle at 78% 28%, rgb(236 116 85 / 0.58), transparent 44%),
+    linear-gradient(160deg, rgb(74 35 24 / 0.78), rgb(44 24 34 / 0.62));
+}
+
+.profile-wallpaper-thumb-forest-glass {
+  background-image:
+    radial-gradient(circle at 19% 31%, rgb(108 199 168 / 0.7), transparent 46%),
+    radial-gradient(circle at 78% 78%, rgb(82 140 255 / 0.54), transparent 44%),
+    linear-gradient(160deg, rgb(17 47 41 / 0.82), rgb(20 29 53 / 0.62));
+}
+
+.profile-wallpaper-thumb-total-white {
+  background-image:
+    radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.99), transparent 45%),
+    radial-gradient(circle at 80% 75%, rgb(237 242 255 / 0.96), transparent 48%),
+    linear-gradient(160deg, rgb(255 255 255 / 0.99), rgb(248 250 255 / 0.98));
+}
+
+.profile-wallpaper-thumb-total-black {
+  background-image:
+    radial-gradient(circle at 22% 24%, rgb(18 18 18 / 0.95), transparent 42%),
+    radial-gradient(circle at 82% 72%, rgb(32 32 32 / 0.88), transparent 44%),
+    linear-gradient(160deg, rgb(8 8 8 / 0.99), rgb(3 3 3 / 0.99));
+}
+
+.dashboard-theme-light [class*="text-white"] {
+  color: var(--dashboard-text) !important;
+}
+
+.dashboard-theme-light [class*="text-white/"] {
+  color: rgba(15, 23, 42, 0.6) !important;
+}
+
+.dashboard-theme-light [class*="bg-white/5"],
+.dashboard-theme-light [class*="bg-white/8"],
+.dashboard-theme-light [class*="bg-white/10"],
+.dashboard-theme-light [class*="bg-white/12"],
+.dashboard-theme-light [class*="bg-white/[0.08]"],
+.dashboard-theme-light [class*="bg-white/[0.1]"] {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.dashboard-theme-light [class*="border-white/5"],
+.dashboard-theme-light [class*="border-white/8"],
+.dashboard-theme-light [class*="border-white/10"],
+.dashboard-theme-light [class*="border-white/12"],
+.dashboard-theme-light [class*="border-white/15"] {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+.dashboard-theme-light [class*="bg-black/"] {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.editor-theme {
+  font-family: "SF Pro Text";
+  --editor-accent: #3d5afe;
+}
+
+.editor-theme-light {
+  --editor-shell-bg: #ececec;
+  --editor-panel-bg: #fafafa;
+  --editor-card-bg: #ffffff;
+  --editor-border: #d1d1d1;
+  --editor-text: #111111;
+  --editor-muted: #5f6368;
+  --editor-shadow: rgb(17 17 17 / 0.08);
+  --editor-ink-on-accent: #ffffff;
+}
+
+.editor-theme-dark {
+  --editor-shell-bg: #1d1d1d;
+  --editor-panel-bg: #252525;
+  --editor-card-bg: #2d2d2d;
+  --editor-border: #4b4b4b;
+  --editor-text: #fafafa;
+  --editor-muted: #b4b4b4;
+  --editor-shadow: rgb(0 0 0 / 0.34);
+  --editor-ink-on-accent: #ffffff;
+}
+
+.editor-theme .editor-header {
+  border-color: var(--editor-border) !important;
+  background: color-mix(in srgb, var(--editor-panel-bg) 90%, transparent) !important;
+}
+
+.editor-theme .editor-widget-library,
+.editor-theme .editor-inspector {
+  background: var(--editor-panel-bg) !important;
+  border-color: var(--editor-border) !important;
+}
+
+.editor-theme .editor-canvas-root {
+  background: radial-gradient(circle at top, rgb(61 90 254 / 0.08), transparent 28%), var(--editor-shell-bg) !important;
+}
+
+.editor-theme .editor-widget-library .editor-lib-section,
+.editor-theme .editor-widget-library .editor-lib-item,
+.editor-theme .editor-inspector .editor-inspector-card,
+.editor-theme .editor-canvas-shell,
+.editor-theme .editor-canvas-meta,
+.editor-theme .editor-canvas-stage-shell,
+.editor-theme .editor-canvas-stage-head,
+.editor-theme .editor-canvas-grid-shell {
+  border-color: var(--editor-border) !important;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.03),
+    0 10px 24px var(--editor-shadow);
+}
+
+.editor-theme .editor-canvas-widget {
+  border-radius: 26px;
+}
+
+.editor-theme .editor-canvas-widget-body {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05),
+    0 12px 28px var(--editor-shadow);
+}
+
+.editor-theme .editor-widget-library .sticky,
+.editor-theme .editor-inspector .sticky {
+  border-color: var(--editor-border) !important;
+  background: color-mix(in srgb, var(--editor-panel-bg) 94%, transparent) !important;
+}
+
+.editor-theme .editor-widget-library h2,
+.editor-theme .editor-inspector h2,
+.editor-theme .editor-canvas-root h2,
+.editor-theme .editor-canvas-root h3 {
+  color: var(--editor-text) !important;
+  font-weight: 500;
+}
+
+.editor-theme .editor-widget-library p,
+.editor-theme .editor-inspector p,
+.editor-theme .editor-canvas-root p,
+.editor-theme [class*="text-slate-400"],
+.editor-theme [class*="text-slate-500"],
+.editor-theme [class*="text-slate-600"] {
+  color: var(--editor-muted) !important;
+}
+
+.editor-theme [class*="text-slate-100"],
+.editor-theme [class*="text-slate-200"],
+.editor-theme [class*="text-slate-300"],
+.editor-theme [class*="text-slate-700"],
+.editor-theme [class*="text-slate-800"],
+.editor-theme [class*="text-slate-900"],
+.editor-theme [class*="text-white"] {
+  color: var(--editor-text) !important;
+}
+
+.editor-theme [class*="bg-sky-400"] {
+  background-color: var(--editor-accent) !important;
+  color: var(--editor-ink-on-accent) !important;
+}
+
+.editor-theme [class*="bg-sky-500/10"],
+.editor-theme [class*="bg-sky-400/10"],
+.editor-theme [class*="bg-sky-400/12"] {
+  background-color: rgb(61 90 254 / 0.12) !important;
+}
+
+.editor-theme [class*="border-sky-400"],
+.editor-theme [class*="border-sky-500"] {
+  border-color: rgb(61 90 254 / 0.45) !important;
+}
+
+.editor-theme [class*="text-sky-100"],
+.editor-theme [class*="text-sky-200"],
+.editor-theme [class*="text-sky-300"] {
+  color: var(--editor-accent) !important;
+}
+
+.editor-theme .react-grid-item.react-grid-placeholder {
+  background: linear-gradient(135deg, rgb(61 90 254 / 0.16), rgb(61 90 254 / 0.08)) !important;
+  border: 2px dashed rgb(61 90 254 / 0.55) !important;
+  box-shadow: inset 0 0 0 1px rgb(61 90 254 / 0.18);
+}
+
+.editor-theme-light .react-resizable-handle::after {
+  background-color: #8f99aa;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.8);
+}
+
+.editor-theme-dark .react-resizable-handle::after {
+  background-color: #9ea9bd;
+  box-shadow: 0 0 0 4px rgb(15 15 15 / 0.52);
+}
+
+.runtime-theme {
+  --runtime-accent: #3d5afe;
+  font-family: "SF Pro Text";
+}
+
+.runtime-theme .runtime-panel-surface {
+  border-color: var(--runtime-border) !important;
+}
+
+.runtime-theme .runtime-widget-shell {
+  backdrop-filter: blur(8px);
+}
+
+.runtime-theme [class*="text-white"] {
+  color: var(--runtime-text) !important;
+}
+
+.runtime-theme [class*="text-slate-950"] {
+  color: #111111 !important;
+}
+
+.runtime-theme [class*="text-white/"],
+.runtime-theme [class*="text-slate-400"],
+.runtime-theme [class*="text-slate-500"] {
+  color: var(--runtime-muted-text) !important;
+}
+
+.runtime-theme [class*="border-white/8"],
+.runtime-theme [class*="border-white/10"],
+.runtime-theme [class*="border-white/12"],
+.runtime-theme [class*="border-white/14"],
+.runtime-theme [class*="border-white/18"] {
+  border-color: var(--runtime-border) !important;
+}
+
+.runtime-theme [class*="bg-white/5"],
+.runtime-theme [class*="bg-white/8"],
+.runtime-theme [class*="bg-white/10"],
+.runtime-theme [class*="bg-white/12"],
+.runtime-theme [class*="bg-white/[0.03]"],
+.runtime-theme [class*="bg-white/[0.04]"] {
+  background-color: color-mix(in srgb, var(--runtime-text) 8%, transparent) !important;
+}
+
+.runtime-theme [class*="bg-sky-400"],
+.runtime-theme [class*="bg-sky-500/10"],
+.runtime-theme [class*="bg-sky-400/10"],
+.runtime-theme [class*="bg-sky-400/12"] {
+  background-color: color-mix(in srgb, var(--runtime-accent) 16%, transparent) !important;
+}
+
+.runtime-theme [class*="border-sky-300"],
+.runtime-theme [class*="border-sky-400"],
+.runtime-theme [class*="border-sky-500"] {
+  border-color: color-mix(in srgb, var(--runtime-accent) 44%, white 8%) !important;
+}
+
+.runtime-theme [class*="text-sky-100"],
+.runtime-theme [class*="text-sky-200"],
+.runtime-theme [class*="text-sky-300"] {
+  color: var(--runtime-accent) !important;
+}
+
+.runtime-theme input[type="range"] {
+  accent-color: var(--runtime-accent);
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar {
+  border-color: rgb(61 90 254 / 0.22) !important;
+  background:
+    radial-gradient(circle at 82% -40%, rgb(61 90 254 / 0.18), transparent 42%),
+    linear-gradient(180deg, rgb(29 29 29 / 0.98), rgb(22 22 22 / 0.98)) !important;
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar input {
+  border-color: rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.04) !important;
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar input:focus {
+  border-color: rgb(61 90 254 / 0.55) !important;
+  box-shadow: 0 0 0 3px rgb(61 90 254 / 0.18);
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar button {
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar button[class*="bg-sky-400"],
+.runtime-host.runtime-host-dark .runtime-host-toolbar button[class*="bg-sky-400/10"] {
+  background: rgb(61 90 254 / 0.22) !important;
+  color: #fafafa !important;
+}
+
+.runtime-host.runtime-host-dark .runtime-host-toolbar [class*="rounded-full"][class*="border"][class*="text-xs"] {
+  border-color: rgb(61 90 254 / 0.28) !important;
+  background: rgb(61 90 254 / 0.12) !important;
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar {
+  border-color: rgb(17 17 17 / 0.1) !important;
+  background:
+    radial-gradient(circle at 82% -40%, rgb(61 90 254 / 0.08), transparent 46%),
+    linear-gradient(180deg, rgb(250 250 250 / 0.98), rgb(244 244 244 / 0.98)) !important;
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar input {
+  border-color: rgb(17 17 17 / 0.16) !important;
+  background: rgb(255 255 255 / 0.94) !important;
+  color: #111111 !important;
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar input:focus {
+  border-color: rgb(61 90 254 / 0.5) !important;
+  box-shadow: 0 0 0 3px rgb(61 90 254 / 0.12);
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar button {
+  border-color: rgb(17 17 17 / 0.14) !important;
+  color: #111111 !important;
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar button[class*="bg-sky-400"],
+.runtime-host.runtime-host-light .runtime-host-toolbar button[class*="bg-sky-400/10"] {
+  background: rgb(61 90 254 / 0.16) !important;
+  color: #111111 !important;
+}
+
+.runtime-host.runtime-host-light .runtime-host-toolbar [class*="rounded-full"][class*="border"][class*="text-xs"] {
+  border-color: rgb(17 17 17 / 0.14) !important;
+  background: rgb(61 90 254 / 0.08) !important;
+  color: #2f3542 !important;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 100;
+  opacity: 0.96;
+  box-shadow:
+    0 0 0 1px rgb(56 189 248 / 0.35),
+    0 24px 48px -12px rgb(2 6 23 / 0.7),
+    0 10px 20px -10px rgb(56 189 248 / 0.25);
+}
+
+.react-grid-item.react-resizable-resizing {
+  z-index: 95;
+  opacity: 0.98;
+  box-shadow:
+    0 0 0 1px rgb(52 211 153 / 0.35),
+    0 24px 48px -12px rgb(2 6 23 / 0.65);
+}
+
+.react-grid-item.react-grid-placeholder {
+  background:
+    linear-gradient(135deg, rgb(56 189 248 / 0.14), rgb(14 165 233 / 0.06)) !important;
+  border: 2px dashed rgb(56 189 248 / 0.55) !important;
+  border-radius: 1rem;
+  box-shadow: inset 0 0 0 1px rgb(56 189 248 / 0.18);
+  transition-duration: 100ms;
+  z-index: 2;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+}
+
+/* Custom Resize Handle */
+.react-resizable-handle {
+  background-image: none !important;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 20;
+}
+
+.react-resizable-handle-e,
+.react-resizable-handle-w {
+  top: 14px;
+  bottom: 14px;
+  width: 12px;
+}
+
+.react-resizable-handle-n,
+.react-resizable-handle-s {
+  left: 14px;
+  right: 14px;
+  height: 12px;
+}
+
+.react-resizable-handle-e {
+  right: 0;
+  cursor: ew-resize;
+}
+
+.react-resizable-handle-w {
+  left: 0;
+  cursor: ew-resize;
+}
+
+.react-resizable-handle-n {
+  top: 0;
+  cursor: ns-resize;
+}
+
+.react-resizable-handle-s {
+  bottom: 0;
+  cursor: ns-resize;
+}
+
+.react-grid-item:hover .react-resizable-handle,
+.react-grid-item.react-resizable-resizing .react-resizable-handle,
+.react-resizable-handle:hover {
+  opacity: 1;
+}
+
+/* Add a custom indicator for the handles */
+.react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 4px;
+  background-color: rgb(148 163 184 / 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgb(15 23 42 / 0.32);
+  transition: background-color 0.2s, transform 0.2s;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.react-resizable-handle-e::after,
+.react-resizable-handle-w::after {
+  width: 4px;
+  height: 28px;
+}
+
+.react-resizable-handle:hover::after {
+  background-color: rgb(56 189 248);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.grid-engine-item {
+  grid-column-start: var(--grid-engine-col-start, auto);
+}
+
+.behance-canvas-shell {
+  width: min(100%, 1700px);
+  margin-inline: auto;
+  padding-inline: clamp(0.55rem, 1.9vw, 2rem);
+}
+
+.behance-grid {
+  margin-inline: auto;
+}
+
+.behance-grid .react-grid-item,
+.behance-grid .react-grid-item > div {
+  min-width: 0;
+  min-height: 0;
+}
+
+.behance-grid .react-grid-item > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 996px) {
+  .behance-canvas-shell {
+    padding-inline: clamp(0.5rem, 2.6vw, 1.3rem);
+  }
+}
+
+@media (min-width: 768px) {
+  .grid-engine-item {
+    grid-column-start: var(--grid-engine-col-start-md, var(--grid-engine-col-start, auto));
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-engine-item {
+    grid-column-start: var(--grid-engine-col-start-lg, var(--grid-engine-col-start-md, var(--grid-engine-col-start, auto)));
+  }
+}
+
+.selection-corners {
+  position: relative;
+  isolation: isolate;
+}
+
+.selection-corners::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 30;
+  box-shadow:
+    inset 0 0 0 2px rgba(147, 197, 253, 0.95),
+    inset 0 0 0 3px rgba(15, 23, 42, 0.35),
+    0 0 0 1px rgba(56, 189, 248, 0.42);
+}

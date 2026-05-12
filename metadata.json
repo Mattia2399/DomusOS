@@ -1,0 +1,5 @@
+{
+  "name": "HA Dashboard Builder",
+  "description": "A visual web app to design Home Assistant dashboards, manage a card registry, and export clean YAML.",
+  "requestFramePermissions": []
+}

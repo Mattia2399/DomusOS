@@ -1,0 +1,918 @@
+import type { DashboardSection, GridItem, SectionKind, Widget, WidgetKind } from '../types/dashboardModels';
+import {
+  GREETING_SECTION_ROWS,
+  INITIAL_SECTIONS,
+  INITIAL_WIDGETS,
+  ROOT_CANVAS_COLS,
+  ROOT_CANVAS_LEGACY_COLS,
+  ROOT_CANVAS_LEGACY_ROW_UNITS,
+  ROOT_CANVAS_ROW_UNITS,
+  SCENES_SECTION_ROWS,
+  WEATHER_SECTION_BASE_ROWS,
+  WEATHER_SECTION_CARD_COLS,
+  WEATHER_SECTION_CARD_ROWS,
+  WEATHER_SECTION_CHIP_COLS,
+  WEATHER_SECTION_CHIP_ROWS,
+  createDefaultSectionLayout,
+} from '../types/dashboardModels';
+
+const STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
+const STORAGE_VERSION = 12;
+
+const VALID_SECTION_KINDS: SectionKind[] = [
+  'greeting',
+  'weather',
+  'scenes',
+  'stack-vertical',
+  'stack-horizontal',
+  'stack-grid',
+];
+
+const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover'];
+
+type StoredLayout = {
+  version: number;
+  sections: DashboardSection[];
+  widgets: Widget[];
+};
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeLayout(
+  id: string,
+  layout: GridItem | undefined,
+  fallback: GridItem,
+  maxCols?: number,
+) {
+  const source = layout && isNumber(layout.x) && isNumber(layout.y) && isNumber(layout.w) && isNumber(layout.h) ? layout : fallback;
+  const safeW = maxCols === undefined ? Math.max(1, Math.round(source.w)) : Math.min(maxCols, Math.max(1, Math.round(source.w)));
+  const maxX = maxCols === undefined ? Number.POSITIVE_INFINITY : Math.max(0, maxCols - safeW);
+  return {
+    i: id,
+    x: Math.min(Math.max(0, Math.round(source.x)), maxX),
+    y: Math.max(0, Math.round(source.y)),
+    w: safeW,
+    h: Math.max(1, Math.round(source.h)),
+  };
+}
+
+function intersects(
+  first: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>,
+  second: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>,
+) {
+  return (
+    first.x < second.x + second.w &&
+    first.x + first.w > second.x &&
+    first.y < second.y + second.h &&
+    first.y + first.h > second.y
+  );
+}
+
+function compactLayoutsUp(layouts: GridItem[], cols: number): GridItem[] {
+  const safeCols = Math.max(1, Math.round(cols));
+  const placed: GridItem[] = [];
+  const ordered = [...layouts].sort((first, second) => {
+    const firstY = Math.max(0, Math.round(first.y));
+    const secondY = Math.max(0, Math.round(second.y));
+    if (firstY !== secondY) {
+      return firstY - secondY;
+    }
+    const firstX = Math.max(0, Math.round(first.x));
+    const secondX = Math.max(0, Math.round(second.x));
+    if (firstX !== secondX) {
+      return firstX - secondX;
+    }
+    return first.i.localeCompare(second.i, 'it-IT');
+  });
+
+  ordered.forEach((item) => {
+    const safeW = Math.min(safeCols, Math.max(1, Math.round(item.w)));
+    const safeH = Math.max(1, Math.round(item.h));
+    const safeX = Math.min(Math.max(0, Math.round(item.x)), Math.max(0, safeCols - safeW));
+    let safeY = Math.max(0, Math.round(item.y));
+
+    while (safeY > 0) {
+      const candidate = { x: safeX, y: safeY - 1, w: safeW, h: safeH };
+      if (placed.some((existing) => intersects(candidate, existing))) {
+        break;
+      }
+      safeY -= 1;
+    }
+
+    placed.push({
+      i: item.i,
+      x: safeX,
+      y: safeY,
+      w: safeW,
+      h: safeH,
+    });
+  });
+
+  return placed;
+}
+
+function scaleRootLayoutCols(layout: GridItem | undefined, id: string): GridItem | undefined {
+  if (!layout || !isNumber(layout.x) || !isNumber(layout.y) || !isNumber(layout.w) || !isNumber(layout.h)) {
+    return layout;
+  }
+  const ratio = ROOT_CANVAS_COLS / ROOT_CANVAS_LEGACY_COLS;
+  const safeW = Math.min(ROOT_CANVAS_COLS, Math.max(1, Math.round(layout.w * ratio)));
+  const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
+  return {
+    i: id,
+    x: Math.min(Math.max(0, Math.round(layout.x * ratio)), maxX),
+    y: Math.max(0, Math.round(layout.y)),
+    w: safeW,
+    h: Math.max(1, Math.round(layout.h)),
+  };
+}
+
+function scaleRootLayoutRows(layout: GridItem | undefined, id: string): GridItem | undefined {
+  if (!layout || !isNumber(layout.x) || !isNumber(layout.y) || !isNumber(layout.w) || !isNumber(layout.h)) {
+    return layout;
+  }
+  const ratio = ROOT_CANVAS_ROW_UNITS / ROOT_CANVAS_LEGACY_ROW_UNITS;
+  return {
+    i: id,
+    x: Math.max(0, Math.round(layout.x)),
+    y: Math.max(0, Math.round(layout.y * ratio)),
+    w: Math.max(1, Math.round(layout.w)),
+    h: Math.max(1, Math.round(layout.h * ratio)),
+  };
+}
+
+function migrateStoredLayoutV1ToV2(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 1) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections)
+    ? layout.sections.map((section) => ({
+        ...section,
+        layout: scaleRootLayoutCols(section.layout, section.id) ?? section.layout,
+      }))
+    : [];
+  const sectionIds = new Set(sections.map((section) => section.id));
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        const belongsToStack = typeof widget.parentSectionId === 'string' && sectionIds.has(widget.parentSectionId);
+        if (belongsToStack) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: scaleRootLayoutCols(widget.layout, widget.id) ?? widget.layout,
+        };
+      })
+    : [];
+
+  return {
+    version: 2,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV2ToV3(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 2) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections)
+    ? layout.sections.map((section) => ({
+        ...section,
+        layout: scaleRootLayoutRows(section.layout, section.id) ?? section.layout,
+      }))
+    : [];
+  const sectionIds = new Set(sections.map((section) => section.id));
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        const belongsToStack = typeof widget.parentSectionId === 'string' && sectionIds.has(widget.parentSectionId);
+        if (belongsToStack) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: scaleRootLayoutRows(widget.layout, widget.id) ?? widget.layout,
+        };
+      })
+    : [];
+
+  return {
+    version: 3,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV3ToV4(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 3) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const sectionIds = new Set(sections.map((section) => section.id));
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        const isRootLight =
+          widget.kind === 'light' &&
+          (!widget.parentSectionId || !sectionIds.has(widget.parentSectionId)) &&
+          isNumber(widget.layout?.h);
+        if (!isRootLight) {
+          return widget;
+        }
+
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        const nextHeight = currentHeight === 2 ? 1 : currentHeight === 4 ? 3 : currentHeight;
+        if (nextHeight === currentHeight) {
+          return widget;
+        }
+
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            h: nextHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 4,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV4ToV5(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 4) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        if (widget.kind !== 'light' || !isNumber(widget.layout?.h)) {
+          return widget;
+        }
+
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        const targetHeight = widget.isOn ? 3 : 2;
+        const isLegacyLightHeight = currentHeight >= 1 && currentHeight <= 4;
+        if (!isLegacyLightHeight || currentHeight === targetHeight) {
+          return widget;
+        }
+
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            h: targetHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 5,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV5ToV6(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 5) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const sectionById = new Map(sections.map((section) => [section.id, section]));
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        if (widget.kind !== 'climate' || !isNumber(widget.layout?.w) || !isNumber(widget.layout?.h)) {
+          return widget;
+        }
+        const currentWidth = Math.max(1, Math.round(widget.layout.w));
+        const parentSection =
+          typeof widget.parentSectionId === 'string' ? sectionById.get(widget.parentSectionId) : undefined;
+        const targetWidth =
+          parentSection?.kind === 'stack-vertical'
+            ? 1
+            : Math.max(1, currentWidth);
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        const targetHeight = Math.max(3, currentHeight);
+        if (currentWidth === targetWidth && currentHeight === targetHeight) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            w: targetWidth,
+            h: targetHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 6,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV6ToV7(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 6) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const sectionById = new Map(sections.map((section) => [section.id, section]));
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        if (widget.kind !== 'climate' || !isNumber(widget.layout?.w) || !isNumber(widget.layout?.h)) {
+          return widget;
+        }
+        const currentWidth = Math.max(1, Math.round(widget.layout.w));
+        const parentSection =
+          typeof widget.parentSectionId === 'string' ? sectionById.get(widget.parentSectionId) : undefined;
+        const targetWidth =
+          parentSection?.kind === 'stack-vertical'
+            ? 1
+            : Math.max(1, currentWidth);
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        const targetHeight = Math.max(3, currentHeight);
+        if (currentWidth === targetWidth && currentHeight === targetHeight) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            w: targetWidth,
+            h: targetHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 7,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV7ToV8(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 7) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        if (widget.kind !== 'light' || !isNumber(widget.layout?.h)) {
+          return widget;
+        }
+        const targetHeight = widget.isOn ? 3 : 1;
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        if (currentHeight === targetHeight) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            h: targetHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 8,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV8ToV9(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 8) {
+    return layout;
+  }
+
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const widgets = Array.isArray(layout.widgets)
+    ? layout.widgets.map((widget) => {
+        if (widget.kind !== 'light' || !isNumber(widget.layout?.h)) {
+          return widget;
+        }
+        const currentHeight = Math.max(1, Math.round(widget.layout.h));
+        const targetMinHeight = widget.isOn ? 3 : 2;
+        const nextHeight = Math.max(targetMinHeight, currentHeight);
+        if (currentHeight === nextHeight) {
+          return widget;
+        }
+        return {
+          ...widget,
+          layout: {
+            ...widget.layout,
+            i: widget.id,
+            h: nextHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 9,
+    sections,
+    widgets,
+  };
+}
+
+function migrateStoredLayoutV9ToV10(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 9) {
+    return layout;
+  }
+
+  const legacyGreetingRows = ROOT_CANVAS_ROW_UNITS;
+  const legacyWeatherChipRows = ROOT_CANVAS_ROW_UNITS;
+  const legacyWeatherCardRows = ROOT_CANVAS_ROW_UNITS * 2;
+  const legacySceneRows = new Set([3, ROOT_CANVAS_ROW_UNITS * 2, ROOT_CANVAS_ROW_UNITS * 3]);
+  const sections = Array.isArray(layout.sections)
+    ? layout.sections.map((section) => {
+        if (!section.layout || !isNumber(section.layout.h)) {
+          return section;
+        }
+
+        const currentHeight = Math.max(1, Math.round(section.layout.h));
+        let nextHeight = currentHeight;
+
+        if (section.kind === 'greeting' && currentHeight === legacyGreetingRows) {
+          nextHeight = GREETING_SECTION_ROWS;
+        } else if (section.kind === 'weather') {
+          const layoutMode = section.weatherLayout ?? 'auto';
+          if (layoutMode === 'card' && currentHeight === legacyWeatherCardRows) {
+            nextHeight = WEATHER_SECTION_CARD_ROWS;
+          } else if (currentHeight === legacyWeatherCardRows || currentHeight === legacyWeatherChipRows) {
+            nextHeight = WEATHER_SECTION_BASE_ROWS;
+          }
+        } else if (section.kind === 'scenes' && legacySceneRows.has(currentHeight)) {
+          nextHeight = SCENES_SECTION_ROWS;
+        }
+
+        if (nextHeight === currentHeight) {
+          return section;
+        }
+
+        return {
+          ...section,
+          layout: {
+            ...section.layout,
+            i: section.id,
+            h: nextHeight,
+          },
+        };
+      })
+    : [];
+
+  return {
+    version: 10,
+    sections,
+    widgets: Array.isArray(layout.widgets) ? layout.widgets : [],
+  };
+}
+
+function migrateStoredLayoutV10ToV11(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 10) {
+    return layout;
+  }
+
+  const rawSections = Array.isArray(layout.sections) ? layout.sections : [];
+  const rawWidgets = Array.isArray(layout.widgets) ? layout.widgets : [];
+  const normalizedSections = rawSections.map((section, index) => {
+    const fallback = createDefaultSectionLayout(section.kind, section.id, index * 2);
+    return {
+      ...section,
+      layout: normalizeLayout(section.id, section.layout, fallback, ROOT_CANVAS_COLS),
+    };
+  });
+  const sectionIdSet = new Set(normalizedSections.map((section) => section.id));
+  const rootWidgetIds = new Set<string>();
+  const normalizedWidgets = rawWidgets.map((widget, index) => {
+    const isRootWidget =
+      !widget.parentSectionId ||
+      typeof widget.parentSectionId !== 'string' ||
+      !sectionIdSet.has(widget.parentSectionId);
+    const fallback: GridItem = {
+      i: widget.id,
+      x: 0,
+      y: index,
+      w: 1,
+      h: 1,
+    };
+    const nextLayout = isRootWidget
+      ? normalizeLayout(widget.id, widget.layout, fallback, ROOT_CANVAS_COLS)
+      : normalizeLayout(widget.id, widget.layout, fallback);
+    if (isRootWidget) {
+      rootWidgetIds.add(widget.id);
+    }
+    return {
+      ...widget,
+      parentSectionId: isRootWidget ? undefined : widget.parentSectionId,
+      layout: nextLayout,
+    };
+  });
+
+  const rootLayouts = [
+    ...normalizedSections.map((section) => section.layout),
+    ...normalizedWidgets
+      .filter((widget) => rootWidgetIds.has(widget.id))
+      .map((widget) => widget.layout),
+  ];
+  const compactedLayoutById = new Map(
+    compactLayoutsUp(rootLayouts, ROOT_CANVAS_COLS).map((layoutItem) => [layoutItem.i, layoutItem]),
+  );
+
+  const sections = normalizedSections.map((section) => {
+    const compacted = compactedLayoutById.get(section.id);
+    return compacted
+      ? {
+          ...section,
+          layout: {
+            ...section.layout,
+            i: section.id,
+            x: compacted.x,
+            y: compacted.y,
+            w: compacted.w,
+            h: compacted.h,
+          },
+        }
+      : section;
+  });
+  const widgets = normalizedWidgets.map((widget) => {
+    if (!rootWidgetIds.has(widget.id)) {
+      return widget;
+    }
+    const compacted = compactedLayoutById.get(widget.id);
+    if (!compacted) {
+      return widget;
+    }
+    return {
+      ...widget,
+      layout: {
+        ...widget.layout,
+        i: widget.id,
+        x: compacted.x,
+        y: compacted.y,
+        w: compacted.w,
+        h: compacted.h,
+      },
+    };
+  });
+
+  return {
+    version: 11,
+    sections,
+    widgets,
+  };
+}
+
+function mergeGreetingAndWeatherSections(sections: DashboardSection[]) {
+  const greetingsNormalized = sections.map((section) =>
+    section.kind === 'greeting' && section.showWeather === undefined
+      ? { ...section, showWeather: false }
+      : section,
+  );
+  const greetingIndex = greetingsNormalized.findIndex((section) => section.kind === 'greeting');
+  const weatherSections = greetingsNormalized.filter((section) => section.kind === 'weather');
+  if (weatherSections.length === 0) {
+    return greetingsNormalized;
+  }
+
+  const firstWeather = weatherSections[0];
+  if (greetingIndex >= 0) {
+    const greeting = greetingsNormalized[greetingIndex];
+    const left = Math.min(greeting.layout.x, firstWeather.layout.x);
+    const top = Math.min(greeting.layout.y, firstWeather.layout.y);
+    const right = Math.max(
+      greeting.layout.x + greeting.layout.w,
+      firstWeather.layout.x + firstWeather.layout.w,
+    );
+    const bottom = Math.max(
+      greeting.layout.y + greeting.layout.h,
+      firstWeather.layout.y + firstWeather.layout.h,
+    );
+
+    const mergedGreeting: DashboardSection = {
+      ...greeting,
+      layout: {
+        ...greeting.layout,
+        i: greeting.id,
+        x: left,
+        y: top,
+        w: Math.max(1, right - left),
+        h: Math.max(1, bottom - top),
+      },
+      showWeather: true,
+      weatherLayout: firstWeather.weatherLayout ?? greeting.weatherLayout ?? 'auto',
+      weatherUnit: firstWeather.weatherUnit ?? greeting.weatherUnit ?? 'C',
+      weatherShowCondition:
+        firstWeather.weatherShowCondition ?? greeting.weatherShowCondition ?? true,
+      weatherShowPrecipitation:
+        firstWeather.weatherShowPrecipitation ?? greeting.weatherShowPrecipitation ?? true,
+      weatherShowWind: firstWeather.weatherShowWind ?? greeting.weatherShowWind ?? true,
+      weatherForecastType:
+        firstWeather.weatherForecastType ?? greeting.weatherForecastType ?? 'daily',
+      weatherForecastDays: firstWeather.weatherForecastDays ?? greeting.weatherForecastDays ?? 4,
+      weatherForecastDensity:
+        firstWeather.weatherForecastDensity ?? greeting.weatherForecastDensity ?? 'comfortable',
+      weatherSecondaryInfo:
+        firstWeather.weatherSecondaryInfo ?? greeting.weatherSecondaryInfo ?? 'auto',
+      weatherCondition: firstWeather.weatherCondition ?? greeting.weatherCondition,
+      weatherEntityId: firstWeather.weatherEntityId ?? greeting.weatherEntityId,
+    };
+
+    let mergedInserted = false;
+    return greetingsNormalized.reduce<DashboardSection[]>((acc, section) => {
+      if (section.kind === 'weather') {
+        return acc;
+      }
+      if (section.id === greeting.id && !mergedInserted) {
+        acc.push(mergedGreeting);
+        mergedInserted = true;
+        return acc;
+      }
+      if (section.id !== greeting.id) {
+        acc.push(section);
+      }
+      return acc;
+    }, []);
+  }
+
+  const convertedGreeting: DashboardSection = {
+    ...firstWeather,
+    kind: 'greeting',
+    showWeather: true,
+    titleAuto: true,
+    subtitleAuto: true,
+    weatherLayout: firstWeather.weatherLayout ?? 'auto',
+    weatherUnit: firstWeather.weatherUnit ?? 'C',
+    weatherShowCondition: firstWeather.weatherShowCondition ?? true,
+    weatherShowPrecipitation: firstWeather.weatherShowPrecipitation ?? true,
+    weatherShowWind: firstWeather.weatherShowWind ?? true,
+    weatherForecastType: firstWeather.weatherForecastType ?? 'daily',
+    weatherForecastDays: firstWeather.weatherForecastDays ?? 4,
+    weatherForecastDensity: firstWeather.weatherForecastDensity ?? 'comfortable',
+    weatherSecondaryInfo: firstWeather.weatherSecondaryInfo ?? 'auto',
+  };
+
+  let convertedInserted = false;
+  return greetingsNormalized.reduce<DashboardSection[]>((acc, section) => {
+    if (section.kind === 'weather') {
+      if (!convertedInserted && section.id === firstWeather.id) {
+        acc.push(convertedGreeting);
+        convertedInserted = true;
+      }
+      return acc;
+    }
+    acc.push(section);
+    return acc;
+  }, []);
+}
+
+function migrateStoredLayoutV11ToV12(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 11) {
+    return layout;
+  }
+  const rawSections = Array.isArray(layout.sections) ? layout.sections : [];
+  const mergedSections = mergeGreetingAndWeatherSections(rawSections);
+  return {
+    version: 12,
+    sections: mergedSections,
+    widgets: Array.isArray(layout.widgets) ? layout.widgets : [],
+  };
+}
+
+function normalizeSection(section: DashboardSection, index: number): DashboardSection {
+  const fallback = createDefaultSectionLayout(section.kind, section.id, index * 2);
+  const layout = normalizeLayout(section.id, section.layout, fallback, ROOT_CANVAS_COLS);
+  if (section.kind === 'greeting' && (section.showWeather ?? false)) {
+    return {
+      ...section,
+      weatherLayout: 'auto',
+      layout: {
+        ...layout,
+        x: 0,
+        w: ROOT_CANVAS_COLS,
+        h: WEATHER_SECTION_CARD_ROWS,
+      },
+    };
+  }
+  const fixedWeatherSpan =
+    section.kind !== 'weather'
+      ? null
+      : (section.weatherLayout ?? 'auto') === 'chip'
+        ? { w: WEATHER_SECTION_CHIP_COLS, h: WEATHER_SECTION_CHIP_ROWS }
+        : (section.weatherLayout ?? 'auto') === 'card'
+          ? { w: WEATHER_SECTION_CARD_COLS, h: WEATHER_SECTION_CARD_ROWS }
+          : null;
+  if (fixedWeatherSpan) {
+    const safeW = Math.min(ROOT_CANVAS_COLS, fixedWeatherSpan.w);
+    const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
+    return {
+      ...section,
+      layout: {
+        ...layout,
+        x: Math.min(layout.x, maxX),
+        w: safeW,
+        h: fixedWeatherSpan.h,
+      },
+    };
+  }
+  const minWidth =
+    section.kind === 'greeting' && (section.showWeather ?? false)
+      ? ROOT_CANVAS_COLS
+      : section.kind === 'weather'
+        ? WEATHER_SECTION_CHIP_COLS
+        : 2;
+  const minHeight =
+    section.kind === 'greeting'
+      ? (section.showWeather ?? false)
+        ? WEATHER_SECTION_CARD_ROWS
+        : GREETING_SECTION_ROWS
+      : section.kind === 'weather'
+        ? WEATHER_SECTION_BASE_ROWS
+        : section.kind === 'scenes'
+          ? SCENES_SECTION_ROWS
+          : ROOT_CANVAS_ROW_UNITS * 2;
+  const normalizedHeight = Math.max(minHeight, layout.h);
+  const safeW = Math.min(ROOT_CANVAS_COLS, Math.max(minWidth, layout.w));
+  const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
+  return {
+    ...section,
+    layout: {
+      ...layout,
+      x: Math.min(layout.x, maxX),
+      w: safeW,
+      h: normalizedHeight,
+    },
+  };
+}
+
+function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, parentSection?: DashboardSection): Widget {
+  const minWidth =
+    widget.kind === 'light'
+      ? parentSection?.kind === 'stack-vertical'
+        ? 1
+        : 2
+      : widget.kind === 'climate'
+      ? parentSection?.kind === 'stack-vertical'
+        ? 1
+        : 2
+      : widget.kind === 'vacuum'
+        ? 2
+      : widget.kind === 'media'
+        ? 3
+        : 1;
+  const minHeight =
+    widget.kind === 'light'
+      ? widget.isOn
+        ? 2
+        : 1
+      : widget.kind === 'climate'
+        ? 3
+        : widget.kind === 'camera'
+          ? 3
+          : widget.kind === 'media'
+            ? 3
+            : widget.kind === 'vacuum'
+              ? 3
+              : widget.kind === 'cover'
+              ? 2
+              : 1;
+  const fallback = {
+    i: widget.id,
+    x: 0,
+    y: index,
+    w: minWidth,
+    h: minHeight,
+  };
+  const normalizedLayout = normalizeLayout(widget.id, widget.layout, fallback, isRootWidget ? ROOT_CANVAS_COLS : undefined);
+  const targetWidth = isRootWidget
+    ? Math.min(ROOT_CANVAS_COLS, Math.max(minWidth, Math.round(normalizedLayout.w)))
+    : Math.max(minWidth, Math.round(normalizedLayout.w));
+  const targetHeight =
+    widget.kind === 'light'
+      ? minHeight
+      : Math.max(minHeight, Math.round(normalizedLayout.h));
+  const maxX = isRootWidget ? Math.max(0, ROOT_CANVAS_COLS - targetWidth) : Number.POSITIVE_INFINITY;
+
+  return {
+    ...widget,
+    layout: {
+      ...normalizedLayout,
+      x: Math.min(normalizedLayout.x, maxX),
+      w: targetWidth,
+      h: targetHeight,
+    },
+  };
+}
+
+function safeParse(raw: string | null): StoredLayout | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as StoredLayout;
+  } catch {
+    return null;
+  }
+}
+
+export function loadDashboardLayout(): { sections: DashboardSection[]; widgets: Widget[] } {
+  if (typeof window === 'undefined') {
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+  }
+
+  const parsed = safeParse(window.localStorage.getItem(STORAGE_KEY));
+  if (!parsed) {
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+  }
+  const migratedV2 = parsed.version === 1 ? migrateStoredLayoutV1ToV2(parsed) : parsed;
+  const migratedV3 = migratedV2.version === 2 ? migrateStoredLayoutV2ToV3(migratedV2) : migratedV2;
+  const migratedV4 = migratedV3.version === 3 ? migrateStoredLayoutV3ToV4(migratedV3) : migratedV3;
+  const migratedV5 = migratedV4.version === 4 ? migrateStoredLayoutV4ToV5(migratedV4) : migratedV4;
+  const migratedV6 = migratedV5.version === 5 ? migrateStoredLayoutV5ToV6(migratedV5) : migratedV5;
+  const migratedV7 = migratedV6.version === 6 ? migrateStoredLayoutV6ToV7(migratedV6) : migratedV6;
+  const migratedV8 = migratedV7.version === 7 ? migrateStoredLayoutV7ToV8(migratedV7) : migratedV7;
+  const migratedV9 = migratedV8.version === 8 ? migrateStoredLayoutV8ToV9(migratedV8) : migratedV8;
+  const migratedV10 = migratedV9.version === 9 ? migrateStoredLayoutV9ToV10(migratedV9) : migratedV9;
+  const migratedV11 = migratedV10.version === 10 ? migrateStoredLayoutV10ToV11(migratedV10) : migratedV10;
+  const hydrated = migratedV11.version === 11 ? migrateStoredLayoutV11ToV12(migratedV11) : migratedV11;
+  if (hydrated.version !== STORAGE_VERSION) {
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+  }
+
+  const rawSections = Array.isArray(hydrated.sections) ? hydrated.sections : [];
+  const rawWidgets = Array.isArray(hydrated.widgets) ? hydrated.widgets : [];
+
+  const sections = rawSections
+    .filter((section) => section && VALID_SECTION_KINDS.includes(section.kind))
+    .map((section, index) => normalizeSection(section, index));
+
+  const sectionById = new Map(sections.map((section) => [section.id, section]));
+  const widgets = rawWidgets
+    .filter((widget) => widget && VALID_WIDGET_KINDS.includes(widget.kind))
+    .map((widget, index) => {
+      const parentSection =
+        typeof widget.parentSectionId === 'string' ? sectionById.get(widget.parentSectionId) : undefined;
+      const isRootWidget = !parentSection;
+      const next = normalizeWidget(widget, index, isRootWidget, parentSection);
+      return {
+        ...next,
+        parentSectionId: isRootWidget ? undefined : parentSection?.id,
+      };
+    });
+
+  if (!sections.length && !widgets.length) {
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+  }
+
+  return { sections, widgets };
+}
+
+export function saveDashboardLayout(sections: DashboardSection[], widgets: Widget[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload: StoredLayout = {
+    version: STORAGE_VERSION,
+    sections,
+    widgets,
+  };
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function clearDashboardLayout() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.removeItem(STORAGE_KEY);
+}

@@ -1,0 +1,281 @@
+.ha-metric-card {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  container-type: size;
+  container-name: metric-card;
+}
+
+.ha-metric-card__surface {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 24px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, var(--ha-metric-start, #6d88ff) 0%, var(--ha-metric-end, #4b63ff) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 40px 60px rgba(12, 18, 32, 0.28),
+    0 8px 20px rgba(12, 18, 32, 0.18);
+  backdrop-filter: blur(20px);
+  color: #f8fbff;
+}
+
+.ha-metric-card__surface::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.ha-metric-card__top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ha-metric-card__icon-shell {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ha-metric-card__icon {
+  width: 17px;
+  height: 17px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.ha-metric-card__title-badge {
+  max-width: calc(100% - 50px);
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+  font-family: "SF Pro Display";
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-metric-card__value-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ha-metric-card__value {
+  font-family: "SF Pro Display";
+  font-size: clamp(1.55rem, 14cqw, 2.35rem);
+  line-height: 0.9;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ha-metric-card__unit {
+  margin-bottom: 3px;
+  font-family: "SF Pro Text";
+  font-size: 0.78rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.ha-metric-card__name {
+  font-family: "SF Pro Text";
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container metric-card (max-width: 290px) {
+  .ha-metric-card__surface {
+    border-radius: 20px;
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .ha-metric-card__surface::after {
+    border-radius: 18px;
+  }
+
+  .ha-metric-card__icon-shell {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ha-metric-card__icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .ha-metric-card__title-badge {
+    max-width: calc(100% - 44px);
+    font-size: 14px;
+  }
+
+  .ha-metric-card__value {
+    font-size: clamp(1.55rem, 12cqw, 1.95rem);
+  }
+
+  .ha-metric-card__unit {
+    font-size: 0.66rem;
+    margin-bottom: 2px;
+    letter-spacing: 0.06em;
+  }
+
+  .ha-metric-card__name {
+    font-size: 11px;
+  }
+}
+
+@container metric-card (max-width: 235px) {
+  .ha-metric-card__surface {
+    border-radius: 16px;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .ha-metric-card__surface::after {
+    border-radius: 14px;
+  }
+
+  .ha-metric-card__icon-shell {
+    width: 28px;
+    height: 28px;
+  }
+
+  .ha-metric-card__icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .ha-metric-card__title-badge {
+    font-size: 13px;
+  }
+
+  .ha-metric-card__unit {
+    display: none;
+  }
+
+  .ha-metric-card__name {
+    font-size: 10px;
+  }
+}
+
+@container metric-card (max-height: 220px) {
+  .ha-metric-card__surface {
+    border-radius: 20px;
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .ha-metric-card__surface::after {
+    border-radius: 18px;
+  }
+
+  .ha-metric-card__icon-shell {
+    width: 30px;
+    height: 30px;
+  }
+
+  .ha-metric-card__icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .ha-metric-card__title-badge {
+    max-width: calc(100% - 44px);
+    font-size: 14px;
+  }
+
+  .ha-metric-card__unit {
+    font-size: 0.66rem;
+    margin-bottom: 2px;
+  }
+
+  .ha-metric-card__name {
+    font-size: 11px;
+  }
+}
+
+@container metric-card (max-height: 180px) {
+  .ha-metric-card__surface {
+    border-radius: 16px;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .ha-metric-card__surface::after {
+    border-radius: 14px;
+  }
+
+  .ha-metric-card__icon-shell {
+    width: 26px;
+    height: 26px;
+  }
+
+  .ha-metric-card__icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .ha-metric-card__title-badge {
+    max-width: calc(100% - 38px);
+    font-size: 12px;
+  }
+
+  .ha-metric-card__name {
+    font-size: 10px;
+  }
+}
+
+@container metric-card (max-height: 150px) {
+  .ha-metric-card__name,
+  .ha-metric-card__unit {
+    display: none;
+  }
+
+  .ha-metric-card__value-row {
+    align-items: center;
+  }
+}

@@ -1,0 +1,25 @@
+.cover-card__blind {
+  transition: height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-size: 100% 8px;
+}
+
+.cover-card__blind--moving {
+  animation: cover-card-slats 0.9s linear infinite;
+}
+
+.cover-card__blind--opening {
+  animation-direction: normal;
+}
+
+.cover-card__blind--closing {
+  animation-direction: reverse;
+}
+
+@keyframes cover-card-slats {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 8px;
+  }
+}

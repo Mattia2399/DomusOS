@@ -1,0 +1,276 @@
+.ha-camera-card {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  container-type: size;
+  container-name: camera-card;
+}
+
+.ha-camera-card__surface {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 24px;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 36px 58px rgba(12, 18, 32, 0.3),
+    0 10px 22px rgba(12, 18, 32, 0.18);
+  backdrop-filter: blur(20px);
+}
+
+.ha-camera-card__surface::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.ha-camera-card__glow {
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 80%;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 20% 32%, rgba(133, 173, 255, 0.36), transparent 58%),
+    radial-gradient(circle at 82% 72%, rgba(147, 146, 255, 0.24), transparent 62%);
+  filter: blur(48px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.ha-camera-card__stream {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.015);
+}
+
+.ha-camera-card__placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(75, 99, 255, 0.3), transparent 56%),
+    linear-gradient(145deg, #23263a 0%, #121724 100%);
+}
+
+.ha-camera-card__placeholder-icon {
+  width: 34px;
+  height: 34px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ha-camera-card__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(6, 10, 18, 0.16) 0%, rgba(6, 10, 18, 0.32) 48%, rgba(6, 10, 18, 0.7) 100%);
+}
+
+.ha-camera-card__live-badge {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 113, 108, 0.55);
+  background: rgba(255, 113, 108, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 10px 20px rgba(255, 113, 108, 0.25);
+  padding: 6px 12px;
+}
+
+.ha-camera-card__live-badge--offline {
+  border-color: rgba(252, 211, 77, 0.55);
+  background: rgba(252, 211, 77, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 10px 20px rgba(251, 191, 36, 0.2);
+}
+
+.ha-camera-card__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff716c;
+  box-shadow: 0 0 0 3px rgba(255, 113, 108, 0.22);
+  animation: ha-camera-live-pulse 1.25s ease-in-out infinite;
+}
+
+.ha-camera-card__live-dot--offline {
+  background: #fcd34d;
+  box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.22);
+  animation: none;
+}
+
+.ha-camera-card__live-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: "SF Pro Text";
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.13em;
+  font-weight: 400;
+  text-transform: uppercase;
+}
+
+.ha-camera-card__live-label--offline {
+  color: rgba(255, 244, 206, 0.88);
+}
+
+.ha-camera-card__footer {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+}
+
+.ha-camera-card__name {
+  color: #ffffff;
+  font-family: "SF Pro Display";
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes ha-camera-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+
+
+@container camera-card (max-width: 300px) {
+  .ha-camera-card__live-badge {
+    top: 12px;
+    left: 12px;
+    padding: 5px 10px;
+    gap: 6px;
+  }
+
+  .ha-camera-card__live-dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  .ha-camera-card__live-label {
+    font-size: 11px;
+  }
+
+  .ha-camera-card__footer {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .ha-camera-card__name {
+    font-size: 14px;
+  }
+}
+
+@container camera-card (max-width: 240px) {
+  .ha-camera-card__live-badge {
+    top: 10px;
+    left: 10px;
+    padding: 4px 8px;
+    gap: 5px;
+  }
+
+  .ha-camera-card__live-label {
+    font-size: 10px;
+    letter-spacing: 0.11em;
+  }
+
+  .ha-camera-card__footer {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+
+  .ha-camera-card__name {
+    font-size: 13px;
+  }
+}
+
+@container camera-card (max-height: 210px) {
+  .ha-camera-card__live-badge {
+    top: 10px;
+    left: 10px;
+    padding: 4px 8px;
+    gap: 5px;
+  }
+
+  .ha-camera-card__live-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .ha-camera-card__live-label {
+    font-size: 10px;
+    letter-spacing: 0.11em;
+  }
+
+  .ha-camera-card__footer {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+
+  .ha-camera-card__name {
+    font-size: 12px;
+  }
+}
+
+@container camera-card (max-height: 165px) {
+  .ha-camera-card__live-badge {
+    top: 8px;
+    left: 8px;
+    padding: 3px 7px;
+    gap: 4px;
+  }
+
+  .ha-camera-card__live-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .ha-camera-card__footer {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .ha-camera-card__name {
+    font-size: 11px;
+  }
+}
