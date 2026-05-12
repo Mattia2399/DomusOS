@@ -28,7 +28,7 @@ const VALID_SECTION_KINDS: SectionKind[] = [
   'stack-grid',
 ];
 
-const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover'];
+const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover', 'members'];
 
 type StoredLayout = {
   version: number;
@@ -784,6 +784,8 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
         ? 2
       : widget.kind === 'media'
         ? 3
+      : widget.kind === 'members'
+        ? 2
         : 1;
   const minHeight =
     widget.kind === 'light'
@@ -799,7 +801,9 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
             : widget.kind === 'vacuum'
               ? 3
               : widget.kind === 'cover'
-              ? 2
+                ? 2
+                : widget.kind === 'members'
+                  ? 2
               : 1;
   const fallback = {
     i: widget.id,

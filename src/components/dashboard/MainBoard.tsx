@@ -22,6 +22,7 @@ import { useNotifications } from '../../context/NotificationProvider';
 import {
   ProfilePanel,
   type ProfileHouseMember,
+  type ProfileSectionId,
   type ProfileMovementMapPoint,
   type ProfileMovementTimelineEntry,
 } from '../settings/ProfilePanel';
@@ -1745,6 +1746,23 @@ function toStringArray(value: unknown) {
     .filter((entry): entry is string => Boolean(entry));
 }
 
+function toTrackerEntityIds(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toTrimmedString(entry))
+      .filter((entry): entry is string => Boolean(entry))
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith('device_tracker.'));
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith('device_tracker.'));
+  }
+  return [];
+}
+
 function normalizeMovementLocationKey(value: string | undefined) {
   const normalized = normalizeLower(value).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return normalized;
@@ -1766,6 +1784,65 @@ function formatMovementLocationLabel(state: string | undefined) {
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/\b\w/g, (chunk) => chunk.toUpperCase()) ?? 'Posizione';
+}
+
+type MemberTrackerDeviceKind = 'smartwatch' | 'tablet' | 'smartphone';
+
+function classifyTrackerDeviceKind(entityId: string, rawAttributes: Record<string, unknown> | undefined): MemberTrackerDeviceKind | null {
+  const entityKey = entityId.startsWith('device_tracker.')
+    ? entityId.slice('device_tracker.'.length)
+    : entityId;
+  const normalized = normalizeLower(
+    [
+      entityKey,
+      toTrimmedString(rawAttributes?.friendly_name),
+      toTrimmedString(rawAttributes?.device_name),
+      toTrimmedString(rawAttributes?.model),
+      toTrimmedString(rawAttributes?.manufacturer),
+      toTrimmedString(rawAttributes?.os_name),
+      toTrimmedString(rawAttributes?.source_type),
+      toTrimmedString(rawAttributes?.device_class),
+      toTrimmedString(rawAttributes?.host_name),
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
+  if (!normalized) {
+    return null;
+  }
+
+  const watchTokens = ['watch', 'watchos', 'smartwatch', 'fitbit', 'garmin', 'amazfit', 'wear_os', 'wearos'];
+  if (watchTokens.some((token) => normalized.includes(token))) {
+    return 'smartwatch';
+  }
+
+  const tabletTokens = ['tablet', 'ipad', 'galaxy_tab', 'tab_', 'tab ', 'xiaomi_pad', 'lenovo_tab'];
+  if (tabletTokens.some((token) => normalized.includes(token))) {
+    return 'tablet';
+  }
+
+  const phoneTokens = [
+    'phone',
+    'iphone',
+    'android',
+    'pixel',
+    'smartphone',
+    'mobile',
+    'oneplus',
+    'xiaomi',
+    'redmi',
+    'galaxy_s',
+  ];
+  if (phoneTokens.some((token) => normalized.includes(token))) {
+    return 'smartphone';
+  }
+
+  const normalizedWords = normalized.replace(/_/g, ' ');
+  if (/\bs\d{2}\b/.test(normalizedWords) || normalizedWords.includes('sm-g')) {
+    return 'smartphone';
+  }
+
+  return null;
 }
 
 function readMovementCoordinates(rawAttributes: Record<string, unknown> | undefined) {
@@ -2889,6 +2966,7 @@ export function MainBoard() {
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('theme');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
   const [isAutomationView, setIsAutomationView] = useState(resolveAutomationFromLocation);
@@ -2995,6 +3073,8 @@ export function MainBoard() {
   const VACUUM_WIDGET_MIN_HEIGHT = 3;
   const COVER_WIDGET_MIN_WIDTH = 2;
   const COVER_WIDGET_MIN_HEIGHT = 2;
+  const MEMBERS_WIDGET_MIN_WIDTH = 3;
+  const MEMBERS_WIDGET_MIN_HEIGHT = 2;
   const isStackSection = (section: DashboardSection) =>
     section.kind === 'stack-vertical' || section.kind === 'stack-horizontal' || section.kind === 'stack-grid';
   const firstStackSectionId = useMemo(
@@ -3207,6 +3287,8 @@ export function MainBoard() {
     resolveWidgetMinimumLayout(widget, VACUUM_WIDGET_MIN_WIDTH, VACUUM_WIDGET_MIN_HEIGHT);
   const resolveCoverLayout = (widget: Widget): GridItem =>
     resolveWidgetMinimumLayout(widget, 1, 2);
+  const resolveMembersLayout = (widget: Widget): GridItem =>
+    resolveWidgetMinimumLayout(widget, MEMBERS_WIDGET_MIN_WIDTH, MEMBERS_WIDGET_MIN_HEIGHT);
   const resolveLockLayout = (widget: Widget): GridItem =>
     resolveWidgetMinimumLayout(widget, 1, toWidgetLayoutRows(widget, 1));
   const resolveWidgetLayoutByKind = (widget: Widget, nextLayout: GridItem): GridItem => {
@@ -3237,6 +3319,9 @@ export function MainBoard() {
     }
     if (widget.kind === 'cover') {
       return resolveCoverLayout(draftWidget);
+    }
+    if (widget.kind === 'members') {
+      return resolveMembersLayout(draftWidget);
     }
     if (widget.kind === 'lock') {
       return resolveLockLayout(draftWidget);
@@ -4596,6 +4681,170 @@ export function MainBoard() {
       return first.name.localeCompare(second.name, 'it-IT');
     });
   }, [currentUserAvatarUrl, haCurrentUser, haStates, haUrl, haUserNamesById, haUsersById, isHaConnected]);
+
+  const membersLiveMapPoints = useMemo(() => {
+    type MemberPersonMeta = {
+      coordinates?: { latitude: number; longitude: number };
+      stateLabel?: string;
+      linkedTrackers: string[];
+      displayName?: string;
+      avatarUrl?: string;
+      sourceTracker?: string;
+    };
+    const personMetaByUserId = new Map<string, MemberPersonMeta>();
+    const personMetaByName = new Map<string, MemberPersonMeta>();
+    const trackersByUserId = new Map<string, Set<string>>();
+    const trackersByName = new Map<string, Set<string>>();
+    const trackersByNameToken = new Map<string, Set<string>>();
+    const trackerKindByEntityId = new Map<string, MemberTrackerDeviceKind | null>();
+
+    const upsertTrackerLink = (map: Map<string, Set<string>>, key: string | undefined, trackerId: string) => {
+      const normalizedKey = toTrimmedString(key);
+      const normalizedTrackerId = toTrimmedString(trackerId);
+      if (!normalizedKey || !normalizedTrackerId || !normalizedTrackerId.startsWith('device_tracker.')) {
+        return;
+      }
+      const existing = map.get(normalizedKey);
+      if (existing) {
+        existing.add(normalizedTrackerId);
+        return;
+      }
+      map.set(normalizedKey, new Set([normalizedTrackerId]));
+    };
+
+    const upsertTrackerTokenLinks = (source: string | undefined, trackerId: string) => {
+      const normalizedSource = toTrimmedString(source);
+      const normalizedTrackerId = toTrimmedString(trackerId);
+      if (!normalizedSource || !normalizedTrackerId) {
+        return;
+      }
+      normalizedSource
+        .split('_')
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3)
+        .forEach((token) => upsertTrackerLink(trackersByNameToken, token, normalizedTrackerId));
+    };
+
+    Object.entries(haStates).forEach(([entityId, entity]) => {
+      if (!entityId.startsWith('person.')) {
+        return;
+      }
+      const rawAttributes = entity.rawAttributes ?? {};
+      const userId = toTrimmedString(rawAttributes.user_id);
+      const friendlyName =
+        toTrimmedString(rawAttributes.friendly_name) ??
+        entityId.slice('person.'.length).replace(/[_-]+/g, ' ').trim();
+      const normalizedName = normalizeMovementLocationKey(friendlyName);
+      const linkedTrackers = Array.from(
+        new Set([
+          ...toTrackerEntityIds(rawAttributes.device_trackers),
+          ...toTrackerEntityIds(rawAttributes.entity_id),
+        ]),
+      );
+      const activeSourceTracker = toTrimmedString(rawAttributes.source);
+      if (activeSourceTracker?.startsWith('device_tracker.')) {
+        linkedTrackers.push(activeSourceTracker);
+      }
+      const coordinates = readMovementCoordinates(rawAttributes) ?? undefined;
+      const stateLabel = toTrimmedString(entity.stateLabel ?? entity.state);
+      const personAvatar = resolveHaAssetUrl(
+        toTrimmedString(entity.imageUrl) ?? toTrimmedString(rawAttributes.entity_picture),
+        haUrl,
+      );
+
+      const personMeta: MemberPersonMeta = {
+        coordinates,
+        stateLabel,
+        linkedTrackers,
+        displayName: friendlyName,
+        avatarUrl: personAvatar,
+        sourceTracker: activeSourceTracker,
+      };
+      if (userId) {
+        personMetaByUserId.set(userId, personMeta);
+      }
+      if (normalizedName) {
+        personMetaByName.set(normalizedName, personMeta);
+      }
+    });
+
+    Object.entries(haStates).forEach(([entityId, entity]) => {
+      if (!entityId.startsWith('device_tracker.')) {
+        return;
+      }
+      const rawAttributes = entity.rawAttributes ?? {};
+      const linkedUserId = toTrimmedString(rawAttributes.user_id);
+      const friendlyNameKey = normalizeMovementLocationKey(toTrimmedString(rawAttributes.friendly_name));
+      const entityKey = normalizeMovementLocationKey(entityId.slice('device_tracker.'.length));
+      trackerKindByEntityId.set(entityId, classifyTrackerDeviceKind(entityId, rawAttributes));
+      upsertTrackerLink(trackersByUserId, linkedUserId, entityId);
+      upsertTrackerLink(trackersByName, friendlyNameKey, entityId);
+      upsertTrackerLink(trackersByName, entityKey, entityId);
+      upsertTrackerTokenLinks(friendlyNameKey, entityId);
+      upsertTrackerTokenLinks(entityKey, entityId);
+    });
+
+    return profileHouseMembers
+      .map((member) => {
+        const normalizedUserId = toTrimmedString(member.userId);
+        const normalizedName = normalizeMovementLocationKey(member.name);
+        const personMeta =
+          (normalizedUserId ? personMetaByUserId.get(normalizedUserId) : undefined) ??
+          (normalizedName ? personMetaByName.get(normalizedName) : undefined);
+        const coordinates = personMeta?.coordinates;
+        if (!coordinates) {
+          return null;
+        }
+        const trackerEntityIds = new Set<string>();
+        personMeta?.linkedTrackers.forEach((trackerId) => trackerEntityIds.add(trackerId));
+        if (normalizedUserId) {
+          trackersByUserId.get(normalizedUserId)?.forEach((trackerId) => trackerEntityIds.add(trackerId));
+        }
+        if (normalizedName) {
+          trackersByName.get(normalizedName)?.forEach((trackerId) => trackerEntityIds.add(trackerId));
+          normalizedName
+            .split('_')
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 3)
+            .forEach((token) =>
+              trackersByNameToken.get(token)?.forEach((trackerId) => trackerEntityIds.add(trackerId)),
+            );
+        }
+        const devices = {
+          smartwatch: 0,
+          tablet: 0,
+          smartphone: 0,
+        };
+        trackerEntityIds.forEach((trackerId) => {
+          const trackerKind = trackerKindByEntityId.get(trackerId);
+          if (trackerKind) {
+            devices[trackerKind] += 1;
+          }
+        });
+
+        return {
+          id: member.id,
+          name: personMeta?.displayName ?? member.name,
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          isCurrent: member.isCurrent === true,
+          roleLabel: member.roleLabel,
+          avatarUrl: personMeta?.avatarUrl ?? member.avatarUrl,
+          locationLabel: formatMovementLocationLabel(personMeta?.stateLabel),
+          devices,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .sort((first, second) => {
+        if (first.isCurrent === true && second.isCurrent !== true) {
+          return -1;
+        }
+        if (second.isCurrent === true && first.isCurrent !== true) {
+          return 1;
+        }
+        return first.name.localeCompare(second.name, 'it-IT');
+      });
+  }, [haStates, haUrl, profileHouseMembers]);
 
   const contextState = useMemo(
     () => ({
@@ -7811,6 +8060,20 @@ export function MainBoard() {
   const openLiveControls = (widget: Widget) => {
     const liveEntity = isHaConnected ? haStatesForUi[widget.entityId] : undefined;
 
+    if (widget.kind === 'members') {
+      setActiveDevice({
+        id: widget.id,
+        type: 'members',
+        name: widget.title || 'Members',
+        status:
+          membersLiveMapPoints.length > 0
+            ? `${membersLiveMapPoints.length} posizioni rilevate`
+            : 'Nessuna posizione disponibile',
+        membersMapPoints: membersLiveMapPoints,
+      });
+      return;
+    }
+
     if (widget.kind === 'camera') {
       const rawAttributes = liveEntity?.rawAttributes;
       const stateValue = normalizeCameraState(
@@ -8215,6 +8478,8 @@ export function MainBoard() {
               ? VACUUM_WIDGET_MIN_WIDTH
               : kind === 'cover'
                 ? COVER_WIDGET_MIN_WIDTH
+                : kind === 'members'
+                  ? MEMBERS_WIDGET_MIN_WIDTH
                 : 2;
     const widgetBaseHeight =
       kind === 'climate'
@@ -8229,6 +8494,8 @@ export function MainBoard() {
               ? VACUUM_WIDGET_MIN_HEIGHT
               : kind === 'cover'
                 ? COVER_WIDGET_MIN_HEIGHT
+                : kind === 'members'
+                  ? MEMBERS_WIDGET_MIN_HEIGHT
                 : kind === 'media'
                   ? MEDIA_WIDGET_MIN_HEIGHT
                   : 1;
@@ -8313,7 +8580,7 @@ export function MainBoard() {
             ? '%'
             : kind === 'climate'
               ? 'C'
-              : kind === 'alarm' || kind === 'lock'
+              : kind === 'alarm' || kind === 'lock' || kind === 'members'
                 ? ''
                 : '%',
         ...(kind === 'alarm' || kind === 'lock'
@@ -8689,6 +8956,10 @@ export function MainBoard() {
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isSecurityView;
   const shouldApplyXsShellBottomInset =
     !isSecurityImmersiveView && isXsViewport && !isDashboardCanvasView;
+  const openProfilePanel = (section: ProfileSectionId = 'theme') => {
+    setProfileInitialSection(section);
+    setIsProfileOpen(true);
+  };
 
   return (
     <div
@@ -8718,7 +8989,7 @@ export function MainBoard() {
           selectedPathId={selectedSidebarPathId}
           onPathClick={handleSidebarPathClick}
           onToggleEditMode={requestToggleEditMode}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={() => openProfilePanel('theme')}
         />
       ) : null}
 
@@ -8799,11 +9070,12 @@ export function MainBoard() {
                     userAvatarUrl={currentUserAvatarUrl}
                     userAvatarAlt={stateWithConnectedUser.userName}
                     haStatus={haStatus}
-                    onOpenProfile={() => setIsProfileOpen(true)}
+                    onOpenProfile={() => openProfilePanel('theme')}
                   />
                 ) : undefined
               }
               state={stateWithConnectedUser}
+              houseMembers={profileHouseMembers}
               sections={sections}
               widgets={widgets}
               runningSceneBySectionId={runningSceneBySectionId}
@@ -8892,6 +9164,7 @@ export function MainBoard() {
                 }
                 openDoor(undefined, widget);
               }}
+              onOpenMembersPanel={() => openProfilePanel('members')}
               onWeatherClick={openWeatherControls}
               onSceneTrigger={triggerSceneAction}
               onWidgetLayoutChange={handleWidgetLayoutChange}
@@ -8907,6 +9180,7 @@ export function MainBoard() {
             <RightSidebarManager
               isEditMode={isEditMode}
               isXs={isXsViewport}
+              theme={theme}
               activeDevice={activeDevice}
               onCloseContextSidebar={clearContextSelection}
               state={contextState}
@@ -9015,13 +9289,17 @@ export function MainBoard() {
           selectedPathId={selectedSidebarPathId}
           onPathClick={handleSidebarPathClick}
           onToggleEditMode={requestToggleEditMode}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={() => openProfilePanel('theme')}
         />
       ) : null}
 
       <ProfilePanel
         isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
+        onClose={() => {
+          setIsProfileOpen(false);
+          setProfileInitialSection('theme');
+        }}
+        initialSection={profileInitialSection}
         userAvatarUrl={currentUserAvatarUrl}
         userAvatarAlt={stateWithConnectedUser.userName}
         userEmail={profileUserEmail}

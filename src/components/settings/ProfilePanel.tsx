@@ -38,6 +38,7 @@ import type { DashboardConfig } from '../../types/dashboard';
 type ProfilePanelProps = {
   isOpen: boolean;
   onClose: () => void;
+  initialSection?: ProfileSectionId;
   userAvatarUrl?: string;
   userAvatarAlt?: string;
   userEmail?: string;
@@ -89,7 +90,7 @@ type ProfilePanelProps = {
   onRelinkCurrentDevice?: (userId: string, deviceId: string) => void;
 };
 
-type ProfileSectionId = 'theme' | 'movements' | 'members' | 'ha' | 'config';
+export type ProfileSectionId = 'theme' | 'movements' | 'members' | 'ha' | 'config';
 
 export type ProfileMovementTimelineEntry = {
   id: string;
@@ -214,22 +215,6 @@ function resolveDashboardShareRoleLabel(roleKey: DashboardShareRoleKey) {
   return 'Membro';
 }
 
-function encodeBase64Utf8(value: string) {
-  try {
-    if (typeof window === 'undefined' || !window.btoa) {
-      return '';
-    }
-    const encoded = new TextEncoder().encode(value);
-    let binary = '';
-    encoded.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-    return window.btoa(binary);
-  } catch {
-    return '';
-  }
-}
-
 function decodeBase64Utf8(value: string) {
   try {
     if (typeof window === 'undefined' || !window.atob) {
@@ -243,13 +228,13 @@ function decodeBase64Utf8(value: string) {
   }
 }
 
-function parseDashboardRoleSharePayload(rawToken: string) {
-  const decoded = decodeBase64Utf8(rawToken.trim());
-  if (!decoded) {
+function parseDashboardRoleSharePayloadJson(rawValue: string) {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
     return null;
   }
   try {
-    const parsed = JSON.parse(decoded) as Partial<DashboardRoleSharePayload>;
+    const parsed = JSON.parse(trimmed) as Partial<DashboardRoleSharePayload>;
     if (
       parsed.schema !== DASHBOARD_SHARE_SCHEMA ||
       parsed.version !== DASHBOARD_SHARE_VERSION ||
@@ -264,6 +249,24 @@ function parseDashboardRoleSharePayload(rawToken: string) {
   } catch {
     return null;
   }
+}
+
+function parseDashboardRoleSharePayload(rawToken: string) {
+  const trimmedToken = rawToken.trim();
+  if (!trimmedToken) {
+    return null;
+  }
+
+  const parsedPlainJson = parseDashboardRoleSharePayloadJson(trimmedToken);
+  if (parsedPlainJson) {
+    return parsedPlainJson;
+  }
+
+  const decoded = decodeBase64Utf8(trimmedToken);
+  if (!decoded) {
+    return null;
+  }
+  return parseDashboardRoleSharePayloadJson(decoded);
 }
 
 function createGuestAccessNonce() {
@@ -337,6 +340,7 @@ function buildGuestAccessUrl(
 export function ProfilePanel({
   isOpen,
   onClose,
+  initialSection = 'theme',
   userAvatarUrl,
   userAvatarAlt,
   userEmail,
@@ -416,14 +420,14 @@ export function ProfilePanel({
     formatDateTimeLocalInput(Date.now() + GUEST_ACCESS_DEFAULT_VALIDITY_MINUTES * 60 * 1000),
   );
   const [guestAccessCopyState, setGuestAccessCopyState] = useState<'idle' | 'done' | 'error'>('idle');
-  const [dashboardShareToken, setDashboardShareToken] = useState('');
-  const [dashboardShareImportToken, setDashboardShareImportToken] = useState('');
   const [dashboardShareFeedback, setDashboardShareFeedback] = useState<{
     tone: 'idle' | 'success' | 'error';
     text: string;
   }>({ tone: 'idle', text: '' });
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
+  const dashboardShareImportInputRef = useRef<HTMLInputElement | null>(null);
   const compactDragStartYRef = useRef<number | null>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -441,12 +445,20 @@ export function ProfilePanel({
       setMemberSourceSelectionById({});
       setMemberActionFeedback({ tone: 'idle', text: '' });
       setGuestAccessCopyState('idle');
-      setDashboardShareToken('');
-      setDashboardShareImportToken('');
       setDashboardShareFeedback({ tone: 'idle', text: '' });
       compactDragStartYRef.current = null;
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setActiveSection(initialSection);
+      if (initialSection === 'members') {
+        setMembersInspectorMode('members');
+      }
+    }
+    wasOpenRef.current = isOpen;
+  }, [initialSection, isOpen]);
 
   useEffect(() => {
     setProfileAvatarSrc(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
@@ -1024,9 +1036,9 @@ export function ProfilePanel({
     });
   };
 
-  const handleGenerateDashboardShareToken = () => {
+  const buildDashboardShareToken = () => {
     if (typeof window === 'undefined') {
-      return;
+      return '';
     }
     const payload = buildDashboardUserDataPayload(window.localStorage);
     const sharePayload: DashboardRoleSharePayload = {
@@ -1038,82 +1050,102 @@ export function ProfilePanel({
       createdBy: desktopDisplayName,
       data: payload,
     };
-    const token = encodeBase64Utf8(JSON.stringify(sharePayload));
-    if (!token) {
-      setDashboardShareFeedback({
-        tone: 'error',
-        text: 'Impossibile generare il codice di condivisione.',
-      });
-      return;
-    }
-    setDashboardShareToken(token);
-    setDashboardShareImportToken(token);
-    setDashboardShareFeedback({
-      tone: 'success',
-      text: 'Codice generato. Condividilo con utenti dello stesso ruolo.',
-    });
+    return JSON.stringify(sharePayload);
   };
 
-  const handleCopyDashboardShareToken = async () => {
-    if (!dashboardShareToken) {
-      setDashboardShareFeedback({ tone: 'error', text: 'Genera prima un codice di condivisione.' });
-      return;
-    }
-    try {
-      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-        throw new Error('Clipboard API non disponibile');
-      }
-      await navigator.clipboard.writeText(dashboardShareToken);
-      setDashboardShareFeedback({ tone: 'success', text: 'Codice copiato negli appunti.' });
-    } catch {
-      setDashboardShareFeedback({
-        tone: 'error',
-        text: 'Impossibile copiare il codice su questo dispositivo.',
-      });
-    }
-  };
-
-  const handleApplyDashboardShareToken = () => {
+  const handleDownloadDashboardShareToken = () => {
     if (typeof window === 'undefined') {
       return;
     }
-    const trimmedToken = dashboardShareImportToken.trim();
-    if (!trimmedToken) {
-      setDashboardShareFeedback({ tone: 'error', text: 'Incolla un codice prima di applicare.' });
-      return;
-    }
-    const parsedSharePayload = parseDashboardRoleSharePayload(trimmedToken);
-    if (!parsedSharePayload) {
-      setDashboardShareFeedback({ tone: 'error', text: 'Codice non valido o corrotto.' });
-      return;
-    }
-    if (parsedSharePayload.roleKey !== currentDashboardShareRoleKey) {
+    const token = buildDashboardShareToken();
+    if (!token || token.trim().length === 0) {
       setDashboardShareFeedback({
         tone: 'error',
-        text: `Questo codice e per ruolo ${parsedSharePayload.roleLabel}. Utente corrente: ${currentDashboardShareRoleLabel}.`,
+        text: 'Impossibile esportare il file di condivisione.',
       });
       return;
     }
-    const parsedDashboardPayload = parseDashboardUserDataPayload(parsedSharePayload.data);
-    if (!parsedDashboardPayload) {
-      setDashboardShareFeedback({
-        tone: 'error',
-        text: 'Il codice non contiene una configurazione dashboard valida.',
-      });
-      return;
-    }
-    const applyResult = applyDashboardUserDataPayload(parsedDashboardPayload, window.localStorage);
-    if (!applyResult.changed) {
-      setDashboardShareFeedback({ tone: 'success', text: 'Configurazione gia aggiornata.' });
-      return;
-    }
+
+    const safeTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `ha-dashboard-share-${currentDashboardShareRoleKey}-${safeTimestamp}.json`;
+    const blob = new Blob([token], { type: 'application/json;charset=utf-8' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
     setDashboardShareFeedback({
       tone: 'success',
-      text: 'Configurazione applicata. Ricarico la dashboard...',
+      text: 'File JSON esportato.',
     });
-    window.setTimeout(() => {
-      window.location.reload();
-    }, 320);
+  };
+
+  const handleOpenDashboardShareImportFile = () => {
+    dashboardShareImportInputRef.current?.click();
+  };
+
+  const handleDashboardShareImportFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    try {
+      const rawToken = await file.text();
+      const trimmedToken = rawToken.trim();
+      if (!trimmedToken) {
+        setDashboardShareFeedback({
+          tone: 'error',
+          text: 'Il file selezionato e vuoto.',
+        });
+        return;
+      }
+
+      const parsedSharePayload = parseDashboardRoleSharePayload(trimmedToken);
+      if (!parsedSharePayload) {
+        setDashboardShareFeedback({ tone: 'error', text: 'File JSON non valido o corrotto.' });
+        return;
+      }
+      if (parsedSharePayload.roleKey !== currentDashboardShareRoleKey) {
+        setDashboardShareFeedback({
+          tone: 'error',
+          text: `Questo file e per ruolo ${parsedSharePayload.roleLabel}. Utente corrente: ${currentDashboardShareRoleLabel}.`,
+        });
+        return;
+      }
+      const parsedDashboardPayload = parseDashboardUserDataPayload(parsedSharePayload.data);
+      if (!parsedDashboardPayload) {
+        setDashboardShareFeedback({
+          tone: 'error',
+          text: 'Il file non contiene una configurazione dashboard valida.',
+        });
+        return;
+      }
+      const applyResult = applyDashboardUserDataPayload(parsedDashboardPayload, window.localStorage);
+      if (!applyResult.changed) {
+        setDashboardShareFeedback({ tone: 'success', text: 'Configurazione gia aggiornata.' });
+        return;
+      }
+      setDashboardShareFeedback({
+        tone: 'success',
+        text: 'Configurazione applicata. Ricarico la dashboard...',
+      });
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 320);
+    } catch {
+      setDashboardShareFeedback({
+        tone: 'error',
+        text: 'Impossibile leggere il file selezionato.',
+      });
+    }
   };
 
   const handleSectionSelect = (sectionId: ProfileSectionId) => {
@@ -1606,71 +1638,38 @@ export function ProfilePanel({
       </div>
 
       <p className={`mt-2 text-xs ${subduedTextClass}`}>
-        Condividi la tua configurazione completa con utenti della casa che hanno lo stesso ruolo.
+        Metodo consigliato: esporta un file JSON e importalo sugli altri dispositivi.
       </p>
       <p className={`mt-2 text-[11px] ${menuTitleClass}`}>
         Ruolo corrente: <span className="font-semibold text-[color:var(--profile-sheet-title)]">{currentDashboardShareRoleLabel}</span>
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button
           type="button"
-          onClick={handleGenerateDashboardShareToken}
-          className={`rounded-xl border px-4 py-2 text-sm font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
+          onClick={handleDownloadDashboardShareToken}
+          className={`rounded-xl border px-4 py-3 text-sm font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
         >
-          Genera Codice
+          Scarica JSON
         </button>
         <button
           type="button"
-          onClick={handleCopyDashboardShareToken}
-          disabled={!dashboardShareToken}
-          className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55 ${buttonMotionClass} ${lightNeutralButtonClass}`}
+          onClick={handleOpenDashboardShareImportFile}
+          className={`rounded-xl border px-4 py-3 text-sm font-semibold ${buttonMotionClass} ${lightNeutralButtonClass}`}
         >
-          Copia Codice
+          Importa da JSON
         </button>
+        <input
+          ref={dashboardShareImportInputRef}
+          type="file"
+          accept=".json,application/json,text/plain"
+          className="hidden"
+          onChange={handleDashboardShareImportFile}
+        />
       </div>
 
-      <label className="mt-4 block">
-        <span className={`text-xs uppercase tracking-[0.16em] ${subduedTextClass}`}>Codice da condividere</span>
-        <textarea
-          value={dashboardShareToken}
-          readOnly
-          className="mt-2 h-24 w-full resize-none rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] px-3 py-2 text-[11px] text-[color:var(--profile-sheet-title)] outline-none"
-          placeholder="Genera un codice e condividilo con un utente dello stesso ruolo."
-        />
-      </label>
-
-      <label className="mt-4 block">
-        <span className={`text-xs uppercase tracking-[0.16em] ${subduedTextClass}`}>Incolla codice ricevuto</span>
-        <textarea
-          value={dashboardShareImportToken}
-          onChange={(event) => {
-            setDashboardShareImportToken(event.target.value);
-            setDashboardShareFeedback({ tone: 'idle', text: '' });
-          }}
-          className="mt-2 h-24 w-full resize-none rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] px-3 py-2 text-[11px] text-[color:var(--profile-sheet-title)] outline-none focus:border-[color:rgb(var(--profile-sheet-accent-rgb)/0.62)] focus:ring-2 focus:ring-[rgb(var(--profile-sheet-accent-rgb)/0.26)]"
-          placeholder="Incolla qui il codice ricevuto e applica la configurazione."
-        />
-      </label>
-
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handleApplyDashboardShareToken}
-          className={`rounded-xl border px-4 py-2 text-sm font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
-        >
-          Applica Configurazione
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setDashboardShareImportToken('');
-            setDashboardShareFeedback({ tone: 'idle', text: '' });
-          }}
-          className={`rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] ${buttonMotionClass} ${lightNeutralButtonClass}`}
-        >
-          Clear
-        </button>
+      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-[11px] ${menuTitleClass}`}>
+        Importa da JSON applica automaticamente la configurazione e ricarica la dashboard.
       </div>
 
       {dashboardShareFeedback.text ? (
@@ -2145,7 +2144,7 @@ export function ProfilePanel({
                         Condividi Dashboard
                       </p>
                       <p className={`mt-1 text-xs ${subduedTextClass}`}>
-                        Condividi la configurazione totale con utenti dello stesso ruolo.
+                        Esporta/importa la configurazione completa tramite file JSON.
                       </p>
                       <button
                         type="button"

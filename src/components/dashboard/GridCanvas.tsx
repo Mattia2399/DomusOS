@@ -29,6 +29,7 @@ import {
   COVER_WIDGET_SPAN_BY_BREAKPOINT,
   LIGHT_WIDGET_SPAN_BY_BREAKPOINT,
   LOCK_WIDGET_SPAN_BY_BREAKPOINT,
+  MEMBERS_WIDGET_SPAN_BY_BREAKPOINT,
   MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
   SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
   VACUUM_WIDGET_SPAN_BY_BREAKPOINT,
@@ -39,6 +40,13 @@ import 'react-resizable/css/styles.css';
 const ResponsiveGridLayout = WidthProvider(Responsive);
 type GridBreakpoint = keyof typeof GRID_ENGINE_BREAKPOINTS;
 type GridLayouts = Partial<Record<GridBreakpoint, GridItem[]>>;
+type HouseMemberCardItem = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  roleLabel?: string;
+  isCurrent?: boolean;
+};
 
 type GridCanvasProps = {
   isEditMode: boolean;
@@ -73,6 +81,7 @@ type GridCanvasProps = {
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => void;
   onWidgetLockOpen: (widget: Widget) => void;
+  onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onSectionsLayoutChange: (next: GridItem[]) => void;
   onAddWidget: (kind: WidgetKind) => void;
@@ -81,6 +90,7 @@ type GridCanvasProps = {
   onUpdateSection: (id: string, updater: (section: DashboardSection) => DashboardSection) => void;
   haConnected: boolean;
   haStates: MockEntityStateMap;
+  houseMembers?: HouseMemberCardItem[];
 };
 
 const SECTION_LABELS: Record<SectionKind, string> = {
@@ -440,6 +450,34 @@ function enforceSensorWidgetSpan(
   );
 }
 
+function enforceMembersWidgetSpan(
+  layouts: GridItem[],
+  breakpoint: GridBreakpoint,
+  cols: number,
+  membersWidgetIds: ReadonlySet<string>,
+): GridItem[] {
+  if (membersWidgetIds.size === 0) {
+    return normalizeRuntimeLayout(layouts, cols);
+  }
+  const span = MEMBERS_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+  const safeCols = Math.max(1, Math.round(cols));
+  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+  const forcedH = Math.max(1, Math.round(span.h));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!membersWidgetIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        w: forcedW,
+        h: forcedH,
+      };
+    }),
+    safeCols,
+  );
+}
+
 function enforceAlarmWidgetSpan(
   layouts: GridItem[],
   breakpoint: GridBreakpoint,
@@ -561,6 +599,7 @@ function enforceRootWidgetSpans(
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
   sensorWidgetIds: ReadonlySet<string>,
+  membersWidgetIds: ReadonlySet<string>,
   alarmWidgetIds: ReadonlySet<string>,
   lockWidgetIds: ReadonlySet<string>,
   vacuumWidgetIds: ReadonlySet<string>,
@@ -571,7 +610,8 @@ function enforceRootWidgetSpans(
   const withCamera = enforceCameraWidgetSpan(withClimate, breakpoint, cols, cameraWidgetIds);
   const withMedia = enforceMediaWidgetSpan(withCamera, breakpoint, cols, mediaWidgetIds);
   const withSensor = enforceSensorWidgetSpan(withMedia, breakpoint, cols, sensorWidgetIds);
-  const withAlarm = enforceAlarmWidgetSpan(withSensor, breakpoint, cols, alarmWidgetIds);
+  const withMembers = enforceMembersWidgetSpan(withSensor, breakpoint, cols, membersWidgetIds);
+  const withAlarm = enforceAlarmWidgetSpan(withMembers, breakpoint, cols, alarmWidgetIds);
   const withLock = enforceLockWidgetSpan(withAlarm, breakpoint, cols, lockWidgetIds);
   const withVacuum = enforceVacuumWidgetSpan(withLock, breakpoint, cols, vacuumWidgetIds);
   return enforceCoverWidgetSpan(withVacuum, breakpoint, cols, coverWidgetIds);
@@ -639,6 +679,7 @@ function buildResponsiveLayoutsFromDesktop(
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
   sensorWidgetIds: ReadonlySet<string>,
+  membersWidgetIds: ReadonlySet<string>,
   alarmWidgetIds: ReadonlySet<string>,
   lockWidgetIds: ReadonlySet<string>,
   vacuumWidgetIds: ReadonlySet<string>,
@@ -654,6 +695,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -671,6 +713,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -688,6 +731,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -708,6 +752,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -725,6 +770,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -742,6 +788,7 @@ function buildResponsiveLayoutsFromDesktop(
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
+      membersWidgetIds,
       alarmWidgetIds,
       lockWidgetIds,
       vacuumWidgetIds,
@@ -785,6 +832,7 @@ export function GridCanvas({
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
+  onOpenMembersPanel,
   onWidgetLayoutChange,
   onSectionsLayoutChange,
   onAddWidget,
@@ -792,6 +840,7 @@ export function GridCanvas({
   onUpdateSection,
   haConnected,
   haStates,
+  houseMembers = [],
 }: GridCanvasProps) {
   const isCanvasInteractingRef = useRef(false);
   const xsLongPressTimerRef = useRef<number | null>(null);
@@ -988,6 +1037,15 @@ export function GridCanvas({
       ),
     [rootWidgets],
   );
+  const rootMembersWidgetIds = useMemo(
+    () =>
+      new Set(
+        rootWidgets
+          .filter((widget) => widget.kind === 'members')
+          .map((widget) => widget.id),
+      ),
+    [rootWidgets],
+  );
   const rootAlarmWidgetIds = useMemo(
     () =>
       new Set(
@@ -1053,6 +1111,7 @@ export function GridCanvas({
         rootCameraWidgetIds,
         rootMediaWidgetIds,
         rootSensorWidgetIds,
+        rootMembersWidgetIds,
         rootAlarmWidgetIds,
         rootLockWidgetIds,
         rootVacuumWidgetIds,
@@ -1065,6 +1124,7 @@ export function GridCanvas({
       rootCameraWidgetIds,
       rootMediaWidgetIds,
       rootSensorWidgetIds,
+      rootMembersWidgetIds,
       rootAlarmWidgetIds,
       rootLockWidgetIds,
       rootVacuumWidgetIds,
@@ -1149,6 +1209,7 @@ export function GridCanvas({
           rootCameraWidgetIds,
           rootMediaWidgetIds,
           rootSensorWidgetIds,
+          rootMembersWidgetIds,
           rootAlarmWidgetIds,
           rootLockWidgetIds,
           rootVacuumWidgetIds,
@@ -1179,6 +1240,7 @@ export function GridCanvas({
       rootCameraWidgetIds,
       rootMediaWidgetIds,
       rootSensorWidgetIds,
+      rootMembersWidgetIds,
       rootAlarmWidgetIds,
       rootLockWidgetIds,
       rootVacuumWidgetIds,
@@ -1204,6 +1266,7 @@ export function GridCanvas({
           rootCameraWidgetIds,
           rootMediaWidgetIds,
           rootSensorWidgetIds,
+          rootMembersWidgetIds,
           rootAlarmWidgetIds,
           rootLockWidgetIds,
           rootVacuumWidgetIds,
@@ -1222,6 +1285,7 @@ export function GridCanvas({
           rootCameraWidgetIds,
           rootMediaWidgetIds,
           rootSensorWidgetIds,
+          rootMembersWidgetIds,
           rootAlarmWidgetIds,
           rootLockWidgetIds,
           rootVacuumWidgetIds,
@@ -1239,6 +1303,7 @@ export function GridCanvas({
           rootCameraWidgetIds,
           rootMediaWidgetIds,
           rootSensorWidgetIds,
+          rootMembersWidgetIds,
           rootAlarmWidgetIds,
           rootLockWidgetIds,
           rootVacuumWidgetIds,
@@ -1264,6 +1329,7 @@ export function GridCanvas({
             rootCameraWidgetIds,
             rootMediaWidgetIds,
             rootSensorWidgetIds,
+            rootMembersWidgetIds,
             rootAlarmWidgetIds,
             rootLockWidgetIds,
             rootVacuumWidgetIds,
@@ -1286,6 +1352,7 @@ export function GridCanvas({
             rootCameraWidgetIds,
             rootMediaWidgetIds,
             rootSensorWidgetIds,
+            rootMembersWidgetIds,
             rootAlarmWidgetIds,
             rootLockWidgetIds,
             rootVacuumWidgetIds,
@@ -1308,6 +1375,7 @@ export function GridCanvas({
             rootCameraWidgetIds,
             rootMediaWidgetIds,
             rootSensorWidgetIds,
+            rootMembersWidgetIds,
             rootAlarmWidgetIds,
             rootLockWidgetIds,
             rootVacuumWidgetIds,
@@ -1328,6 +1396,7 @@ export function GridCanvas({
       rootCameraWidgetIds,
       rootMediaWidgetIds,
       rootSensorWidgetIds,
+      rootMembersWidgetIds,
       rootAlarmWidgetIds,
       rootLockWidgetIds,
       rootVacuumWidgetIds,
@@ -1507,6 +1576,7 @@ export function GridCanvas({
                 isXsViewport={isXsViewport}
                 sectionsMounted={stackMounted}
                 state={state}
+                houseMembers={houseMembers}
                 section={section}
                 gridBreakpoint={gridEngineActiveBreakpoint}
                 sectionCanvasCols={sectionCanvasCols}
@@ -1533,6 +1603,7 @@ export function GridCanvas({
                 onWidgetVacuumReturnToBase={onWidgetVacuumReturnToBase}
                 onWidgetLockToggle={onWidgetLockToggle}
                 onWidgetLockOpen={onWidgetLockOpen}
+                onOpenMembersPanel={onOpenMembersPanel}
                 onWidgetLayoutChange={onWidgetLayoutChange}
                 haConnected={haConnected}
                 haStates={haStates}
@@ -1546,6 +1617,7 @@ export function GridCanvas({
       haConnected,
       haStates,
       gridEngineActiveBreakpoint,
+      houseMembers,
       isEditMode,
       isStackSection,
       isTabletCanvas,
@@ -1565,6 +1637,7 @@ export function GridCanvas({
       onWidgetLayoutChange,
       onWidgetLockOpen,
       onWidgetLockToggle,
+      onOpenMembersPanel,
       onWidgetMediaSeek,
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
@@ -1783,7 +1856,9 @@ export function GridCanvas({
                     onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                     onLockToggle={onWidgetLockToggle}
                     onLockOpen={onWidgetLockOpen}
+                    onMembersOpenPanel={() => onOpenMembersPanel()}
                     liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                    houseMembers={houseMembers}
                   />
                 </div>
               );

@@ -94,6 +94,15 @@ export const SENSOR_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, { w:
   xs: { w: 1, h: 1 },
 };
 
+export const MEMBERS_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, { w: number; h: number }> = {
+  '2xl': { w: 3, h: 2 },
+  xl: { w: 3, h: 2 },
+  lg: { w: 3, h: 2 },
+  md: { w: 2, h: 2 },
+  sm: { w: 2, h: 2 },
+  xs: { w: 1, h: 2 },
+};
+
 export const LOCK_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, { w: number; h: number }> = {
   '2xl': { w: 2, h: 2 },
   xl: { w: 2, h: 2 },

@@ -33,6 +33,7 @@ import {
   type SidebarQuickPath,
   type SidebarQuickPathIconKey,
 } from '../../hooks/useProfileSettings';
+import type { DashboardTheme } from '../../hooks/useProfileSettings';
 import { getGreetingDefaults } from '../widgets/GreetingCard';
 import { getSceneIconNode, SCENE_ICON_OPTIONS, SCENES_CATALOG } from '../widgets/ScenesCard';
 
@@ -290,6 +291,7 @@ function resolveWeatherSecondaryInfoOptions(weather: DashboardStateShape['weathe
 type RightSidebarManagerProps = {
   isEditMode: boolean;
   isXs?: boolean;
+  theme?: DashboardTheme;
   activeDevice: ActiveDevice | null;
   onCloseContextSidebar: () => void;
   state: DashboardStateShape;
@@ -394,6 +396,7 @@ type RightSidebarManagerProps = {
 export function RightSidebarManager({
   isEditMode,
   isXs = false,
+  theme = 'dark',
   activeDevice,
   onCloseContextSidebar,
   state,
@@ -522,6 +525,7 @@ export function RightSidebarManager({
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-1 pb-1">
                 <ContextSidebar
                   activeDevice={activeDevice}
+                  theme={theme}
                   onClose={onCloseContextSidebar}
                   showCloseButton={false}
                   externalScrollContainer
@@ -560,6 +564,7 @@ export function RightSidebarManager({
       <div className={sidebarWidthClass}>
         <ContextSidebar
           activeDevice={activeDevice}
+          theme={theme}
           onClose={onCloseContextSidebar}
           lamp={state.lamp}
           climate={state.climate}

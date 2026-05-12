@@ -1,4 +1,15 @@
-export type ActiveDeviceType = 'light' | 'climate' | 'camera' | 'sensor' | 'media' | 'weather' | 'alarm' | 'vacuum' | 'lock' | 'cover';
+export type ActiveDeviceType =
+  | 'light'
+  | 'climate'
+  | 'camera'
+  | 'sensor'
+  | 'media'
+  | 'weather'
+  | 'alarm'
+  | 'vacuum'
+  | 'lock'
+  | 'cover'
+  | 'members';
 export type SensorConnectionState = 'online' | 'offline' | 'unknown';
 
 export interface ActiveDevice {
@@ -27,4 +38,19 @@ export interface ActiveDevice {
   coverPosition?: number;
   coverTiltPosition?: number;
   coverSupportedFeatures?: number;
+  membersMapPoints?: Array<{
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    isCurrent?: boolean;
+    roleLabel?: string;
+    avatarUrl?: string;
+    locationLabel?: string;
+    devices?: {
+      smartwatch: number;
+      tablet: number;
+      smartphone: number;
+    };
+  }>;
 }

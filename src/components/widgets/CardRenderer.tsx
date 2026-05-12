@@ -8,6 +8,7 @@ import { AlarmCard } from './AlarmCard';
 import { VacuumCard } from './VacuumCard';
 import { LockCard } from './LockCard';
 import { CoverCard } from './CoverCard';
+import { MembersCard } from './MembersCard';
 import { GreetingCard } from './GreetingCard';
 import { GreetingWeatherCard } from './GreetingWeatherCard';
 import { WeatherCard } from './WeatherCard';
@@ -16,6 +17,14 @@ import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { ROOT_CANVAS_ROW_UNITS, type DashboardSection, type SceneKey, type Widget } from '../../types/dashboardModels';
 import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
 import type { MockEntityState } from '../../types/ha';
+
+type HouseMemberCardItem = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  roleLabel?: string;
+  isCurrent?: boolean;
+};
 
 type WidgetCardRendererProps = {
   widget: Widget;
@@ -37,8 +46,10 @@ type WidgetCardRendererProps = {
   onVacuumReturnToBase?: (widget: Widget) => void;
   onLockToggle?: (widget: Widget) => void;
   onLockOpen?: (widget: Widget) => void;
+  onMembersOpenPanel?: (widget: Widget) => void;
   liveEntity?: MockEntityState;
   gridBreakpoint?: GridEngineBreakpoint;
+  houseMembers?: HouseMemberCardItem[];
 };
 
 export function WidgetCardRenderer({
@@ -61,8 +72,10 @@ export function WidgetCardRenderer({
   onVacuumReturnToBase,
   onLockToggle,
   onLockOpen,
+  onMembersOpenPanel,
   liveEntity,
   gridBreakpoint,
+  houseMembers,
 }: WidgetCardRendererProps) {
   if (widget.kind === 'climate') {
     return (
@@ -172,6 +185,20 @@ export function WidgetCardRenderer({
         isEditMode={isEditMode}
         onClick={onClick}
         liveEntity={liveEntity}
+      />
+    );
+  }
+
+  if (widget.kind === 'members') {
+    return (
+      <MembersCard
+        widget={widget}
+        isSelected={isSelected}
+        isEditMode={isEditMode}
+        onClick={onClick}
+        onOpenMembersPanel={() => onMembersOpenPanel?.(widget)}
+        houseMembers={houseMembers}
+        gridBreakpoint={gridBreakpoint}
       />
     );
   }

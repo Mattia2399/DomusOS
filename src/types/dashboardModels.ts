@@ -1,4 +1,14 @@
-export type WidgetKind = 'light' | 'climate' | 'camera' | 'sensor' | 'media' | 'alarm' | 'vacuum' | 'lock' | 'cover';
+export type WidgetKind =
+  | 'light'
+  | 'climate'
+  | 'camera'
+  | 'sensor'
+  | 'media'
+  | 'alarm'
+  | 'vacuum'
+  | 'lock'
+  | 'cover'
+  | 'members';
 export type SectionKind = 'greeting' | 'weather' | 'scenes' | 'stack-vertical' | 'stack-horizontal' | 'stack-grid';
 export type WeatherLayoutMode = 'auto' | 'card' | 'chip';
 export type WeatherUnit = 'C' | 'F';
@@ -138,6 +148,7 @@ export const ENTITY_OPTIONS: Record<WidgetKind, string[]> = {
   vacuum: ['vacuum.demo_robot', 'vacuum.roborock_s8', 'vacuum.living_room_robot'],
   lock: ['lock.front_door', 'lock.garage_entry'],
   cover: ['cover.living_room_shutter', 'cover.kitchen_blind', 'cover.bedroom_curtain'],
+  members: ['group.house_members'],
 };
 
 export const WIDGET_CATALOG: Array<{ kind: WidgetKind; label: string }> = [
@@ -150,6 +161,7 @@ export const WIDGET_CATALOG: Array<{ kind: WidgetKind; label: string }> = [
   { kind: 'vacuum', label: 'Vacuum' },
   { kind: 'lock', label: 'Lock' },
   { kind: 'cover', label: 'Tapparella' },
+  { kind: 'members', label: 'Membri' },
 ];
 
 export const SECTION_CATALOG: Array<{ kind: SectionKind; label: string }> = [

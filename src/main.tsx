@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import { NotificationProvider } from './context/NotificationProvider';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './assets/index.css';
 
 createRoot(document.getElementById('root')!).render(

@@ -11,12 +11,21 @@ import {
   COVER_WIDGET_SPAN_BY_BREAKPOINT,
   LIGHT_WIDGET_SPAN_BY_BREAKPOINT,
   LOCK_WIDGET_SPAN_BY_BREAKPOINT,
+  MEMBERS_WIDGET_SPAN_BY_BREAKPOINT,
   MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
   SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
   STACK_GRID_COLS_BY_BREAKPOINT,
   VACUUM_WIDGET_SPAN_BY_BREAKPOINT,
   type GridEngineBreakpoint,
 } from './dashboardBreakpointConfig';
+
+type HouseMemberCardItem = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  roleLabel?: string;
+  isCurrent?: boolean;
+};
 
 const STACK_WIDGET_MIN_WIDTH_PX: Record<Widget['kind'], number> = {
   light: 168,
@@ -28,6 +37,7 @@ const STACK_WIDGET_MIN_WIDTH_PX: Record<Widget['kind'], number> = {
   vacuum: 208,
   lock: 168,
   cover: 168,
+  members: 232,
 };
 const ADAPTIVE_SPAN_ENABLE_COL_WIDTH_PX = 78;
 const ADAPTIVE_SPAN_DISABLE_COL_WIDTH_PX = 90;
@@ -388,6 +398,33 @@ function enforceSensorWidgetSpan(
   );
 }
 
+function enforceMembersWidgetSpan(
+  layouts: GridItem[],
+  breakpoint: GridEngineBreakpoint,
+  cols: number,
+  membersWidgetIds: ReadonlySet<string>,
+): GridItem[] {
+  if (membersWidgetIds.size === 0) {
+    return normalizeRuntimeLayout(layouts);
+  }
+  const span = MEMBERS_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+  const safeCols = Math.max(1, Math.round(cols));
+  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+  const forcedH = Math.max(1, Math.round(span.h));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!membersWidgetIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        w: forcedW,
+        h: forcedH,
+      };
+    }),
+  );
+}
+
 function enforceAlarmWidgetSpan(
   layouts: GridItem[],
   breakpoint: GridEngineBreakpoint,
@@ -478,6 +515,7 @@ function enforceGridStackWidgetSpans(
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
   sensorWidgetIds: ReadonlySet<string>,
+  membersWidgetIds: ReadonlySet<string>,
   alarmWidgetIds: ReadonlySet<string>,
   lockWidgetIds: ReadonlySet<string>,
   vacuumWidgetIds: ReadonlySet<string>,
@@ -488,7 +526,8 @@ function enforceGridStackWidgetSpans(
   const withCamera = enforceCameraWidgetSpan(withClimate, breakpoint, cols, cameraWidgetIds);
   const withMedia = enforceMediaWidgetSpan(withCamera, breakpoint, cols, mediaWidgetIds);
   const withSensor = enforceSensorWidgetSpan(withMedia, breakpoint, cols, sensorWidgetIds);
-  const withAlarm = enforceAlarmWidgetSpan(withSensor, breakpoint, cols, alarmWidgetIds);
+  const withMembers = enforceMembersWidgetSpan(withSensor, breakpoint, cols, membersWidgetIds);
+  const withAlarm = enforceAlarmWidgetSpan(withMembers, breakpoint, cols, alarmWidgetIds);
   const withLock = enforceLockWidgetSpan(withAlarm, breakpoint, cols, lockWidgetIds);
   const withVacuum = enforceVacuumWidgetSpan(withLock, breakpoint, cols, vacuumWidgetIds);
   return enforceCoverWidgetSpan(withVacuum, breakpoint, cols, coverWidgetIds);
@@ -499,6 +538,7 @@ type StackGridProps = {
   isXsViewport: boolean;
   sectionsMounted: boolean;
   state: DashboardStateShape;
+  houseMembers?: HouseMemberCardItem[];
   section: DashboardSection;
   gridBreakpoint: GridEngineBreakpoint;
   sectionCanvasCols: number;
@@ -525,6 +565,7 @@ type StackGridProps = {
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => void;
   onWidgetLockOpen: (widget: Widget) => void;
+  onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   haConnected: boolean;
   haStates: MockEntityStateMap;
@@ -535,6 +576,7 @@ function StackGridComponent({
   isXsViewport,
   sectionsMounted,
   state,
+  houseMembers = [],
   section,
   gridBreakpoint,
   sectionCanvasCols,
@@ -561,6 +603,7 @@ function StackGridComponent({
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
+  onOpenMembersPanel,
   onWidgetLayoutChange,
   haConnected,
   haStates,
@@ -811,6 +854,15 @@ function StackGridComponent({
       ),
     [stackWidgets],
   );
+  const stackMembersWidgetIds = useMemo(
+    () =>
+      new Set(
+        stackWidgets
+          .filter((widget) => widget.kind === 'members')
+          .map((widget) => widget.id),
+      ),
+    [stackWidgets],
+  );
   const stackAlarmWidgetIds = useMemo(
     () =>
       new Set(
@@ -870,6 +922,7 @@ function StackGridComponent({
           stackCameraWidgetIds,
           stackMediaWidgetIds,
           stackSensorWidgetIds,
+          stackMembersWidgetIds,
           stackAlarmWidgetIds,
           stackLockWidgetIds,
           stackVacuumWidgetIds,
@@ -893,6 +946,7 @@ function StackGridComponent({
           stackCameraWidgetIds,
           stackMediaWidgetIds,
           stackSensorWidgetIds,
+          stackMembersWidgetIds,
           stackAlarmWidgetIds,
           stackLockWidgetIds,
           stackVacuumWidgetIds,
@@ -953,6 +1007,7 @@ function StackGridComponent({
       stackCameraWidgetIds,
       stackMediaWidgetIds,
       stackSensorWidgetIds,
+      stackMembersWidgetIds,
       stackAlarmWidgetIds,
       stackLockWidgetIds,
       stackVacuumWidgetIds,
@@ -984,6 +1039,7 @@ function StackGridComponent({
             stackCameraWidgetIds,
             stackMediaWidgetIds,
             stackSensorWidgetIds,
+            stackMembersWidgetIds,
             stackAlarmWidgetIds,
             stackLockWidgetIds,
             stackVacuumWidgetIds,
@@ -1000,6 +1056,7 @@ function StackGridComponent({
     stackCameraWidgetIds,
     stackMediaWidgetIds,
     stackSensorWidgetIds,
+    stackMembersWidgetIds,
     stackAlarmWidgetIds,
     stackLockWidgetIds,
     stackVacuumWidgetIds,
@@ -1051,6 +1108,7 @@ function StackGridComponent({
           stackCameraWidgetIds,
           stackMediaWidgetIds,
           stackSensorWidgetIds,
+          stackMembersWidgetIds,
           stackAlarmWidgetIds,
           stackLockWidgetIds,
           stackVacuumWidgetIds,
@@ -1099,6 +1157,7 @@ function StackGridComponent({
       stackCameraWidgetIds,
       stackMediaWidgetIds,
       stackSensorWidgetIds,
+      stackMembersWidgetIds,
       stackAlarmWidgetIds,
       stackLockWidgetIds,
       stackVacuumWidgetIds,
@@ -1282,7 +1341,9 @@ function StackGridComponent({
                       onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                       onLockToggle={onWidgetLockToggle}
                       onLockOpen={onWidgetLockOpen}
+                      onMembersOpenPanel={() => onOpenMembersPanel()}
                       liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                      houseMembers={houseMembers}
                     />
                   </div>
                 </div>
