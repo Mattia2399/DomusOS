@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Pause, Play, Speaker } from 'lucide-react';
+import { Pause, Play, SkipBack, SkipForward, Speaker } from 'lucide-react';
 import './HaMediaCard.css';
 
 export interface HaMediaCardProps {
@@ -14,25 +14,14 @@ export interface HaMediaCardProps {
     media_position?: number;
   };
   onTogglePlay?: () => void;
+  onPreviousTrack?: () => void;
+  onNextTrack?: () => void;
   onSeek?: (position: number) => void;
   onLongPress?: (entityId: string) => void;
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function statusLabel(state: HaMediaCardProps['state']) {
-  if (state === 'playing') {
-    return 'Riproduzione';
-  }
-  if (state === 'paused') {
-    return 'In pausa';
-  }
-  if (state === 'unavailable') {
-    return 'Non disponibile';
-  }
-  return 'Inattivo';
 }
 
 function formatTime(totalSeconds?: number) {
@@ -51,6 +40,8 @@ export function HaMediaCard({
   state,
   attributes,
   onTogglePlay,
+  onPreviousTrack,
+  onNextTrack,
   onSeek,
   onLongPress,
 }: HaMediaCardProps) {
@@ -62,23 +53,25 @@ export function HaMediaCard({
   const rawPosition = Math.floor(Number(attributes.media_position) || 0);
   const position = duration > 0 ? clamp(rawPosition, 0, duration) : 0;
   const progress = duration > 0 ? (position / duration) * 100 : 0;
-  const hasTiming = duration > 0;
-  const playbackStatus = hasTiming
-    ? `${statusLabel(state)} - ${formatTime(position)} / ${formatTime(duration)}`
-    : statusLabel(state);
   const mediaTitle = attributes.media_title?.trim();
   const mediaArtist = attributes.media_artist?.trim();
   const primaryTrackText = mediaTitle || mediaArtist;
   const secondaryTrackText = mediaTitle && mediaArtist ? mediaArtist : undefined;
+  const headerTitle = primaryTrackText || name;
+  const headerSubtitle = state === 'idle' ? headerTitle : name;
+  const shouldScrollHeaderTitle = headerTitle.length > 24;
   const isExpanded = true;
   const showTrack = Boolean(primaryTrackText || hasCover);
-  const showProgress = true;
+  const showProgress = state === 'playing' || state === 'paused';
+  const showTransport = Boolean(onPreviousTrack || onTogglePlay || onNextTrack);
   const canSeek = Boolean(onSeek) && state !== 'unavailable';
   const canToggle = Boolean(onTogglePlay) && state !== 'unavailable';
+  const canPrevious = Boolean(onPreviousTrack) && state !== 'unavailable';
+  const canNext = Boolean(onNextTrack) && state !== 'unavailable';
   const ActionIcon = state === 'playing' ? Pause : Play;
   const actionLabel = state === 'playing' ? 'Pausa' : 'Riproduci';
   const supportsLongPress = Boolean(onLongPress && entityId);
-  const useCoverBackground = state === 'playing' && hasCover;
+  const useCoverBackground = hasCover && state !== 'unavailable';
 
   const clearLongPressTimer = () => {
     if (longPressTimerRef.current !== null) {
@@ -128,31 +121,33 @@ export function HaMediaCard({
           <div className="ha-media-card__header">
             <div className="ha-media-card__header-left">
               <span className="ha-media-card__icon-shell" aria-hidden="true">
-                <Speaker className="ha-media-card__icon" />
+                {state === 'playing' && hasCover ? (
+                  <img className="ha-media-card__icon-cover" src={coverUrl} alt="" />
+                ) : (
+                  <Speaker className="ha-media-card__icon" />
+                )}
               </span>
               <div className="ha-media-card__header-meta">
-                <div className="ha-media-card__name">{name}</div>
-                <div className="ha-media-card__status">{playbackStatus}</div>
+                <div className="ha-media-card__name" title={headerTitle}>
+                  {shouldScrollHeaderTitle ? (
+                    <span className="ha-media-card__name-marquee">
+                      <span className="ha-media-card__name-marquee-segment">{headerTitle}</span>
+                      <span className="ha-media-card__name-marquee-segment" aria-hidden="true">
+                        {headerTitle}
+                      </span>
+                    </span>
+                  ) : (
+                    headerTitle
+                  )}
+                </div>
+                <div className="ha-media-card__status" title={headerSubtitle}>
+                  {headerSubtitle}
+                </div>
               </div>
             </div>
-
-            <button
-              className="ha-media-card__play-toggle"
-              type="button"
-              onPointerDown={(event) => event.stopPropagation()}
-              onPointerUp={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onTogglePlay?.();
-              }}
-              disabled={!canToggle}
-              aria-label={actionLabel}
-            >
-              <ActionIcon className="ha-media-card__play-icon" />
-            </button>
           </div>
 
-          {showTrack || showProgress ? (
+          {showTrack || showTransport || showProgress ? (
             <div className="ha-media-card__expand" aria-hidden={!isExpanded}>
               {showTrack ? (
                 <div className="ha-media-card__track">
@@ -170,6 +165,55 @@ export function HaMediaCard({
                       <div className="ha-media-card__track-artist">{secondaryTrackText}</div>
                     ) : null}
                   </div>
+                </div>
+              ) : null}
+
+              {showTransport ? (
+                <div className="ha-media-card__transport">
+                  <button
+                    className="ha-media-card__transport-button"
+                    type="button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onPreviousTrack?.();
+                    }}
+                    disabled={!canPrevious}
+                    aria-label="Brano precedente"
+                  >
+                    <SkipBack className="ha-media-card__transport-icon" />
+                  </button>
+
+                  <button
+                    className="ha-media-card__transport-button ha-media-card__transport-button--primary"
+                    type="button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onTogglePlay?.();
+                    }}
+                    disabled={!canToggle}
+                    aria-label={actionLabel}
+                  >
+                    <ActionIcon className="ha-media-card__transport-icon ha-media-card__transport-icon--primary" />
+                  </button>
+
+                  <button
+                    className="ha-media-card__transport-button"
+                    type="button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onNextTrack?.();
+                    }}
+                    disabled={!canNext}
+                    aria-label="Brano successivo"
+                  >
+                    <SkipForward className="ha-media-card__transport-icon" />
+                  </button>
                 </div>
               ) : null}
 

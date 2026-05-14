@@ -89,11 +89,7 @@ export function CoverControls({
   }, [resolvedTiltPosition, cover.name]);
 
   const displayStatus = useMemo(() => {
-    const translated = translateCoverState(normalizedState);
-    if (normalizedState === 'unknown' || normalizedState === 'unavailable') {
-      return translated;
-    }
-    return `${translated} ${currentPosition}%`;
+    return `${translateCoverState(normalizedState)} | ${currentPosition}%`;
   }, [currentPosition, normalizedState]);
 
   const blindCoverage = 100 - currentPosition;
@@ -119,8 +115,8 @@ export function CoverControls({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={CONTEXT_PANEL_LAYOUT.section}>
-        <div className="flex items-start justify-between gap-3">
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+        <div className="flex items-start gap-3 pr-11">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-12 w-12 rounded-full border border-white/10 bg-white/10 flex items-center justify-center text-white">
               <Blinds size={20} />
@@ -130,9 +126,10 @@ export function CoverControls({
               <p className="mt-1 text-sm text-white/60 truncate">{displayStatus}</p>
             </div>
           </div>
-          <p className="text-sm text-white/65 shrink-0">{`${currentPosition}% Aperta`}</p>
         </div>
+      </div>
 
+      <div className={CONTEXT_PANEL_LAYOUT.section}>
         <div className="mt-6 flex justify-center">
           <div className="relative aspect-[7/10] w-full max-w-[clamp(10.5rem,62vw,14rem)] rounded-3xl border-[6px] border-neutral-800/80 bg-black/40 overflow-hidden shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03),inset_0_18px_34px_rgba(0,0,0,0.35)]">
             <div className="pointer-events-none absolute inset-[10px] rounded-[18px] border border-white/5" />

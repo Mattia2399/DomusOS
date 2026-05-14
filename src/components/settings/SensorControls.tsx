@@ -8,51 +8,75 @@ interface SensorControlsProps {
   status?: string;
   value: number;
   unit: string;
+  entityId?: string;
+  deviceClass?: string;
   history?: number[];
   battery?: string;
   connection?: string;
   connectionState?: SensorConnectionState;
 }
 
+type SensorChartKind = 'line' | 'bar';
+
+const BAR_DEVICE_CLASSES = new Set([
+  'water',
+  'volume',
+  'precipitation',
+  'precipitation_intensity',
+  'rain',
+  'gas',
+]);
+
+const BAR_KEYWORDS = [
+  'lit',
+  'liter',
+  'litri',
+  'lpm',
+  'l/min',
+  'm3',
+  'm^3',
+  'gall',
+  'consum',
+  'flow',
+  'water',
+  'rain',
+];
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function OnlineBadge({ connection, state }: { connection?: string; state?: SensorConnectionState }) {
-  const resolvedState = state === 'offline' ? 'offline' : 'online';
-  const dotClass =
-    resolvedState === 'offline'
-      ? 'bg-rose-400 shadow-[0_0_12px_rgba(251,113,133,0.65)]'
-      : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]';
-  const textClass = resolvedState === 'offline' ? 'text-rose-100' : 'text-emerald-100';
-  const badgeToneClass =
-    resolvedState === 'offline'
-      ? 'border-rose-300/28 bg-rose-500/16'
-      : 'border-emerald-300/28 bg-emerald-500/16';
-  const label =
-    connection && connection.trim().length > 0
-      ? connection.trim()
-      : resolvedState === 'offline'
-        ? 'Disconnesso'
-        : 'Connesso';
+function normalizeHintText(...parts: Array<string | undefined>) {
+  return parts
+    .map((part) => (part ?? '').trim().toLowerCase())
+    .filter((part) => part.length > 0)
+    .join(' ');
+}
 
-  return (
-    <span className="shrink-0">
-      <span
-        className={`inline-flex min-[996px]:hidden items-center justify-center h-[clamp(1.7rem,5.2vw,2rem)] w-[clamp(1.7rem,5.2vw,2rem)] rounded-full border ${badgeToneClass} backdrop-blur-md`}
-        aria-label={label}
-        title={label}
-      >
-        <span className={`h-[clamp(0.44rem,1.2vw,0.58rem)] w-[clamp(0.44rem,1.2vw,0.58rem)] rounded-full ${dotClass}`} />
-      </span>
-      <span
-        className={`hidden min-[996px]:inline-flex items-center gap-[clamp(0.3rem,1vw,0.5rem)] rounded-full border ${badgeToneClass} backdrop-blur-md px-[clamp(0.55rem,1.8vw,0.8rem)] py-[clamp(0.2rem,0.7vw,0.3rem)] text-[clamp(0.66rem,1.75vw,0.79rem)] font-medium ${textClass}`}
-      >
-        <span className={`h-[clamp(0.38rem,1vw,0.5rem)] w-[clamp(0.38rem,1vw,0.5rem)] rounded-full ${dotClass}`} />
-        {label}
-      </span>
-    </span>
-  );
+function hasKeyword(source: string, keywords: string[]) {
+  return keywords.some((keyword) => source.includes(keyword));
+}
+
+function resolveSensorChartKind({
+  unit,
+  name,
+  entityId,
+  deviceClass,
+}: {
+  unit: string;
+  name: string;
+  entityId?: string;
+  deviceClass?: string;
+}): SensorChartKind {
+  const normalizedDeviceClass = (deviceClass ?? '').trim().toLowerCase();
+  if (BAR_DEVICE_CLASSES.has(normalizedDeviceClass)) {
+    return 'bar';
+  }
+  const hint = normalizeHintText(normalizedDeviceClass, unit, name, entityId);
+  if (hasKeyword(hint, BAR_KEYWORDS)) {
+    return 'bar';
+  }
+  return 'line';
 }
 
 function parseBatteryPercentage(value?: string) {
@@ -101,6 +125,63 @@ function BatteryLevelGlyph({ percentage }: { percentage?: number }) {
         ))}
       </svg>
     </span>
+  );
+}
+
+function normalizeTrendLinePoints(values: number[], width: number, height: number, padding: number) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = Math.max(0.001, max - min);
+  return values.map((value, index) => {
+    const progressX = values.length <= 1 ? 0 : index / (values.length - 1);
+    const x = padding + progressX * (width - padding * 2);
+    const progressY = (value - min) / spread;
+    const y = height - padding - progressY * (height - padding * 2);
+    return { x, y };
+  });
+}
+
+function TrendLine({ values }: { values: number[] }) {
+  if (values.length < 2) {
+    return (
+      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
+        <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-white/50">Nessun dato storico disponibile</p>
+      </div>
+    );
+  }
+
+  const width = 320;
+  const height = 108;
+  const padding = 6;
+  const points = normalizeTrendLinePoints(values, width, height, padding);
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const linePath = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(' ');
+  const areaPath = [
+    `M ${firstPoint.x.toFixed(2)} ${(height - padding).toFixed(2)}`,
+    `L ${firstPoint.x.toFixed(2)} ${firstPoint.y.toFixed(2)}`,
+    ...points.slice(1).map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`),
+    `L ${lastPoint.x.toFixed(2)} ${(height - padding).toFixed(2)}`,
+    'Z',
+  ].join(' ');
+
+  return (
+    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" fill="none" aria-hidden="true">
+        <path d={areaPath} fill="rgba(59,130,246,0.16)" />
+        <path
+          d={linePath}
+          stroke="rgba(191,219,254,0.95)"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        <circle cx={lastPoint.x} cy={lastPoint.y} r={2.6} fill="rgba(191,219,254,1)" />
+      </svg>
+    </div>
   );
 }
 
@@ -180,6 +261,8 @@ export function SensorControlsPanel({
   status,
   value,
   unit,
+  entityId,
+  deviceClass,
   history,
   battery,
   connection,
@@ -187,30 +270,52 @@ export function SensorControlsPanel({
 }: SensorControlsProps) {
   const sensorValue = Math.round(value);
   const chartValues = (history ?? []).filter((entry) => Number.isFinite(entry));
+  const chartKind = useMemo(
+    () =>
+      resolveSensorChartKind({
+        unit,
+        name,
+        entityId,
+        deviceClass,
+      }),
+    [deviceClass, entityId, name, unit],
+  );
   const average =
     chartValues.length > 0
       ? Math.round(chartValues.reduce((sum, item) => sum + item, 0) / chartValues.length)
       : null;
+  const averageLabel =
+    average !== null
+      ? `Media: ${average}${unit && unit.trim().length > 0 ? ` ${unit}` : ''}`
+      : 'Media: N/D';
   const batteryValue = battery && battery.trim().length > 0 ? battery : 'N/D';
-  const connectionValue = connection && connection.trim().length > 0 ? connection : 'Sconosciuto';
+  const resolvedConnectionState = connectionState === 'offline' ? 'offline' : 'online';
+  const connectionLabel =
+    connection && connection.trim().length > 0
+      ? connection.trim()
+      : resolvedConnectionState === 'offline'
+        ? 'Disconnesso'
+        : 'Connesso';
+  const connectionSubtitleClass = resolvedConnectionState === 'offline' ? 'text-rose-200/90' : 'text-emerald-200/90';
+  const connectionValue = connectionLabel;
   const batteryPercent = parseBatteryPercentage(batteryValue);
   void status;
 
   return (
     <div className={`${CONTEXT_PANEL_LAYOUT.shell} gap-[clamp(0.7rem,2.4vw,1rem)]`}>
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="flex items-center justify-between gap-[clamp(0.65rem,2.2vw,1rem)]">
+        <div className="flex min-w-0 items-center gap-[clamp(0.65rem,2.2vw,1rem)] pr-11">
           <div className="flex min-w-0 flex-1 items-center gap-[clamp(0.65rem,2.2vw,1rem)]">
             <span className="h-[clamp(2.6rem,6.2vw,3.2rem)] w-[clamp(2.6rem,6.2vw,3.2rem)] rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-cyan-200 shrink-0">
               <Droplets size={22} className="h-[clamp(1.05rem,3.1vw,1.35rem)] w-[clamp(1.05rem,3.1vw,1.35rem)]" />
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="text-[clamp(0.98rem,2.8vw,1.3rem)] leading-[1.12] font-medium tracking-[-0.01em] text-white whitespace-normal break-words [overflow-wrap:anywhere] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">
-                {name || 'Sensore umidita'}
+                {name || 'Sensore'}
               </h2>
+              <p className={`mt-1 truncate text-xs ${connectionSubtitleClass}`}>{connectionLabel}</p>
             </div>
           </div>
-          <OnlineBadge connection={connection} state={connectionState} />
         </div>
       </div>
 
@@ -223,7 +328,7 @@ export function SensorControlsPanel({
             </span>
           </div>
           <p className="mt-[clamp(0.45rem,1.8vw,0.72rem)] text-[clamp(0.72rem,2.1vw,0.94rem)] leading-tight tracking-[0.01em] text-blue-400">
-            Umidita attuale
+            Valore attuale
           </p>
         </div>
       </div>
@@ -231,9 +336,9 @@ export function SensorControlsPanel({
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
         <div className="flex items-center justify-between mb-[clamp(0.55rem,1.9vw,0.9rem)]">
           <p className="text-[clamp(0.78rem,2vw,0.92rem)] text-white font-medium">Trend di oggi</p>
-          <p className="text-[clamp(0.74rem,1.95vw,0.9rem)] text-gray-400">{average !== null ? `Media: ${average}%` : 'Media: N/D'}</p>
+          <p className="text-[clamp(0.74rem,1.95vw,0.9rem)] text-gray-400">{averageLabel}</p>
         </div>
-        <TrendBars values={chartValues} />
+        {chartKind === 'bar' ? <TrendBars values={chartValues} /> : <TrendLine values={chartValues} />}
       </div>
 
       <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-[clamp(0.55rem,1.9vw,0.8rem)] mt-auto">

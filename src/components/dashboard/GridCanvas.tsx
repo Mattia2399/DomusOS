@@ -74,6 +74,8 @@ type GridCanvasProps = {
   onWidgetClimateModeChange: (widget: Widget, mode: string) => void;
   onWidgetClimateFanModeChange: (widget: Widget, mode: string) => void;
   onWidgetMediaToggle: (widget: Widget) => void;
+  onWidgetMediaPrevious: (widget: Widget) => void;
+  onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -90,6 +92,7 @@ type GridCanvasProps = {
   onUpdateSection: (id: string, updater: (section: DashboardSection) => DashboardSection) => void;
   haConnected: boolean;
   haStates: MockEntityStateMap;
+  sensorHistoryByEntity?: Record<string, number[]>;
   houseMembers?: HouseMemberCardItem[];
 };
 
@@ -825,6 +828,8 @@ export function GridCanvas({
   onWidgetClimateModeChange,
   onWidgetClimateFanModeChange,
   onWidgetMediaToggle,
+  onWidgetMediaPrevious,
+  onWidgetMediaNext,
   onWidgetMediaSeek,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
@@ -840,6 +845,7 @@ export function GridCanvas({
   onUpdateSection,
   haConnected,
   haStates,
+  sensorHistoryByEntity = {},
   houseMembers = [],
 }: GridCanvasProps) {
   const isCanvasInteractingRef = useRef(false);
@@ -1596,6 +1602,8 @@ export function GridCanvas({
                 onWidgetClimateModeChange={onWidgetClimateModeChange}
                 onWidgetClimateFanModeChange={onWidgetClimateFanModeChange}
                 onWidgetMediaToggle={onWidgetMediaToggle}
+                onWidgetMediaPrevious={onWidgetMediaPrevious}
+                onWidgetMediaNext={onWidgetMediaNext}
                 onWidgetMediaSeek={onWidgetMediaSeek}
                 onWidgetAlarmDisarm={onWidgetAlarmDisarm}
                 onWidgetAlarmArm={onWidgetAlarmArm}
@@ -1607,6 +1615,7 @@ export function GridCanvas({
                 onWidgetLayoutChange={onWidgetLayoutChange}
                 haConnected={haConnected}
                 haStates={haStates}
+                sensorHistoryByEntity={sensorHistoryByEntity}
               />
             </div>
           )}
@@ -1616,6 +1625,7 @@ export function GridCanvas({
     [
       haConnected,
       haStates,
+      sensorHistoryByEntity,
       gridEngineActiveBreakpoint,
       houseMembers,
       isEditMode,
@@ -1638,6 +1648,8 @@ export function GridCanvas({
       onWidgetLockOpen,
       onWidgetLockToggle,
       onOpenMembersPanel,
+      onWidgetMediaPrevious,
+      onWidgetMediaNext,
       onWidgetMediaSeek,
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
@@ -1849,6 +1861,8 @@ export function GridCanvas({
                     onClimateModeChange={onWidgetClimateModeChange}
                     onClimateFanModeChange={onWidgetClimateFanModeChange}
                     onMediaToggle={onWidgetMediaToggle}
+                    onMediaPrevious={onWidgetMediaPrevious}
+                    onMediaNext={onWidgetMediaNext}
                     onMediaSeek={onWidgetMediaSeek}
                     onAlarmDisarm={onWidgetAlarmDisarm}
                     onAlarmArm={onWidgetAlarmArm}
@@ -1858,6 +1872,7 @@ export function GridCanvas({
                     onLockOpen={onWidgetLockOpen}
                     onMembersOpenPanel={() => onOpenMembersPanel()}
                     liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                    sensorHistory={sensorHistoryByEntity[widget.entityId]}
                     houseMembers={houseMembers}
                   />
                 </div>

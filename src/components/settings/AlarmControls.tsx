@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Delete, Home, LockOpen, Moon, Plane, Shield, ShieldBan, ShieldEllipsis, ShieldPlus, ShieldQuestionMark, UserRound } from 'lucide-react';
+import { AlertTriangle, Delete, Home, LockOpen, Moon, Plane, Shield, ShieldBan, ShieldEllipsis, ShieldPlus, ShieldQuestionMark } from 'lucide-react';
 import {
   ALARM_FEATURE_ARM_AWAY,
   ALARM_FEATURE_ARM_CUSTOM_BYPASS,
@@ -245,12 +245,6 @@ export function AlarmControls({
             <p className="text-sm text-white/80 truncate">{translatedState}</p>
           </div>
         </div>
-        {changedBy ? (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/20 px-3 py-1.5 text-xs text-white/75">
-            <UserRound size={13} />
-            Ultimo cambio: {changedBy}
-          </div>
-        ) : null}
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>

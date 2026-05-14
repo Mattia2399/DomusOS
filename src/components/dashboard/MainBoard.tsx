@@ -53,7 +53,7 @@ import {
   type ConsumptionCardId,
   useConsumptionConfig,
 } from '../../hooks/useConsumptionConfig';
-import { useProfileSettings } from '../../hooks/useProfileSettings';
+import { useProfileSettings, type SidebarQuickPath } from '../../hooks/useProfileSettings';
 import { useHaLiveConnection } from '../../hooks/useHaLiveConnection';
 import { useHaPanelBridgeConnection } from '../../hooks/useHaPanelBridgeConnection';
 import {
@@ -108,7 +108,11 @@ const MEDIA_FEATURE_PREVIOUS_TRACK = 16;
 const MEDIA_FEATURE_NEXT_TRACK = 32;
 const MEDIA_FEATURE_TURN_ON = 128;
 const MEDIA_FEATURE_TURN_OFF = 256;
+const MEDIA_FEATURE_SELECT_SOURCE = 2048;
 const MEDIA_FEATURE_PLAY = 16384;
+const MEDIA_FEATURE_SHUFFLE_SET = 32768;
+const MEDIA_FEATURE_GROUPING = 524288;
+const MEDIA_FEATURE_REPEAT_SET = 262144;
 const LOCK_FEATURE_OPEN = 1;
 const VACUUM_FEATURE_PAUSE = 4;
 const VACUUM_FEATURE_STOP = 8;
@@ -2251,6 +2255,39 @@ function resolveMediaState(value: string | undefined): 'playing' | 'paused' | 'i
   return 'idle';
 }
 
+type MediaRepeatMode = 'off' | 'all' | 'one';
+type MediaOutputKind = 'speaker' | 'tv' | 'cast';
+
+function inferMediaOutputKind(value: string | undefined): MediaOutputKind {
+  const normalized = normalizeLower(value);
+  if (
+    normalized.includes('tv') ||
+    normalized.includes('television') ||
+    normalized.includes('chromecast')
+  ) {
+    return 'tv';
+  }
+  if (
+    normalized.includes('cast') ||
+    normalized.includes('airplay') ||
+    normalized.includes('google home')
+  ) {
+    return 'cast';
+  }
+  return 'speaker';
+}
+
+function formatMediaPlayerEntityLabel(entityId: string) {
+  const slug = entityId
+    .replace(/^media_player\./, '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  if (!slug) {
+    return entityId;
+  }
+  return slug.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function resolveLiveMediaPosition(
   basePosition: number,
   duration: number,
@@ -2273,6 +2310,17 @@ function resolveLiveMediaPosition(
   return Math.max(0, Math.min(duration, safeBase + elapsedSeconds));
 }
 
+function resolveMediaRepeatMode(value: unknown): MediaRepeatMode {
+  const normalized = normalizeLower(toTrimmedString(value));
+  if (normalized === 'one' || normalized === 'single' || normalized === 'track' || normalized === '1') {
+    return 'one';
+  }
+  if (normalized === 'all' || normalized === 'playlist' || normalized === 'on' || normalized === 'true') {
+    return 'all';
+  }
+  return 'off';
+}
+
 function resolveMediaCapabilities(entity?: MockEntityState) {
   if (!entity) {
     return {
@@ -2282,6 +2330,10 @@ function resolveMediaCapabilities(entity?: MockEntityState) {
       supportsNextTrack: true,
       supportsPreviousTrack: true,
       supportsPower: true,
+      supportsShuffle: true,
+      supportsRepeat: true,
+      supportsSelectSource: true,
+      supportsGrouping: true,
     };
   }
 
@@ -2307,6 +2359,18 @@ function resolveMediaCapabilities(entity?: MockEntityState) {
       (features & MEDIA_FEATURE_TURN_OFF) !== 0 ||
       (features & MEDIA_FEATURE_PLAY) !== 0 ||
       (features & MEDIA_FEATURE_PAUSE) !== 0,
+    supportsShuffle:
+      (features & MEDIA_FEATURE_SHUFFLE_SET) !== 0 ||
+      typeof toBoolean(entity.rawAttributes?.shuffle) === 'boolean',
+    supportsRepeat:
+      (features & MEDIA_FEATURE_REPEAT_SET) !== 0 ||
+      ['off', 'all', 'one'].includes(normalizeLower(toTrimmedString(entity.rawAttributes?.repeat))),
+    supportsSelectSource:
+      (features & MEDIA_FEATURE_SELECT_SOURCE) !== 0 ||
+      toStringArray(entity.rawAttributes?.source_list).length > 0,
+    supportsGrouping:
+      (features & MEDIA_FEATURE_GROUPING) !== 0 ||
+      toStringArray(entity.rawAttributes?.group_members).length > 0,
   };
 }
 
@@ -4063,8 +4127,9 @@ export function MainBoard() {
           : false;
     return {
       name:
-        toTrimmedString(rawAttributes?.friendly_name) ??
-        activeWidget.title,
+        activeWidget.title ||
+        toTrimmedString(rawAttributes?.friendly_name) ||
+        state.climate.name,
       mode: hvacMode,
       isOn,
       status: hvacAction || liveEntity?.stateLabel || liveEntity?.state || '',
@@ -4137,8 +4202,9 @@ export function MainBoard() {
     const isOffline = isCameraOfflineState(stateValue);
     const preview = resolveCameraPreviewUrls(liveEntity, activeWidget.entityId, haUrl);
     const cameraName =
-      toTrimmedString(rawAttributes?.friendly_name) ??
-      activeWidget.title;
+      activeWidget.title ||
+      toTrimmedString(rawAttributes?.friendly_name) ||
+      'Camera';
     const cameraEntityId = preview.cameraEntityId ?? activeWidget.entityId;
     const derivedActivity = resolveCameraDerivedActivity(cameraEntityId, cameraName, haStatesForUi, haUrl);
     const mergedRawAttributes: Record<string, unknown> = {
@@ -4219,6 +4285,81 @@ export function MainBoard() {
           : Math.max(0, Math.min(100, Math.round(fallbackProgress)));
     const resolvedPosition =
       resolvedPositionFromEntity ?? Math.max(0, Math.min(resolvedDuration, Math.round((resolvedProgress / 100) * resolvedDuration)));
+    const parsedShuffleValue = toBoolean(liveEntity?.rawAttributes?.shuffle);
+    const resolvedShuffleEnabled =
+      typeof parsedShuffleValue === 'boolean'
+        ? parsedShuffleValue
+        : Boolean(state.speaker.shuffleEnabled);
+    const resolvedRepeatMode = resolveMediaRepeatMode(
+      liveEntity?.rawAttributes?.repeat ?? state.speaker.repeatMode ?? 'off',
+    );
+    const liveSourceList = toStringArray(liveEntity?.rawAttributes?.source_list);
+    const selectedSource =
+      toTrimmedString(liveEntity?.rawAttributes?.source) ?? state.speaker.selectedOutputDeviceId ?? '';
+    const outputSourceNames = Array.from(
+      new Set(
+        [selectedSource, ...liveSourceList]
+          .map((entry) => entry.trim())
+          .filter((entry) => entry.length > 0),
+      ),
+    );
+    const outputDevices =
+      outputSourceNames.length > 0
+        ? outputSourceNames.map((sourceName) => ({
+            id: sourceName,
+            name: sourceName,
+            kind: inferMediaOutputKind(sourceName),
+          }))
+        : isHaConnected
+          ? []
+          : state.speaker.outputDevices;
+    const groupedMemberIds = toStringArray(liveEntity?.rawAttributes?.group_members).filter(
+      (entityId) => entityId !== activeWidget.entityId,
+    );
+    const groupedSet = new Set(groupedMemberIds);
+    const multiroomDevices = (() => {
+      if (!isHaConnected) {
+        return state.speaker.multiroomDevices;
+      }
+      const candidateMap = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          subtitle?: string;
+          kind: MediaOutputKind;
+        }
+      >();
+      Object.entries(haStatesForUi).forEach(([entityId, entity]) => {
+        if (!entityId.startsWith('media_player.') || entityId === activeWidget.entityId) {
+          return;
+        }
+        const friendlyName = toTrimmedString(entity.rawAttributes?.friendly_name) ?? formatMediaPlayerEntityLabel(entityId);
+        candidateMap.set(entityId, {
+          id: entityId,
+          name: friendlyName,
+          subtitle: toTrimmedString(entity.stateLabel) ?? toTrimmedString(entity.state),
+          kind: inferMediaOutputKind(friendlyName),
+        });
+      });
+      groupedMemberIds.forEach((entityId) => {
+        if (candidateMap.has(entityId)) {
+          return;
+        }
+        candidateMap.set(entityId, {
+          id: entityId,
+          name: formatMediaPlayerEntityLabel(entityId),
+          subtitle: 'Disponibile',
+          kind: 'speaker',
+        });
+      });
+      return Array.from(candidateMap.values())
+        .sort((first, second) => first.name.localeCompare(second.name, 'it-IT'))
+        .map((entry) => ({
+          ...entry,
+          grouped: groupedSet.has(entry.id),
+        }));
+    })();
 
     return {
       isPlaying: mediaState === 'playing',
@@ -4241,6 +4382,18 @@ export function MainBoard() {
       supportsNextTrack: capabilities.supportsNextTrack,
       supportsPreviousTrack: capabilities.supportsPreviousTrack,
       supportsPower: capabilities.supportsPower,
+      supportsShuffle: capabilities.supportsShuffle,
+      supportsRepeat: capabilities.supportsRepeat,
+      supportsSelectSource: capabilities.supportsSelectSource,
+      supportsGrouping: capabilities.supportsGrouping,
+      shuffleEnabled: resolvedShuffleEnabled,
+      repeatMode: resolvedRepeatMode,
+      outputDevices,
+      selectedOutputDeviceId:
+        selectedSource ||
+        (isHaConnected ? undefined : state.speaker.selectedOutputDeviceId),
+      multiroomDevices,
+      rawAttributes: liveEntity?.rawAttributes,
     };
   }, [activeWidget, haStatesForUi, isHaConnected, state.speaker]);
 
@@ -4324,8 +4477,9 @@ export function MainBoard() {
 
     return {
       name:
-        toTrimmedString(sourceAttributes?.friendly_name) ??
-        activeWidget.title,
+        activeWidget.title ||
+        toTrimmedString(sourceAttributes?.friendly_name) ||
+        'Robot Vacuum',
       state: normalizedState,
       status: statusText,
       batteryLevel,
@@ -4380,8 +4534,9 @@ export function MainBoard() {
     const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
     return {
       name:
-        toTrimmedString(rawAttributes?.friendly_name) ??
-        activeWidget.title,
+        activeWidget.title ||
+        toTrimmedString(rawAttributes?.friendly_name) ||
+        'Allarme',
       state: resolvedState,
       status: getAlarmStateLabel(resolvedState),
       codeArmRequired,
@@ -4428,8 +4583,9 @@ export function MainBoard() {
 
     return {
       name:
-        toTrimmedString(rawAttributes?.friendly_name) ??
-        activeWidget.title,
+        activeWidget.title ||
+        toTrimmedString(rawAttributes?.friendly_name) ||
+        'Serratura',
       state: stateValue,
       status: translateLockState(stateValue),
       changedBy,
@@ -4479,8 +4635,9 @@ export function MainBoard() {
 
     return {
       name:
-        toTrimmedString(rawAttributes?.friendly_name) ??
-        activeWidget.title,
+        activeWidget.title ||
+        toTrimmedString(rawAttributes?.friendly_name) ||
+        'Tapparella',
       state: stateValue,
       status: `${translateCoverState(stateValue)} ${position}%`,
       position,
@@ -7703,8 +7860,13 @@ export function MainBoard() {
     actions.toggleSpeakerPower();
   };
 
-  const previousMediaTrack = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+  const previousMediaTrack = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
     const entityId = targetWidget?.entityId;
     if (isHaConnected && entityId) {
       void callHaService('media_player', 'media_previous_track', { entity_id: entityId });
@@ -7713,8 +7875,13 @@ export function MainBoard() {
     actions.previousSpeakerTrack();
   };
 
-  const nextMediaTrack = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+  const nextMediaTrack = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
     const entityId = targetWidget?.entityId;
     if (isHaConnected && entityId) {
       void callHaService('media_player', 'media_next_track', { entity_id: entityId });
@@ -7795,6 +7962,169 @@ export function MainBoard() {
       return;
     }
     actions.toggleSpeakerMute();
+  };
+
+  const toggleMediaShuffle = () => {
+    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+    const entityId = targetWidget?.entityId;
+    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const currentShuffleRaw = toBoolean(liveEntity?.rawAttributes?.shuffle);
+    const currentShuffle =
+      typeof currentShuffleRaw === 'boolean'
+        ? currentShuffleRaw
+        : Boolean(contextSpeaker.shuffleEnabled);
+    const nextShuffle = !currentShuffle;
+
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'shuffle_set', {
+        entity_id: entityId,
+        shuffle: nextShuffle,
+      });
+      return;
+    }
+
+    actions.toggleSpeakerShuffle();
+  };
+
+  const cycleMediaRepeatMode = () => {
+    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+    const entityId = targetWidget?.entityId;
+    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const currentRepeatMode = resolveMediaRepeatMode(
+      liveEntity?.rawAttributes?.repeat ?? contextSpeaker.repeatMode ?? 'off',
+    );
+    const nextRepeatMode: MediaRepeatMode =
+      currentRepeatMode === 'off'
+        ? 'all'
+        : currentRepeatMode === 'all'
+          ? 'one'
+          : 'off';
+
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'repeat_set', {
+        entity_id: entityId,
+        repeat: nextRepeatMode,
+      });
+      return;
+    }
+
+    actions.cycleSpeakerRepeatMode();
+  };
+
+  const selectMediaOutputDevice = (deviceId: string) => {
+    const selectedSource = deviceId.trim();
+    if (!selectedSource) {
+      return;
+    }
+    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+    const entityId = targetWidget?.entityId;
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'select_source', {
+        entity_id: entityId,
+        source: selectedSource,
+      });
+      return;
+    }
+    actions.setSpeakerOutputDevice(selectedSource);
+  };
+
+  const toggleMediaGroupMember = (memberEntityId: string, shouldJoin: boolean) => {
+    const normalizedMemberId = memberEntityId.trim();
+    if (!normalizedMemberId) {
+      return;
+    }
+    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+    const leaderEntityId = targetWidget?.entityId;
+    if (isHaConnected && leaderEntityId) {
+      if (shouldJoin) {
+        void callHaService('media_player', 'join', {
+          entity_id: leaderEntityId,
+          group_members: [normalizedMemberId],
+        });
+        return;
+      }
+      void callHaService('media_player', 'unjoin', {
+        entity_id: normalizedMemberId,
+      });
+      return;
+    }
+    actions.toggleSpeakerGroupMember(normalizedMemberId, shouldJoin);
+  };
+
+  const toggleMicroWidgetEntity = (entityId: string, nextActive: boolean) => {
+    const normalizedEntityId = entityId.trim();
+    if (!normalizedEntityId) {
+      return;
+    }
+    if (!isHaConnected) {
+      return;
+    }
+
+    const domain = normalizedEntityId.split('.')[0]?.trim().toLowerCase();
+    if (domain === 'button' || domain === 'input_button') {
+      if (!nextActive) {
+        return;
+      }
+      void callHaService(domain, 'press', {
+        entity_id: normalizedEntityId,
+      });
+      return;
+    }
+
+    const genericService = nextActive ? 'turn_on' : 'turn_off';
+    const domainService = (() => {
+      switch (domain) {
+        case 'cover':
+          return nextActive ? 'open_cover' : 'close_cover';
+        case 'lock':
+          return nextActive ? 'lock' : 'unlock';
+        case 'vacuum':
+          return nextActive ? 'start' : 'pause';
+        default:
+          return genericService;
+      }
+    })();
+
+    const primaryDomain =
+      domain === 'cover' || domain === 'lock' || domain === 'vacuum'
+        ? domain
+        : domain || 'homeassistant';
+
+    void (async () => {
+      const primaryOk = await callHaService(primaryDomain, domainService, {
+        entity_id: normalizedEntityId,
+      });
+      if (primaryOk) {
+        return;
+      }
+
+      const fallbackOk = await callHaService('homeassistant', genericService, {
+        entity_id: normalizedEntityId,
+      });
+      if (fallbackOk) {
+        return;
+      }
+
+      void callHaService('homeassistant', 'toggle', {
+        entity_id: normalizedEntityId,
+      });
+    })();
+  };
+
+  const setMicroSliderEntityValue = (entityId: string, value: number) => {
+    const normalizedEntityId = entityId.trim();
+    if (!normalizedEntityId || !Number.isFinite(value) || !isHaConnected) {
+      return;
+    }
+    const domain = normalizedEntityId.split('.')[0]?.trim().toLowerCase();
+    if (domain !== 'input_number') {
+      return;
+    }
+
+    void callHaService('input_number', 'set_value', {
+      entity_id: normalizedEntityId,
+      value,
+    });
   };
 
   const buildCameraPtzMovePayloads = (
@@ -8057,14 +8387,37 @@ export function MainBoard() {
     [callHaApi, isHaConnected],
   );
 
+  useEffect(() => {
+    if (!isHaConnected) {
+      return;
+    }
+    const sensorEntityIds = Array.from(
+      new Set(
+        widgets
+          .filter((widget) => widget.kind === 'sensor')
+          .map((widget) => widget.entityId.trim())
+          .filter((entityId) => entityId.length > 0),
+      ),
+    );
+    sensorEntityIds.forEach((entityId) => {
+      const cached = sensorHistoryByEntity[entityId];
+      if (cached && cached.length >= 3) {
+        return;
+      }
+      void loadSensorHistory(entityId);
+    });
+  }, [isHaConnected, loadSensorHistory, sensorHistoryByEntity, widgets]);
+
   const openLiveControls = (widget: Widget) => {
     const liveEntity = isHaConnected ? haStatesForUi[widget.entityId] : undefined;
+    const microWidgets = widget.widgets ?? [];
 
     if (widget.kind === 'members') {
       setActiveDevice({
         id: widget.id,
         type: 'members',
         name: widget.title || 'Members',
+        microWidgets,
         status:
           membersLiveMapPoints.length > 0
             ? `${membersLiveMapPoints.length} posizioni rilevate`
@@ -8085,8 +8438,10 @@ export function MainBoard() {
         id: widget.id,
         type: 'camera',
         name:
-          toTrimmedString(rawAttributes?.friendly_name) ??
-          widget.title,
+          widget.title ||
+          toTrimmedString(rawAttributes?.friendly_name) ||
+          'Camera',
+        microWidgets,
         status: isCameraOfflineState(stateValue) ? 'Offline' : 'Live',
       });
       return;
@@ -8099,6 +8454,7 @@ export function MainBoard() {
         id: widget.id,
         type: 'sensor',
         name: widget.title,
+        microWidgets,
         status: sensorMeta.status,
         sensorValue:
           typeof liveEntity?.numericValue === 'number'
@@ -8107,6 +8463,11 @@ export function MainBoard() {
               ? state.wifiDownloadMbps
               : widget.value ?? 48,
         sensorUnit: liveEntity?.unit ?? widget.unit ?? '%',
+        sensorEntityId: widget.entityId,
+        sensorDeviceClass:
+          typeof liveEntity?.rawAttributes?.device_class === 'string'
+            ? liveEntity.rawAttributes.device_class
+            : undefined,
         sensorHistory,
         sensorBattery: sensorMeta.battery,
         sensorConnection: sensorMeta.connection,
@@ -8150,8 +8511,10 @@ export function MainBoard() {
         id: widget.id,
         type: 'alarm',
         name:
-          toTrimmedString(rawAttributes?.friendly_name) ??
-          widget.title,
+          widget.title ||
+          toTrimmedString(rawAttributes?.friendly_name) ||
+          'Allarme',
+        microWidgets,
         status: stateValue,
         alarmState: stateValue,
         alarmCodeRequired: typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false,
@@ -8173,8 +8536,10 @@ export function MainBoard() {
         id: widget.id,
         type: 'vacuum',
         name:
-          toTrimmedString(sourceAttributes?.friendly_name) ??
-          widget.title,
+          widget.title ||
+          toTrimmedString(sourceAttributes?.friendly_name) ||
+          'Robot Vacuum',
+        microWidgets,
         status: toTrimmedString(sourceAttributes?.status) ?? translateVacuumState(normalizedState),
         vacuumState: normalizedState,
         vacuumBatteryLevel:
@@ -8208,8 +8573,10 @@ export function MainBoard() {
         id: widget.id,
         type: 'lock',
         name:
-          toTrimmedString(rawAttributes?.friendly_name) ??
-          widget.title,
+          widget.title ||
+          toTrimmedString(rawAttributes?.friendly_name) ||
+          'Serratura',
+        microWidgets,
         status: translateLockState(stateValue),
         lockState: stateValue,
         lockChangedBy: toTrimmedString(rawAttributes?.changed_by),
@@ -8240,8 +8607,10 @@ export function MainBoard() {
         id: widget.id,
         type: 'cover',
         name:
-          toTrimmedString(rawAttributes?.friendly_name) ??
-          widget.title,
+          widget.title ||
+          toTrimmedString(rawAttributes?.friendly_name) ||
+          'Tapparella',
+        microWidgets,
         status: `${translateCoverState(stateValue)} ${position}%`,
         coverState: stateValue,
         coverPosition: position,
@@ -8255,6 +8624,7 @@ export function MainBoard() {
       id: widget.id,
       type: widget.kind,
       name: widget.title,
+      microWidgets,
       status: liveEntity?.stateLabel ?? liveEntity?.state ?? widget.status,
     } as ActiveDevice);
   };
@@ -8945,6 +9315,19 @@ export function MainBoard() {
     }
     window.location.assign(normalized);
   };
+  const handleMicroWidgetPageNavigation = (path: string) => {
+    const normalizedPath = path.trim();
+    if (!normalizedPath) {
+      return;
+    }
+    const pageEntry: SidebarQuickPath = {
+      id: `micro-widget-page-${Date.now()}`,
+      label: 'Micro Widget Page',
+      path: normalizedPath,
+      icon: 'dashboard',
+    };
+    handleSidebarPathClick(pageEntry);
+  };
   const dashboardWallpaperClass = `dashboard-wallpaper-${wallpaper}`;
   const profileUserEmail =
     haCurrentUser?.email ??
@@ -9119,6 +9502,8 @@ export function MainBoard() {
                 setClimateFanMode(mode, widget);
               }}
               onWidgetMediaToggle={toggleMediaPlayback}
+              onWidgetMediaPrevious={previousMediaTrack}
+              onWidgetMediaNext={nextMediaTrack}
               onWidgetMediaSeek={(widget, position) => {
                 if (widget.kind !== 'media') {
                   return;
@@ -9175,6 +9560,7 @@ export function MainBoard() {
               onUpdateSection={updateSection}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
+              sensorHistoryByEntity={sensorHistoryByEntity}
             />
 
             <RightSidebarManager
@@ -9219,6 +9605,11 @@ export function MainBoard() {
                 seekSpeakerPosition: (position) => seekMediaPosition(position),
                 setSpeakerVolume: (value) => setMediaVolume(value),
                 toggleSpeakerMute: () => toggleMediaMute(),
+                toggleSpeakerShuffle: () => toggleMediaShuffle(),
+                cycleSpeakerRepeatMode: () => cycleMediaRepeatMode(),
+                selectSpeakerOutputDevice: (deviceId) => selectMediaOutputDevice(deviceId),
+                toggleSpeakerGroupMember: (deviceId, shouldJoin) =>
+                  toggleMediaGroupMember(deviceId, shouldJoin),
                 disarmAlarm: (code) => disarmAlarm(code),
                 armAlarmHome: (code) => armAlarmHome(code),
                 armAlarmAway: (code) => armAlarmAway(code),
@@ -9246,14 +9637,19 @@ export function MainBoard() {
                 moveCameraPtz: (direction) => moveCameraPtz(direction),
                 stopCameraPtz: () => stopCameraPtz(),
               }}
+              onToggleMicroWidget={toggleMicroWidgetEntity}
+              onSetMicroSliderValue={setMicroSliderEntityValue}
+              onNavigateMicroWidgetPage={handleMicroWidgetPageNavigation}
               onUpdateUserName={actions.setUserName}
               selectedWidget={selectedWidget}
               selectedSection={selectedSection}
               selectedSidebarPath={selectedSidebarPath}
+              sidebarPaths={visibleSidebarPaths}
               weatherConfig={weatherSection}
               entityOptions={ENTITY_OPTIONS}
               haEntityIds={haEntityIds}
               haConnected={isHaConnected}
+              haStates={haStatesForUi}
               onUpdateWidget={updateWidget}
               onUpdateSection={updateSection}
               onUpdateSidebarPath={updateSidebarPath}

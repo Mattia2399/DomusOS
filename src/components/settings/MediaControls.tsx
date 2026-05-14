@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Cast,
   Check,
+  Info,
   Mic,
   Pause,
   Play,
-  Power,
+  Repeat,
   Settings2,
+  Shuffle,
   SkipBack,
   SkipForward,
-  Star,
   Speaker,
   Tv2,
   Volume2,
@@ -23,6 +24,16 @@ interface MediaOutputDevice {
   subtitle?: string;
   kind?: 'speaker' | 'tv' | 'cast';
 }
+
+interface MediaGroupDevice {
+  id: string;
+  name: string;
+  subtitle?: string;
+  kind?: 'speaker' | 'tv' | 'cast';
+  grouped?: boolean;
+}
+
+type MediaRepeatMode = 'off' | 'all' | 'one';
 
 interface MediaControlsProps {
   name?: string;
@@ -42,8 +53,16 @@ interface MediaControlsProps {
   supportsNextTrack?: boolean;
   supportsPreviousTrack?: boolean;
   supportsPower?: boolean;
+  supportsShuffle?: boolean;
+  supportsRepeat?: boolean;
+  supportsSelectSource?: boolean;
+  supportsGrouping?: boolean;
+  shuffleEnabled?: boolean;
+  repeatMode?: MediaRepeatMode;
+  rawAttributes?: Record<string, unknown>;
   outputDevices?: MediaOutputDevice[];
   selectedOutputDeviceId?: string;
+  multiroomDevices?: MediaGroupDevice[];
   onTogglePlayback: () => void;
   onTogglePower?: () => void;
   onPreviousTrack?: () => void;
@@ -51,18 +70,14 @@ interface MediaControlsProps {
   onSeek?: (position: number) => void;
   onVolumeChange?: (value: number) => void;
   onToggleMute?: () => void;
+  onToggleShuffle?: () => void;
+  onCycleRepeatMode?: () => void;
   onSelectOutputDevice?: (deviceId: string) => void;
+  onToggleMultiroomDevice?: (deviceId: string, shouldJoin: boolean) => void;
 }
 
 const DEFAULT_ALBUM_ART =
   'https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=1200&auto=format&fit=crop';
-const FALLBACK_OUTPUT_DEVICES: MediaOutputDevice[] = [
-  { id: 'output_living_room', name: 'Living Room Speaker', subtitle: 'Wi-Fi', kind: 'speaker' },
-  { id: 'output_homepod_mini', name: 'HomePod mini', subtitle: 'AirPlay', kind: 'speaker' },
-  { id: 'output_tv', name: 'LG Living TV', subtitle: 'HDMI ARC', kind: 'tv' },
-  { id: 'output_chromecast', name: 'Chromecast Audio', subtitle: 'Cast', kind: 'cast' },
-];
-
 function formatTimeFromProgress(progressPercent: number, durationSeconds: number) {
   const current = Math.round((Math.max(0, Math.min(100, progressPercent)) / 100) * durationSeconds);
   const minutes = Math.floor(current / 60);
@@ -81,11 +96,285 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function SecondaryAction({ icon, label }: { icon: React.ReactNode; label: string }) {
+type MediaSourceKind =
+  | 'spotify'
+  | 'youtube_music'
+  | 'youtube'
+  | 'apple_music'
+  | 'tidal'
+  | 'deezer'
+  | 'amazon_music'
+  | 'soundcloud'
+  | 'generic';
+
+function toTrimmedString(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function inferMediaSourceKind(value: string | undefined): MediaSourceKind | null {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.includes('spotify')) {
+    return 'spotify';
+  }
+  if (
+    normalized.includes('youtube music') ||
+    normalized.includes('yt music') ||
+    normalized.includes('ytmusic')
+  ) {
+    return 'youtube_music';
+  }
+  if (normalized.includes('youtube')) {
+    return 'youtube';
+  }
+  if (normalized.includes('apple music')) {
+    return 'apple_music';
+  }
+  if (normalized.includes('tidal')) {
+    return 'tidal';
+  }
+  if (normalized.includes('deezer')) {
+    return 'deezer';
+  }
+  if (normalized.includes('amazon music')) {
+    return 'amazon_music';
+  }
+  if (normalized.includes('soundcloud')) {
+    return 'soundcloud';
+  }
+  return 'generic';
+}
+
+function sourceKindLabel(kind: MediaSourceKind, fallback?: string) {
+  if (kind === 'spotify') {
+    return 'Spotify';
+  }
+  if (kind === 'youtube_music') {
+    return 'YouTube Music';
+  }
+  if (kind === 'youtube') {
+    return 'YouTube';
+  }
+  if (kind === 'apple_music') {
+    return 'Apple Music';
+  }
+  if (kind === 'tidal') {
+    return 'TIDAL';
+  }
+  if (kind === 'deezer') {
+    return 'Deezer';
+  }
+  if (kind === 'amazon_music') {
+    return 'Amazon Music';
+  }
+  if (kind === 'soundcloud') {
+    return 'SoundCloud';
+  }
+  return fallback ?? 'Sorgente';
+}
+
+function sourceKindBadge(kind: MediaSourceKind, label: string) {
+  if (kind === 'spotify') {
+    return 'S';
+  }
+  if (kind === 'youtube_music') {
+    return 'YM';
+  }
+  if (kind === 'youtube') {
+    return 'YT';
+  }
+  if (kind === 'apple_music') {
+    return 'A';
+  }
+  if (kind === 'tidal') {
+    return 'T';
+  }
+  if (kind === 'deezer') {
+    return 'D';
+  }
+  if (kind === 'amazon_music') {
+    return 'AM';
+  }
+  if (kind === 'soundcloud') {
+    return 'SC';
+  }
+  const first = label.trim().charAt(0).toUpperCase();
+  return first || 'M';
+}
+
+function sourceKindBadgeClass(kind: MediaSourceKind) {
+  if (kind === 'spotify') {
+    return 'bg-[#1DB954] text-black';
+  }
+  if (kind === 'youtube_music') {
+    return 'bg-[#ff0033] text-white';
+  }
+  if (kind === 'youtube') {
+    return 'bg-[#ff0000] text-white';
+  }
+  if (kind === 'apple_music') {
+    return 'bg-[#fa233b] text-white';
+  }
+  if (kind === 'tidal') {
+    return 'bg-white text-black';
+  }
+  if (kind === 'deezer') {
+    return 'bg-[#8c30ff] text-white';
+  }
+  if (kind === 'amazon_music') {
+    return 'bg-[#00a8e1] text-white';
+  }
+  if (kind === 'soundcloud') {
+    return 'bg-[#ff7700] text-white';
+  }
+  return 'bg-white/20 text-white';
+}
+
+function parseSpotifyUrl(value: string | undefined) {
+  const raw = toTrimmedString(value);
+  if (!raw) {
+    return undefined;
+  }
+  if (raw.startsWith('https://open.spotify.com/') || raw.startsWith('http://open.spotify.com/')) {
+    return raw;
+  }
+  if (!raw.startsWith('spotify:')) {
+    return undefined;
+  }
+  const parts = raw.split(':').filter((entry) => entry.trim().length > 0);
+  if (parts.length < 3) {
+    return 'https://open.spotify.com/';
+  }
+  const resource = parts[1];
+  const id = parts[2];
+  if (!resource || !id) {
+    return 'https://open.spotify.com/';
+  }
+  return `https://open.spotify.com/${encodeURIComponent(resource)}/${encodeURIComponent(id)}`;
+}
+
+function parseYoutubeMusicUrl(value: string | undefined) {
+  const raw = toTrimmedString(value);
+  if (!raw) {
+    return undefined;
+  }
+  if (
+    raw.startsWith('https://music.youtube.com/') ||
+    raw.startsWith('http://music.youtube.com/')
+  ) {
+    return raw;
+  }
+  if (raw.startsWith('https://www.youtube.com/') || raw.startsWith('http://www.youtube.com/')) {
+    return raw;
+  }
+  if (/^[a-zA-Z0-9_-]{11}$/.test(raw)) {
+    return `https://music.youtube.com/watch?v=${raw}`;
+  }
+  if (raw.includes('watch?v=')) {
+    return raw.startsWith('http') ? raw : `https://music.youtube.com/${raw.replace(/^\/+/, '')}`;
+  }
+  return undefined;
+}
+
+function parseHttpUrl(value: string | undefined) {
+  const raw = toTrimmedString(value);
+  if (!raw) {
+    return undefined;
+  }
+  if (raw.startsWith('https://') || raw.startsWith('http://')) {
+    return raw;
+  }
+  return undefined;
+}
+
+function resolveMediaSourceMeta(rawAttributes: Record<string, unknown> | undefined) {
+  const sourceCandidates = [
+    toTrimmedString(rawAttributes?.app_name),
+    toTrimmedString(rawAttributes?.source),
+    toTrimmedString(rawAttributes?.media_channel),
+    toTrimmedString(rawAttributes?.source_name),
+    toTrimmedString(rawAttributes?.application_name),
+    toTrimmedString(rawAttributes?.app_id),
+  ].filter((entry): entry is string => Boolean(entry));
+
+  const firstCandidate = sourceCandidates[0];
+  const inferredKind =
+    sourceCandidates.map((entry) => inferMediaSourceKind(entry)).find((entry): entry is MediaSourceKind => entry !== null) ??
+    'generic';
+  const sourceLabel = sourceKindLabel(inferredKind, firstCandidate);
+
+  const directUrlCandidates = [
+    toTrimmedString(rawAttributes?.app_url),
+    toTrimmedString(rawAttributes?.source_url),
+    toTrimmedString(rawAttributes?.media_content_url),
+    toTrimmedString(rawAttributes?.url),
+    toTrimmedString(rawAttributes?.link),
+    toTrimmedString(rawAttributes?.website),
+  ];
+  const mediaContentId = toTrimmedString(rawAttributes?.media_content_id);
+  const directHttpUrl =
+    directUrlCandidates
+      .map((candidate) => parseHttpUrl(candidate))
+      .find((candidate): candidate is string => Boolean(candidate)) ??
+    parseHttpUrl(mediaContentId);
+
+  let sourceAppUrl = directHttpUrl;
+  if (!sourceAppUrl && inferredKind === 'spotify') {
+    sourceAppUrl = parseSpotifyUrl(mediaContentId) ?? 'https://open.spotify.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'youtube_music') {
+    sourceAppUrl = parseYoutubeMusicUrl(mediaContentId) ?? 'https://music.youtube.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'youtube') {
+    sourceAppUrl = parseYoutubeMusicUrl(mediaContentId) ?? 'https://www.youtube.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'apple_music') {
+    sourceAppUrl = 'https://music.apple.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'tidal') {
+    sourceAppUrl = 'https://listen.tidal.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'deezer') {
+    sourceAppUrl = 'https://www.deezer.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'amazon_music') {
+    sourceAppUrl = 'https://music.amazon.com/';
+  }
+  if (!sourceAppUrl && inferredKind === 'soundcloud') {
+    sourceAppUrl = 'https://soundcloud.com/';
+  }
+
+  return {
+    sourceKind: inferredKind,
+    sourceLabel,
+    sourceBadge: sourceKindBadge(inferredKind, sourceLabel),
+    sourceBadgeClass: sourceKindBadgeClass(inferredKind),
+    sourceAppUrl,
+  };
+}
+
+function SecondaryAction({
+  icon,
+  label,
+  disabled = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
-      className="h-12 w-12 min-[420px]:h-14 min-[420px]:w-14 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white/90 flex items-center justify-center hover:bg-white/15 transition-colors"
+      disabled={disabled}
+      className={`h-12 w-12 min-[420px]:h-14 min-[420px]:w-14 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white/90 flex items-center justify-center transition-colors ${
+        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/15'
+      }`}
       aria-label={label}
       title={label}
     >
@@ -111,16 +400,25 @@ export function MediaControlsPanel({
   supportsMute = true,
   supportsNextTrack = true,
   supportsPreviousTrack = true,
-  supportsPower = true,
+  supportsShuffle = true,
+  supportsRepeat = true,
+  supportsSelectSource = true,
+  supportsGrouping = true,
+  shuffleEnabled = false,
+  repeatMode = 'off',
+  rawAttributes,
   outputDevices,
   selectedOutputDeviceId: selectedOutputDeviceIdProp,
+  multiroomDevices,
   onTogglePlayback,
-  onTogglePower,
   onPreviousTrack,
   onNextTrack,
   onVolumeChange,
   onToggleMute,
+  onToggleShuffle,
+  onCycleRepeatMode,
   onSelectOutputDevice,
+  onToggleMultiroomDevice,
 }: MediaControlsProps) {
   const VOLUME_DEBOUNCE_MS = 120;
   const volumeDebounceRef = useRef<number | null>(null);
@@ -132,18 +430,29 @@ export function MediaControlsPanel({
   const [livePosition, setLivePosition] = useState(resolvedPosition);
   const displayProgress = hasLiveDuration ? Math.round((livePosition / safeDuration) * 100) : 0;
   const [volumeDraft, setVolumeDraft] = useState(Math.max(0, Math.min(100, Math.round(volumeLevel))));
-  const availableOutputDevices = outputDevices && outputDevices.length > 0 ? outputDevices : FALLBACK_OUTPUT_DEVICES;
+  const availableOutputDevices = outputDevices ?? [];
+  const availableMultiroomDevices = multiroomDevices ?? [];
   const [localOutputDeviceId, setLocalOutputDeviceId] = useState(
     selectedOutputDeviceIdProp ?? availableOutputDevices[0]?.id ?? '',
   );
+  const [localGroupedDeviceIds, setLocalGroupedDeviceIds] = useState<string[]>([]);
   const selectedOutputDeviceId = selectedOutputDeviceIdProp ?? localOutputDeviceId;
+  const resolvedShuffleEnabled = Boolean(shuffleEnabled);
+  const resolvedRepeatMode: MediaRepeatMode = repeatMode === 'one' || repeatMode === 'all' ? repeatMode : 'off';
+  const repeatButtonLabel =
+    resolvedRepeatMode === 'one'
+      ? 'Repeat: uno'
+      : resolvedRepeatMode === 'all'
+        ? 'Repeat: tutti'
+        : 'Repeat: off';
   const safeVolumePercent = Math.max(0, Math.min(100, volumeDraft));
   const elapsed = useMemo(() => formatTimeFromSeconds(livePosition), [livePosition]);
   const total = useMemo(() => formatTimeFromProgress(100, safeDuration), [safeDuration]);
   const resolvedTrackTitle = trackTitle.trim() || 'Nessun brano in riproduzione';
   const resolvedTrackArtist = trackArtist.trim() || 'Nessun artista';
-  const statusWithTime = `${status} - ${elapsed} / ${total}`;
   const albumArt = coverUrl && coverUrl.trim().length > 0 ? coverUrl : DEFAULT_ALBUM_ART;
+  const sourceMeta = useMemo(() => resolveMediaSourceMeta(rawAttributes), [rawAttributes]);
+  const canOpenSourceApp = Boolean(sourceMeta.sourceAppUrl);
 
   useEffect(() => {
     setVolumeDraft(Math.max(0, Math.min(100, Math.round(volumeLevel))));
@@ -158,6 +467,14 @@ export function MediaControlsPanel({
       setLocalOutputDeviceId(availableOutputDevices[0]?.id ?? '');
     }
   }, [availableOutputDevices, localOutputDeviceId, selectedOutputDeviceIdProp]);
+
+  useEffect(() => {
+    setLocalGroupedDeviceIds(
+      availableMultiroomDevices
+        .filter((device) => device.grouped === true)
+        .map((device) => device.id),
+    );
+  }, [availableMultiroomDevices]);
 
   useEffect(() => {
     setLivePosition(resolvedPosition);
@@ -193,30 +510,14 @@ export function MediaControlsPanel({
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
+        <div className="flex items-center gap-4 min-w-0 pr-11">
             <span className="w-14 h-14 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
               <Speaker size={22} />
             </span>
             <div className="min-w-0">
               <h2 className="text-[1.3rem] font-medium text-white truncate">{name}</h2>
-              <p className="text-sm text-gray-400 font-light truncate">{statusWithTime}</p>
+              <p className="mt-0.5 text-sm text-white/60 truncate">{status}</p>
             </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onTogglePower?.()}
-            disabled={!supportsPower}
-            className={`w-14 h-14 rounded-full border flex items-center justify-center transition-colors ${
-              supportsPower
-                ? 'bg-white/90 border-white text-slate-900'
-                : 'bg-white/10 border-white/10 text-white/45 cursor-not-allowed'
-            }`}
-            aria-label="Power speaker"
-          >
-            <Power size={20} />
-          </button>
         </div>
       </div>
 
@@ -230,14 +531,32 @@ export function MediaControlsPanel({
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-full bg-[#1DB954] text-black text-xs font-bold flex items-center justify-center">
-                S
+              <span
+                className={`w-8 h-8 rounded-full text-[10px] font-bold flex items-center justify-center ${sourceMeta.sourceBadgeClass}`}
+              >
+                {sourceMeta.sourceBadge}
               </span>
-              <span className="text-sm text-white font-medium">Spotify</span>
+              <span className="text-sm text-white font-medium truncate">{sourceMeta.sourceLabel}</span>
             </div>
-            <span className="text-[10px] tracking-wider uppercase bg-white/10 rounded-full px-3 py-1 text-gray-200 border border-white/10">
+            <a
+              href={sourceMeta.sourceAppUrl ?? '#'}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                if (!sourceMeta.sourceAppUrl) {
+                  event.preventDefault();
+                }
+              }}
+              className={`text-[10px] tracking-wider uppercase rounded-full px-3 py-1 border transition-colors ${
+                canOpenSourceApp
+                  ? 'bg-white/10 text-gray-200 border-white/10 hover:bg-white/15'
+                  : 'bg-white/5 text-gray-400 border-white/5 cursor-not-allowed'
+              }`}
+              aria-disabled={!canOpenSourceApp}
+              title={canOpenSourceApp ? `Apri ${sourceMeta.sourceLabel}` : 'Sorgente non disponibile'}
+            >
               Open App
-            </span>
+            </a>
           </div>
 
           <img
@@ -261,107 +580,231 @@ export function MediaControlsPanel({
             </div>
           </div>
 
-          <div className="mt-4 rounded-full bg-black/20 backdrop-blur-md border border-white/5 p-2 flex items-center justify-between gap-3">
-            <div className="flex-1" />
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
-                  supportsPreviousTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
-                }`}
-                aria-label="Traccia precedente"
-                disabled={!supportsPreviousTrack}
-                onClick={() => onPreviousTrack?.()}
-              >
-                <SkipBack size={16} />
-              </button>
-              <button
-                type="button"
-                className="w-11 h-11 rounded-full bg-white text-slate-900 flex items-center justify-center hover:bg-white/90 transition-colors"
-                onClick={onTogglePlayback}
-                aria-label={isPlaying ? 'Metti in pausa' : 'Riproduci'}
-              >
-                {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-              </button>
-              <button
-                type="button"
-                className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
-                  supportsNextTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
-                }`}
-                aria-label="Traccia successiva"
-                disabled={!supportsNextTrack}
-                onClick={() => onNextTrack?.()}
-              >
-                <SkipForward size={16} />
-              </button>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="inline-flex items-center gap-1 text-xs text-white/80">
-                <Volume2 size={14} />
-                {`${volumeDraft}%`}
-              </span>
-              <button
-                type="button"
-                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${
-                  muted
-                    ? 'bg-blue-500/25 border-blue-300/40 text-blue-100'
-                    : 'bg-white/10 border-white/10 text-white/90 hover:bg-white/15'
-                } ${supportsMute ? '' : 'opacity-45 cursor-not-allowed'}`}
-                aria-label="Mute audio"
-                disabled={!supportsMute}
-                onClick={() => onToggleMute?.()}
-              >
-                <Star size={14} />
-              </button>
-            </div>
+          <div className="mt-4 rounded-full bg-black/20 backdrop-blur-md border border-white/5 p-2 flex items-center justify-center gap-2.5">
+            <button
+              type="button"
+              className={`w-9 h-9 rounded-full border text-white flex items-center justify-center transition-colors ${
+                resolvedShuffleEnabled
+                  ? 'bg-blue-500/25 border-blue-300/45 text-blue-100'
+                  : 'bg-white/10 border-white/10'
+              } ${supportsShuffle ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'}`}
+              disabled={!supportsShuffle}
+              aria-label="Shuffle"
+              title={resolvedShuffleEnabled ? 'Shuffle attivo' : 'Shuffle disattivo'}
+              aria-pressed={resolvedShuffleEnabled}
+              onClick={() => {
+                if (!supportsShuffle) {
+                  return;
+                }
+                onToggleShuffle?.();
+              }}
+            >
+              <Shuffle size={15} />
+            </button>
+
+            <button
+              type="button"
+              className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
+                supportsPreviousTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
+              }`}
+              aria-label="Traccia precedente"
+              disabled={!supportsPreviousTrack}
+              onClick={() => onPreviousTrack?.()}
+            >
+              <SkipBack size={16} />
+            </button>
+
+            <button
+              type="button"
+              className="w-11 h-11 rounded-full bg-white text-slate-900 flex items-center justify-center hover:bg-white/90 transition-colors"
+              onClick={onTogglePlayback}
+              aria-label={isPlaying ? 'Metti in pausa' : 'Riproduci'}
+            >
+              {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            </button>
+
+            <button
+              type="button"
+              className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
+                supportsNextTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
+              }`}
+              aria-label="Traccia successiva"
+              disabled={!supportsNextTrack}
+              onClick={() => onNextTrack?.()}
+            >
+              <SkipForward size={16} />
+            </button>
+
+            <button
+              type="button"
+              className={`relative w-9 h-9 rounded-full border text-white flex items-center justify-center transition-colors ${
+                resolvedRepeatMode !== 'off'
+                  ? 'bg-blue-500/25 border-blue-300/45 text-blue-100'
+                  : 'bg-white/10 border-white/10'
+              } ${supportsRepeat ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'}`}
+              disabled={!supportsRepeat}
+              aria-label={repeatButtonLabel}
+              title={repeatButtonLabel}
+              aria-pressed={resolvedRepeatMode !== 'off'}
+              onClick={() => {
+                if (!supportsRepeat) {
+                  return;
+                }
+                onCycleRepeatMode?.();
+              }}
+            >
+              <Repeat size={15} />
+              {resolvedRepeatMode === 'one' ? (
+                <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white/25 bg-slate-900/90 px-1 text-[9px] font-semibold leading-none text-white">
+                  1
+                </span>
+              ) : null}
+            </button>
           </div>
         </div>
       </div>
 
       <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
         <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase px-3 pb-2 pt-1">
-          Speakers & TVs
+          Output Device
         </p>
 
-        <div className="space-y-1.5">
-          {availableOutputDevices.map((device) => {
-            const isSelected = device.id === selectedOutputDeviceId;
-            const DeviceIcon =
-              device.kind === 'tv' ? Tv2 : device.kind === 'cast' ? Cast : Speaker;
-            return (
-              <button
-                key={device.id}
-                type="button"
-                onClick={() => {
-                  if (onSelectOutputDevice) {
-                    onSelectOutputDevice(device.id);
-                    return;
-                  }
-                  setLocalOutputDeviceId(device.id);
-                }}
-                className={`flex items-center justify-between w-full rounded-2xl py-3 px-4 cursor-pointer transition-all duration-200 active:scale-[0.98] ${
-                  isSelected
-                    ? 'bg-white/15 text-white'
-                    : 'text-white/85 hover:bg-white/10'
-                }`}
-              >
-                <span className="flex items-center gap-3 min-w-0">
-                  <DeviceIcon
-                    size={18}
-                    className={isSelected ? 'text-white' : 'text-white/75'}
-                  />
-                  <span className="text-sm font-medium truncate">{device.name}</span>
-                </span>
+        {availableOutputDevices.length > 0 ? (
+          <div className="space-y-1.5">
+            {availableOutputDevices.map((device) => {
+              const isSelected = device.id === selectedOutputDeviceId;
+              const DeviceIcon =
+                device.kind === 'tv' ? Tv2 : device.kind === 'cast' ? Cast : Speaker;
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  disabled={!supportsSelectSource}
+                  onClick={() => {
+                    if (!supportsSelectSource) {
+                      return;
+                    }
+                    if (onSelectOutputDevice) {
+                      onSelectOutputDevice(device.id);
+                      return;
+                    }
+                    setLocalOutputDeviceId(device.id);
+                  }}
+                  className={`flex items-center justify-between w-full rounded-2xl py-3 px-4 transition-all duration-200 active:scale-[0.98] ${
+                    !supportsSelectSource
+                      ? 'opacity-45 cursor-not-allowed text-white/65'
+                      : isSelected
+                        ? 'bg-white/15 text-white cursor-pointer'
+                        : 'text-white/85 hover:bg-white/10 cursor-pointer'
+                  }`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <DeviceIcon
+                      size={18}
+                      className={isSelected ? 'text-white' : 'text-white/75'}
+                    />
+                    <span className="text-sm font-medium truncate">{device.name}</span>
+                  </span>
 
-                {isSelected ? (
-                  <Check size={16} className="ml-auto text-white" />
-                ) : (
-                  <span className="text-xs text-white/45 ml-3 shrink-0">{device.subtitle ?? ''}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  {isSelected ? (
+                    <Check size={16} className="ml-auto text-white" />
+                  ) : (
+                    <span className="text-xs text-white/45 ml-3 shrink-0">{device.subtitle ?? ''}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="px-3 py-3 text-sm text-white/55">
+            Nessun dispositivo di uscita disponibile.
+          </p>
+        )}
+      </div>
+
+      <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
+        <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase px-3 pb-2 pt-1">
+          Multiroom Group
+        </p>
+
+        {!supportsGrouping ? (
+          <div className="mb-2 rounded-xl border border-amber-200/25 bg-amber-400/10 px-3 py-2.5">
+            <p className="text-xs font-medium text-amber-100">
+              Multiroom non disponibile con questo player.
+            </p>
+            <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug text-amber-100/80">
+              <span title="Suggerimento multiroom">
+                <Info
+                  size={13}
+                  className="mt-[1px] shrink-0"
+                  aria-hidden="true"
+                />
+              </span>
+              <span title="Per il multiroom usa un player leader compatibile come Sonos, Google Cast o Music Assistant.">
+                Per usare al meglio il multiroom serve un player leader compatibile (es. Sonos, Google Cast o Music Assistant).
+              </span>
+            </p>
+          </div>
+        ) : null}
+
+        {availableMultiroomDevices.length > 0 ? (
+          <div className="space-y-1.5">
+            {availableMultiroomDevices.map((device) => {
+              const isGrouped =
+                device.grouped === true || localGroupedDeviceIds.includes(device.id);
+              const DeviceIcon =
+                device.kind === 'tv' ? Tv2 : device.kind === 'cast' ? Cast : Speaker;
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  disabled={!supportsGrouping}
+                  onClick={() => {
+                    if (!supportsGrouping) {
+                      return;
+                    }
+                    const shouldJoin = !isGrouped;
+                    if (onToggleMultiroomDevice) {
+                      onToggleMultiroomDevice(device.id, shouldJoin);
+                      return;
+                    }
+                    setLocalGroupedDeviceIds((current) => {
+                      if (shouldJoin) {
+                        return current.includes(device.id) ? current : [...current, device.id];
+                      }
+                      return current.filter((entry) => entry !== device.id);
+                    });
+                  }}
+                  className={`flex items-center justify-between w-full rounded-2xl py-3 px-4 transition-all duration-200 active:scale-[0.98] ${
+                    !supportsGrouping
+                      ? 'opacity-45 cursor-not-allowed text-white/65'
+                      : isGrouped
+                        ? 'bg-blue-500/20 border border-blue-300/30 text-blue-100 cursor-pointer'
+                        : 'text-white/85 hover:bg-white/10 cursor-pointer'
+                  }`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <DeviceIcon
+                      size={18}
+                      className={isGrouped ? 'text-blue-100' : 'text-white/75'}
+                    />
+                    <span className="text-sm font-medium truncate">{device.name}</span>
+                  </span>
+
+                  {isGrouped ? (
+                    <Check size={16} className="ml-auto text-blue-100" />
+                  ) : (
+                    <span className="text-xs text-white/45 ml-3 shrink-0">{device.subtitle ?? ''}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="px-3 py-3 text-sm text-white/55">
+            Nessun player disponibile per il gruppo.
+          </p>
+        )}
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
@@ -435,11 +878,11 @@ export function MediaControlsPanel({
         </div>
       </div>
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
+      <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1 opacity-55 pointer-events-none`} aria-disabled="true">
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <SecondaryAction icon={<Cast size={22} />} label="Cast To" />
-          <SecondaryAction icon={<Mic size={22} />} label={muted ? 'Muted' : 'Push to talk'} />
-          <SecondaryAction icon={<Settings2 size={22} />} label="Settings" />
+          <SecondaryAction icon={<Cast size={22} />} label="Cast To" disabled />
+          <SecondaryAction icon={<Mic size={22} />} label={muted ? 'Muted' : 'Push to talk'} disabled />
+          <SecondaryAction icon={<Settings2 size={22} />} label="Settings" disabled />
         </div>
       </div>
     </div>

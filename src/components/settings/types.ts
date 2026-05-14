@@ -1,3 +1,5 @@
+import type { MicroWidget } from '../../types/dashboardModels';
+
 export type ActiveDeviceType =
   | 'light'
   | 'climate'
@@ -16,9 +18,12 @@ export interface ActiveDevice {
   id: string;
   name: string;
   type: ActiveDeviceType;
+  microWidgets?: MicroWidget[];
   status?: string;
   sensorValue?: number;
   sensorUnit?: string;
+  sensorEntityId?: string;
+  sensorDeviceClass?: string;
   sensorHistory?: number[];
   sensorBattery?: string;
   sensorConnection?: string;

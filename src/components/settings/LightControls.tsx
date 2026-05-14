@@ -220,13 +220,13 @@ export function LightControlsPanel({
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 pr-11">
+          <div className="flex min-w-0 items-center gap-4">
             <span className="w-14 h-14 rounded-full bg-white/10 border border-white/12 flex items-center justify-center text-white">
               <Lightbulb size={23} />
             </span>
-            <div>
-              <h2 className="text-[1.35rem] font-semibold tracking-tight text-white">{lamp.name}</h2>
+            <div className="min-w-0">
+              <h2 className="truncate text-[1.35rem] font-semibold tracking-tight text-white">{lamp.name}</h2>
               <p className="text-sm text-gray-400 mt-0.5">{currentStateLabel}</p>
             </div>
           </div>

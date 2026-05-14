@@ -284,17 +284,18 @@ export function VacuumControls({
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 pr-11">
           <div className="h-12 w-12 rounded-full border border-white/12 bg-white/10 flex items-center justify-center text-white">
             <Bot size={20} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold text-white truncate">Robot Aspirapolvere</h3>
-            <p className="-mt-0.5 text-sm text-white/70 truncate">{vacuum.name}</p>
-            <p className="text-sm text-white/60">Stato: {statusLabel}</p>
+            <h3 className="text-lg font-semibold text-white truncate">{vacuum.name || 'Robot Aspirapolvere'}</h3>
+            <p className="text-sm text-white/60 truncate">Stato: {statusLabel}</p>
           </div>
         </div>
+      </div>
 
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mt-4 flex justify-center">
           <RadarCore state={state} sizeClass="h-[clamp(6.75rem,34vw,8rem)] w-[clamp(6.75rem,34vw,8rem)]" />
         </div>

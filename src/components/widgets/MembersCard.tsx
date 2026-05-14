@@ -44,6 +44,7 @@ export function MembersCard({
   houseMembers = [],
   gridBreakpoint,
 }: MembersCardProps) {
+  const canOpenMembersPanel = !isEditMode && typeof onOpenMembersPanel === 'function';
   const cardDensity = resolveCardDensityByBreakpoint(gridBreakpoint);
   const isTinyCard = cardDensity === 'tiny' || cardDensity === 'compact';
   const cardRadiusClass = isTinyCard ? 'rounded-[1.45rem]' : 'rounded-[1.6rem]';
@@ -78,15 +79,26 @@ export function MembersCard({
             </p>
             <button
               type="button"
-              disabled={isEditMode || !onOpenMembersPanel}
+              data-members-panel-trigger="true"
+              aria-disabled={!canOpenMembersPanel}
               onClick={(event) => {
                 event.stopPropagation();
-                if (isEditMode || !onOpenMembersPanel) {
+                if (!canOpenMembersPanel) {
                   return;
                 }
                 onOpenMembersPanel();
               }}
-              className="pointer-events-auto relative z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/15 text-white/90 transition-colors hover:bg-black/25 disabled:cursor-default disabled:opacity-60"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onPointerUp={(event) => {
+                event.stopPropagation();
+              }}
+              className={`pointer-events-auto relative z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/15 text-white/90 transition-colors ${
+                canOpenMembersPanel
+                  ? 'hover:bg-black/25'
+                  : 'cursor-default opacity-60'
+              }`}
               aria-label="Apri pannello membri"
               title="Apri pannello membri"
             >
@@ -138,6 +150,13 @@ export function MembersCard({
         role="button"
         tabIndex={0}
         onClick={(event) => {
+          const clickTarget = event.target;
+          if (
+            clickTarget instanceof Element &&
+            clickTarget.closest('[data-members-panel-trigger="true"]')
+          ) {
+            return;
+          }
           event.stopPropagation();
           onClick();
         }}

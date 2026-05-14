@@ -9,6 +9,8 @@ type MediaCardProps = {
   isEditMode: boolean;
   onClick: () => void;
   onTogglePlayback?: () => void;
+  onPreviousTrack?: () => void;
+  onNextTrack?: () => void;
   onSeek?: (position: number) => void;
   liveEntity?: MockEntityState;
 };
@@ -64,6 +66,8 @@ export function MediaCard({
   isEditMode,
   onClick,
   onTogglePlayback,
+  onPreviousTrack,
+  onNextTrack,
   onSeek,
   liveEntity,
 }: MediaCardProps) {
@@ -136,6 +140,8 @@ export function MediaCard({
             media_position: mediaPosition,
           }}
           onTogglePlay={!isEditMode ? onTogglePlayback : undefined}
+          onPreviousTrack={!isEditMode ? onPreviousTrack : undefined}
+          onNextTrack={!isEditMode ? onNextTrack : undefined}
           onSeek={!isEditMode ? onSeek : undefined}
         />
       </div>

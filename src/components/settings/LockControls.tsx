@@ -149,17 +149,21 @@ export function LockControls({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={CONTEXT_PANEL_LAYOUT.section}>
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white">
             {isLocked ? <Lock size={21} /> : <Unlock size={21} />}
           </div>
           <div className="min-w-0">
-            <h3 className="text-[1.2rem] font-semibold tracking-tight text-white truncate">Serratura {lock.name}</h3>
+            <h3 className="text-[1.2rem] font-semibold tracking-tight text-white truncate">
+              {lock.name || 'Serratura'}
+            </h3>
             <p className="mt-1 text-sm text-white/60">Stato: {statusLabel}</p>
           </div>
         </div>
+      </div>
 
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mt-6 flex flex-col items-center">
           <div
             className={`relative h-[clamp(8rem,42vw,10rem)] w-[clamp(8rem,42vw,10rem)] rounded-full border border-white/10 ${panelAuraClass} backdrop-blur-xl flex items-center justify-center transition-all duration-200 ${

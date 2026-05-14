@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   BarChart3,
   DoorOpen,
@@ -12,11 +13,20 @@ import {
   Settings,
   ShieldCheck,
   Thermometer,
+  Plus,
+  Trash2,
   X,
 } from 'lucide-react';
 import { ContextSidebar } from '../settings/ContextSidebar';
+import { MiniRing } from '../widgets/micro/MiniRing';
+import { MicroButton } from '../widgets/micro/MicroButton';
+import { MicroSlider } from '../widgets/micro/MicroSlider';
+import { MicroToggle } from '../widgets/micro/MicroToggle';
+import { StatusGlow } from '../widgets/micro/StatusGlow';
+import { ValuePill } from '../widgets/micro/ValuePill';
 import type { CameraPtzDirection } from '../settings/CameraControls';
 import type { ActiveDevice } from '../settings/types';
+import type { MockEntityState, MockEntityStateMap } from '../../types/ha';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import type {
   DashboardSection,
@@ -27,6 +37,7 @@ import type {
   WeatherSecondaryInfo,
   Widget,
   WidgetKind,
+  MicroWidget,
 } from '../../types/dashboardModels';
 import {
   SIDEBAR_PATH_ICON_KEYS,
@@ -58,6 +69,10 @@ type ContextSidebarActions = {
   seekSpeakerPosition: (position: number) => void;
   setSpeakerVolume: (value: number) => void;
   toggleSpeakerMute: () => void;
+  toggleSpeakerShuffle: () => void;
+  cycleSpeakerRepeatMode: () => void;
+  selectSpeakerOutputDevice: (deviceId: string) => void;
+  toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
   disarmAlarm: (code?: string) => void;
   armAlarmHome: (code?: string) => void;
   armAlarmAway: (code?: string) => void;
@@ -377,14 +392,19 @@ type RightSidebarManagerProps = {
     name: string;
   }>;
   actions: ContextSidebarActions;
+  onToggleMicroWidget?: (entityId: string, nextActive: boolean) => void;
+  onSetMicroSliderValue?: (entityId: string, value: number) => void;
+  onNavigateMicroWidgetPage?: (path: string) => void;
   onUpdateUserName: (name: string) => void;
   selectedWidget: Widget | null;
   selectedSection: DashboardSection | null;
   selectedSidebarPath: SidebarQuickPath | null;
+  sidebarPaths?: SidebarQuickPath[];
   weatherConfig: DashboardSection | null;
   entityOptions: Record<WidgetKind, string[]>;
   haEntityIds?: string[];
   haConnected?: boolean;
+  haStates?: MockEntityStateMap;
   onUpdateWidget: (id: string, updater: (widget: Widget) => Widget) => void;
   onUpdateSection: (id: string, updater: (section: DashboardSection) => DashboardSection) => void;
   onUpdateSidebarPath: (id: string, patch: Partial<Omit<SidebarQuickPath, 'id'>>) => void;
@@ -392,6 +412,183 @@ type RightSidebarManagerProps = {
   onRemoveSection: (id: string) => void;
   onRemoveSidebarPath: (id: string) => void;
 };
+
+const MICRO_WIDGET_CATALOG: Array<{
+  type: MicroWidget['type'];
+  label: string;
+  description: string;
+}> = [
+  {
+    type: 'value_pill',
+    label: 'Value Pill',
+    description: 'Valore principale con label secondaria.',
+  },
+  {
+    type: 'status_glow',
+    label: 'Status Glow',
+    description: 'Indicatore stato con glow dinamico.',
+  },
+  {
+    type: 'mini_ring',
+    label: 'Mini Ring',
+    description: 'Ring compatto con progress circolare.',
+  },
+  {
+    type: 'micro_toggle',
+    label: 'Micro Toggle',
+    description: 'Interruttore mini con stato on/off.',
+  },
+  {
+    type: 'micro_button',
+    label: 'Button',
+    description: 'Pulsante con azione push, switch o pagina.',
+  },
+  {
+    type: 'micro_slider',
+    label: 'Slider',
+    description: 'Controllo numerico per helper input_number.',
+  },
+];
+
+const MICRO_TOGGLE_COMPATIBLE_DOMAINS = new Set([
+  'light',
+  'switch',
+  'input_boolean',
+  'fan',
+  'media_player',
+  'script',
+  'automation',
+  'scene',
+  'cover',
+  'lock',
+  'vacuum',
+]);
+const MINI_RING_COMPATIBLE_DOMAINS = new Set([
+  'light',
+  'cover',
+  'fan',
+  'vacuum',
+  'media_player',
+  'sensor',
+  'number',
+  'input_number',
+  'climate',
+]);
+const STATUS_GLOW_COMPATIBLE_DOMAINS = new Set([
+  'binary_sensor',
+  'sensor',
+  'switch',
+  'light',
+  'lock',
+  'alarm_control_panel',
+  'media_player',
+  'person',
+  'device_tracker',
+  'vacuum',
+  'cover',
+  'fan',
+  'climate',
+  'script',
+  'automation',
+  'scene',
+]);
+const MICRO_SLIDER_COMPATIBLE_DOMAINS = new Set(['input_number']);
+
+function extractEntityDomain(entityId: string | undefined) {
+  const trimmed = (entityId ?? '').trim().toLowerCase();
+  if (!trimmed.includes('.')) {
+    return '';
+  }
+  return trimmed.split('.')[0] ?? '';
+}
+
+function isMicroWidgetTypeCompatible(type: MicroWidget['type'], entityId: string | undefined) {
+  const domain = extractEntityDomain(entityId);
+  if (!domain) {
+    return true;
+  }
+  if (type === 'value_pill' || type === 'micro_button') {
+    return true;
+  }
+  if (type === 'micro_slider') {
+    return MICRO_SLIDER_COMPATIBLE_DOMAINS.has(domain);
+  }
+  if (type === 'status_glow') {
+    return STATUS_GLOW_COMPATIBLE_DOMAINS.has(domain);
+  }
+  if (type === 'mini_ring') {
+    return MINI_RING_COMPATIBLE_DOMAINS.has(domain);
+  }
+  return MICRO_TOGGLE_COMPATIBLE_DOMAINS.has(domain);
+}
+
+function buildFallbackMicroWidgetState(type: MicroWidget['type'], label: string): MockEntityState {
+  if (type === 'value_pill') {
+    return {
+      state: 'on',
+      stateLabel: 'Attivo',
+      numericValue: 24,
+      unit: 'C',
+      rawAttributes: { friendly_name: label },
+    };
+  }
+  if (type === 'status_glow') {
+    return {
+      state: 'on',
+      stateLabel: 'Connesso',
+      rawAttributes: { friendly_name: label },
+    };
+  }
+  if (type === 'mini_ring') {
+    return {
+      state: 'on',
+      numericValue: 72,
+      unit: '%',
+      rawAttributes: { friendly_name: label },
+    };
+  }
+  if (type === 'micro_button') {
+    return {
+      state: 'off',
+      stateLabel: 'Switch',
+      toggleOn: false,
+      rawAttributes: { friendly_name: label },
+    };
+  }
+  if (type === 'micro_slider') {
+    return {
+      state: '42',
+      numericValue: 42,
+      unit: '%',
+      rawAttributes: { friendly_name: label, min: 0, max: 100, step: 1, unit_of_measurement: '%' },
+    };
+  }
+  return {
+    state: 'on',
+    stateLabel: 'Acceso',
+    toggleOn: true,
+    rawAttributes: { friendly_name: label },
+  };
+}
+
+function renderMicroWidgetPreview(widget: MicroWidget, state: MockEntityState | undefined) {
+  if (widget.type === 'value_pill') {
+    return <ValuePill widget={widget} state={state} />;
+  }
+  if (widget.type === 'status_glow') {
+    return <StatusGlow widget={widget} state={state} />;
+  }
+  if (widget.type === 'mini_ring') {
+    return <MiniRing widget={widget} state={state} />;
+  }
+  if (widget.type === 'micro_button') {
+    return <MicroButton widget={widget} state={state} />;
+  }
+  if (widget.type === 'micro_slider') {
+    return <MicroSlider widget={widget} state={state} sendOnRelease={widget.sliderSendOnRelease ?? true} />;
+  }
+  return <MicroToggle widget={widget} state={state} />;
+}
 
 export function RightSidebarManager({
   isEditMode,
@@ -407,14 +604,19 @@ export function RightSidebarManager({
   cover,
   vacuumAreas = [],
   actions,
+  onToggleMicroWidget,
+  onSetMicroSliderValue,
+  onNavigateMicroWidgetPage,
   onUpdateUserName,
   selectedWidget,
   selectedSection,
   selectedSidebarPath,
+  sidebarPaths = [],
   weatherConfig,
   entityOptions,
   haEntityIds = [],
   haConnected = false,
+  haStates = {},
   onUpdateWidget,
   onUpdateSection,
   onUpdateSidebarPath,
@@ -426,6 +628,10 @@ export function RightSidebarManager({
     'w-[clamp(17.5rem,46vw,22.5rem)] md:w-[clamp(18rem,34vw,24rem)] lg:w-[clamp(18rem,28vw,23rem)] xl:w-[clamp(18.5rem,25vw,24rem)] h-full min-h-0 shrink-0';
   const [isContextSheetDragging, setIsContextSheetDragging] = React.useState(false);
   const [contextSheetDragOffset, setContextSheetDragOffset] = React.useState(0);
+  const [isMicroWidgetCatalogOpen, setIsMicroWidgetCatalogOpen] = React.useState(false);
+  const [microWidgetCatalogEntity, setMicroWidgetCatalogEntity] = React.useState('');
+  const [selectedMicroWidgetId, setSelectedMicroWidgetId] = React.useState<string | null>(null);
+  const selectedWidgetMicroWidgets = selectedWidget?.widgets;
   const contextSheetStartYRef = React.useRef<number | null>(null);
   const contextSheetPointerIdRef = React.useRef<number | null>(null);
   const contextSheetDragOffsetRef = React.useRef(0);
@@ -483,6 +689,27 @@ export function RightSidebarManager({
       resetContextSheetDrag();
     }
   }, [resetContextSheetDrag, shouldShowXsContextSheet]);
+  React.useEffect(() => {
+    setIsMicroWidgetCatalogOpen(false);
+  }, [isEditMode, selectedWidget?.id]);
+  React.useEffect(() => {
+    setMicroWidgetCatalogEntity(selectedWidget?.entityId?.trim() ?? '');
+  }, [selectedWidget?.entityId, selectedWidget?.id]);
+  React.useEffect(() => {
+    setSelectedMicroWidgetId(null);
+  }, [selectedWidget?.id]);
+  React.useEffect(() => {
+    if (!selectedWidgetMicroWidgets || selectedWidgetMicroWidgets.length === 0) {
+      setSelectedMicroWidgetId((current) => (current === null ? current : null));
+      return;
+    }
+    setSelectedMicroWidgetId((current) => {
+      if (!current) {
+        return current;
+      }
+      return selectedWidgetMicroWidgets.some((entry) => entry.id === current) ? current : null;
+    });
+  }, [selectedWidgetMicroWidgets]);
 
   if (!isEditMode) {
     if (isXs) {
@@ -525,10 +752,12 @@ export function RightSidebarManager({
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-1 pb-1">
                 <ContextSidebar
                   activeDevice={activeDevice}
+                  isEditMode={isEditMode}
                   theme={theme}
                   onClose={onCloseContextSidebar}
                   showCloseButton={false}
                   externalScrollContainer
+                  haStates={haStates}
                   lamp={state.lamp}
                   climate={state.climate}
                   camera={camera}
@@ -553,6 +782,9 @@ export function RightSidebarManager({
                       : undefined
                   }
                   actions={actions}
+                  onToggleMicroWidget={onToggleMicroWidget}
+                  onSetMicroSliderValue={onSetMicroSliderValue}
+                  onNavigateMicroWidgetPage={onNavigateMicroWidgetPage}
                 />
               </div>
             </div>
@@ -564,8 +796,10 @@ export function RightSidebarManager({
       <div className={sidebarWidthClass}>
         <ContextSidebar
           activeDevice={activeDevice}
+          isEditMode={isEditMode}
           theme={theme}
           onClose={onCloseContextSidebar}
+          haStates={haStates}
           lamp={state.lamp}
           climate={state.climate}
           camera={camera}
@@ -590,6 +824,9 @@ export function RightSidebarManager({
               : undefined
           }
           actions={actions}
+          onToggleMicroWidget={onToggleMicroWidget}
+          onSetMicroSliderValue={onSetMicroSliderValue}
+          onNavigateMicroWidgetPage={onNavigateMicroWidgetPage}
         />
       </div>
     );
@@ -654,6 +891,88 @@ export function RightSidebarManager({
     : [];
   const staticSuggestions = selectedWidget ? entityOptions[selectedWidget.kind] ?? [] : [];
   const entitySuggestions = Array.from(new Set([...liveEntitySuggestions, ...staticSuggestions]));
+  const microWidgets = selectedWidget?.widgets ?? [];
+  const selectedMicroWidget = selectedMicroWidgetId
+    ? microWidgets.find((entry) => entry.id === selectedMicroWidgetId) ?? null
+    : null;
+  const selectedMicroWidgetIndex = selectedMicroWidget
+    ? microWidgets.findIndex((entry) => entry.id === selectedMicroWidget.id)
+    : -1;
+  const selectedMicroButtonMode =
+    selectedMicroWidget?.type === 'micro_button'
+      ? selectedMicroWidget.buttonMode ?? 'switch'
+      : null;
+  const selectedMicroSliderSendOnRelease =
+    selectedMicroWidget?.type === 'micro_slider'
+      ? selectedMicroWidget.sliderSendOnRelease ?? true
+      : true;
+  const microWidgetEntitySuggestions = haConnected ? haEntityIds : [];
+  const configuredMicroWidgetEntities = microWidgets
+    .map((microWidget) => microWidget.entity.trim())
+    .filter((entityId) => entityId.length > 0);
+  const microWidgetEntityOptions = Array.from(
+    new Set([
+      ...configuredMicroWidgetEntities,
+      ...microWidgetEntitySuggestions,
+      selectedWidget?.entityId?.trim() ?? '',
+    ].filter((entityId) => entityId.length > 0)),
+  );
+  const microWidgetDatalistId = selectedWidget
+    ? `micro-widget-entities-${selectedWidget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    : 'micro-widget-entities';
+  const microWidgetPagePathDatalistId = selectedWidget
+    ? `micro-widget-pages-${selectedWidget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    : 'micro-widget-pages';
+  const microWidgetPageOptions = Array.from(
+    new Set(
+      [
+        ...sidebarPaths
+          .map((entry) => entry.path.trim())
+          .filter((path) => path.length > 0),
+        '/home',
+        '/automations',
+        '/security',
+        '/consumi',
+        '/appgallery',
+      ].filter((path) => path.length > 0),
+    ),
+  );
+  const defaultMicroWidgetPagePath = microWidgetPageOptions[0] ?? '/home';
+  const microWidgetPathLabelByPath = new Map(
+    sidebarPaths
+      .map((entry) => [entry.path.trim(), entry.label.trim()] as const)
+      .filter(([path]) => path.length > 0),
+  );
+  const defaultMicroWidgetEntity = microWidgetEntityOptions[0] ?? '';
+  const catalogEntityId = microWidgetCatalogEntity.trim() || defaultMicroWidgetEntity;
+  const compatibleMicroWidgetCatalog = MICRO_WIDGET_CATALOG.filter((catalogItem) =>
+    isMicroWidgetTypeCompatible(catalogItem.type, catalogEntityId),
+  );
+  const appendMicroWidget = (type: MicroWidget['type'], entityId = catalogEntityId) => {
+    if (!selectedWidget) {
+      return;
+    }
+    const normalizedEntityId = entityId.trim() || defaultMicroWidgetEntity;
+    const nextMicroWidgetId = `micro-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+    onUpdateWidget(selectedWidget.id, (widget) => {
+      const nextIndex = (widget.widgets ?? []).length + 1;
+      const nextMicroWidget: MicroWidget = {
+        id: nextMicroWidgetId,
+        type,
+        entity: normalizedEntityId,
+        label: `Widget ${nextIndex}`,
+        buttonMode: type === 'micro_button' ? 'switch' : undefined,
+        buttonHoldWhilePressed: type === 'micro_button' ? false : undefined,
+        buttonPagePath: type === 'micro_button' ? defaultMicroWidgetPagePath : undefined,
+        sliderSendOnRelease: type === 'micro_slider' ? true : undefined,
+      };
+      return {
+        ...widget,
+        widgets: [...(widget.widgets ?? []), nextMicroWidget],
+      };
+    });
+    setSelectedMicroWidgetId(nextMicroWidgetId);
+  };
   const sensorMetaSuggestions = haConnected
     ? haEntityIds.filter(
         (entityId) =>
@@ -1743,6 +2062,359 @@ export function RightSidebarManager({
                   : 'Puoi scegliere dal catalogo o digitare una entita personalizzata.'}
               </p>
             </label>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-white/50">Dispositivi correlati</p>
+                  <p className="mt-1 text-[11px] text-white/45">
+                    Aggiungi widget dal catalogo, con anteprima uguale alla modalita live.
+                  </p>
+                </div>
+              </div>
+
+              <datalist id={microWidgetDatalistId}>
+                {microWidgetEntityOptions.map((entity) => (
+                  <option key={entity} value={entity} />
+                ))}
+              </datalist>
+              <datalist id={microWidgetPagePathDatalistId}>
+                {microWidgetPageOptions.map((path) => (
+                  <option key={path} value={path} />
+                ))}
+              </datalist>
+
+              <div className="mt-3 rounded-2xl border border-white/12 bg-white/[0.04] p-3">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-white/52">Anteprima pannello live</p>
+                <div className="mt-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
+                  {microWidgets.map((microWidget, microWidgetIndex) => {
+                    const fallbackLabel = microWidget.label?.trim() || `Widget ${microWidgetIndex + 1}`;
+                    const livePreviewState = haStates[microWidget.entity];
+                    const previewState =
+                      livePreviewState ??
+                      buildFallbackMicroWidgetState(microWidget.type, fallbackLabel);
+                    const isSelected = selectedMicroWidgetId === microWidget.id;
+                    const previewFrameRadius = microWidget.type === 'value_pill' ? 'rounded-full' : 'rounded-2xl';
+                    return (
+                      <button
+                        key={`preview-grid-${microWidget.id}`}
+                        type="button"
+                        onClick={() => setSelectedMicroWidgetId(microWidget.id)}
+                        className={`relative w-full text-left transition-all ${
+                          isSelected ? 'scale-[1.01]' : 'hover:scale-[1.005]'
+                        }`}
+                        aria-label={`Configura ${fallbackLabel}`}
+                        title={`Configura ${fallbackLabel}`}
+                      >
+                        <div
+                          className={`${previewFrameRadius} overflow-hidden transition-all ${
+                            isSelected
+                              ? 'ring-1 ring-blue-300/55 shadow-[0_0_0_1px_rgba(147,197,253,0.18),0_10px_28px_rgba(37,99,235,0.25)]'
+                              : 'ring-1 ring-transparent hover:ring-white/15'
+                          }`}
+                        >
+                          <div className="pointer-events-none">{renderMicroWidgetPreview(microWidget, previewState)}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isMicroWidgetCatalogOpen && !microWidgetCatalogEntity.trim()) {
+                        setMicroWidgetCatalogEntity(defaultMicroWidgetEntity);
+                      }
+                      setIsMicroWidgetCatalogOpen((current) => !current);
+                    }}
+                    className={`min-h-[4.25rem] rounded-2xl border border-dashed bg-white/[0.03] text-white/60 transition-colors ${
+                      isMicroWidgetCatalogOpen
+                        ? 'border-blue-300/45 bg-blue-500/14 text-blue-100'
+                        : 'border-white/20 hover:border-white/35 hover:bg-white/[0.07] hover:text-white'
+                    }`}
+                    aria-label="Apri catalogo micro-widget"
+                    title="Apri catalogo micro-widget"
+                  >
+                    <span className="flex h-full items-center justify-center">
+                      <Plus size={18} />
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {microWidgets.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-white/52">Configurazione widget selezionato</p>
+                  {selectedMicroWidget ? (
+                    <div key={selectedMicroWidget.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                          Micro-widget {selectedMicroWidgetIndex >= 0 ? selectedMicroWidgetIndex + 1 : 1}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextSelection =
+                              microWidgets.find((entry) => entry.id !== selectedMicroWidget.id)?.id ?? null;
+                            setSelectedMicroWidgetId(nextSelection);
+                            onUpdateWidget(selectedWidget.id, (widget) => {
+                              const nextWidgets = (widget.widgets ?? []).filter(
+                                (entry) => entry.id !== selectedMicroWidget.id,
+                              );
+                              return {
+                                ...widget,
+                                widgets: nextWidgets.length > 0 ? nextWidgets : undefined,
+                              };
+                            });
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-300/30 bg-rose-500/12 text-rose-100 transition-colors hover:bg-rose-500/20"
+                          aria-label="Rimuovi micro-widget"
+                          title="Rimuovi micro-widget"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {selectedMicroWidget.type === 'micro_button' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Funzione</p>
+                            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                              {(['switch', 'push', 'page'] as const).map((mode) => {
+                                const isModeActive = (selectedMicroButtonMode ?? 'switch') === mode;
+                                const modeLabel = mode === 'switch' ? 'Switch' : mode === 'push' ? 'Push' : 'Page';
+                                return (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() =>
+                                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                                        ...widget,
+                                        widgets: (widget.widgets ?? []).map((entry) => {
+                                          if (entry.id !== selectedMicroWidget.id) {
+                                            return entry;
+                                          }
+                                          return {
+                                            ...entry,
+                                            buttonMode: mode,
+                                            buttonPagePath:
+                                              mode === 'page'
+                                                ? entry.buttonPagePath?.trim() || defaultMicroWidgetPagePath
+                                                : entry.buttonPagePath,
+                                            buttonHoldWhilePressed:
+                                              mode === 'push'
+                                                ? entry.buttonHoldWhilePressed ?? false
+                                                : entry.buttonHoldWhilePressed,
+                                          };
+                                        }),
+                                      }))
+                                    }
+                                    className={`rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                                      isModeActive
+                                        ? 'border border-blue-300/55 bg-blue-500/24 text-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.24)]'
+                                        : 'border border-transparent bg-white/[0.03] text-white/72 hover:border-white/14 hover:bg-white/[0.08]'
+                                    }`}
+                                  >
+                                    {modeLabel}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </label>
+                        ) : null}
+
+                        {selectedMicroButtonMode !== 'page' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita</p>
+                            <input
+                              list={microWidgetDatalistId}
+                              value={selectedMicroWidget.entity}
+                              onChange={(event) =>
+                                onUpdateWidget(selectedWidget.id, (widget) => ({
+                                  ...widget,
+                                  widgets: (widget.widgets ?? []).map((entry) =>
+                                    entry.id === selectedMicroWidget.id
+                                      ? { ...entry, entity: event.target.value }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                              placeholder="Es. sensor.bollitore_temperature"
+                              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                            />
+                          </label>
+                        ) : null}
+
+                        {selectedMicroButtonMode === 'push' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Invio segnale</p>
+                            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateWidget(selectedWidget.id, (widget) => ({
+                                    ...widget,
+                                    widgets: (widget.widgets ?? []).map((entry) =>
+                                      entry.id === selectedMicroWidget.id
+                                        ? {
+                                            ...entry,
+                                            buttonHoldWhilePressed: !(entry.buttonHoldWhilePressed === true),
+                                          }
+                                        : entry,
+                                    ),
+                                  }))
+                                }
+                                className="group inline-flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 transition-colors hover:bg-white/[0.06]"
+                                aria-pressed={selectedMicroWidget.buttonHoldWhilePressed === true}
+                                title="Mantieni segnale durante pressione"
+                              >
+                                <span className="text-left text-sm text-white/90">
+                                  Mantieni il segnale finche il dito resta premuto
+                                </span>
+                                <span
+                                  className={`relative inline-flex h-6 w-10 shrink-0 rounded-full border transition-colors ${
+                                    selectedMicroWidget.buttonHoldWhilePressed === true
+                                      ? 'border-sky-300/65 bg-sky-400/50 shadow-[0_0_16px_rgba(56,189,248,0.35)]'
+                                      : 'border-white/25 bg-white/12'
+                                  }`}
+                                >
+                                <span
+                                  className={`absolute left-[2px] top-[2px] h-[1.125rem] w-[1.125rem] rounded-full bg-white shadow-[0_2px_6px_rgba(15,23,42,0.4)] transition-transform ${
+                                    selectedMicroWidget.buttonHoldWhilePressed === true ? 'translate-x-[1rem]' : 'translate-x-0'
+                                  }`}
+                                />
+                                </span>
+                              </button>
+                            </div>
+                          </label>
+                        ) : null}
+
+                        {selectedMicroButtonMode === 'page' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Pagina destinazione</p>
+                            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                              <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1">
+                                {microWidgetPageOptions.map((path) => {
+                                  const pathLabel = microWidgetPathLabelByPath.get(path);
+                                  const optionLabel = pathLabel && pathLabel.length > 0 ? `${pathLabel}  ${path}` : path;
+                                  const isPathSelected =
+                                    (selectedMicroWidget.buttonPagePath?.trim() || defaultMicroWidgetPagePath) === path;
+                                  return (
+                                    <button
+                                      key={path}
+                                      type="button"
+                                      onClick={() =>
+                                        onUpdateWidget(selectedWidget.id, (widget) => ({
+                                          ...widget,
+                                          widgets: (widget.widgets ?? []).map((entry) =>
+                                            entry.id === selectedMicroWidget.id
+                                              ? { ...entry, buttonPagePath: path }
+                                              : entry,
+                                          ),
+                                        }))
+                                      }
+                                      className={`w-full rounded-lg border px-2.5 py-2 text-left text-sm transition-colors ${
+                                        isPathSelected
+                                          ? 'border-blue-300/50 bg-blue-500/22 text-blue-100'
+                                          : 'border-transparent bg-white/[0.03] text-white/78 hover:border-white/15 hover:bg-white/[0.07]'
+                                      }`}
+                                    >
+                                      {optionLabel}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <input
+                              list={microWidgetPagePathDatalistId}
+                              value={selectedMicroWidget.buttonPagePath?.trim() || defaultMicroWidgetPagePath}
+                              onChange={(event) =>
+                                onUpdateWidget(selectedWidget.id, (widget) => ({
+                                  ...widget,
+                                  widgets: (widget.widgets ?? []).map((entry) =>
+                                    entry.id === selectedMicroWidget.id
+                                      ? { ...entry, buttonPagePath: event.target.value }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                              placeholder="/home"
+                              className="mt-2 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                            />
+                          </label>
+                        ) : null}
+
+                        {selectedMicroWidget.type === 'micro_slider' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Invio valore</p>
+                            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateWidget(selectedWidget.id, (widget) => ({
+                                    ...widget,
+                                    widgets: (widget.widgets ?? []).map((entry) =>
+                                      entry.id === selectedMicroWidget.id
+                                        ? {
+                                            ...entry,
+                                            sliderSendOnRelease: !(entry.sliderSendOnRelease ?? true),
+                                          }
+                                        : entry,
+                                    ),
+                                  }))
+                                }
+                                className="group inline-flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 transition-colors hover:bg-white/[0.06]"
+                                aria-pressed={selectedMicroSliderSendOnRelease}
+                                title="Invia solo quando rilasci lo slider"
+                              >
+                                <span className="text-left text-sm text-white/90">
+                                  Invia solo al rilascio
+                                </span>
+                                <span
+                                  className={`relative inline-flex h-6 w-10 shrink-0 rounded-full border transition-colors ${
+                                    selectedMicroSliderSendOnRelease
+                                      ? 'border-sky-300/65 bg-sky-400/50 shadow-[0_0_16px_rgba(56,189,248,0.35)]'
+                                      : 'border-white/25 bg-white/12'
+                                  }`}
+                                >
+                                  <span
+                                    className={`absolute left-[2px] top-[2px] h-[1.125rem] w-[1.125rem] rounded-full bg-white shadow-[0_2px_6px_rgba(15,23,42,0.4)] transition-transform ${
+                                      selectedMicroSliderSendOnRelease ? 'translate-x-[1rem]' : 'translate-x-0'
+                                    }`}
+                                  />
+                                </span>
+                              </button>
+                            </div>
+                          </label>
+                        ) : null}
+
+                        <label className="block">
+                          <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Label</p>
+                          <input
+                            value={selectedMicroWidget.label ?? ''}
+                            onChange={(event) =>
+                              onUpdateWidget(selectedWidget.id, (widget) => ({
+                                ...widget,
+                                widgets: (widget.widgets ?? []).map((entry) =>
+                                  entry.id === selectedMicroWidget.id
+                                    ? { ...entry, label: event.target.value || undefined }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            placeholder="Es. Bollitore"
+                            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/14 bg-white/[0.03] px-3 py-3 text-sm text-white/55">
+                      Seleziona un widget dalla preview live per aprire la sua configurazione.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
             {selectedWidget.kind === 'sensor' ? (
               <>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -1908,6 +2580,109 @@ export function RightSidebarManager({
           </button>
         </div>
       )}
+
+      {isEditMode &&
+      selectedWidget &&
+      isMicroWidgetCatalogOpen &&
+      typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-3xl flex items-center justify-center p-4 sm:p-6"
+              onClick={() => setIsMicroWidgetCatalogOpen(false)}
+            >
+              <div
+                className="w-full max-w-3xl max-h-[88dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.08] backdrop-blur-3xl p-4 sm:p-6"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/50">Catalogo micro-widget</p>
+                    <h3 className="mt-1 text-xl font-semibold text-white/95">Aggiungi dispositivo correlato</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMicroWidgetCatalogOpen(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/75 transition-colors hover:bg-white/[0.16] hover:text-white"
+                    aria-label="Chiudi catalogo micro-widget"
+                    title="Chiudi catalogo"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="max-h-[calc(88dvh-7.5rem)] overflow-y-auto custom-scrollbar pr-1">
+                  <label className="block">
+                    <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita da associare</p>
+                    <input
+                      list={microWidgetDatalistId}
+                      value={microWidgetCatalogEntity}
+                      onChange={(event) => setMicroWidgetCatalogEntity(event.target.value)}
+                      placeholder="Es. switch.bedside_lamp"
+                      className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                    />
+                    <p className="mt-2 text-[11px] text-white/45">
+                      Entita corrente: <span className="text-white/80">{catalogEntityId || 'nessuna'}</span>
+                    </p>
+                  </label>
+
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {compatibleMicroWidgetCatalog.length > 0 ? (
+                      compatibleMicroWidgetCatalog.map((catalogItem) => {
+                        const previewWidget: MicroWidget = {
+                          id: `preview-${catalogItem.type}`,
+                          type: catalogItem.type,
+                          entity: catalogEntityId,
+                          label: catalogItem.label,
+                        };
+                        const livePreviewState = catalogEntityId ? haStates[catalogEntityId] : undefined;
+                        const previewState =
+                          livePreviewState ??
+                          buildFallbackMicroWidgetState(catalogItem.type, catalogItem.label);
+                        return (
+                          <div
+                            key={catalogItem.type}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              appendMicroWidget(catalogItem.type, catalogEntityId);
+                              setIsMicroWidgetCatalogOpen(false);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                appendMicroWidget(catalogItem.type, catalogEntityId);
+                                setIsMicroWidgetCatalogOpen(false);
+                              }
+                            }}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 transition-colors hover:border-white/22 hover:bg-white/[0.06] cursor-pointer"
+                          >
+                            <div className="pointer-events-none">
+                              {renderMicroWidgetPreview(previewWidget, previewState)}
+                            </div>
+                            <div className="mt-2 flex items-center justify-between gap-3 px-1">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-white/88">{catalogItem.label}</p>
+                                <p className="truncate text-[11px] text-white/48">{catalogItem.description}</p>
+                              </div>
+                              <span className="inline-flex shrink-0 rounded-full border border-white/18 bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-white/72">
+                                Aggiungi
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="md:col-span-2 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/50">
+                        Nessun widget compatibile con questa entita. Prova un&apos;entita diversa.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </aside>
   );
 }

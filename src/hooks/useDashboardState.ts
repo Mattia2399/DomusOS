@@ -105,6 +105,26 @@ export interface DashboardStateShape {
     supportsNextTrack?: boolean;
     supportsPreviousTrack?: boolean;
     supportsPower?: boolean;
+    supportsShuffle?: boolean;
+    supportsRepeat?: boolean;
+    supportsSelectSource?: boolean;
+    supportsGrouping?: boolean;
+    shuffleEnabled?: boolean;
+    repeatMode?: 'off' | 'all' | 'one';
+    outputDevices?: Array<{
+      id: string;
+      name: string;
+      subtitle?: string;
+      kind?: 'speaker' | 'tv' | 'cast';
+    }>;
+    selectedOutputDeviceId?: string;
+    multiroomDevices?: Array<{
+      id: string;
+      name: string;
+      subtitle?: string;
+      kind?: 'speaker' | 'tv' | 'cast';
+      grouped?: boolean;
+    }>;
   };
   favorites: FavoriteDevice[];
   livingRoomMasterOff: boolean;
@@ -157,6 +177,18 @@ const FAVORITES_SEED: FavoriteDevice[] = [
     imgClass: 'mix-blend-screen opacity-90 scale-110',
     isOn: true,
   },
+];
+
+const SPEAKER_OUTPUT_DEVICES_SEED = [
+  { id: 'living_room_speaker', name: 'Living Room Speaker', subtitle: 'Wi-Fi', kind: 'speaker' as const },
+  { id: 'kitchen_speaker', name: 'Kitchen Speaker', subtitle: 'AirPlay', kind: 'speaker' as const },
+  { id: 'bedroom_tv', name: 'Bedroom TV', subtitle: 'HDMI ARC', kind: 'tv' as const },
+];
+
+const SPEAKER_MULTIROOM_SEED = [
+  { id: 'media_player.kitchen_speaker', name: 'Kitchen Speaker', subtitle: 'Cucina', kind: 'speaker' as const, grouped: false },
+  { id: 'media_player.bedroom_speaker', name: 'Bedroom Speaker', subtitle: 'Camera', kind: 'speaker' as const, grouped: false },
+  { id: 'media_player.living_room_tv', name: 'Living Room TV', subtitle: 'Soggiorno', kind: 'tv' as const, grouped: false },
 ];
 
 const CLIMATE_DEMO_MIN_TEMP = 16;
@@ -510,6 +542,13 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
   const [speakerVolume, setSpeakerVolume] = useState(72);
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [speakerPowered, setSpeakerPowered] = useState(true);
+  const [speakerShuffleEnabled, setSpeakerShuffleEnabled] = useState(false);
+  const [speakerRepeatMode, setSpeakerRepeatMode] = useState<'off' | 'all' | 'one'>('off');
+  const [speakerOutputDevices] = useState(() => SPEAKER_OUTPUT_DEVICES_SEED);
+  const [speakerSelectedOutputDeviceId, setSpeakerSelectedOutputDeviceId] = useState(
+    SPEAKER_OUTPUT_DEVICES_SEED[0]?.id ?? '',
+  );
+  const [speakerMultiroomDevices, setSpeakerMultiroomDevices] = useState(() => SPEAKER_MULTIROOM_SEED);
   const [favorites, setFavorites] = useState<FavoriteDevice[]>(FAVORITES_SEED);
   const haStates = options?.haStates ?? {};
   const haConnected = options?.haStatus === 'connected';
@@ -705,6 +744,44 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
 
   const toggleSpeakerMute = () => {
     setSpeakerMuted((current) => !current);
+  };
+
+  const toggleSpeakerShuffle = () => {
+    setSpeakerShuffleEnabled((current) => !current);
+  };
+
+  const cycleSpeakerRepeatMode = () => {
+    setSpeakerRepeatMode((current) => {
+      if (current === 'off') {
+        return 'all';
+      }
+      if (current === 'all') {
+        return 'one';
+      }
+      return 'off';
+    });
+  };
+
+  const setSpeakerOutputDevice = (deviceId: string) => {
+    const normalized = deviceId.trim();
+    if (!normalized) {
+      return;
+    }
+    setSpeakerSelectedOutputDeviceId(normalized);
+  };
+
+  const toggleSpeakerGroupMember = (deviceId: string, shouldJoin: boolean) => {
+    const normalized = deviceId.trim();
+    if (!normalized) {
+      return;
+    }
+    setSpeakerMultiroomDevices((current) =>
+      current.map((device) =>
+        device.id === normalized
+          ? { ...device, grouped: shouldJoin }
+          : device,
+      ),
+    );
   };
 
   const previousSpeakerTrack = () => {
@@ -1226,6 +1303,15 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
         supportsNextTrack: true,
         supportsPreviousTrack: true,
         supportsPower: true,
+        supportsShuffle: true,
+        supportsRepeat: true,
+        supportsSelectSource: true,
+        supportsGrouping: true,
+        shuffleEnabled: speakerShuffleEnabled,
+        repeatMode: speakerRepeatMode,
+        outputDevices: speakerOutputDevices,
+        selectedOutputDeviceId: speakerSelectedOutputDeviceId,
+        multiroomDevices: speakerMultiroomDevices,
       },
       favorites,
       livingRoomMasterOff: !resolvedLampOn && !resolvedClimateOn,
@@ -1246,8 +1332,13 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
     lampOn,
     lampTimerEnd,
     speakerMuted,
+    speakerMultiroomDevices,
+    speakerOutputDevices,
     speakerPowered,
     speakerProgress,
+    speakerRepeatMode,
+    speakerSelectedOutputDeviceId,
+    speakerShuffleEnabled,
     speakerVolume,
     speakerPlaying,
     userName,
@@ -1281,7 +1372,11 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
       previousSpeakerTrack,
       setSpeakerProgress: setSpeakerProgressValue,
       setSpeakerVolume: setSpeakerVolumeValue,
+      setSpeakerOutputDevice,
+      toggleSpeakerGroupMember,
+      cycleSpeakerRepeatMode,
       toggleSpeakerMute,
+      toggleSpeakerShuffle,
       toggleSpeakerPower,
       toggleSpeakerPlayback,
     },

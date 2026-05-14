@@ -558,6 +558,8 @@ type StackGridProps = {
   onWidgetClimateModeChange: (widget: Widget, mode: string) => void;
   onWidgetClimateFanModeChange: (widget: Widget, mode: string) => void;
   onWidgetMediaToggle: (widget: Widget) => void;
+  onWidgetMediaPrevious: (widget: Widget) => void;
+  onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -569,6 +571,7 @@ type StackGridProps = {
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   haConnected: boolean;
   haStates: MockEntityStateMap;
+  sensorHistoryByEntity?: Record<string, number[]>;
 };
 
 function StackGridComponent({
@@ -596,6 +599,8 @@ function StackGridComponent({
   onWidgetClimateModeChange,
   onWidgetClimateFanModeChange,
   onWidgetMediaToggle,
+  onWidgetMediaPrevious,
+  onWidgetMediaNext,
   onWidgetMediaSeek,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
@@ -607,6 +612,7 @@ function StackGridComponent({
   onWidgetLayoutChange,
   haConnected,
   haStates,
+  sensorHistoryByEntity = {},
 }: StackGridProps) {
   const isStackInteractingRef = useRef(false);
   const xsLongPressTimerRef = useRef<number | null>(null);
@@ -1334,6 +1340,8 @@ function StackGridComponent({
                       onClimateModeChange={onWidgetClimateModeChange}
                       onClimateFanModeChange={onWidgetClimateFanModeChange}
                       onMediaToggle={onWidgetMediaToggle}
+                      onMediaPrevious={onWidgetMediaPrevious}
+                      onMediaNext={onWidgetMediaNext}
                       onMediaSeek={onWidgetMediaSeek}
                       onAlarmDisarm={onWidgetAlarmDisarm}
                       onAlarmArm={onWidgetAlarmArm}
@@ -1343,6 +1351,7 @@ function StackGridComponent({
                       onLockOpen={onWidgetLockOpen}
                       onMembersOpenPanel={() => onOpenMembersPanel()}
                       liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                      sensorHistory={sensorHistoryByEntity[widget.entityId]}
                       houseMembers={houseMembers}
                     />
                   </div>

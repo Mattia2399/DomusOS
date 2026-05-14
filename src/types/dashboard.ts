@@ -1,4 +1,5 @@
 import type { DashboardSection, Widget } from './dashboardModels';
+export type { MicroWidget } from './dashboardModels';
 
 export interface LayoutData {
   cards: unknown[]; // Definizione serializzata delle card/griglia.

@@ -32,6 +32,7 @@ type WidgetCardRendererProps = {
   isEditMode: boolean;
   isSelected: boolean;
   value: number;
+  sensorHistory?: number[];
   onClick: () => void;
   onLightBrightnessChange?: (widget: Widget, value: number) => void;
   onClimateTargetTempChange?: (widget: Widget, value: number) => void;
@@ -39,6 +40,8 @@ type WidgetCardRendererProps = {
   onClimateModeChange?: (widget: Widget, mode: string) => void;
   onClimateFanModeChange?: (widget: Widget, mode: string) => void;
   onMediaToggle?: (widget: Widget) => void;
+  onMediaPrevious?: (widget: Widget) => void;
+  onMediaNext?: (widget: Widget) => void;
   onMediaSeek?: (widget: Widget, position: number) => void;
   onAlarmDisarm?: (widget: Widget) => void;
   onAlarmArm?: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -58,6 +61,7 @@ export function WidgetCardRenderer({
   isEditMode,
   isSelected,
   value,
+  sensorHistory,
   onClick,
   onLightBrightnessChange,
   onClimateTargetTempChange,
@@ -65,6 +69,8 @@ export function WidgetCardRenderer({
   onClimateModeChange,
   onClimateFanModeChange,
   onMediaToggle,
+  onMediaPrevious,
+  onMediaNext,
   onMediaSeek,
   onAlarmDisarm,
   onAlarmArm,
@@ -128,6 +134,8 @@ export function WidgetCardRenderer({
         isEditMode={isEditMode}
         onClick={onClick}
         onTogglePlayback={() => onMediaToggle?.(widget)}
+        onPreviousTrack={() => onMediaPrevious?.(widget)}
+        onNextTrack={() => onMediaNext?.(widget)}
         onSeek={(position) => onMediaSeek?.(widget, position)}
         liveEntity={liveEntity}
       />
@@ -208,8 +216,10 @@ export function WidgetCardRenderer({
       widget={widget}
       isSelected={isSelected}
       value={value}
+      sensorHistory={sensorHistory}
       isEditMode={isEditMode}
       onClick={onClick}
+      liveEntity={liveEntity}
       gridBreakpoint={gridBreakpoint}
     />
   );

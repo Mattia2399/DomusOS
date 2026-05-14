@@ -78,11 +78,23 @@ export type GridItem = {
   h: number;
 };
 
+export interface MicroWidget {
+  id: string;
+  type: 'value_pill' | 'status_glow' | 'micro_toggle' | 'mini_ring' | 'micro_button' | 'micro_slider';
+  entity: string;
+  label?: string;
+  buttonMode?: 'push' | 'switch' | 'page';
+  buttonHoldWhilePressed?: boolean;
+  buttonPagePath?: string;
+  sliderSendOnRelease?: boolean;
+}
+
 export type Widget = {
   id: string;
   kind: WidgetKind;
   title: string;
   entityId: string;
+  widgets?: MicroWidget[];
   isFavorite?: boolean;
   alarmUnlockCode?: string;
   lockCode?: string;

@@ -300,23 +300,6 @@ function isLikelyVideoUrl(url: string | undefined) {
   return /\.(mp4|webm|ogg|m3u8)(?:$|[?#])/i.test(url);
 }
 
-function LiveBadge({ offline = false }: { offline?: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-        offline
-          ? 'bg-amber-500/15 border-amber-300/35 text-amber-100'
-          : 'bg-red-500/15 border-red-400/30 text-red-200'
-      }`}
-    >
-      <span
-        className={`w-2 h-2 rounded-full ${offline ? 'bg-amber-300' : 'bg-red-500 animate-pulse'}`}
-      />
-      {offline ? 'OFFLINE' : 'LIVE'}
-    </span>
-  );
-}
-
 function TimelineSelector({
   value,
   items,
@@ -512,7 +495,6 @@ function PtzJoystick({
 
 export function CameraControlsPanel({
   name,
-  status,
   entityId,
   streamUrl,
   snapshotUrl,
@@ -581,8 +563,8 @@ export function CameraControlsPanel({
   const liveVisualUrl = streamFailed ? fallbackVisual ?? '' : resolvedStreamUrl ?? fallbackVisual ?? '';
   const hasLiveVisual = liveVisualUrl.length > 0;
   const snapshotCaptureUrl = cameraProxySnapshotUrl ?? fallbackVisual ?? (hasLiveVisual ? liveVisualUrl : undefined);
-  const resolvedStatus = toTrimmedString(status) ?? (isOffline ? 'Offline' : 'Live');
-  const subtitle = entityId ? `${resolvedStatus} - ${entityId}` : resolvedStatus;
+  const subtitle = isOffline ? 'Disconnesso' : 'Connesso';
+  const subtitleClass = isOffline ? 'text-rose-200/90' : 'text-emerald-200/90';
 
   const eventLogs = useMemo(() => {
     const liveEvents = buildLiveEventLogs(rawAttributes);
@@ -813,17 +795,14 @@ export function CameraControlsPanel({
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
+        <div className="flex items-center gap-4 min-w-0 pr-11">
             <span className="w-14 h-14 rounded-full bg-white/10 border border-white/12 flex items-center justify-center text-white shrink-0">
               <Webcam size={22} />
             </span>
             <div className="min-w-0">
               <h2 className="text-[1.35rem] font-semibold tracking-tight text-white truncate">{name}</h2>
-              <p className="text-sm text-gray-400 truncate">{subtitle}</p>
+              <p className={`text-sm truncate ${subtitleClass}`}>{subtitle}</p>
             </div>
-          </div>
-          <LiveBadge offline={isOffline} />
         </div>
       </div>
 

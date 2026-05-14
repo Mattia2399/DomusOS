@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Crown, Lightbulb, LocateFixed, MapPin, Smartphone, Tablet, Users, Watch, X } from 'lucide-react';
+import { Crown, Lightbulb, LocateFixed, MapPin, Plus, Smartphone, Tablet, Users, Watch, X } from 'lucide-react';
 import { Map, Marker, type MapProps, type MapRef } from '@vis.gl/react-maplibre';
 import { ActiveDevice } from './types';
 import { ClimateControls } from './ClimateControls';
@@ -12,15 +12,28 @@ import { AlarmControls } from './AlarmControls';
 import { VacuumControls } from './VacuumControls';
 import { LockControls } from './LockControls';
 import { CoverControls } from './CoverControls';
+import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { StatusGlow } from '../widgets/micro/StatusGlow';
+import { ValuePill } from '../widgets/micro/ValuePill';
+import { MiniRing } from '../widgets/micro/MiniRing';
+import { MicroToggle } from '../widgets/micro/MicroToggle';
+import { MicroButton } from '../widgets/micro/MicroButton';
+import { MicroSlider } from '../widgets/micro/MicroSlider';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import type { DashboardTheme } from '../../hooks/useProfileSettings';
+import type { MockEntityStateMap } from '../../types/ha';
+
+type MediaRepeatMode = 'off' | 'all' | 'one';
+type MediaOutputKind = 'speaker' | 'tv' | 'cast';
 
 interface ContextSidebarProps {
   activeDevice: ActiveDevice | null;
+  isEditMode?: boolean;
   theme?: DashboardTheme;
   onClose?: () => void;
   showCloseButton?: boolean;
   externalScrollContainer?: boolean;
+  haStates?: MockEntityStateMap;
   lamp: {
     name: string;
     isOn: boolean;
@@ -78,6 +91,27 @@ interface ContextSidebarProps {
     supportsNextTrack?: boolean;
     supportsPreviousTrack?: boolean;
     supportsPower?: boolean;
+    supportsShuffle?: boolean;
+    supportsRepeat?: boolean;
+    supportsSelectSource?: boolean;
+    supportsGrouping?: boolean;
+    shuffleEnabled?: boolean;
+    repeatMode?: MediaRepeatMode;
+    outputDevices?: Array<{
+      id: string;
+      name: string;
+      subtitle?: string;
+      kind?: MediaOutputKind;
+    }>;
+    selectedOutputDeviceId?: string;
+    multiroomDevices?: Array<{
+      id: string;
+      name: string;
+      subtitle?: string;
+      kind?: MediaOutputKind;
+      grouped?: boolean;
+    }>;
+    rawAttributes?: Record<string, unknown>;
   };
   vacuum: {
     name: string;
@@ -160,6 +194,9 @@ interface ContextSidebarProps {
     showPrecipitation?: boolean;
     showWind?: boolean;
   };
+  onToggleMicroWidget?: (entityId: string, nextActive: boolean) => void;
+  onSetMicroSliderValue?: (entityId: string, value: number) => void;
+  onNavigateMicroWidgetPage?: (path: string) => void;
   actions: {
     toggleLamp: () => void;
     setLampBrightness: (value: number) => void;
@@ -181,6 +218,10 @@ interface ContextSidebarProps {
     seekSpeakerPosition: (position: number) => void;
     setSpeakerVolume: (value: number) => void;
     toggleSpeakerMute: () => void;
+    toggleSpeakerShuffle: () => void;
+    cycleSpeakerRepeatMode: () => void;
+    selectSpeakerOutputDevice: (deviceId: string) => void;
+    toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
     disarmAlarm: (code?: string) => void;
     armAlarmHome: (code?: string) => void;
     armAlarmAway: (code?: string) => void;
@@ -268,10 +309,12 @@ function buildMembersMapInitialViewState(points: MembersMapPoint[]): MembersMapI
 
 export function ContextSidebar({
   activeDevice,
+  isEditMode = false,
   theme = 'dark',
   onClose,
   showCloseButton = true,
   externalScrollContainer = false,
+  haStates = {},
   lamp,
   climate,
   camera,
@@ -283,11 +326,14 @@ export function ContextSidebar({
   lock,
   cover,
   weatherConfig,
+  onToggleMicroWidget,
+  onSetMicroSliderValue,
+  onNavigateMicroWidgetPage,
   actions,
 }: ContextSidebarProps) {
   const activeDeviceLayoutClass = externalScrollContainer
     ? 'overflow-visible pb-3 pt-2'
-    : 'overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pb-4 lg:pb-6 pt-10 lg:pt-12';
+    : 'overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pb-4 lg:pb-6';
   const membersMapRef = React.useRef<MapRef | null>(null);
   const membersMapPoints = activeDevice?.membersMapPoints ?? [];
   const membersMapStyleUrl =
@@ -328,6 +374,7 @@ export function ContextSidebar({
       essential: true,
     });
   }, [currentMemberMapPoint]);
+  const microWidgets = activeDevice?.microWidgets ?? [];
   return (
     <aside
       className={`context-sidebar w-full shrink-0 relative ${
@@ -340,7 +387,7 @@ export function ContextSidebar({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-2 top-2 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-xl transition-all hover:bg-white/15 hover:text-white active:scale-95"
+          className="absolute z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-xl transition-all hover:bg-white/15 hover:text-white active:scale-95 right-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.5rem)] top-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.4rem)]"
           aria-label="Chiudi pannello contestuale"
           title="Chiudi"
         >
@@ -362,7 +409,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'climate' ? (
         <ClimateControls
-          climate={climate}
+          climate={{ ...climate, name: activeDevice.name }}
           onTogglePower={actions.toggleClimatePower}
           onDecreaseTarget={actions.decreaseClimateTarget}
           onIncreaseTarget={actions.increaseClimateTarget}
@@ -377,7 +424,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'light' ? (
         <LightControls
-          lamp={lamp}
+          lamp={{ ...lamp, name: activeDevice.name }}
           onToggle={actions.toggleLamp}
           onBrightnessChange={actions.setLampBrightness}
           onColorTempChange={actions.setLampColorTemp}
@@ -387,7 +434,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'camera' ? (
         <CameraControls
-          name={camera.name || activeDevice.name}
+          name={activeDevice.name}
           status={camera.status ?? activeDevice.status}
           entityId={camera.entityId}
           streamUrl={camera.streamUrl}
@@ -419,6 +466,16 @@ export function ContextSidebar({
           supportsNextTrack={speaker.supportsNextTrack}
           supportsPreviousTrack={speaker.supportsPreviousTrack}
           supportsPower={speaker.supportsPower}
+          supportsShuffle={speaker.supportsShuffle}
+          supportsRepeat={speaker.supportsRepeat}
+          supportsSelectSource={speaker.supportsSelectSource}
+          supportsGrouping={speaker.supportsGrouping}
+          shuffleEnabled={speaker.shuffleEnabled}
+          repeatMode={speaker.repeatMode}
+          outputDevices={speaker.outputDevices}
+          selectedOutputDeviceId={speaker.selectedOutputDeviceId}
+          multiroomDevices={speaker.multiroomDevices}
+          rawAttributes={speaker.rawAttributes}
           onTogglePlayback={actions.toggleSpeakerPlayback}
           onTogglePower={actions.toggleSpeakerPower}
           onPreviousTrack={actions.previousSpeakerTrack}
@@ -426,6 +483,10 @@ export function ContextSidebar({
           onSeek={actions.seekSpeakerPosition}
           onVolumeChange={actions.setSpeakerVolume}
           onToggleMute={actions.toggleSpeakerMute}
+          onToggleShuffle={actions.toggleSpeakerShuffle}
+          onCycleRepeatMode={actions.cycleSpeakerRepeatMode}
+          onSelectOutputDevice={actions.selectSpeakerOutputDevice}
+          onToggleMultiroomDevice={actions.toggleSpeakerGroupMember}
         />
       ) : null}
 
@@ -435,6 +496,8 @@ export function ContextSidebar({
           status={activeDevice.status}
           value={activeDevice.sensorValue ?? 0}
           unit={activeDevice.sensorUnit ?? '%'}
+          entityId={activeDevice.sensorEntityId}
+          deviceClass={activeDevice.sensorDeviceClass}
           history={activeDevice.sensorHistory}
           battery={activeDevice.sensorBattery}
           connection={activeDevice.sensorConnection}
@@ -457,7 +520,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'alarm' ? (
         <AlarmControls
-          alarm={alarm}
+          alarm={{ ...alarm, name: activeDevice.name }}
           onDisarm={actions.disarmAlarm}
           onArmHome={actions.armAlarmHome}
           onArmAway={actions.armAlarmAway}
@@ -470,7 +533,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'vacuum' ? (
         <VacuumControls
-          vacuum={vacuum}
+          vacuum={{ ...vacuum, name: activeDevice.name }}
           areaOptions={vacuumAreas}
           onStart={actions.startVacuum}
           onPause={actions.pauseVacuum}
@@ -486,7 +549,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'lock' ? (
         <LockControls
-          lock={lock}
+          lock={{ ...lock, name: activeDevice.name }}
           onLock={actions.lockDoor}
           onUnlock={actions.unlockDoor}
           onOpen={actions.openDoor}
@@ -495,7 +558,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'cover' ? (
         <CoverControls
-          cover={cover}
+          cover={{ ...cover, name: activeDevice.name }}
           onOpen={actions.openCover}
           onClose={actions.closeCover}
           onStop={actions.stopCover}
@@ -505,20 +568,22 @@ export function ContextSidebar({
       ) : null}
 
       {activeDevice?.type === 'members' ? (
-        <div className="rounded-[2rem] border border-white/10 bg-white/5 backdrop-blur-xl p-4 sm:p-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-300/35 bg-cyan-500/15 text-cyan-100">
-              <Users size={18} />
-            </span>
-            <div>
-              <p className="text-lg font-semibold text-white/95">{activeDevice.name || 'Members'}</p>
-              <p className="text-xs text-white/60">
-                {membersMapPoints.length} posizione{membersMapPoints.length === 1 ? '' : 'i'} disponibili
-              </p>
+        <div className={CONTEXT_PANEL_LAYOUT.shell}>
+          <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-300/35 bg-cyan-500/15 text-cyan-100">
+                <Users size={18} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold text-white/95">{activeDevice.name || 'Members'}</p>
+                <p className="text-xs text-white/60">
+                  {membersMapPoints.length} posizione{membersMapPoints.length === 1 ? '' : 'i'} disponibili
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-3">
+          <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Mappa Presenze</p>
             <div className="relative mt-2 h-56 overflow-hidden rounded-xl border border-white/12 bg-gradient-to-br from-slate-900/70 to-slate-800/55">
               {membersMapPoints.length > 0 ? (
@@ -582,8 +647,11 @@ export function ContextSidebar({
                 <LocateFixed size={15} />
               </button>
             </div>
+          </div>
 
-            {membersMapPoints.length > 0 ? (
+          {membersMapPoints.length > 0 ? (
+            <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Membri</p>
               <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                 {membersMapPoints.map((point) => (
                   <div key={point.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
@@ -643,7 +711,101 @@ export function ContextSidebar({
                   </div>
                 ))}
               </div>
-            ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {activeDevice ? (
+        <div className="px-[clamp(0.75rem,2.8vw,1.5rem)] pb-1">
+          <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Dispositivi correlati</p>
+            <div className={`mt-3 ${CONTEXT_PANEL_LAYOUT.adaptiveGridTwo}`}>
+              {microWidgets.map((microWidget) => {
+                const state = haStates[microWidget.entity];
+                if (microWidget.type === 'value_pill') {
+                  return <ValuePill key={microWidget.id} widget={microWidget} state={state} />;
+                }
+                if (microWidget.type === 'status_glow') {
+                  return <StatusGlow key={microWidget.id} widget={microWidget} state={state} />;
+                }
+                if (microWidget.type === 'mini_ring') {
+                  return <MiniRing key={microWidget.id} widget={microWidget} state={state} />;
+                }
+                if (microWidget.type === 'micro_slider') {
+                  return (
+                    <MicroSlider
+                      key={microWidget.id}
+                      widget={microWidget}
+                      state={state}
+                      sendOnRelease={microWidget.sliderSendOnRelease ?? true}
+                      onValueChange={(value) => onSetMicroSliderValue?.(microWidget.entity, value)}
+                    />
+                  );
+                }
+                if (microWidget.type === 'micro_button') {
+                  const buttonMode = microWidget.buttonMode ?? 'switch';
+                  return (
+                    <MicroButton
+                      key={microWidget.id}
+                      widget={microWidget}
+                      state={state}
+                      onSwitchToggle={
+                        buttonMode === 'switch'
+                          ? (nextActive) => onToggleMicroWidget?.(microWidget.entity, nextActive)
+                          : undefined
+                      }
+                      onPushTap={
+                        buttonMode === 'push'
+                          ? () => onToggleMicroWidget?.(microWidget.entity, true)
+                          : undefined
+                      }
+                      onPushStart={
+                        buttonMode === 'push'
+                          ? () => onToggleMicroWidget?.(microWidget.entity, true)
+                          : undefined
+                      }
+                      onPushEnd={
+                        buttonMode === 'push'
+                          ? () => onToggleMicroWidget?.(microWidget.entity, false)
+                          : undefined
+                      }
+                      onPageNavigate={
+                        buttonMode === 'page'
+                          ? (path) => onNavigateMicroWidgetPage?.(path)
+                          : undefined
+                      }
+                    />
+                  );
+                }
+                return (
+                  <MicroToggle
+                    key={microWidget.id}
+                    widget={microWidget}
+                    state={state}
+                    onToggle={(nextActive) => onToggleMicroWidget?.(microWidget.entity, nextActive)}
+                  />
+                );
+              })}
+              {isEditMode ? (
+                <button
+                  type="button"
+                  onClick={() => console.log('Open Widget Box')}
+                  className="min-h-[4.25rem] rounded-2xl border border-dashed border-white/22 bg-white/[0.03] text-white/65 transition-colors hover:border-white/35 hover:bg-white/[0.07] hover:text-white"
+                  aria-label="Aggiungi dispositivo correlato"
+                  title="Aggiungi dispositivo correlato"
+                >
+                  <span className="flex h-full items-center justify-center">
+                    <Plus size={18} />
+                  </span>
+                </button>
+              ) : null}
+              {microWidgets.length === 0 && !isEditMode ? (
+                <div className="col-span-full rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/45">
+                  Nessun dispositivo correlato.
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

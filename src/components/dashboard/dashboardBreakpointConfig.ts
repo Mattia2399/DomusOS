@@ -105,7 +105,7 @@ export const MEMBERS_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, { w
 
 export const LOCK_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, { w: number; h: number }> = {
   '2xl': { w: 2, h: 2 },
-  xl: { w: 2, h: 2 },
+  xl: { w: 2, h: 3 },
   lg: { w: 2, h: 2 },
   md: { w: 2, h: 2 },
   sm: { w: 1, h: 2 },
