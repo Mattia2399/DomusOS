@@ -18,6 +18,8 @@ import { ValuePill } from '../widgets/micro/ValuePill';
 import { MiniRing } from '../widgets/micro/MiniRing';
 import { MicroToggle } from '../widgets/micro/MicroToggle';
 import { MicroButton } from '../widgets/micro/MicroButton';
+import { MicroSuperChart } from '../widgets/micro/MicroSuperChart';
+import { MicroStep } from '../widgets/micro/MicroStep';
 import { MicroSlider } from '../widgets/micro/MicroSlider';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import type { DashboardTheme } from '../../hooks/useProfileSettings';
@@ -25,6 +27,14 @@ import type { MockEntityStateMap } from '../../types/ha';
 
 type MediaRepeatMode = 'off' | 'all' | 'one';
 type MediaOutputKind = 'speaker' | 'tv' | 'cast';
+
+function resolveEntityStateById(haStates: MockEntityStateMap, entityId: string | undefined) {
+  const normalizedEntityId = (entityId ?? '').trim();
+  if (!normalizedEntityId) {
+    return undefined;
+  }
+  return haStates[normalizedEntityId] ?? haStates[normalizedEntityId.toLowerCase()];
+}
 
 interface ContextSidebarProps {
   activeDevice: ActiveDevice | null;
@@ -34,6 +44,7 @@ interface ContextSidebarProps {
   showCloseButton?: boolean;
   externalScrollContainer?: boolean;
   haStates?: MockEntityStateMap;
+  microChartHistoryByEntity?: Record<string, number[]>;
   lamp: {
     name: string;
     isOn: boolean;
@@ -315,6 +326,7 @@ export function ContextSidebar({
   showCloseButton = true,
   externalScrollContainer = false,
   haStates = {},
+  microChartHistoryByEntity = {},
   lamp,
   climate,
   camera,
@@ -722,7 +734,10 @@ export function ContextSidebar({
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Dispositivi correlati</p>
             <div className={`mt-3 ${CONTEXT_PANEL_LAYOUT.adaptiveGridTwo}`}>
               {microWidgets.map((microWidget) => {
-                const state = haStates[microWidget.entity];
+                const state = resolveEntityStateById(haStates, microWidget.entity);
+                const history =
+                  microChartHistoryByEntity[microWidget.entity.trim()] ??
+                  microChartHistoryByEntity[microWidget.entity.trim().toLowerCase()];
                 if (microWidget.type === 'value_pill') {
                   return <ValuePill key={microWidget.id} widget={microWidget} state={state} />;
                 }
@@ -740,6 +755,26 @@ export function ContextSidebar({
                       state={state}
                       sendOnRelease={microWidget.sliderSendOnRelease ?? true}
                       onValueChange={(value) => onSetMicroSliderValue?.(microWidget.entity, value)}
+                    />
+                  );
+                }
+                if (microWidget.type === 'micro_step') {
+                  return (
+                    <MicroStep
+                      key={microWidget.id}
+                      widget={microWidget}
+                      state={state}
+                      onValueChange={(value) => onSetMicroSliderValue?.(microWidget.entity, value)}
+                    />
+                  );
+                }
+                if (microWidget.type === 'micro_superchart') {
+                  return (
+                    <MicroSuperChart
+                      key={microWidget.id}
+                      widget={microWidget}
+                      state={state}
+                      history={history}
                     />
                   );
                 }

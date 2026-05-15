@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode } from 'react';
+import React, { type CSSProperties, type ReactNode } from 'react';
 import clsx from 'clsx';
 
 type WidgetWrapperProps = {
@@ -110,7 +110,7 @@ function clampToColumnStart(value: number | undefined, maxCols: number, span: nu
   return Math.min(maxStart, start);
 }
 
-export function WidgetWrapper({
+function WidgetWrapperComponent({
   width,
   mdWidth,
   lgWidth,
@@ -161,7 +161,7 @@ export function WidgetWrapper({
         className={clsx(
           'relative h-full w-full min-h-0 min-w-0 overflow-hidden',
           chrome === 'apple'
-            ? 'rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl'
+            ? 'rounded-3xl border border-white/10 bg-white/10'
             : 'bg-transparent',
         )}
       >
@@ -170,5 +170,23 @@ export function WidgetWrapper({
     </div>
   );
 }
+
+function areWidgetWrapperPropsEqual(prevProps: WidgetWrapperProps, nextProps: WidgetWrapperProps) {
+  return (
+    prevProps.width === nextProps.width &&
+    prevProps.mdWidth === nextProps.mdWidth &&
+    prevProps.lgWidth === nextProps.lgWidth &&
+    prevProps.height === nextProps.height &&
+    prevProps.columnStart === nextProps.columnStart &&
+    prevProps.mdColumnStart === nextProps.mdColumnStart &&
+    prevProps.lgColumnStart === nextProps.lgColumnStart &&
+    prevProps.rowStart === nextProps.rowStart &&
+    prevProps.chrome === nextProps.chrome &&
+    prevProps.className === nextProps.className &&
+    prevProps.children === nextProps.children
+  );
+}
+
+export const WidgetWrapper = React.memo(WidgetWrapperComponent, areWidgetWrapperPropsEqual);
 
 export default WidgetWrapper;

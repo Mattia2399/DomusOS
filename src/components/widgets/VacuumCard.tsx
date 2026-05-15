@@ -207,7 +207,7 @@ export function VacuumCard({
       }}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/5 backdrop-blur-xl ${contentPaddingClass} flex flex-col justify-between overflow-hidden transition-transform duration-200 ${auraClass}`}
+        className={`relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/5 ${contentPaddingClass} flex flex-col justify-between overflow-hidden transition-transform duration-200 ${auraClass}`}
       >
         <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(85%_72%_at_50%_0%,rgba(255,255,255,0.08),transparent_72%)]`} />
 

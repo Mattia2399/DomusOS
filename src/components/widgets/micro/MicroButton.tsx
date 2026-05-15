@@ -169,7 +169,7 @@ export function MicroButton({
             }
           : undefined
       }
-      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-left text-white backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/55 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-left text-white transition-all duration-200 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/55 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
         visualActive
           ? 'border-blue-300/45 bg-blue-500/18 shadow-[0_0_24px_rgba(56,189,248,0.24)]'
           : 'border-white/10 bg-white/[0.06] hover:border-white/22 hover:bg-white/[0.08] hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)]'

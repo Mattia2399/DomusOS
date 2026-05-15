@@ -1,5 +1,4 @@
 import React from 'react';
-import { SlidersHorizontal } from 'lucide-react';
 import type { MicroWidget } from '../../../types/dashboardModels';
 import type { MockEntityState } from '../../../types/ha';
 
@@ -23,6 +22,19 @@ function parseNumber(value: unknown) {
   return undefined;
 }
 
+function resolveAttributeNumber(rawAttributes: Record<string, unknown> | undefined, keys: string[]) {
+  if (!rawAttributes) {
+    return undefined;
+  }
+  for (const key of keys) {
+    const parsed = parseNumber(rawAttributes[key]);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -40,9 +52,9 @@ function resolveStepDecimals(step: number) {
 
 function normalizeSliderMeta(state: MockEntityState | undefined) {
   const rawAttributes = state?.rawAttributes;
-  const minAttr = parseNumber(rawAttributes?.min);
-  const maxAttr = parseNumber(rawAttributes?.max);
-  const stepAttr = parseNumber(rawAttributes?.step);
+  const minAttr = resolveAttributeNumber(rawAttributes, ['min', 'native_min_value', 'min_value', 'min_temp']);
+  const maxAttr = resolveAttributeNumber(rawAttributes, ['max', 'native_max_value', 'max_value', 'max_temp']);
+  const stepAttr = resolveAttributeNumber(rawAttributes, ['step', 'native_step', 'target_temp_step']);
 
   const hasValidBounds = minAttr !== undefined && maxAttr !== undefined && maxAttr > minAttr;
   const min = hasValidBounds ? minAttr : 0;
@@ -52,13 +64,19 @@ function normalizeSliderMeta(state: MockEntityState | undefined) {
 }
 
 function resolveCurrentValue(state: MockEntityState | undefined, min: number, max: number) {
-  const numericState = parseNumber(state?.numericValue) ?? parseNumber(state?.state);
+  const rawAttributes = state?.rawAttributes;
+  const numericState =
+    parseNumber(state?.numericValue) ??
+    parseNumber(state?.state) ??
+    resolveAttributeNumber(rawAttributes, ['value', 'current_value', 'temperature']);
   return clamp(numericState ?? min, min, max);
 }
 
 export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange }: MicroSliderProps) {
   const label = widget.label?.trim() || state?.rawAttributes?.friendly_name?.toString() || widget.entity;
-  const unit = (state?.unit ?? state?.rawAttributes?.unit_of_measurement)?.toString() ?? '';
+  const unit =
+    (state?.unit ?? state?.rawAttributes?.unit_of_measurement ?? state?.rawAttributes?.native_unit_of_measurement)?.toString() ??
+    '';
   const { min, max, step } = React.useMemo(() => normalizeSliderMeta(state), [state]);
   const isDisabled = max <= min;
   const incomingValue = React.useMemo(() => resolveCurrentValue(state, min, max), [max, min, state]);
@@ -102,7 +120,7 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
 
   return (
     <div
-      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white backdrop-blur-md transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
         isDisabled
           ? 'border-white/8 bg-white/[0.05] opacity-70'
           : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'
@@ -123,14 +141,6 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
             className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-300/80 to-blue-400/85 transition-[width] duration-150"
             style={{ width: `${Math.max(0, Math.min(100, sliderPercent))}%` }}
           />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-3">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/18 bg-white/14 text-white/85">
-              <SlidersHorizontal size={13} />
-            </span>
-            <span className="text-[10px] text-white/60">
-              {sendOnRelease ? 'Invia al rilascio' : 'Invio realtime'}
-            </span>
-          </div>
 
           <input
             type="range"

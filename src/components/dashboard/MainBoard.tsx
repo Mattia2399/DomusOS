@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveDevice, SensorConnectionState } from '../settings/types';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardState } from '../../hooks/useDashboardState';
 import { ConsumptionDashboardPage } from '../../pages/Consumi';
 import { AutomationsBuilder } from '../../pages/AutomationsBuilder';
@@ -2643,6 +2644,8 @@ function resolveLightCapabilities(entity?: MockEntityState) {
 }
 
 export function MainBoard() {
+  const navigate = useNavigate();
+  const routerLocation = useLocation();
   const {
     theme,
     setTheme,
@@ -6100,53 +6103,35 @@ export function MainBoard() {
   }, [selectedSidebarPathId, visibleSidebarPaths]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    if (window.location.pathname !== '/') {
+    if (routerLocation.pathname !== '/') {
       return;
     }
 
-    const nextRoute = `/home${window.location.search}${window.location.hash}`;
-    const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const nextRoute = `/home${routerLocation.search}${routerLocation.hash}`;
+    const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
     if (nextRoute === currentRoute) {
       return;
     }
 
-    window.history.replaceState({}, '', nextRoute);
-    setIsConsumptionView(resolveConsumptionFromLocation());
-    setIsAutomationView(resolveAutomationFromLocation());
-    setIsAppGalleryView(resolveAppGalleryFromLocation());
-    setIsSecurityView(resolveSecurityFromLocation());
-    setIsSecurityCamerasView(resolveSecurityCamerasFromLocation());
-    setIsEditAvailableForRoute(resolveEditAvailabilityFromLocation());
-  }, []);
+    navigate(nextRoute, { replace: true });
+  }, [navigate, routerLocation.hash, routerLocation.pathname, routerLocation.search]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const syncFromLocation = () => {
-      const nextIsConsumption = resolveConsumptionFromLocation();
-      const nextIsAutomation = resolveAutomationFromLocation();
-      const nextIsAppGallery = resolveAppGalleryFromLocation();
-      const nextIsSecurity = resolveSecurityFromLocation();
-      const nextIsSecurityCameras = resolveSecurityCamerasFromLocation();
-      const nextEditAvailability = resolveEditAvailabilityFromLocation();
-      setIsConsumptionView(nextIsConsumption);
-      setIsAutomationView(nextIsAutomation);
-      setIsAppGalleryView(nextIsAppGallery);
-      setIsSecurityView(nextIsSecurity);
-      setIsSecurityCamerasView(nextIsSecurityCameras);
-      setIsEditAvailableForRoute(nextEditAvailability);
-    };
-    window.addEventListener('popstate', syncFromLocation);
-    window.addEventListener('hashchange', syncFromLocation);
-    return () => {
-      window.removeEventListener('popstate', syncFromLocation);
-      window.removeEventListener('hashchange', syncFromLocation);
-    };
-  }, []);
+    const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
+    const nextIsConsumption = isConsumptionNavigationTarget(currentRoute);
+    const nextIsAutomation = isAutomationNavigationTarget(currentRoute);
+    const nextIsAppGallery = isAppGalleryNavigationTarget(currentRoute);
+    const nextIsSecurity = isSecurityNavigationTarget(currentRoute);
+    const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(currentRoute);
+    const nextEditAvailability =
+      isHomeNavigationTarget(currentRoute) || nextIsConsumption || nextIsAppGallery || nextIsSecurity;
+    setIsConsumptionView(nextIsConsumption);
+    setIsAutomationView(nextIsAutomation);
+    setIsAppGalleryView(nextIsAppGallery);
+    setIsSecurityView(nextIsSecurity);
+    setIsSecurityCamerasView(nextIsSecurityCameras);
+    setIsEditAvailableForRoute(nextEditAvailability);
+  }, [routerLocation.hash, routerLocation.pathname, routerLocation.search]);
 
   useEffect(() => {
     if (isEditMode) {
@@ -8117,11 +8102,12 @@ export function MainBoard() {
       return;
     }
     const domain = normalizedEntityId.split('.')[0]?.trim().toLowerCase();
-    if (domain !== 'input_number') {
+    const serviceDomain = domain === 'input_number' || domain === 'number' ? domain : null;
+    if (!serviceDomain) {
       return;
     }
 
-    void callHaService('input_number', 'set_value', {
+    void callHaService(serviceDomain, 'set_value', {
       entity_id: normalizedEntityId,
       value,
     });
@@ -8391,15 +8377,23 @@ export function MainBoard() {
     if (!isHaConnected) {
       return;
     }
-    const sensorEntityIds = Array.from(
+    const historyEntityIds = Array.from(
       new Set(
-        widgets
+        [
+          ...widgets
           .filter((widget) => widget.kind === 'sensor')
           .map((widget) => widget.entityId.trim())
           .filter((entityId) => entityId.length > 0),
+          ...widgets.flatMap((widget) =>
+            (widget.widgets ?? [])
+              .filter((microWidget) => microWidget.type === 'micro_superchart')
+              .map((microWidget) => microWidget.entity.trim())
+              .filter((entityId) => entityId.length > 0),
+          ),
+        ],
       ),
     );
-    sensorEntityIds.forEach((entityId) => {
+    historyEntityIds.forEach((entityId) => {
       const cached = sensorHistoryByEntity[entityId];
       if (cached && cached.length >= 3) {
         return;
@@ -9278,18 +9272,27 @@ export function MainBoard() {
     setSelectedSidebarPathId(null);
 
     if (!isExternalNavigationTarget(normalized)) {
-      const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (normalized !== currentRoute) {
-        window.history.pushState({}, '', normalized);
+      const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
+      const normalizedRouteForNavigate = normalized.startsWith('#')
+        ? `${routerLocation.pathname}${routerLocation.search}${normalized}`
+        : normalized.startsWith('?')
+          ? `${routerLocation.pathname}${normalized}`
+          : normalized;
+
+      if (normalizedRouteForNavigate !== currentRoute) {
+        navigate(normalizedRouteForNavigate);
       }
 
-      const nextIsConsumption = isConsumptionNavigationTarget(normalized);
-      const nextIsAutomation = isAutomationNavigationTarget(normalized);
-      const nextIsAppGallery = isAppGalleryNavigationTarget(normalized);
-      const nextIsSecurity = isSecurityNavigationTarget(normalized);
-      const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(normalized);
+      const nextIsConsumption = isConsumptionNavigationTarget(normalizedRouteForNavigate);
+      const nextIsAutomation = isAutomationNavigationTarget(normalizedRouteForNavigate);
+      const nextIsAppGallery = isAppGalleryNavigationTarget(normalizedRouteForNavigate);
+      const nextIsSecurity = isSecurityNavigationTarget(normalizedRouteForNavigate);
+      const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(normalizedRouteForNavigate);
       const nextEditAvailability =
-        isHomeNavigationTarget(normalized) || nextIsConsumption || nextIsAppGallery || nextIsSecurity;
+        isHomeNavigationTarget(normalizedRouteForNavigate) ||
+        nextIsConsumption ||
+        nextIsAppGallery ||
+        nextIsSecurity;
       setIsConsumptionView(nextIsConsumption);
       setIsAutomationView(nextIsAutomation);
       setIsAppGalleryView(nextIsAppGallery);
@@ -9310,7 +9313,8 @@ export function MainBoard() {
       return;
     }
 
-    if (normalized === window.location.href) {
+    const currentAbsoluteRoute = `${window.location.origin}${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
+    if (normalized === currentAbsoluteRoute) {
       return;
     }
     window.location.assign(normalized);
@@ -9640,6 +9644,7 @@ export function MainBoard() {
               onToggleMicroWidget={toggleMicroWidgetEntity}
               onSetMicroSliderValue={setMicroSliderEntityValue}
               onNavigateMicroWidgetPage={handleMicroWidgetPageNavigation}
+              microChartHistoryByEntity={sensorHistoryByEntity}
               onUpdateUserName={actions.setUserName}
               selectedWidget={selectedWidget}
               selectedSection={selectedSection}

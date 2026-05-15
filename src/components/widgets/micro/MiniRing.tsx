@@ -88,7 +88,7 @@ export function MiniRing({ widget, state }: MiniRingProps) {
 
   return (
     <div
-      className={`group min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white backdrop-blur-md transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`group min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
         active
           ? 'border-blue-300/35 bg-blue-500/12 shadow-[0_0_22px_rgba(59,130,246,0.22)]'
           : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'

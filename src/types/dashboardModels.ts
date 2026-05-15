@@ -80,13 +80,22 @@ export type GridItem = {
 
 export interface MicroWidget {
   id: string;
-  type: 'value_pill' | 'status_glow' | 'micro_toggle' | 'mini_ring' | 'micro_button' | 'micro_slider';
+  type:
+    | 'value_pill'
+    | 'status_glow'
+    | 'micro_toggle'
+    | 'mini_ring'
+    | 'micro_button'
+    | 'micro_slider'
+    | 'micro_step'
+    | 'micro_superchart';
   entity: string;
   label?: string;
   buttonMode?: 'push' | 'switch' | 'page';
   buttonHoldWhilePressed?: boolean;
   buttonPagePath?: string;
   sliderSendOnRelease?: boolean;
+  superChartType?: 'line' | 'area' | 'bar';
 }
 
 export type Widget = {

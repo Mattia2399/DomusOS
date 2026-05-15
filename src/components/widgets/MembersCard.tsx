@@ -68,7 +68,7 @@ export function MembersCard({
       }`}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden border border-blue-300/35 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,rgba(255,255,255,0.06)_100%)] backdrop-blur-2xl ${cardRadiusClass} ${
+        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden border border-blue-300/35 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,rgba(255,255,255,0.06)_100%)] ${cardRadiusClass} ${
           isTinyCard ? 'px-3 py-2.5' : 'px-4 py-3.5'
         }`}
       >

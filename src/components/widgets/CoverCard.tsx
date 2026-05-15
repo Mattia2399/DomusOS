@@ -123,7 +123,7 @@ export function CoverCard({
       }}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/5 ${cardPaddingClass} backdrop-blur-xl overflow-hidden ${auraClass}`}
+        className={`relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/5 ${cardPaddingClass} overflow-hidden ${auraClass}`}
       >
         <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(82%_76%_at_0%_0%,rgba(255,255,255,0.08),transparent_72%)]`} />
         <div className={`relative flex h-full min-h-0 min-w-0 items-stretch justify-between ${contentGapClass}`}>
@@ -147,7 +147,7 @@ export function CoverCard({
             <div className={railClass}>
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.18))]" />
               <div
-                className={`cover-card__blind absolute inset-x-0 top-0 border-b border-white/35 bg-white/30 backdrop-blur-sm shadow-[0_8px_16px_rgba(15,23,42,0.22)] ${movingClass}`}
+                className={`cover-card__blind absolute inset-x-0 top-0 border-b border-white/35 bg-white/30 shadow-[0_8px_16px_rgba(15,23,42,0.22)] ${movingClass}`}
                 style={{
                   height: `${blindCoverage}%`,
                   backgroundImage:

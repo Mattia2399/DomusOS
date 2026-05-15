@@ -530,10 +530,10 @@ export function ClimateCard({
   const fanModeIconIndex = Math.max(0, fanModes.findIndex((mode) => mode === 'auto'));
   const fanModesAreCrowded = fanModes.length > (isDenseCard ? 4 : isCompactClimateCard ? 5 : 7);
   const fanTrackClass = isDenseCard
-    ? 'mx-auto mt-1.5 w-full rounded-[0.68rem] border p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px]'
+    ? 'mx-auto mt-1.5 w-full rounded-[0.68rem] border p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]'
     : isCompactClimateCard
-      ? 'mx-auto mt-2 w-full rounded-[0.76rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px]'
-      : 'mx-auto mt-3 w-full rounded-[0.82rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px]';
+      ? 'mx-auto mt-2 w-full rounded-[0.76rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]'
+      : 'mx-auto mt-3 w-full rounded-[0.82rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]';
   const fanStepClass = isDenseCard ? 'h-5' : isCompactClimateCard ? 'h-6' : 'h-7';
   const fanCrowdedWidthClass = isDenseCard ? 'w-[1.45rem]' : isCompactClimateCard ? 'w-[1.7rem]' : 'w-[1.95rem]';
   const fanItemsClass = fanModesAreCrowded ? 'flex items-center gap-1 overflow-x-auto pr-0.5' : 'flex items-center gap-1';

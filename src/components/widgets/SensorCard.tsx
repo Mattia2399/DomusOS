@@ -294,7 +294,7 @@ export function SensorCard({
     >
       {isMiniMode ? (
         <div
-          className={`pointer-events-none relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/10 bg-white/5 backdrop-blur-xl overflow-hidden ${miniPaddingClass}`}
+          className={`pointer-events-none relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/10 bg-white/5 overflow-hidden ${miniPaddingClass}`}
         >
           <div
             className={`absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_78%_at_0%_0%,rgba(255,255,255,0.14),transparent_65%)]`}
@@ -317,7 +317,7 @@ export function SensorCard({
         </div>
       ) : (
         <div
-          className={`pointer-events-none relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/10 bg-white/5 backdrop-blur-xl overflow-hidden ${cardPaddingClass}`}
+          className={`pointer-events-none relative h-full w-full min-h-0 min-w-0 ${cardRadiusClass} border border-white/10 bg-white/5 overflow-hidden ${cardPaddingClass}`}
         >
           <div
             className={`absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_78%_at_0%_0%,rgba(255,255,255,0.14),transparent_65%)]`}

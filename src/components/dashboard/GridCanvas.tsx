@@ -857,6 +857,7 @@ export function GridCanvas({
   const runtimeGridHostRef = useRef<HTMLDivElement | null>(null);
   const stableRuntimeGridWidthRef = useRef(0);
   const lastLiveGridEngineLayoutsRef = useRef<GridLayouts>({});
+  const [isMounted, setIsMounted] = useState(false);
   const [runtimeGridWidth, setRuntimeGridWidth] = useState(0);
   const [gridEngineActiveBreakpoint, setGridEngineActiveBreakpoint] = useState<GridBreakpoint>(() =>
     resolveActiveBreakpoint(getViewportWidth()),
@@ -934,6 +935,9 @@ export function GridCanvas({
     }
     resetXsLongPressState();
   }, [resetXsLongPressState]);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   useEffect(() => {
     return () => {
       resetXsLongPressState();
@@ -1687,198 +1691,201 @@ export function GridCanvas({
             </div>
           ) : null}
 
-          <ResponsiveGridLayout
-            className={`sections-grid behance-grid relative ${isEditMode ? 'is-editing' : ''}`}
-            breakpoints={GRID_ENGINE_BREAKPOINTS}
-            cols={GRID_ENGINE_COLS}
-            layouts={liveGridEngineLayouts as ResponsiveLayouts<GridBreakpoint>}
-            rowHeight={GRID_ENGINE_ROW_UNIT}
-            margin={[GRID_ENGINE_GAP_PX, GRID_ENGINE_GAP_PX]}
-            containerPadding={GRID_ENGINE_CONTAINER_PADDING}
-            compactType="vertical"
-            preventCollision={false}
-            isDraggable={isEditMode}
-            isResizable={isEditMode}
-            resizeHandles={['se']}
-            draggableCancel=".builder-grid,.widget-action,.section-action,.react-resizable-handle"
-            onBreakpointChange={(nextBreakpoint) => {
-              setGridEngineActiveBreakpoint(nextBreakpoint as GridBreakpoint);
-            }}
-            onDragStart={(_, __, newItem) => {
-              if (!isEditMode) {
-                return;
-              }
-              isCanvasInteractingRef.current = true;
-              if (newItem?.i) {
-                focusCanvasOverlayItem(newItem.i);
-              }
-            }}
-            onResizeStart={(_, __, newItem) => {
-              if (!isEditMode) {
-                return;
-              }
-              isCanvasInteractingRef.current = true;
-              if (newItem?.i) {
-                focusCanvasOverlayItem(newItem.i);
-              }
-            }}
-            onDragStop={(layout) => {
-              if (!isEditMode) {
-                return;
-              }
-              isCanvasInteractingRef.current = false;
-              const committed = updateGridEngineLayouts({
-                ...liveGridEngineLayouts,
-                [gridEngineActiveBreakpoint]: layout as GridItem[],
-              });
-              commitGridEngineLayouts(committed, layout as GridItem[]);
-            }}
-            onResizeStop={(layout) => {
-              if (!isEditMode) {
-                return;
-              }
-              isCanvasInteractingRef.current = false;
-              const committed = updateGridEngineLayouts({
-                ...liveGridEngineLayouts,
-                [gridEngineActiveBreakpoint]: layout as GridItem[],
-              });
-              commitGridEngineLayouts(committed, layout as GridItem[]);
-            }}
-            onLayoutChange={(layout, layouts) => {
-              if (!isEditMode || !isCanvasInteractingRef.current) {
-                return;
-              }
-              const nextLayouts = updateGridEngineLayouts(layouts as ResponsiveLayouts<GridBreakpoint>);
-              commitGridEngineLayouts(nextLayouts, layout as GridItem[]);
-            }}
-          >
-            {sections.map((section) => {
-              const sectionLayoutItem = liveGridEngineLayoutMap.get(section.id);
-              const sectionSpanW = Math.max(1, Math.round(sectionLayoutItem?.w ?? section.layout.w));
-              const sectionSpanH = Math.max(1, Math.round(sectionLayoutItem?.h ?? section.layout.h));
-              const sectionCanvasCols = sectionSpanW;
-              const stackWidth = Math.max(
-                1,
-                Math.round(
-                  gridEngineColumnWidth * sectionSpanW + GRID_ENGINE_GAP_PX * Math.max(0, sectionSpanW - 1),
-                ),
-              );
-              return (
-                <div key={section.id} className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
-                  {renderSectionCard(
-                    section,
-                    sectionSpanW,
-                    sectionSpanH,
-                    sectionCanvasCols,
-                    stackWidth,
-                    GRID_ENGINE_ROW_UNIT,
-                    GRID_ENGINE_GAP_PX,
-                    runtimeGridEffectiveWidth > 0,
-                  )}
-                </div>
-              );
-            })}
-            {rootWidgets.map((widget) => {
-              const value =
-                widget.entityId === 'sensor.nest_wifi_download'
-                  ? state.wifiDownloadMbps
-                  : widget.value ?? 0;
-              return (
-                <div
-                  key={widget.id}
-                  className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
-                  style={
-                    isXsLongPressMode
-                      ? {
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                        }
-                      : undefined
-                  }
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (isEditMode) {
-                      onSelectWidget(widget.id);
+          <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
+            <ResponsiveGridLayout
+              className={`sections-grid behance-grid relative ${isEditMode ? 'is-editing' : ''}`}
+              measureBeforeMount={true}
+              breakpoints={GRID_ENGINE_BREAKPOINTS}
+              cols={GRID_ENGINE_COLS}
+              layouts={liveGridEngineLayouts as ResponsiveLayouts<GridBreakpoint>}
+              rowHeight={GRID_ENGINE_ROW_UNIT}
+              margin={[GRID_ENGINE_GAP_PX, GRID_ENGINE_GAP_PX]}
+              containerPadding={GRID_ENGINE_CONTAINER_PADDING}
+              compactType="vertical"
+              preventCollision={false}
+              isDraggable={isEditMode}
+              isResizable={isEditMode}
+              resizeHandles={['se']}
+              draggableCancel=".builder-grid,.widget-action,.section-action,.react-resizable-handle"
+              onBreakpointChange={(nextBreakpoint) => {
+                setGridEngineActiveBreakpoint(nextBreakpoint as GridBreakpoint);
+              }}
+              onDragStart={(_, __, newItem) => {
+                if (!isEditMode) {
+                  return;
+                }
+                isCanvasInteractingRef.current = true;
+                if (newItem?.i) {
+                  focusCanvasOverlayItem(newItem.i);
+                }
+              }}
+              onResizeStart={(_, __, newItem) => {
+                if (!isEditMode) {
+                  return;
+                }
+                isCanvasInteractingRef.current = true;
+                if (newItem?.i) {
+                  focusCanvasOverlayItem(newItem.i);
+                }
+              }}
+              onDragStop={(layout) => {
+                if (!isEditMode) {
+                  return;
+                }
+                isCanvasInteractingRef.current = false;
+                const committed = updateGridEngineLayouts({
+                  ...liveGridEngineLayouts,
+                  [gridEngineActiveBreakpoint]: layout as GridItem[],
+                });
+                commitGridEngineLayouts(committed, layout as GridItem[]);
+              }}
+              onResizeStop={(layout) => {
+                if (!isEditMode) {
+                  return;
+                }
+                isCanvasInteractingRef.current = false;
+                const committed = updateGridEngineLayouts({
+                  ...liveGridEngineLayouts,
+                  [gridEngineActiveBreakpoint]: layout as GridItem[],
+                });
+                commitGridEngineLayouts(committed, layout as GridItem[]);
+              }}
+              onLayoutChange={(layout, layouts) => {
+                if (!isEditMode || !isCanvasInteractingRef.current) {
+                  return;
+                }
+                const nextLayouts = updateGridEngineLayouts(layouts as ResponsiveLayouts<GridBreakpoint>);
+                commitGridEngineLayouts(nextLayouts, layout as GridItem[]);
+              }}
+            >
+              {sections.map((section) => {
+                const sectionLayoutItem = liveGridEngineLayoutMap.get(section.id);
+                const sectionSpanW = Math.max(1, Math.round(sectionLayoutItem?.w ?? section.layout.w));
+                const sectionSpanH = Math.max(1, Math.round(sectionLayoutItem?.h ?? section.layout.h));
+                const sectionCanvasCols = sectionSpanW;
+                const stackWidth = Math.max(
+                  1,
+                  Math.round(
+                    gridEngineColumnWidth * sectionSpanW + GRID_ENGINE_GAP_PX * Math.max(0, sectionSpanW - 1),
+                  ),
+                );
+                return (
+                  <div key={section.id} className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
+                    {renderSectionCard(
+                      section,
+                      sectionSpanW,
+                      sectionSpanH,
+                      sectionCanvasCols,
+                      stackWidth,
+                      GRID_ENGINE_ROW_UNIT,
+                      GRID_ENGINE_GAP_PX,
+                      runtimeGridEffectiveWidth > 0,
+                    )}
+                  </div>
+                );
+              })}
+              {rootWidgets.map((widget) => {
+                const value =
+                  widget.entityId === 'sensor.nest_wifi_download'
+                    ? state.wifiDownloadMbps
+                    : widget.value ?? 0;
+                return (
+                  <div
+                    key={widget.id}
+                    className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
+                    style={
+                      isXsLongPressMode
+                        ? {
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                          }
+                        : undefined
                     }
-                  }}
-                  onPointerDown={(event) => {
-                    if (!isEditMode) {
-                      handleXsLongPressStart(event, widget);
-                      return;
-                    }
-                    event.stopPropagation();
-                    onSelectWidget(widget.id);
-                  }}
-                  onPointerMove={(event) => {
-                    if (isEditMode) {
-                      return;
-                    }
-                    handleXsLongPressMove(event);
-                  }}
-                  onPointerUp={(event) => {
-                    if (isEditMode) {
-                      return;
-                    }
-                    handleXsLongPressEnd(event);
-                  }}
-                  onPointerCancel={(event) => {
-                    if (isEditMode) {
-                      return;
-                    }
-                    handleXsLongPressEnd(event);
-                  }}
-                  onPointerLeave={() => {
-                    if (isEditMode) {
-                      return;
-                    }
-                    clearXsLongPressTimer();
-                  }}
-                >
-                  <WidgetCardRenderer
-                    widget={widget}
-                    dashboardState={state}
-                    isEditMode={false}
-                    isSelected={selectedWidgetId === widget.id}
-                    gridBreakpoint={gridEngineActiveBreakpoint}
-                    value={value}
-                    onClick={() => {
-                      if (isXsLongPressMode) {
-                        if (xsSuppressNextCardClickRef.current) {
-                          xsSuppressNextCardClickRef.current = false;
-                          xsLongPressTriggeredRef.current = false;
-                          return;
-                        }
-                        if (widget.kind === 'light') {
-                          onWidgetLightToggle(widget);
-                        }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (isEditMode) {
+                        onSelectWidget(widget.id);
+                      }
+                    }}
+                    onPointerDown={(event) => {
+                      if (!isEditMode) {
+                        handleXsLongPressStart(event, widget);
                         return;
                       }
-                      onWidgetClick(widget);
+                      event.stopPropagation();
+                      onSelectWidget(widget.id);
                     }}
-                    onLightBrightnessChange={onWidgetBrightnessChange}
-                    onClimateTargetTempChange={onWidgetClimateTargetTempChange}
-                    onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
-                    onClimateModeChange={onWidgetClimateModeChange}
-                    onClimateFanModeChange={onWidgetClimateFanModeChange}
-                    onMediaToggle={onWidgetMediaToggle}
-                    onMediaPrevious={onWidgetMediaPrevious}
-                    onMediaNext={onWidgetMediaNext}
-                    onMediaSeek={onWidgetMediaSeek}
-                    onAlarmDisarm={onWidgetAlarmDisarm}
-                    onAlarmArm={onWidgetAlarmArm}
-                    onVacuumStartPause={onWidgetVacuumStartPause}
-                    onVacuumReturnToBase={onWidgetVacuumReturnToBase}
-                    onLockToggle={onWidgetLockToggle}
-                    onLockOpen={onWidgetLockOpen}
-                    onMembersOpenPanel={() => onOpenMembersPanel()}
-                    liveEntity={haConnected ? haStates[widget.entityId] : undefined}
-                    sensorHistory={sensorHistoryByEntity[widget.entityId]}
-                    houseMembers={houseMembers}
-                  />
-                </div>
-              );
-            })}
-          </ResponsiveGridLayout>
+                    onPointerMove={(event) => {
+                      if (isEditMode) {
+                        return;
+                      }
+                      handleXsLongPressMove(event);
+                    }}
+                    onPointerUp={(event) => {
+                      if (isEditMode) {
+                        return;
+                      }
+                      handleXsLongPressEnd(event);
+                    }}
+                    onPointerCancel={(event) => {
+                      if (isEditMode) {
+                        return;
+                      }
+                      handleXsLongPressEnd(event);
+                    }}
+                    onPointerLeave={() => {
+                      if (isEditMode) {
+                        return;
+                      }
+                      clearXsLongPressTimer();
+                    }}
+                  >
+                    <WidgetCardRenderer
+                      widget={widget}
+                      dashboardState={state}
+                      isEditMode={false}
+                      isSelected={selectedWidgetId === widget.id}
+                      gridBreakpoint={gridEngineActiveBreakpoint}
+                      value={value}
+                      onClick={() => {
+                        if (isXsLongPressMode) {
+                          if (xsSuppressNextCardClickRef.current) {
+                            xsSuppressNextCardClickRef.current = false;
+                            xsLongPressTriggeredRef.current = false;
+                            return;
+                          }
+                          if (widget.kind === 'light') {
+                            onWidgetLightToggle(widget);
+                          }
+                          return;
+                        }
+                        onWidgetClick(widget);
+                      }}
+                      onLightBrightnessChange={onWidgetBrightnessChange}
+                      onClimateTargetTempChange={onWidgetClimateTargetTempChange}
+                      onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
+                      onClimateModeChange={onWidgetClimateModeChange}
+                      onClimateFanModeChange={onWidgetClimateFanModeChange}
+                      onMediaToggle={onWidgetMediaToggle}
+                      onMediaPrevious={onWidgetMediaPrevious}
+                      onMediaNext={onWidgetMediaNext}
+                      onMediaSeek={onWidgetMediaSeek}
+                      onAlarmDisarm={onWidgetAlarmDisarm}
+                      onAlarmArm={onWidgetAlarmArm}
+                      onVacuumStartPause={onWidgetVacuumStartPause}
+                      onVacuumReturnToBase={onWidgetVacuumReturnToBase}
+                      onLockToggle={onWidgetLockToggle}
+                      onLockOpen={onWidgetLockOpen}
+                      onMembersOpenPanel={() => onOpenMembersPanel()}
+                      liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                      sensorHistory={sensorHistoryByEntity[widget.entityId]}
+                      houseMembers={houseMembers}
+                    />
+                  </div>
+                );
+              })}
+            </ResponsiveGridLayout>
+          </div>
         </div>
       </div>
 

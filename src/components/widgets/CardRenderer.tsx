@@ -55,7 +55,7 @@ type WidgetCardRendererProps = {
   houseMembers?: HouseMemberCardItem[];
 };
 
-export function WidgetCardRenderer({
+function WidgetCardRendererComponent({
   widget,
   dashboardState,
   isEditMode,
@@ -224,6 +224,74 @@ export function WidgetCardRenderer({
     />
   );
 }
+
+function areWidgetEntitiesEqual(prevEntity: MockEntityState | undefined, nextEntity: MockEntityState | undefined) {
+  if (prevEntity === nextEntity) {
+    return true;
+  }
+  if (!prevEntity || !nextEntity) {
+    return !prevEntity && !nextEntity;
+  }
+  return (
+    prevEntity.state === nextEntity.state &&
+    prevEntity.stateLabel === nextEntity.stateLabel &&
+    prevEntity.secondary === nextEntity.secondary &&
+    prevEntity.numericValue === nextEntity.numericValue &&
+    prevEntity.targetValue === nextEntity.targetValue &&
+    prevEntity.currentValue === nextEntity.currentValue &&
+    prevEntity.brightness === nextEntity.brightness &&
+    prevEntity.toggleOn === nextEntity.toggleOn &&
+    prevEntity.progress === nextEntity.progress &&
+    prevEntity.mediaPosition === nextEntity.mediaPosition &&
+    prevEntity.mediaPositionUpdatedAt === nextEntity.mediaPositionUpdatedAt &&
+    prevEntity.volumeLevel === nextEntity.volumeLevel &&
+    prevEntity.mediaMuted === nextEntity.mediaMuted &&
+    prevEntity.hvacMode === nextEntity.hvacMode &&
+    prevEntity.fanMode === nextEntity.fanMode &&
+    prevEntity.rawAttributes === nextEntity.rawAttributes
+  );
+}
+
+function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nextProps: WidgetCardRendererProps) {
+  if (prevProps.widget !== nextProps.widget) {
+    return false;
+  }
+  if (prevProps.isEditMode !== nextProps.isEditMode) {
+    return false;
+  }
+  if (prevProps.isSelected !== nextProps.isSelected) {
+    return false;
+  }
+  if (prevProps.gridBreakpoint !== nextProps.gridBreakpoint) {
+    return false;
+  }
+  if (!areWidgetEntitiesEqual(prevProps.liveEntity, nextProps.liveEntity)) {
+    return false;
+  }
+
+  const kind = nextProps.widget.kind;
+  if ((kind === 'climate' || kind === 'light') && prevProps.dashboardState !== nextProps.dashboardState) {
+    return false;
+  }
+  if (kind === 'sensor') {
+    if (prevProps.value !== nextProps.value) {
+      return false;
+    }
+    if (prevProps.sensorHistory !== nextProps.sensorHistory) {
+      return false;
+    }
+  }
+  if (kind === 'members' && prevProps.houseMembers !== nextProps.houseMembers) {
+    return false;
+  }
+
+  return true;
+}
+
+export const WidgetCardRenderer = React.memo(
+  WidgetCardRendererComponent,
+  areWidgetCardRendererPropsEqual,
+);
 
 type SectionCardRendererProps = {
   section: DashboardSection;

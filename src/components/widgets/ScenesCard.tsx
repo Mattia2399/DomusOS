@@ -583,7 +583,7 @@ function SceneButton({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.2 }}
               transition={{ duration: 0.3, type: 'spring', bounce: 0.4 }}
-              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-full border border-emerald-100/45 bg-emerald-500/80 backdrop-blur-[4px]"
+              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-full border border-emerald-100/45 bg-emerald-500/80"
             >
               <CheckCircle2 size={20} className="text-emerald-50 drop-shadow-[0_1px_4px_rgba(16,185,129,0.5)]" />
             </motion.span>

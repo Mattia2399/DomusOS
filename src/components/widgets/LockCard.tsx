@@ -240,7 +240,7 @@ export function LockCard({
       }}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} border border-white/5 backdrop-blur-xl ${contentPaddingClass} transition-all duration-300 ${
+        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} border border-white/5 ${contentPaddingClass} transition-all duration-300 ${
           isLocked ? 'bg-white/5' : 'bg-red-950/30'
         } ${
           isHolding ? 'scale-[1.03]' : 'scale-100'

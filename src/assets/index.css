@@ -131,11 +131,17 @@ body,
   height: 100%;
 }
 
+html,
+body {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   background: #020617;
   color: #f8fafc;
   font-family: "SF Pro Text";
+  touch-action: manipulation;
 }
 
 :root {
@@ -590,7 +596,16 @@ body {
 }
 
 .runtime-theme .runtime-widget-shell {
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 .runtime-theme [class*="text-white"] {

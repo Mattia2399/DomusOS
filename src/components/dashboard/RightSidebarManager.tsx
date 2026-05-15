@@ -20,6 +20,8 @@ import {
 import { ContextSidebar } from '../settings/ContextSidebar';
 import { MiniRing } from '../widgets/micro/MiniRing';
 import { MicroButton } from '../widgets/micro/MicroButton';
+import { MicroSuperChart } from '../widgets/micro/MicroSuperChart';
+import { MicroStep } from '../widgets/micro/MicroStep';
 import { MicroSlider } from '../widgets/micro/MicroSlider';
 import { MicroToggle } from '../widgets/micro/MicroToggle';
 import { StatusGlow } from '../widgets/micro/StatusGlow';
@@ -395,6 +397,7 @@ type RightSidebarManagerProps = {
   onToggleMicroWidget?: (entityId: string, nextActive: boolean) => void;
   onSetMicroSliderValue?: (entityId: string, value: number) => void;
   onNavigateMicroWidgetPage?: (path: string) => void;
+  microChartHistoryByEntity?: Record<string, number[]>;
   onUpdateUserName: (name: string) => void;
   selectedWidget: Widget | null;
   selectedSection: DashboardSection | null;
@@ -446,7 +449,17 @@ const MICRO_WIDGET_CATALOG: Array<{
   {
     type: 'micro_slider',
     label: 'Slider',
-    description: 'Controllo numerico per helper input_number.',
+    description: 'Controllo numerico per entita input_number/number.',
+  },
+  {
+    type: 'micro_step',
+    label: 'Step',
+    description: 'Controllo orizzontale con incremento/decremento su + e -.',
+  },
+  {
+    type: 'micro_superchart',
+    label: 'Superchart',
+    description: 'Grafico mini live con scelta tipo line/area/bar.',
   },
 ];
 
@@ -492,7 +505,11 @@ const STATUS_GLOW_COMPATIBLE_DOMAINS = new Set([
   'automation',
   'scene',
 ]);
-const MICRO_SLIDER_COMPATIBLE_DOMAINS = new Set(['input_number']);
+const MICRO_SLIDER_COMPATIBLE_DOMAINS = new Set(['input_number', 'number']);
+const MICRO_STEP_COMPATIBLE_DOMAINS = new Set(['input_number', 'number']);
+const MICRO_SUPERCHART_COMPATIBLE_DOMAINS = new Set(['sensor', 'number', 'input_number']);
+const MICRO_WIDGET_CATALOG_ENTITY_LIMIT = 80;
+const MICRO_WIDGET_CATALOG_DOMAIN_LIMIT = 10;
 
 function extractEntityDomain(entityId: string | undefined) {
   const trimmed = (entityId ?? '').trim().toLowerCase();
@@ -500,6 +517,59 @@ function extractEntityDomain(entityId: string | undefined) {
     return '';
   }
   return trimmed.split('.')[0] ?? '';
+}
+
+function resolveEntityStateById(haStates: MockEntityStateMap, entityId: string | undefined) {
+  const normalizedEntityId = (entityId ?? '').trim();
+  if (!normalizedEntityId) {
+    return undefined;
+  }
+  return haStates[normalizedEntityId] ?? haStates[normalizedEntityId.toLowerCase()];
+}
+
+function resolveEntityHistoryById(historyMap: Record<string, number[]>, entityId: string | undefined) {
+  const normalizedEntityId = (entityId ?? '').trim();
+  if (!normalizedEntityId) {
+    return undefined;
+  }
+  return historyMap[normalizedEntityId] ?? historyMap[normalizedEntityId.toLowerCase()];
+}
+
+function scoreEntitySearchMatch(entityId: string, query: string) {
+  const normalizedEntityId = entityId.trim().toLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return 0;
+  }
+  if (normalizedEntityId === normalizedQuery) {
+    return 1000;
+  }
+  if (normalizedEntityId.startsWith(normalizedQuery)) {
+    return 900 - normalizedEntityId.length * 0.01;
+  }
+  const [domain = '', objectId = ''] = normalizedEntityId.split('.', 2);
+  if (objectId === normalizedQuery) {
+    return 850;
+  }
+  if (objectId.startsWith(normalizedQuery)) {
+    return 800 - objectId.length * 0.01;
+  }
+  const dottedQueryIndex = normalizedEntityId.indexOf(`.${normalizedQuery}`);
+  if (dottedQueryIndex >= 0) {
+    return 650 - dottedQueryIndex * 0.01;
+  }
+  const includesIndex = normalizedEntityId.indexOf(normalizedQuery);
+  if (includesIndex >= 0) {
+    return 500 - includesIndex * 0.01;
+  }
+  if (domain.startsWith(normalizedQuery)) {
+    return 250 - domain.length * 0.01;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+function formatEntityDomainLabel(domain: string) {
+  return domain.replaceAll('_', ' ');
 }
 
 function isMicroWidgetTypeCompatible(type: MicroWidget['type'], entityId: string | undefined) {
@@ -512,6 +582,12 @@ function isMicroWidgetTypeCompatible(type: MicroWidget['type'], entityId: string
   }
   if (type === 'micro_slider') {
     return MICRO_SLIDER_COMPATIBLE_DOMAINS.has(domain);
+  }
+  if (type === 'micro_step') {
+    return MICRO_STEP_COMPATIBLE_DOMAINS.has(domain);
+  }
+  if (type === 'micro_superchart') {
+    return MICRO_SUPERCHART_COMPATIBLE_DOMAINS.has(domain);
   }
   if (type === 'status_glow') {
     return STATUS_GLOW_COMPATIBLE_DOMAINS.has(domain);
@@ -563,6 +639,22 @@ function buildFallbackMicroWidgetState(type: MicroWidget['type'], label: string)
       rawAttributes: { friendly_name: label, min: 0, max: 100, step: 1, unit_of_measurement: '%' },
     };
   }
+  if (type === 'micro_step') {
+    return {
+      state: '42',
+      numericValue: 42,
+      unit: '%',
+      rawAttributes: { friendly_name: label, min: 0, max: 100, step: 1, unit_of_measurement: '%' },
+    };
+  }
+  if (type === 'micro_superchart') {
+    return {
+      state: '31',
+      numericValue: 31,
+      unit: '',
+      rawAttributes: { friendly_name: label, unit_of_measurement: '' },
+    };
+  }
   return {
     state: 'on',
     stateLabel: 'Acceso',
@@ -571,7 +663,7 @@ function buildFallbackMicroWidgetState(type: MicroWidget['type'], label: string)
   };
 }
 
-function renderMicroWidgetPreview(widget: MicroWidget, state: MockEntityState | undefined) {
+function renderMicroWidgetPreview(widget: MicroWidget, state: MockEntityState | undefined, history?: number[]) {
   if (widget.type === 'value_pill') {
     return <ValuePill widget={widget} state={state} />;
   }
@@ -586,6 +678,12 @@ function renderMicroWidgetPreview(widget: MicroWidget, state: MockEntityState | 
   }
   if (widget.type === 'micro_slider') {
     return <MicroSlider widget={widget} state={state} sendOnRelease={widget.sliderSendOnRelease ?? true} />;
+  }
+  if (widget.type === 'micro_step') {
+    return <MicroStep widget={widget} state={state} />;
+  }
+  if (widget.type === 'micro_superchart') {
+    return <MicroSuperChart widget={widget} state={state} history={history} />;
   }
   return <MicroToggle widget={widget} state={state} />;
 }
@@ -607,6 +705,7 @@ export function RightSidebarManager({
   onToggleMicroWidget,
   onSetMicroSliderValue,
   onNavigateMicroWidgetPage,
+  microChartHistoryByEntity = {},
   onUpdateUserName,
   selectedWidget,
   selectedSection,
@@ -630,6 +729,7 @@ export function RightSidebarManager({
   const [contextSheetDragOffset, setContextSheetDragOffset] = React.useState(0);
   const [isMicroWidgetCatalogOpen, setIsMicroWidgetCatalogOpen] = React.useState(false);
   const [microWidgetCatalogEntity, setMicroWidgetCatalogEntity] = React.useState('');
+  const [microWidgetCatalogDomainFilter, setMicroWidgetCatalogDomainFilter] = React.useState('all');
   const [selectedMicroWidgetId, setSelectedMicroWidgetId] = React.useState<string | null>(null);
   const selectedWidgetMicroWidgets = selectedWidget?.widgets;
   const contextSheetStartYRef = React.useRef<number | null>(null);
@@ -693,8 +793,9 @@ export function RightSidebarManager({
     setIsMicroWidgetCatalogOpen(false);
   }, [isEditMode, selectedWidget?.id]);
   React.useEffect(() => {
-    setMicroWidgetCatalogEntity(selectedWidget?.entityId?.trim() ?? '');
-  }, [selectedWidget?.entityId, selectedWidget?.id]);
+    setMicroWidgetCatalogEntity('');
+    setMicroWidgetCatalogDomainFilter('all');
+  }, [selectedWidget?.id]);
   React.useEffect(() => {
     setSelectedMicroWidgetId(null);
   }, [selectedWidget?.id]);
@@ -758,6 +859,7 @@ export function RightSidebarManager({
                   showCloseButton={false}
                   externalScrollContainer
                   haStates={haStates}
+                  microChartHistoryByEntity={microChartHistoryByEntity}
                   lamp={state.lamp}
                   climate={state.climate}
                   camera={camera}
@@ -800,6 +902,7 @@ export function RightSidebarManager({
           theme={theme}
           onClose={onCloseContextSidebar}
           haStates={haStates}
+          microChartHistoryByEntity={microChartHistoryByEntity}
           lamp={state.lamp}
           climate={state.climate}
           camera={camera}
@@ -906,6 +1009,10 @@ export function RightSidebarManager({
     selectedMicroWidget?.type === 'micro_slider'
       ? selectedMicroWidget.sliderSendOnRelease ?? true
       : true;
+  const selectedMicroSuperChartType =
+    selectedMicroWidget?.type === 'micro_superchart'
+      ? selectedMicroWidget.superChartType ?? 'line'
+      : 'line';
   const microWidgetEntitySuggestions = haConnected ? haEntityIds : [];
   const configuredMicroWidgetEntities = microWidgets
     .map((microWidget) => microWidget.entity.trim())
@@ -943,8 +1050,50 @@ export function RightSidebarManager({
       .map((entry) => [entry.path.trim(), entry.label.trim()] as const)
       .filter(([path]) => path.length > 0),
   );
-  const defaultMicroWidgetEntity = microWidgetEntityOptions[0] ?? '';
-  const catalogEntityId = microWidgetCatalogEntity.trim() || defaultMicroWidgetEntity;
+  const catalogEntityId = microWidgetCatalogEntity.trim();
+  const normalizedCatalogEntityQuery = catalogEntityId.toLowerCase();
+  const catalogDomainFilter = microWidgetCatalogDomainFilter === 'all' ? '' : microWidgetCatalogDomainFilter;
+  const catalogEntityDomainOptions = (() => {
+    const counts = new Map<string, number>();
+    microWidgetEntityOptions.forEach((entityId) => {
+      const domain = extractEntityDomain(entityId);
+      if (!domain) {
+        return;
+      }
+      counts.set(domain, (counts.get(domain) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((first, second) => {
+        if (second[1] !== first[1]) {
+          return second[1] - first[1];
+        }
+        return first[0].localeCompare(second[0]);
+      })
+      .slice(0, MICRO_WIDGET_CATALOG_DOMAIN_LIMIT);
+  })();
+  const filteredCatalogEntityOptions = (() => {
+    const scopedOptions = microWidgetEntityOptions.filter((entityId) => {
+      if (!catalogDomainFilter) {
+        return true;
+      }
+      return entityId.toLowerCase().startsWith(`${catalogDomainFilter}.`);
+    });
+    const sortedOptions = scopedOptions
+      .map((entityId) => ({
+        entityId,
+        score: scoreEntitySearchMatch(entityId, normalizedCatalogEntityQuery),
+      }))
+      .filter((entry) => (normalizedCatalogEntityQuery ? Number.isFinite(entry.score) : true))
+      .sort((first, second) => {
+        if (second.score !== first.score) {
+          return second.score - first.score;
+        }
+        return first.entityId.localeCompare(second.entityId);
+      })
+      .slice(0, MICRO_WIDGET_CATALOG_ENTITY_LIMIT);
+    return sortedOptions.map((entry) => entry.entityId);
+  })();
+  const hasCatalogEntitySelection = catalogEntityId.length > 0;
   const compatibleMicroWidgetCatalog = MICRO_WIDGET_CATALOG.filter((catalogItem) =>
     isMicroWidgetTypeCompatible(catalogItem.type, catalogEntityId),
   );
@@ -952,7 +1101,10 @@ export function RightSidebarManager({
     if (!selectedWidget) {
       return;
     }
-    const normalizedEntityId = entityId.trim() || defaultMicroWidgetEntity;
+    const normalizedEntityId = entityId.trim();
+    if (!normalizedEntityId) {
+      return;
+    }
     const nextMicroWidgetId = `micro-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
     onUpdateWidget(selectedWidget.id, (widget) => {
       const nextIndex = (widget.widgets ?? []).length + 1;
@@ -965,6 +1117,7 @@ export function RightSidebarManager({
         buttonHoldWhilePressed: type === 'micro_button' ? false : undefined,
         buttonPagePath: type === 'micro_button' ? defaultMicroWidgetPagePath : undefined,
         sliderSendOnRelease: type === 'micro_slider' ? true : undefined,
+        superChartType: type === 'micro_superchart' ? 'line' : undefined,
       };
       return {
         ...widget,
@@ -2088,7 +2241,8 @@ export function RightSidebarManager({
                 <div className="mt-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
                   {microWidgets.map((microWidget, microWidgetIndex) => {
                     const fallbackLabel = microWidget.label?.trim() || `Widget ${microWidgetIndex + 1}`;
-                    const livePreviewState = haStates[microWidget.entity];
+                    const livePreviewState = resolveEntityStateById(haStates, microWidget.entity);
+                    const livePreviewHistory = resolveEntityHistoryById(microChartHistoryByEntity, microWidget.entity);
                     const previewState =
                       livePreviewState ??
                       buildFallbackMicroWidgetState(microWidget.type, fallbackLabel);
@@ -2112,7 +2266,7 @@ export function RightSidebarManager({
                               : 'ring-1 ring-transparent hover:ring-white/15'
                           }`}
                         >
-                          <div className="pointer-events-none">{renderMicroWidgetPreview(microWidget, previewState)}</div>
+                          <div className="pointer-events-none">{renderMicroWidgetPreview(microWidget, previewState, livePreviewHistory)}</div>
                         </div>
                       </button>
                     );
@@ -2121,8 +2275,9 @@ export function RightSidebarManager({
                   <button
                     type="button"
                     onClick={() => {
-                      if (!isMicroWidgetCatalogOpen && !microWidgetCatalogEntity.trim()) {
-                        setMicroWidgetCatalogEntity(defaultMicroWidgetEntity);
+                      if (!isMicroWidgetCatalogOpen) {
+                        setMicroWidgetCatalogEntity('');
+                        setMicroWidgetCatalogDomainFilter('all');
                       }
                       setIsMicroWidgetCatalogOpen((current) => !current);
                     }}
@@ -2387,6 +2542,41 @@ export function RightSidebarManager({
                           </label>
                         ) : null}
 
+                        {selectedMicroWidget.type === 'micro_superchart' ? (
+                          <label className="block">
+                            <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Tipo grafico</p>
+                            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                              {(['line', 'area', 'bar'] as const).map((chartType) => {
+                                const isTypeActive = selectedMicroSuperChartType === chartType;
+                                const typeLabel = chartType === 'line' ? 'Line' : chartType === 'area' ? 'Area' : 'Bar';
+                                return (
+                                  <button
+                                    key={chartType}
+                                    type="button"
+                                    onClick={() =>
+                                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                                        ...widget,
+                                        widgets: (widget.widgets ?? []).map((entry) =>
+                                          entry.id === selectedMicroWidget.id
+                                            ? { ...entry, superChartType: chartType }
+                                            : entry,
+                                        ),
+                                      }))
+                                    }
+                                    className={`rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                                      isTypeActive
+                                        ? 'border border-blue-300/55 bg-blue-500/24 text-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.24)]'
+                                        : 'border border-transparent bg-white/[0.03] text-white/72 hover:border-white/14 hover:bg-white/[0.08]'
+                                    }`}
+                                  >
+                                    {typeLabel}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </label>
+                        ) : null}
+
                         <label className="block">
                           <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Label</p>
                           <input
@@ -2614,16 +2804,86 @@ export function RightSidebarManager({
                   <label className="block">
                     <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita da associare</p>
                     <input
-                      list={microWidgetDatalistId}
                       value={microWidgetCatalogEntity}
                       onChange={(event) => setMicroWidgetCatalogEntity(event.target.value)}
                       placeholder="Es. switch.bedside_lamp"
                       className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
                     />
                     <p className="mt-2 text-[11px] text-white/45">
-                      Entita corrente: <span className="text-white/80">{catalogEntityId || 'nessuna'}</span>
+                      Scrivi per filtrare le entita o seleziona dalla lista ordinata qui sotto.
                     </p>
                   </label>
+
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMicroWidgetCatalogDomainFilter('all')}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                          microWidgetCatalogDomainFilter === 'all'
+                            ? 'border-blue-300/60 bg-blue-500/24 text-blue-100'
+                            : 'border-white/14 bg-white/[0.04] text-white/70 hover:border-white/30 hover:text-white'
+                        }`}
+                      >
+                        Tutti ({microWidgetEntityOptions.length})
+                      </button>
+                      {catalogEntityDomainOptions.map(([domain, count]) => (
+                        <button
+                          key={domain}
+                          type="button"
+                          onClick={() => setMicroWidgetCatalogDomainFilter(domain)}
+                          className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                            microWidgetCatalogDomainFilter === domain
+                              ? 'border-blue-300/60 bg-blue-500/24 text-blue-100'
+                              : 'border-white/14 bg-white/[0.04] text-white/70 hover:border-white/30 hover:text-white'
+                          }`}
+                        >
+                          {formatEntityDomainLabel(domain)} ({count})
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 max-h-48 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                      {filteredCatalogEntityOptions.length > 0 ? (
+                        filteredCatalogEntityOptions.map((entityId) => {
+                          const domain = extractEntityDomain(entityId);
+                          const objectId = entityId.includes('.') ? entityId.split('.').slice(1).join('.') : entityId;
+                          const isSelected = catalogEntityId.toLowerCase() === entityId.toLowerCase();
+                          return (
+                            <button
+                              key={entityId}
+                              type="button"
+                              onClick={() => setMicroWidgetCatalogEntity(entityId)}
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                                isSelected
+                                  ? 'border-blue-300/55 bg-blue-500/20 text-blue-100'
+                                  : 'border-transparent bg-white/[0.02] text-white/80 hover:border-white/15 hover:bg-white/[0.06]'
+                              }`}
+                            >
+                              <span className="min-w-0 truncate text-sm font-medium">{objectId}</span>
+                              <span className="shrink-0 rounded-full border border-white/14 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-white/62">
+                                {domain || 'custom'}
+                              </span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-2 text-xs text-white/55">
+                          Nessuna entita trovata con questi filtri.
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="mt-2 text-[11px] text-white/45">
+                      Entita corrente: <span className="text-white/80">{catalogEntityId || 'nessuna'}</span>
+                    </p>
+                  </div>
+
+                  {!hasCatalogEntitySelection ? (
+                    <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-500/12 px-3 py-2 text-xs text-amber-100/90">
+                      Seleziona prima un&apos;entita per abilitare il pulsante Aggiungi.
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                     {compatibleMicroWidgetCatalog.length > 0 ? (
@@ -2634,7 +2894,8 @@ export function RightSidebarManager({
                           entity: catalogEntityId,
                           label: catalogItem.label,
                         };
-                        const livePreviewState = catalogEntityId ? haStates[catalogEntityId] : undefined;
+                        const livePreviewState = resolveEntityStateById(haStates, catalogEntityId);
+                        const livePreviewHistory = resolveEntityHistoryById(microChartHistoryByEntity, catalogEntityId);
                         const previewState =
                           livePreviewState ??
                           buildFallbackMicroWidgetState(catalogItem.type, catalogItem.label);
@@ -2642,22 +2903,32 @@ export function RightSidebarManager({
                           <div
                             key={catalogItem.type}
                             role="button"
-                            tabIndex={0}
+                            tabIndex={hasCatalogEntitySelection ? 0 : -1}
                             onClick={() => {
+                              if (!hasCatalogEntitySelection) {
+                                return;
+                              }
                               appendMicroWidget(catalogItem.type, catalogEntityId);
                               setIsMicroWidgetCatalogOpen(false);
                             }}
                             onKeyDown={(event) => {
+                              if (!hasCatalogEntitySelection) {
+                                return;
+                              }
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
                                 appendMicroWidget(catalogItem.type, catalogEntityId);
                                 setIsMicroWidgetCatalogOpen(false);
                               }
                             }}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 transition-colors hover:border-white/22 hover:bg-white/[0.06] cursor-pointer"
+                            className={`rounded-2xl border p-2.5 transition-colors ${
+                              hasCatalogEntitySelection
+                                ? 'cursor-pointer border-white/10 bg-white/[0.03] hover:border-white/22 hover:bg-white/[0.06]'
+                                : 'cursor-not-allowed border-white/8 bg-white/[0.02] opacity-60'
+                            }`}
                           >
                             <div className="pointer-events-none">
-                              {renderMicroWidgetPreview(previewWidget, previewState)}
+                              {renderMicroWidgetPreview(previewWidget, previewState, livePreviewHistory)}
                             </div>
                             <div className="mt-2 flex items-center justify-between gap-3 px-1">
                               <div className="min-w-0">
@@ -2665,7 +2936,7 @@ export function RightSidebarManager({
                                 <p className="truncate text-[11px] text-white/48">{catalogItem.description}</p>
                               </div>
                               <span className="inline-flex shrink-0 rounded-full border border-white/18 bg-white/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-white/72">
-                                Aggiungi
+                                {hasCatalogEntitySelection ? 'Aggiungi' : 'Seleziona entita'}
                               </span>
                             </div>
                           </div>
