@@ -15,25 +15,25 @@ export function DetailScaffold({
   right: React.ReactNode;
 }) {
   return (
-    <div className="w-full h-full p-8 flex flex-col gap-6 overflow-y-auto">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:gap-6 sm:p-6 lg:p-8">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/85 backdrop-blur-xl transition-colors hover:bg-white/14"
+          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3.5 py-2 text-sm text-white/85 backdrop-blur-xl transition-colors hover:bg-white/14 sm:px-4"
         >
           <ArrowLeft size={16} />
           Torna indietro
         </button>
-        <h2 className="text-3xl font-semibold tracking-tight text-white">{title}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 h-full min-h-0">
-        <div className="relative xl:col-span-7 bg-white/5 backdrop-blur-2xl border border-white/5 rounded-[2rem] overflow-hidden flex items-center justify-center p-8">
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:gap-6 xl:grid-cols-12 xl:gap-8">
+        <div className="relative flex min-h-[24rem] items-center justify-center overflow-hidden rounded-[1.65rem] border border-white/5 bg-white/5 p-3 backdrop-blur-2xl sm:min-h-[32rem] sm:rounded-[2rem] sm:p-6 lg:p-8 xl:col-span-7 xl:min-h-0">
           {left}
         </div>
 
-        <div className="xl:col-span-5 flex flex-col gap-6 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-4 overflow-visible pr-0 sm:gap-6 xl:col-span-5 xl:overflow-y-auto xl:pr-1">
           {right}
         </div>
       </div>
@@ -51,12 +51,12 @@ export function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[2rem] border border-white/5 bg-white/5 p-5 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_34px_rgba(0,0,0,0.26)]">
+    <div className="rounded-[1.65rem] border border-white/5 bg-white/5 p-4 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_34px_rgba(0,0,0,0.26)] sm:rounded-[2rem] sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium uppercase tracking-[0.14em] text-white/55">{title}</p>
         {controls}
       </div>
-      <div className="h-56">{children}</div>
+      <div className="h-48 sm:h-56">{children}</div>
     </div>
   );
 }

@@ -660,6 +660,42 @@ function resolveOAuthReturnPath(path: string | undefined) {
   return '/home';
 }
 
+function isEmbeddedDashboardRuntime() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  try {
+    if (window.self !== window.top) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  const url = new URL(window.location.href);
+  const mode = (url.searchParams.get('dashboard_mode') ?? url.searchParams.get('navigation_mode') ?? '').toLowerCase();
+  return mode === 'embedded' || mode === 'iframe' || url.searchParams.get('embedded') === '1';
+}
+
+function shouldUseBrowserRouteNavigation() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  if (isEmbeddedDashboardRuntime()) {
+    return false;
+  }
+  const pathname = window.location.pathname.toLowerCase();
+  const lastSegment = pathname.split('/').filter(Boolean).at(-1) ?? '';
+  if (/\.[a-z0-9]+$/i.test(lastSegment)) {
+    return false;
+  }
+  return !(
+    pathname.startsWith('/local/') ||
+    pathname.startsWith('/hacsfiles/') ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/panel_iframe/')
+  );
+}
+
 function isExternalNavigationTarget(path: string) {
   const target = path.trim().toLowerCase();
   return target.startsWith('http://') || target.startsWith('https://');
@@ -2646,6 +2682,7 @@ function resolveLightCapabilities(entity?: MockEntityState) {
 export function MainBoard() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
+  const canUseBrowserRouteNavigation = useMemo(shouldUseBrowserRouteNavigation, []);
   const {
     theme,
     setTheme,
@@ -3041,6 +3078,9 @@ export function MainBoard() {
   const [isSecurityView, setIsSecurityView] = useState(resolveSecurityFromLocation);
   const [isSecurityCamerasView, setIsSecurityCamerasView] = useState(resolveSecurityCamerasFromLocation);
   const [isEditAvailableForRoute, setIsEditAvailableForRoute] = useState(resolveEditAvailabilityFromLocation);
+  const [internalNavigationRoute, setInternalNavigationRoute] = useState(() =>
+    typeof window === 'undefined' ? '/home' : window.location.href,
+  );
   const [selectedConsumptionCardId, setSelectedConsumptionCardId] = useState<ConsumptionCardId | null>('electricity');
   const [oauthFlowError, setOAuthFlowError] = useState<string | null>(null);
   const [isOAuthFlowBusy, setIsOAuthFlowBusy] = useState(false);
@@ -6103,35 +6143,39 @@ export function MainBoard() {
   }, [selectedSidebarPathId, visibleSidebarPaths]);
 
   useEffect(() => {
-    if (routerLocation.pathname !== '/') {
-      return;
-    }
-
-    const nextRoute = `/home${routerLocation.search}${routerLocation.hash}`;
-    const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
-    if (nextRoute === currentRoute) {
-      return;
-    }
-
-    navigate(nextRoute, { replace: true });
-  }, [navigate, routerLocation.hash, routerLocation.pathname, routerLocation.search]);
-
-  useEffect(() => {
-    const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
+    const currentRoute = canUseBrowserRouteNavigation
+      ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+      : internalNavigationRoute;
     const nextIsConsumption = isConsumptionNavigationTarget(currentRoute);
     const nextIsAutomation = isAutomationNavigationTarget(currentRoute);
     const nextIsAppGallery = isAppGalleryNavigationTarget(currentRoute);
     const nextIsSecurity = isSecurityNavigationTarget(currentRoute);
     const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(currentRoute);
+    const nextIsKnownRoute =
+      isHomeNavigationTarget(currentRoute) ||
+      nextIsConsumption ||
+      nextIsAutomation ||
+      nextIsAppGallery ||
+      nextIsSecurity;
     const nextEditAvailability =
-      isHomeNavigationTarget(currentRoute) || nextIsConsumption || nextIsAppGallery || nextIsSecurity;
+      isHomeNavigationTarget(currentRoute) ||
+      nextIsConsumption ||
+      nextIsAppGallery ||
+      nextIsSecurity ||
+      (!canUseBrowserRouteNavigation && !nextIsKnownRoute);
     setIsConsumptionView(nextIsConsumption);
     setIsAutomationView(nextIsAutomation);
     setIsAppGalleryView(nextIsAppGallery);
     setIsSecurityView(nextIsSecurity);
     setIsSecurityCamerasView(nextIsSecurityCameras);
     setIsEditAvailableForRoute(nextEditAvailability);
-  }, [routerLocation.hash, routerLocation.pathname, routerLocation.search]);
+  }, [
+    canUseBrowserRouteNavigation,
+    internalNavigationRoute,
+    routerLocation.hash,
+    routerLocation.pathname,
+    routerLocation.search,
+  ]);
 
   useEffect(() => {
     if (isEditMode) {
@@ -6181,7 +6225,16 @@ export function MainBoard() {
     const oauthState = parseHaOAuthState(currentUrl.searchParams.get('state'));
     const returnPath = resolveOAuthReturnPath(oauthState?.returnTo);
     const cleanupUrl = () => {
-      window.history.replaceState({}, '', returnPath);
+      if (canUseBrowserRouteNavigation) {
+        window.history.replaceState({}, '', returnPath);
+        return;
+      }
+      currentUrl.searchParams.delete(HA_OAUTH_CALLBACK_PARAM);
+      currentUrl.searchParams.delete('error');
+      currentUrl.searchParams.delete('error_description');
+      currentUrl.searchParams.delete('code');
+      currentUrl.searchParams.delete('state');
+      window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
     };
 
     if (oauthError) {
@@ -6251,7 +6304,7 @@ export function MainBoard() {
       window.clearTimeout(deferredRunId);
       oauthAbortController.abort();
     };
-  }, []);
+  }, [canUseBrowserRouteNavigation]);
 
   useEffect(() => {
     if (!pendingOAuthConnect || !haToken.trim()) {
@@ -9279,8 +9332,12 @@ export function MainBoard() {
           ? `${routerLocation.pathname}${normalized}`
           : normalized;
 
-      if (normalizedRouteForNavigate !== currentRoute) {
-        navigate(normalizedRouteForNavigate);
+      if (canUseBrowserRouteNavigation) {
+        if (normalizedRouteForNavigate !== currentRoute) {
+          navigate(normalizedRouteForNavigate);
+        }
+      } else {
+        setInternalNavigationRoute(normalizedRouteForNavigate);
       }
 
       const nextIsConsumption = isConsumptionNavigationTarget(normalizedRouteForNavigate);
@@ -9288,11 +9345,18 @@ export function MainBoard() {
       const nextIsAppGallery = isAppGalleryNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurity = isSecurityNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(normalizedRouteForNavigate);
+      const nextIsKnownRoute =
+        isHomeNavigationTarget(normalizedRouteForNavigate) ||
+        nextIsConsumption ||
+        nextIsAutomation ||
+        nextIsAppGallery ||
+        nextIsSecurity;
       const nextEditAvailability =
         isHomeNavigationTarget(normalizedRouteForNavigate) ||
         nextIsConsumption ||
         nextIsAppGallery ||
-        nextIsSecurity;
+        nextIsSecurity ||
+        (!canUseBrowserRouteNavigation && !nextIsKnownRoute);
       setIsConsumptionView(nextIsConsumption);
       setIsAutomationView(nextIsAutomation);
       setIsAppGalleryView(nextIsAppGallery);
@@ -9386,6 +9450,8 @@ export function MainBoard() {
             <div className="h-full min-h-0 flex-1 overflow-hidden">
               <ConsumptionDashboardPage
                 embedded
+                suppressBrowserNavigation={!canUseBrowserRouteNavigation}
+                navigationRoute={internalNavigationRoute}
                 isEditMode={isEditMode}
                 selectedCardId={selectedConsumptionCardId}
                 data={consumptionData}
@@ -9424,6 +9490,8 @@ export function MainBoard() {
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <AppGallery
               isEditMode={isEditMode}
+              suppressBrowserNavigation={!canUseBrowserRouteNavigation}
+              navigationRoute={internalNavigationRoute}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               haEntityIds={haEntityIds}
@@ -9438,6 +9506,8 @@ export function MainBoard() {
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <SecurityDashboard
               isEditMode={isEditMode}
+              suppressBrowserNavigation={!canUseBrowserRouteNavigation}
+              navigationRoute={internalNavigationRoute}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               alarmEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('alarm_control_panel.'))}

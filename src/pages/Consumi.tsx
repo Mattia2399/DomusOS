@@ -17,6 +17,8 @@ import { isOnboardingCompleted, markOnboardingCompleted } from '../services/onbo
 
 type Props = {
   embedded?: boolean;
+  suppressBrowserNavigation?: boolean;
+  navigationRoute?: string;
   data?: ConsumptionDashboardData;
   config?: ConsumptionEntityConfig;
   isEditMode?: boolean;
@@ -290,7 +292,7 @@ function UtilityCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative h-80 cursor-pointer overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-left backdrop-blur-2xl',
+        'group relative min-h-[13.75rem] cursor-pointer overflow-hidden rounded-[1.65rem] border border-white/10 bg-white/[0.06] p-5 text-left backdrop-blur-2xl sm:min-h-[16rem] sm:rounded-[2rem] sm:p-6 xl:h-80 xl:p-8',
         'flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:bg-white/[0.1] active:scale-95',
         'shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_24px_50px_rgba(0,0,0,0.3)]',
         active ? 'border-sky-300/45 bg-sky-400/12 shadow-[0_0_0_1px_rgba(125,211,252,0.32)]' : '',
@@ -299,19 +301,19 @@ function UtilityCard({
       <div className={cn('pointer-events-none absolute inset-0 opacity-80', accentClassName)} />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(150deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.04)_38%,rgba(15,23,42,0.18)_100%)]" />
 
-      <h3 className="relative z-10 text-3xl font-medium tracking-tight text-white">{title}</h3>
+      <h3 className="relative z-10 text-2xl font-medium tracking-tight text-white sm:text-3xl">{title}</h3>
 
-      <div className="relative z-10 space-y-4">
+      <div className="relative z-10 space-y-3 sm:space-y-4">
         {metrics.map((metric) => (
           <div key={`${title}-${metric.label}`}>
-            <p className="text-2xl font-bold leading-none text-white">{metric.value}</p>
-            <p className="mt-1 text-sm text-white/50">{metric.label}</p>
+            <p className="text-xl font-bold leading-none text-white sm:text-2xl">{metric.value}</p>
+            <p className="mt-1 text-xs text-white/50 sm:text-sm">{metric.label}</p>
           </div>
         ))}
       </div>
 
-      <div className={cn('pointer-events-none absolute -bottom-8 -right-8 h-44 w-44 rounded-full blur-2xl', glowClassName)} />
-      <div className="pointer-events-none absolute bottom-5 right-5 flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-white/10 text-white/85 shadow-[0_14px_28px_rgba(0,0,0,0.32)]">
+      <div className={cn('pointer-events-none absolute -bottom-8 -right-8 h-36 w-36 rounded-full blur-2xl sm:h-44 sm:w-44', glowClassName)} />
+      <div className="pointer-events-none absolute bottom-4 right-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white/85 shadow-[0_14px_28px_rgba(0,0,0,0.32)] sm:bottom-5 sm:right-5 sm:h-24 sm:w-24 sm:rounded-3xl">
         {icon}
       </div>
     </button>
@@ -320,6 +322,8 @@ function UtilityCard({
 
 export function ConsumptionDashboardPage({
   embedded,
+  suppressBrowserNavigation = false,
+  navigationRoute,
   data,
   config,
   isEditMode = false,
@@ -393,7 +397,7 @@ export function ConsumptionDashboardPage({
   }, [routesByCard.electricity]);
 
   const pushRoute = React.useCallback((targetRoute: string, replace = false) => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || suppressBrowserNavigation) {
       return;
     }
 
@@ -425,10 +429,10 @@ export function ConsumptionDashboardPage({
         window.history.pushState({}, '', normalizedTarget);
       }
     }
-  }, []);
+  }, [suppressBrowserNavigation]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || suppressBrowserNavigation) {
       return undefined;
     }
 
@@ -438,14 +442,21 @@ export function ConsumptionDashboardPage({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [routesByCard]);
+  }, [routesByCard, suppressBrowserNavigation]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || suppressBrowserNavigation) {
       return;
     }
     setActiveView(resolveActiveViewFromLocation(window.location.href, routesByCard));
-  }, [routesByCard]);
+  }, [routesByCard, suppressBrowserNavigation]);
+
+  React.useEffect(() => {
+    if (!suppressBrowserNavigation || !navigationRoute) {
+      return;
+    }
+    setActiveView(resolveActiveViewFromLocation(navigationRoute, routesByCard));
+  }, [navigationRoute, routesByCard, suppressBrowserNavigation]);
 
   React.useEffect(() => {
     if (!isEditMode || activeView === 'overview') {
@@ -471,6 +482,9 @@ export function ConsumptionDashboardPage({
 
       const targetRoute = routesByCard[cardId];
       if (!isConsumptionRoute(targetRoute)) {
+        if (suppressBrowserNavigation) {
+          return;
+        }
         if (typeof window !== 'undefined') {
           window.location.assign(normalizeRoute(targetRoute, '/'));
         }
@@ -480,7 +494,7 @@ export function ConsumptionDashboardPage({
       setActiveView(cardId);
       pushRoute(targetRoute);
     },
-    [isEditMode, onSelectCard, pushRoute, routesByCard],
+    [isEditMode, onSelectCard, pushRoute, routesByCard, suppressBrowserNavigation],
   );
 
   const handleBackToOverview = React.useCallback(() => {
@@ -686,26 +700,26 @@ export function ConsumptionDashboardPage({
 
       <div className="relative z-10 h-full min-h-0">
         {activeView === 'overview' ? (
-          <div className="h-full min-h-0 overflow-y-auto p-8 lg:p-10">
+          <div className="h-full min-h-0 overflow-y-auto px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-6 lg:p-10">
             <div className="flex min-h-full flex-col">
               <header>
-                <h1 className="text-4xl font-semibold tracking-tight text-white lg:text-5xl">
+                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                   Hub Sostenibilità e Consumi
                 </h1>
-                <p className="mt-3 max-w-3xl text-lg text-white/60">
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 sm:text-lg">
                   Ottieni insight in tempo reale sui consumi della tua casa. Oggi hai risparmiato il 14% rispetto alla
                   media settimanale.
                 </p>
               </header>
 
-              <section className="mt-7 w-full max-w-[1280px]">
-                <div className="rounded-full border border-white/10 bg-white/[0.04] p-2 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
-                  <div className="flex items-center gap-1.5">
+              <section className="mt-5 w-full max-w-[1280px] sm:mt-7">
+                <div className="rounded-full border border-white/10 bg-white/[0.04] p-1.5 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] sm:p-2">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
                     {progressTicks.map((isActive, index) => (
                       <span
                         key={`tick-${index}`}
                         className={cn(
-                          'h-7 flex-1 rounded-full transition-colors duration-300',
+                          'h-4 flex-1 rounded-full transition-colors duration-300 sm:h-7',
                           isActive ? 'bg-emerald-400/92 shadow-[0_0_18px_rgba(52,211,153,0.46)]' : 'bg-white/12',
                         )}
                       />
@@ -720,8 +734,8 @@ export function ConsumptionDashboardPage({
                 </div>
               </section>
 
-              <section className="mt-auto pt-10">
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-4">
+              <section className="mt-7 pt-0 lg:mt-auto lg:pt-10">
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-4 xl:gap-8">
                   {utilityCards.map((card) => (
                     <UtilityCard
                       key={card.id}

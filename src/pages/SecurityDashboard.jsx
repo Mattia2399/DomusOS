@@ -357,7 +357,7 @@ function SecurityMainShield({
 }) {
   const Icon = visual.icon;
   return (
-    <section className="rounded-[32px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-6 backdrop-blur-2xl">
+    <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Shield Core</p>
@@ -371,12 +371,12 @@ function SecurityMainShield({
           onClick={onPrimaryAction}
           disabled={disabled}
           whileTap={disabled ? undefined : { scale: 0.985 }}
-          className={cn('relative flex h-[19rem] w-[19rem] items-center justify-center rounded-full border', disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer')}
+          className={cn('relative flex h-[min(72vw,19rem)] w-[min(72vw,19rem)] min-h-[15.5rem] min-w-[15.5rem] items-center justify-center rounded-full border sm:h-[19rem] sm:w-[19rem]', disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer')}
           animate={{ backgroundColor: visual.backgroundColor, borderColor: visual.borderColor, boxShadow: visual.boxShadow }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         >
           <motion.div
-            className="pointer-events-none absolute -inset-7 rounded-full"
+            className="pointer-events-none absolute -inset-4 rounded-full sm:-inset-7"
             animate={{ boxShadow: `0 0 0 2px ${visual.pulseColor}`, opacity: isTransitioning ? [0.22, 0.72, 0.24] : [0.12, 0.36, 0.12], scale: isTransitioning ? [1, 1.1, 1] : [1, 1.04, 1] }}
             transition={{ duration: 2.5, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
           />
@@ -398,8 +398,8 @@ function SecurityMainShield({
             </svg>
           ) : null}
           <div className="relative z-10 flex flex-col items-center text-center">
-            <span className="inline-flex rounded-full border border-white/15 bg-black/20 p-3.5"><Icon className={cn('h-14 w-14 text-white', isTransitioning ? 'animate-spin' : '')} /></span>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.2em] text-white/90">{statusLabel}</p>
+            <span className="inline-flex rounded-full border border-white/15 bg-black/20 p-3 sm:p-3.5"><Icon className={cn('h-11 w-11 text-white sm:h-14 sm:w-14', isTransitioning ? 'animate-spin' : '')} /></span>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/90 sm:mt-5 sm:text-sm sm:tracking-[0.2em]">{statusLabel}</p>
             <p className="mt-2 text-xs text-white/65">{visual.helper}</p>
             {showDelayProgress ? <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/75">Uscita in {delayRemainingSeconds}s</p> : null}
           </div>
@@ -407,7 +407,7 @@ function SecurityMainShield({
       </div>
       <p className="mt-6 text-center text-xs font-light text-white/60">Tocca lo shield per <span className="font-semibold text-white">{primaryActionLabel}</span></p>
 
-      <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="mt-5 grid grid-cols-3 gap-2">
         {ALARM_OPTIONS.map((option) => {
           const OptionIcon = option.icon;
           const isActive = activeState === option.value;
@@ -541,10 +541,10 @@ function SecurityEntityPickerModal({
 function SecuritySensorList({ sensors, query, onQueryChange, isEditMode = false, selectedCount = 0, totalCount = 0, onOpenSelector }) {
   const getIcon = (type) => (type === 'door' ? House : Blinds);
   return (
-    <section className="rounded-[32px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-6 backdrop-blur-2xl">
-      <div className="flex items-start justify-between gap-3">
+    <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div><p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Sensori</p><h3 className="mt-2 text-xl font-semibold text-white">Perimetro</h3></div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start">
           {isEditMode ? (
             <button type="button" onClick={onOpenSelector} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-xs font-semibold text-white/85 hover:bg-white/[0.14]">
               <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -562,7 +562,7 @@ function SecuritySensorList({ sensors, query, onQueryChange, isEditMode = false,
           </label>
         </div>
       ) : null}
-      <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1 custom-scrollbar">
+      <div className="mt-4 max-h-none space-y-3 overflow-visible pr-0 sm:max-h-[28rem] sm:overflow-y-auto sm:pr-1 custom-scrollbar">
         {sensors.length > 0 ? sensors.map((sensor) => {
           const Icon = getIcon(sensor.type);
           return (
@@ -610,10 +610,10 @@ function SecurityCameraSection({
     <section
       className={cn(
         'border border-white/10 bg-[rgba(25,25,25,0.3)] backdrop-blur-2xl',
-        isDedicatedPage ? 'h-full rounded-none border-0 bg-transparent p-6 sm:p-8' : 'rounded-[32px] p-6',
+        isDedicatedPage ? 'h-full rounded-none border-0 bg-transparent px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-8' : 'rounded-[26px] p-4 sm:rounded-[32px] sm:p-6',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div>
           {isDedicatedPage ? (
             <button
@@ -648,7 +648,7 @@ function SecurityCameraSection({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start">
           {!isDedicatedPage && isEditMode ? (
             <button
               type="button"
@@ -674,7 +674,7 @@ function SecurityCameraSection({
         </div>
       </div>
 
-      <div className={cn('mt-4 overflow-y-auto pr-1 custom-scrollbar', isDedicatedPage ? '' : 'max-h-[28rem]')}>
+      <div className={cn('mt-4 pr-0 sm:pr-1 custom-scrollbar', isDedicatedPage ? 'overflow-visible sm:overflow-y-auto' : 'max-h-none overflow-visible sm:max-h-[28rem] sm:overflow-y-auto')}>
         {visibleCameras.length > 0 ? (
           <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2', isDedicatedPage ? 'xl:grid-cols-3 2xl:grid-cols-4' : '')}>
             {visibleCameras.map((camera) => (
@@ -797,7 +797,16 @@ function SecurityAuthModal(props) {
     </AnimatePresence>
   );
 }
-export function SecurityDashboard({ isEditMode = false, haConnected = false, haStates = {}, alarmEntityOptions = [], sensorEntityOptions = [], onCallService }) {
+export function SecurityDashboard({
+  isEditMode = false,
+  suppressBrowserNavigation = false,
+  navigationRoute = '',
+  haConnected = false,
+  haStates = {},
+  alarmEntityOptions = [],
+  sensorEntityOptions = [],
+  onCallService,
+}) {
   const [alarmState, setAlarmState] = useState('disarmed');
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [sensorSearchQuery, setSensorSearchQuery] = useState('');
@@ -967,7 +976,7 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
   }, [biometricCredentialId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
+    if (typeof window === 'undefined' || suppressBrowserNavigation) return undefined;
     const syncFromLocation = () => setIsCameraDirectoryView(resolveSecurityCamerasFromLocation());
     syncFromLocation();
     window.addEventListener('popstate', syncFromLocation);
@@ -976,7 +985,12 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
       window.removeEventListener('popstate', syncFromLocation);
       window.removeEventListener('hashchange', syncFromLocation);
     };
-  }, []);
+  }, [suppressBrowserNavigation]);
+
+  useEffect(() => {
+    if (!suppressBrowserNavigation || !navigationRoute) return;
+    setIsCameraDirectoryView(isSecurityCamerasNavigationTarget(navigationRoute));
+  }, [navigationRoute, suppressBrowserNavigation]);
 
   useEffect(() => {
     if (availableAlarmEntities.length > 0) {
@@ -1308,9 +1322,12 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
   const selectNoCameras = () => setVisibleCameraEntityIds([]);
 
   const navigateSecurityPage = (targetPath) => {
-    if (typeof window === 'undefined') return;
     const normalizedTarget = `${targetPath}`.trim();
     if (!normalizedTarget) return;
+    if (suppressBrowserNavigation || typeof window === 'undefined') {
+      setIsCameraDirectoryView(isSecurityCamerasNavigationTarget(normalizedTarget));
+      return;
+    }
     const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (currentRoute !== normalizedTarget) {
       window.history.pushState({}, '', normalizedTarget);
@@ -1326,12 +1343,12 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
   const openSecurityOverviewPage = () => navigateSecurityPage(SECURITY_OVERVIEW_PATH);
 
   return (
-    <div className={cn('h-full w-full overflow-y-auto', isCameraDirectoryView ? 'p-0' : 'p-6 sm:p-8')} style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}>
+    <div className={cn('h-full w-full overflow-y-auto', isCameraDirectoryView ? 'p-0' : 'px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-6 lg:p-8')} style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}>
       {!isCameraDirectoryView ? (
-        <header className="rounded-[32px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-6 backdrop-blur-2xl">
+        <header className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-[2.15rem] font-semibold tracking-tight text-white">Sicurezza</h1>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.15rem]">Sicurezza</h1>
               <p className="mt-2 text-sm font-light text-white/60">Controllo perimetrale e videosorveglianza</p>
             </div>
           </div>
@@ -1351,8 +1368,8 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
           />
         </div>
       ) : (
-        <div className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-2">
             {!isEditMode ? (
               <SecurityMainShield
                 visual={currentVisual}
@@ -1368,7 +1385,7 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
                 disabled={isAlarmTransitioning}
               />
             ) : (
-              <section className="rounded-[32px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-6 backdrop-blur-2xl">
+              <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Config</p>
@@ -1445,7 +1462,7 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
             />
           </div>
 
-          <div className={cn('grid grid-cols-1 gap-6', UI_FLAGS.showEventFeed ? 'xl:grid-cols-2' : '')}>
+          <div className={cn('grid grid-cols-1 gap-4 sm:gap-6', UI_FLAGS.showEventFeed ? 'xl:grid-cols-2' : '')}>
             <SecuritySensorList
               sensors={filteredSensors}
               query={sensorSearchQuery}
@@ -1457,7 +1474,7 @@ export function SecurityDashboard({ isEditMode = false, haConnected = false, haS
             />
 
             {UI_FLAGS.showEventFeed ? (
-              <section className="rounded-[32px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-6 backdrop-blur-2xl">
+              <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Eventi Recenti</p>

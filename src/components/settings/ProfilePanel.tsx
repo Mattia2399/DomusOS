@@ -400,8 +400,6 @@ export function ProfilePanel({
   const [haActionError, setHaActionError] = useState<string | null>(null);
   const [configActionError, setConfigActionError] = useState<string | null>(null);
   const [isConfigActionBusy, setIsConfigActionBusy] = useState(false);
-  const [compactSheetOffsetY, setCompactSheetOffsetY] = useState(0);
-  const [isCompactSheetDragging, setIsCompactSheetDragging] = useState(false);
   const [profileAvatarSrc, setProfileAvatarSrc] = useState(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
   const [isGuestAccessModalOpen, setIsGuestAccessModalOpen] = useState(false);
   const [membersInspectorMode, setMembersInspectorMode] = useState<'members' | 'guest' | 'share'>('guest');
@@ -426,7 +424,6 @@ export function ProfilePanel({
   }>({ tone: 'idle', text: '' });
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const dashboardShareImportInputRef = useRef<HTMLInputElement | null>(null);
-  const compactDragStartYRef = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
@@ -437,8 +434,6 @@ export function ProfilePanel({
       setIsConfigActionBusy(false);
       setActiveSection('theme');
       setIsCompactDetailOpen(false);
-      setCompactSheetOffsetY(0);
-      setIsCompactSheetDragging(false);
       setIsGuestAccessModalOpen(false);
       setMembersInspectorMode('guest');
       setExpandedMemberId(null);
@@ -446,7 +441,6 @@ export function ProfilePanel({
       setMemberActionFeedback({ tone: 'idle', text: '' });
       setGuestAccessCopyState('idle');
       setDashboardShareFeedback({ tone: 'idle', text: '' });
-      compactDragStartYRef.current = null;
     }
   }, [isOpen]);
 
@@ -483,10 +477,7 @@ export function ProfilePanel({
   useEffect(() => {
     if (!isCompactViewport) {
       setIsCompactDetailOpen(false);
-      setCompactSheetOffsetY(0);
-      setIsCompactSheetDragging(false);
       setIsGuestAccessModalOpen(false);
-      compactDragStartYRef.current = null;
     }
   }, [isCompactViewport]);
 
@@ -548,6 +539,9 @@ export function ProfilePanel({
   const activeSectionMeta = PROFILE_SECTIONS.find((section) => section.id === activeSection) ?? PROFILE_SECTIONS[0];
   const showMenuOnCompact = isCompactViewport && !isCompactDetailOpen;
   const showDetailOnCompact = isCompactViewport && isCompactDetailOpen;
+  const isCompactFullScreenPage = isCompactViewport;
+  const compactPageHeaderTitle = showDetailOnCompact ? activeSectionMeta.label : 'Profilo';
+  const compactPageHeaderSubtitle = showDetailOnCompact ? 'Impostazioni' : 'Impostazioni account';
   const compactDisplayName = userAvatarAlt?.trim() || 'Utente';
   const compactDisplayEmail = userEmail?.trim() || 'Email non disponibile';
   const compactDisplayRole = userRoleLabel?.trim() || 'Utente';
@@ -1155,37 +1149,6 @@ export function ProfilePanel({
     }
   };
 
-  const handleCompactHandlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!isCompactViewport) {
-      return;
-    }
-    compactDragStartYRef.current = event.clientY;
-    setIsCompactSheetDragging(true);
-  };
-
-  const handleCompactHandlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const startY = compactDragStartYRef.current;
-    if (!isCompactViewport || startY === null) {
-      return;
-    }
-    const dragDistance = Math.max(0, event.clientY - startY);
-    setCompactSheetOffsetY(dragDistance);
-  };
-
-  const handleCompactHandlePointerEnd = () => {
-    if (!isCompactViewport) {
-      return;
-    }
-    const shouldClose = compactSheetOffsetY > 96;
-    compactDragStartYRef.current = null;
-    setIsCompactSheetDragging(false);
-    if (shouldClose) {
-      onClose();
-      return;
-    }
-    setCompactSheetOffsetY(0);
-  };
-
   const handleStartOAuth = async () => {
     setHaActionError(null);
     try {
@@ -1291,6 +1254,13 @@ export function ProfilePanel({
   const touchMotionClass = 'transition-all duration-200 active:scale-[0.99]';
   const compactMenuIconClass =
     'flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-muted)]';
+  const handleCompactPageBack = () => {
+    if (showDetailOnCompact) {
+      setIsCompactDetailOpen(false);
+      return;
+    }
+    onClose();
+  };
   const renderGuestAccessPanel = ({
     withCloseButton,
     qrSize,
@@ -1682,19 +1652,27 @@ export function ProfilePanel({
 
   return (
     <div className="fixed inset-0 z-[220] overflow-hidden">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute inset-0 bg-[color:var(--profile-sheet-overlay)] backdrop-blur-[6px]"
-        aria-label="Chiudi profilo"
-      />
-      <div className="pointer-events-none absolute inset-0 flex items-end justify-center px-0 sm:px-2 md:items-center md:px-5 lg:px-7">
+      {!isCompactFullScreenPage ? (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute inset-0 bg-[color:var(--profile-sheet-overlay)] backdrop-blur-[6px]"
+          aria-label="Chiudi profilo"
+        />
+      ) : null}
+      <div
+        className={
+          isCompactFullScreenPage
+            ? 'absolute inset-0'
+            : 'pointer-events-none absolute inset-0 flex items-end justify-center px-0 sm:px-2 md:items-center md:px-5 lg:px-7'
+        }
+      >
         <div
-          className={`pointer-events-auto relative isolate flex h-[calc(100dvh-0.65rem)] w-full max-w-[1180px] flex-col overflow-hidden rounded-t-[2.6rem] rounded-b-none border px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 sm:px-7 sm:pt-4 md:h-[min(92dvh,820px)] md:rounded-[2.5rem] md:px-7 md:pb-6 md:pt-5 backdrop-blur-3xl ${panelShellClass}`}
-          style={{
-            transform: isCompactViewport ? `translateY(${compactSheetOffsetY}px)` : undefined,
-            transition: isCompactViewport && !isCompactSheetDragging ? 'transform 200ms ease-out' : undefined,
-          }}
+          className={`pointer-events-auto relative isolate flex w-full flex-col overflow-hidden backdrop-blur-3xl ${panelShellClass} ${
+            isCompactFullScreenPage
+              ? 'h-full max-w-none rounded-none border-0 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+0.65rem)] sm:px-5'
+              : 'h-[calc(100dvh-0.65rem)] max-w-[1180px] rounded-t-[2.6rem] rounded-b-none border px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 sm:px-7 sm:pt-4 md:h-[min(92dvh,820px)] md:rounded-[2.5rem] md:px-7 md:pb-6 md:pt-5'
+          }`}
         >
           <div
             className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full blur-3xl"
@@ -1712,15 +1690,22 @@ export function ProfilePanel({
           />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_26%)]" />
 
-          <div
-            className="relative z-[1] mb-2 flex justify-center touch-none md:hidden"
-            onPointerDown={handleCompactHandlePointerDown}
-            onPointerMove={handleCompactHandlePointerMove}
-            onPointerUp={handleCompactHandlePointerEnd}
-            onPointerCancel={handleCompactHandlePointerEnd}
-          >
-            <span className="h-1.5 w-12 rounded-full bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.5)]" />
-          </div>
+          {isCompactFullScreenPage ? (
+            <div className="relative z-[1] mb-3 flex items-center gap-2 px-0.5 py-1">
+              <button
+                type="button"
+                onClick={handleCompactPageBack}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl text-[color:var(--profile-sheet-text)] hover:bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.14)] ${touchMotionClass}`}
+                aria-label={showDetailOnCompact ? 'Torna al menu impostazioni' : 'Torna alla dashboard'}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="min-w-0">
+                <p className={`text-[11px] uppercase tracking-[0.2em] ${menuTitleClass}`}>{compactPageHeaderSubtitle}</p>
+                <p className="truncate text-sm font-semibold text-[color:var(--profile-sheet-title)]">{compactPageHeaderTitle}</p>
+              </div>
+            </div>
+          ) : null}
 
           {!isCompactViewport ? (
             <div className="relative z-[1] mb-4 flex items-center justify-between gap-4">
@@ -1839,22 +1824,6 @@ export function ProfilePanel({
               showDetailOnCompact ? 'block' : 'hidden md:block'
             }`}
           >
-            {isCompactViewport ? (
-              <div className="mb-2 flex items-center gap-2 px-0.5 py-1">
-                <button
-                  type="button"
-                  onClick={() => setIsCompactDetailOpen(false)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl text-[color:var(--profile-sheet-text)] hover:bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.14)] ${touchMotionClass}`}
-                  aria-label="Torna al menu impostazioni"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="min-w-0">
-                  <p className={`text-[11px] uppercase tracking-[0.2em] ${menuTitleClass}`}>Impostazioni</p>
-                  <p className="truncate text-sm font-semibold">{activeSectionMeta.label}</p>
-                </div>
-              </div>
-            ) : null}
             {activeSection === 'theme' ? (
               <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
                 <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Tema</p>

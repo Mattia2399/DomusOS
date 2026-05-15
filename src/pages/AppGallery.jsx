@@ -830,6 +830,20 @@ function resolveAppGalleryViewFromLocation() {
   }
 }
 
+function resolveAppGalleryViewFromTarget(path) {
+  try {
+    const parsed = new URL(path, 'http://dashboard.local');
+    const fromPath = readViewFromPath(parsed.pathname);
+    if (fromPath) {
+      return fromPath;
+    }
+    const hashPath = parsed.hash.replace(/^#/, '').replace(/^\//, '');
+    return readViewFromPath(hashPath) ?? normalizeAppGalleryViewToken(parsed.searchParams.get('view') ?? '');
+  } catch {
+    return 'launcher';
+  }
+}
+
 function navigateTo(path) {
   if (typeof window === 'undefined') {
     return;
@@ -845,7 +859,7 @@ function navigateTo(path) {
   console.log(`Navigating to ${normalized}`);
 }
 
-function PortalCard({ portal }) {
+function PortalCard({ portal, onNavigate = navigateTo }) {
   const Icon = portal.icon;
 
   return (
@@ -854,7 +868,7 @@ function PortalCard({ portal }) {
       variants={cardVariants}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      onClick={() => navigateTo(portal.route)}
+      onClick={() => onNavigate(portal.route)}
       className={`group relative flex aspect-video w-full flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 text-left backdrop-blur-3xl transition-colors duration-300 ${portal.borderHoverClass}`}
     >
       <div
@@ -1060,7 +1074,7 @@ function ZoneConfigModal({
   );
 }
 
-function LauncherView() {
+function LauncherView({ onNavigate = navigateTo }) {
   return (
     <div className="mx-auto w-full max-w-[1720px] space-y-10 pb-8">
       <motion.header
@@ -1091,7 +1105,7 @@ function LauncherView() {
           className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3"
         >
           {SYSTEM_PORTALS.map((portal) => (
-            <PortalCard key={portal.id} portal={portal} />
+            <PortalCard key={portal.id} portal={portal} onNavigate={onNavigate} />
           ))}
         </motion.div>
       </section>
@@ -1125,6 +1139,7 @@ function IrrigationDashboardView({
   onCallService,
   onCallApi,
   onNotify,
+  onNavigate = navigateTo,
 }) {
   const [masterControlState, setMasterControlState] = React.useState('stopped');
   const [irrigationConfig, setIrrigationConfig] = React.useState(() => readStoredIrrigationConfig());
@@ -1985,7 +2000,7 @@ function IrrigationDashboardView({
       >
         <button
           type="button"
-          onClick={() => navigateTo('/appgallery')}
+          onClick={() => onNavigate('/appgallery')}
           className="inline-flex items-center gap-2 text-sm text-white/65 transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -2658,7 +2673,7 @@ function IrrigationDashboardView({
   );
 }
 
-function ComingSoonPortalView({ view }) {
+function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
   const titleByView = {
     technical: 'Locale Tecnico',
     pool: 'Piscina & Spa',
@@ -2669,7 +2684,7 @@ function ComingSoonPortalView({ view }) {
     <div className="mx-auto flex h-full w-full max-w-[1720px] flex-col items-center justify-center gap-6 pb-8 text-center">
       <button
         type="button"
-        onClick={() => navigateTo('/appgallery')}
+        onClick={() => onNavigate('/appgallery')}
         className="inline-flex items-center gap-2 text-sm text-white/65 transition-colors hover:text-white"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -2690,6 +2705,8 @@ function ComingSoonPortalView({ view }) {
 /**
  * @typedef {Object} AppGalleryProps
  * @property {boolean=} isEditMode
+ * @property {boolean=} suppressBrowserNavigation
+ * @property {string=} navigationRoute
  * @property {boolean=} haConnected
  * @property {Record<string, unknown>=} haStates
  * @property {string[]=} haEntityIds
@@ -2705,6 +2722,8 @@ function ComingSoonPortalView({ view }) {
  */
 export function AppGallery({
   isEditMode = false,
+  suppressBrowserNavigation = false,
+  navigationRoute = '',
   haConnected = false,
   haStates = {},
   haEntityIds = [],
@@ -2715,8 +2734,21 @@ export function AppGallery({
   onNotify,
 } = {}) {
   const [activeView, setActiveView] = React.useState(resolveAppGalleryViewFromLocation);
+  const handleNavigate = React.useCallback(
+    (path) => {
+      if (suppressBrowserNavigation) {
+        setActiveView(resolveAppGalleryViewFromTarget(path));
+        return;
+      }
+      navigateTo(path);
+    },
+    [suppressBrowserNavigation],
+  );
 
   React.useEffect(() => {
+    if (suppressBrowserNavigation) {
+      return undefined;
+    }
     const syncView = () => {
       setActiveView(resolveAppGalleryViewFromLocation());
     };
@@ -2726,7 +2758,14 @@ export function AppGallery({
       window.removeEventListener('popstate', syncView);
       window.removeEventListener('hashchange', syncView);
     };
-  }, []);
+  }, [suppressBrowserNavigation]);
+
+  React.useEffect(() => {
+    if (!suppressBrowserNavigation || !navigationRoute) {
+      return;
+    }
+    setActiveView(resolveAppGalleryViewFromTarget(navigationRoute));
+  }, [navigationRoute, suppressBrowserNavigation]);
 
   return (
     <div
@@ -2739,7 +2778,7 @@ export function AppGallery({
       />
 
       {activeView === 'launcher' ? (
-        <LauncherView />
+        <LauncherView onNavigate={handleNavigate} />
       ) : activeView === 'irrigation' ? (
         <IrrigationDashboardView
           isEditMode={isEditMode}
@@ -2751,9 +2790,10 @@ export function AppGallery({
           onCallService={onCallService}
           onCallApi={onCallApi}
           onNotify={onNotify}
+          onNavigate={handleNavigate}
         />
       ) : (
-        <ComingSoonPortalView view={activeView} />
+        <ComingSoonPortalView view={activeView} onNavigate={handleNavigate} />
       )}
     </div>
   );
