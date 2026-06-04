@@ -173,7 +173,7 @@ export function LeftSidebar({
         />
       ) : null}
 
-      <aside className="relative z-50 w-14 sm:w-16 lg:w-20 h-full min-h-0 bg-white/5 backdrop-blur-xl rounded-[2rem] border border-white/5">
+      <aside className="liquid-glass-panel relative z-50 w-14 sm:w-16 lg:w-20 h-full min-h-0">
       <div className="relative z-10 h-full min-h-0 flex flex-col items-center py-5 sm:py-7">
         <button
           type="button"
@@ -206,14 +206,19 @@ export function LeftSidebar({
                 type="button"
                 onClick={() => onPathClick(entry)}
                 title={`${entry.label} (${entry.path})`}
-                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-colors ${
+                className={`group w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-colors ${
                   active
-                    ? 'bg-[#3b82f6] text-white'
+                    ? 'text-white'
                     : 'text-white/50 hover:text-white hover:bg-white/5'
                 }`}
                 aria-label={`Apri ${entry.label}`}
               >
-                <Icon size={21} />
+                <Icon
+                  size={21}
+                  strokeWidth={active ? 1.85 : 2}
+                  fill={active ? 'currentColor' : 'none'}
+                  className={active ? '' : 'group-hover:scale-105 transition-transform'}
+                />
               </button>
             );
           })}
@@ -259,7 +264,7 @@ export function LeftSidebar({
           {isNotificationsOpen ? (
             <div
               ref={notificationPopupRef}
-              className="absolute z-[60] bottom-0 left-full ml-5 w-[22rem] max-w-[calc(100vw-7rem)] rounded-[1.5rem] border border-white/10 bg-[#0a0f17]/88 backdrop-blur-2xl shadow-2xl p-3"
+              className="liquid-glass-panel absolute z-[60] bottom-0 left-full ml-5 w-[22rem] max-w-[calc(100vw-7rem)] rounded-[1.5rem] p-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -279,7 +284,7 @@ export function LeftSidebar({
               </div>
 
               {notifications.length === 0 ? (
-                <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white/60">
+                <p className="liquid-glass-card mt-4 rounded-xl px-3 py-3 text-sm text-white/60">
                   Nessuna notifica al momento.
                 </p>
               ) : (
@@ -309,7 +314,7 @@ export function LeftSidebar({
                           <button
                             type="button"
                             onClick={() => removeNotification(notification.id)}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/25 text-[11px] text-white/65 transition-colors hover:bg-white/10 hover:text-white"
+                            className="btn-premium inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-[11px] text-white/65 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/[0.08] hover:text-white"
                             aria-label="Rimuovi notifica"
                           >
                             x

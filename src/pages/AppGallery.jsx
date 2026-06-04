@@ -958,7 +958,7 @@ function ZoneConfigModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="relative z-10 w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-900/80 p-5 text-white backdrop-blur-3xl sm:p-6"
+            className="liquid-glass-panel relative z-10 w-full max-w-xl p-5 text-white sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1019,7 +1019,7 @@ function ZoneConfigModal({
                         type="time"
                         value={time}
                         onChange={(event) => onStartTimeChange(index, event.target.value)}
-                        className="w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-300/40"
+                        className="w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-300/40"
                       />
                       <button
                         type="button"
@@ -1317,7 +1317,7 @@ function IrrigationDashboardView({
       ? 'border-rose-300/30 bg-rose-500/10'
       : rainSensorActive
         ? 'border-cyan-300/30 bg-cyan-400/10'
-        : 'border-white/10 bg-black/20';
+        : 'border-white/10 bg-white/[0.04]';
   const rainControlIconWrapClassName = !rainSensorEnabled
     ? 'border-amber-300/35 bg-amber-400/18 text-amber-100'
     : rainSensorUnavailable
@@ -2073,7 +2073,7 @@ function IrrigationDashboardView({
                       placeholder="Scrivi entity_id o scegli dai suggerimenti"
                       autoComplete="off"
                       spellCheck={false}
-                      className="mt-2 w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
+                      className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
                     />
                     <datalist id={`edit-master-${field.key}-options`}>
                       {field.options.map((entityId) => (
@@ -2226,7 +2226,7 @@ function IrrigationDashboardView({
                   placeholder="sensor.soil_moisture"
                   autoComplete="off"
                   spellCheck={false}
-                  className="mt-2 w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
+                  className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
                 />
                 <datalist id="edit-soil-moisture-options">
                   {buildEntityOptions(sensorOptions, irrigationConfig.soilMoistureEntityId).map((entityId) => (
@@ -2304,7 +2304,7 @@ function IrrigationDashboardView({
                             placeholder="Es. Prato Sud"
                             autoComplete="off"
                             spellCheck={false}
-                            className="mt-2 w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
+                            className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
                           />
                         </label>
 
@@ -2318,7 +2318,7 @@ function IrrigationDashboardView({
                             placeholder="switch.irrigation_zona_x"
                             autoComplete="off"
                             spellCheck={false}
-                            className="mt-2 w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
+                            className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
                           />
                           <datalist id={`${fieldKey}-entity-options`}>
                             {options.map((entityId) => (
@@ -2347,7 +2347,7 @@ function IrrigationDashboardView({
                                   className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${
                                     selected
                                       ? 'border-cyan-300/45 bg-cyan-400/20 text-cyan-100'
-                                      : 'border-white/12 bg-black/20 text-white/70 hover:text-white'
+                                      : 'border-white/12 bg-white/[0.04] text-white/70 hover:text-white'
                                   }`}
                                 >
                                   <OptionIcon className="h-3.5 w-3.5" />
@@ -2599,7 +2599,7 @@ function IrrigationDashboardView({
                     placeholder="Scrivi entity_id o scegli dai suggerimenti"
                     autoComplete="off"
                     spellCheck={false}
-                    className="mt-2 w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
+                    className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
                   />
                   <datalist id={`edit-water-${field.key}-options`}>
                     {field.options.map((entityId) => (

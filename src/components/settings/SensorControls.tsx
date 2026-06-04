@@ -144,7 +144,7 @@ function normalizeTrendLinePoints(values: number[], width: number, height: numbe
 function TrendLine({ values }: { values: number[] }) {
   if (values.length < 2) {
     return (
-      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
+      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
         <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-white/50">Nessun dato storico disponibile</p>
       </div>
     );
@@ -168,7 +168,7 @@ function TrendLine({ values }: { values: number[] }) {
   ].join(' ');
 
   return (
-    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
+    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" fill="none" aria-hidden="true">
         <path d={areaPath} fill="rgba(59,130,246,0.16)" />
         <path
@@ -201,14 +201,14 @@ function TrendBars({ values }: { values: number[] }) {
 
   if (normalizedHeights.length === 0) {
     return (
-      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
+      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
         <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-white/50">Nessun dato storico disponibile</p>
       </div>
     );
   }
 
   return (
-    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-black/25 border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
+    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
       <div className="h-full flex items-end justify-between gap-[clamp(0.3rem,1vw,0.5rem)]">
         {normalizedHeights.map((height, index) => {
           const isLast = index === normalizedHeights.length - 1;

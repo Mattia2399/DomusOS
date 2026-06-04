@@ -1,4 +1,9 @@
 import type { DashboardSection, GridItem, SectionKind, Widget, WidgetKind } from '../types/dashboardModels';
+import type {
+  DashboardGridBreakpoint,
+  WidgetTypeBreakpointLayoutOverride,
+  WidgetTypeLayoutOverrides,
+} from '../types/widgetTypeLayout';
 import {
   GREETING_SECTION_ROWS,
   INITIAL_SECTIONS,
@@ -17,7 +22,7 @@ import {
 } from '../types/dashboardModels';
 
 const STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
-const STORAGE_VERSION = 12;
+const STORAGE_VERSION = 13;
 
 const VALID_SECTION_KINDS: SectionKind[] = [
   'greeting',
@@ -29,15 +34,71 @@ const VALID_SECTION_KINDS: SectionKind[] = [
 ];
 
 const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover', 'members'];
+const VALID_GRID_BREAKPOINTS: DashboardGridBreakpoint[] = ['2xl', 'xl', 'lg', 'md', 'sm', 'xs'];
 
 type StoredLayout = {
   version: number;
   sections: DashboardSection[];
   widgets: Widget[];
+  widgetTypeLayoutOverrides?: WidgetTypeLayoutOverrides;
 };
 
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function toPositiveInt(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.max(1, Math.round(value));
+}
+
+function normalizeBreakpointLayoutOverride(
+  raw: unknown,
+): WidgetTypeBreakpointLayoutOverride | undefined {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+  const source = raw as WidgetTypeBreakpointLayoutOverride;
+  const w = toPositiveInt(source.w);
+  const h = toPositiveInt(source.h);
+  const hOn = toPositiveInt(source.hOn);
+  const hOff = toPositiveInt(source.hOff);
+  if (!w && !h && !hOn && !hOff) {
+    return undefined;
+  }
+  return {
+    ...(w ? { w } : null),
+    ...(h ? { h } : null),
+    ...(hOn ? { hOn } : null),
+    ...(hOff ? { hOff } : null),
+  };
+}
+
+function normalizeWidgetTypeLayoutOverrides(raw: unknown): WidgetTypeLayoutOverrides {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+  const source = raw as WidgetTypeLayoutOverrides;
+  const normalized: WidgetTypeLayoutOverrides = {};
+  VALID_WIDGET_KINDS.forEach((kind) => {
+    const byBreakpointRaw = source[kind];
+    if (!byBreakpointRaw || typeof byBreakpointRaw !== 'object') {
+      return;
+    }
+    const nextByBreakpoint: Partial<Record<DashboardGridBreakpoint, WidgetTypeBreakpointLayoutOverride>> = {};
+    VALID_GRID_BREAKPOINTS.forEach((breakpoint) => {
+      const nextOverride = normalizeBreakpointLayoutOverride(byBreakpointRaw[breakpoint]);
+      if (nextOverride) {
+        nextByBreakpoint[breakpoint] = nextOverride;
+      }
+    });
+    if (Object.keys(nextByBreakpoint).length > 0) {
+      normalized[kind] = nextByBreakpoint;
+    }
+  });
+  return normalized;
 }
 
 function normalizeLayout(
@@ -701,6 +762,19 @@ function migrateStoredLayoutV11ToV12(layout: StoredLayout): StoredLayout {
     version: 12,
     sections: mergedSections,
     widgets: Array.isArray(layout.widgets) ? layout.widgets : [],
+    widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides),
+  };
+}
+
+function migrateStoredLayoutV12ToV13(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 12) {
+    return layout;
+  }
+  return {
+    version: 13,
+    sections: Array.isArray(layout.sections) ? layout.sections : [],
+    widgets: Array.isArray(layout.widgets) ? layout.widgets : [],
+    widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides),
   };
 }
 
@@ -844,14 +918,18 @@ function safeParse(raw: string | null): StoredLayout | null {
   }
 }
 
-export function loadDashboardLayout(): { sections: DashboardSection[]; widgets: Widget[] } {
+export function loadDashboardLayout(): {
+  sections: DashboardSection[];
+  widgets: Widget[];
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
+} {
   if (typeof window === 'undefined') {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
   }
 
   const parsed = safeParse(window.localStorage.getItem(STORAGE_KEY));
   if (!parsed) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
   }
   const migratedV2 = parsed.version === 1 ? migrateStoredLayoutV1ToV2(parsed) : parsed;
   const migratedV3 = migratedV2.version === 2 ? migrateStoredLayoutV2ToV3(migratedV2) : migratedV2;
@@ -863,9 +941,10 @@ export function loadDashboardLayout(): { sections: DashboardSection[]; widgets: 
   const migratedV9 = migratedV8.version === 8 ? migrateStoredLayoutV8ToV9(migratedV8) : migratedV8;
   const migratedV10 = migratedV9.version === 9 ? migrateStoredLayoutV9ToV10(migratedV9) : migratedV9;
   const migratedV11 = migratedV10.version === 10 ? migrateStoredLayoutV10ToV11(migratedV10) : migratedV10;
-  const hydrated = migratedV11.version === 11 ? migrateStoredLayoutV11ToV12(migratedV11) : migratedV11;
+  const migratedV12 = migratedV11.version === 11 ? migrateStoredLayoutV11ToV12(migratedV11) : migratedV11;
+  const hydrated = migratedV12.version === 12 ? migrateStoredLayoutV12ToV13(migratedV12) : migratedV12;
   if (hydrated.version !== STORAGE_VERSION) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
   }
 
   const rawSections = Array.isArray(hydrated.sections) ? hydrated.sections : [];
@@ -890,13 +969,21 @@ export function loadDashboardLayout(): { sections: DashboardSection[]; widgets: 
     });
 
   if (!sections.length && !widgets.length) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS };
+    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
   }
 
-  return { sections, widgets };
+  return {
+    sections,
+    widgets,
+    widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(hydrated.widgetTypeLayoutOverrides),
+  };
 }
 
-export function saveDashboardLayout(sections: DashboardSection[], widgets: Widget[]) {
+export function saveDashboardLayout(
+  sections: DashboardSection[],
+  widgets: Widget[],
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides = {},
+) {
   if (typeof window === 'undefined') {
     return;
   }
@@ -905,6 +992,7 @@ export function saveDashboardLayout(sections: DashboardSection[], widgets: Widge
     version: STORAGE_VERSION,
     sections,
     widgets,
+    widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides),
   };
 
   try {

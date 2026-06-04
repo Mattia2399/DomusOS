@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import GlassDropdown from '../components/ui/GlassDropdown';
+import SecurityAuthModal from '../components/security/SecurityAuthModal';
 import { getAlarmStateLabel, normalizeAlarmState } from '../utils/alarmUtils';
 
 const STORAGE_KEYS = {
@@ -38,7 +40,7 @@ const STORAGE_KEYS = {
 };
 
 const UI_FLAGS = Object.freeze({
-  directCallWhenCodeNotRequired: true,
+  directCallWhenCodeNotRequired: false,
   showSensorSearch: true,
   showEventFeed: true,
 });
@@ -357,7 +359,7 @@ function SecurityMainShield({
 }) {
   const Icon = visual.icon;
   return (
-    <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+    <section className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Shield Core</p>
@@ -398,7 +400,7 @@ function SecurityMainShield({
             </svg>
           ) : null}
           <div className="relative z-10 flex flex-col items-center text-center">
-            <span className="inline-flex rounded-full border border-white/15 bg-black/20 p-3 sm:p-3.5"><Icon className={cn('h-11 w-11 text-white sm:h-14 sm:w-14', isTransitioning ? 'animate-spin' : '')} /></span>
+            <span className="inline-flex rounded-full border border-white/15 bg-white/[0.04] p-3 sm:p-3.5"><Icon className={cn('h-11 w-11 text-white sm:h-14 sm:w-14', isTransitioning ? 'animate-spin' : '')} /></span>
             <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/90 sm:mt-5 sm:text-sm sm:tracking-[0.2em]">{statusLabel}</p>
             <p className="mt-2 text-xs text-white/65">{visual.helper}</p>
             {showDelayProgress ? <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/75">Uscita in {delayRemainingSeconds}s</p> : null}
@@ -426,7 +428,7 @@ function SecurityMainShield({
               )}
             >
               <span className="inline-flex items-center gap-2">
-                <span className="inline-flex rounded-full border border-white/15 bg-black/25 p-1.5">
+                <span className="inline-flex rounded-full border border-white/15 bg-white/[0.04] p-1.5">
                   <OptionIcon className="h-3.5 w-3.5" />
                 </span>
                 <span className="text-xs font-semibold">{option.label}</span>
@@ -468,8 +470,8 @@ function SecurityEntityPickerModal({
     <AnimatePresence>
       {isOpen ? (
         <motion.div className="fixed inset-0 z-[290] flex items-center justify-center p-4 sm:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <button type="button" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-2xl" aria-label="Chiudi selezione dispositivi" />
-          <motion.div className="relative z-10 w-full max-w-2xl rounded-[34px] border border-white/10 bg-[rgba(25,25,25,0.85)] p-5 backdrop-blur-2xl sm:p-6" initial={{ y: 20, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0, scale: 0.98 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
+          <button type="button" onClick={onClose} className="absolute inset-0 bg-white/[0.02] backdrop-blur-2xl" aria-label="Chiudi selezione dispositivi" />
+          <motion.div className="liquid-glass-panel relative z-10 w-full max-w-2xl rounded-[34px] p-5 sm:p-6" initial={{ y: 20, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0, scale: 0.98 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
             <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full border border-white/15 bg-white/10 p-1.5 text-white/70 hover:text-white" aria-label="Chiudi selezione">
               <X className="h-4 w-4" />
             </button>
@@ -478,7 +480,7 @@ function SecurityEntityPickerModal({
             <h3 className="mt-2 pr-10 text-xl font-semibold text-white">{title}</h3>
             <p className="mt-2 text-sm text-white/60">{description}</p>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(25,25,25,0.3)] px-4 py-3 backdrop-blur-2xl">
+            <div className="liquid-glass-card mt-4 px-4 py-3">
               <label className="flex items-center gap-3">
                 <span className="inline-flex rounded-full border border-white/10 bg-white/10 p-2"><Search className="h-3.5 w-3.5 text-white/75" /></span>
                 <input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-sm text-white placeholder:text-white/45 outline-none" placeholder="Cerca dispositivo per nome o entity_id" />
@@ -514,7 +516,7 @@ function SecurityEntityPickerModal({
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded-md border', checked ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-100' : 'border-white/20 bg-black/20 text-transparent')}>
+                        <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded-md border', checked ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-100' : 'border-white/20 bg-white/[0.04] text-transparent')}>
                           <Check className="h-3.5 w-3.5" />
                         </span>
                         <div className="min-w-0 flex-1">
@@ -541,7 +543,7 @@ function SecurityEntityPickerModal({
 function SecuritySensorList({ sensors, query, onQueryChange, isEditMode = false, selectedCount = 0, totalCount = 0, onOpenSelector }) {
   const getIcon = (type) => (type === 'door' ? House : Blinds);
   return (
-    <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+    <section className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div><p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Sensori</p><h3 className="mt-2 text-xl font-semibold text-white">Perimetro</h3></div>
         <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start">
@@ -555,7 +557,7 @@ function SecuritySensorList({ sensors, query, onQueryChange, isEditMode = false,
         </div>
       </div>
       {UI_FLAGS.showSensorSearch ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(25,25,25,0.3)] px-4 py-3 backdrop-blur-2xl">
+        <div className="liquid-glass-card mt-4 px-4 py-3">
           <label className="flex items-center gap-3">
             <span className="inline-flex rounded-full border border-white/10 bg-white/10 p-2"><Search className="h-3.5 w-3.5 text-white/75" /></span>
             <input value={query} onChange={(event) => onQueryChange(event.target.value)} className="w-full bg-transparent text-sm text-white placeholder:text-white/45 outline-none" placeholder="Cerca sensore per nome o entity_id" />
@@ -566,7 +568,7 @@ function SecuritySensorList({ sensors, query, onQueryChange, isEditMode = false,
         {sensors.length > 0 ? sensors.map((sensor) => {
           const Icon = getIcon(sensor.type);
           return (
-            <div key={sensor.entityId} className={cn('rounded-2xl border px-4 py-3', sensor.isOpen ? 'border-[#FF3B30]/40 bg-[#FF3B30]/12' : 'border-white/10 bg-[rgba(25,25,25,0.3)]')}>
+            <div key={sensor.entityId} className={cn('liquid-glass-card px-4 py-3', sensor.isOpen ? 'border-[#FF3B30]/40 bg-[#FF3B30]/12' : '')}>
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10"><Icon className="h-4.5 w-4.5 text-white/85" /></span>
                 <div className="min-w-0 flex-1">
@@ -609,7 +611,7 @@ function SecurityCameraSection({
   return (
     <section
       className={cn(
-        'border border-white/10 bg-[rgba(25,25,25,0.3)] backdrop-blur-2xl',
+        'liquid-glass-card',
         isDedicatedPage ? 'h-full rounded-none border-0 bg-transparent px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-8' : 'rounded-[26px] p-4 sm:rounded-[32px] sm:p-6',
       )}
     >
@@ -751,52 +753,6 @@ function SecurityCameraSection({
   );
 }
 
-function SecurityAuthModal(props) {
-  const {
-    isOpen, pendingAlarmState, pendingStateRequiresCode, authError, isAuthBusy, supportsBiometric, prefersBiometric,
-    isAlarmCodeNumeric, alarmCodeTypeLabel, authPinInput, onPinInputChange, onVerifyWithPin, onVerifyWithBiometric,
-    onPushPinDigit, onPopPinDigit, onClearPin, onClose,
-  } = props;
-
-  return (
-    <AnimatePresence>
-      {isOpen ? (
-        <motion.div className="fixed inset-0 z-[280] flex items-center justify-center p-4 sm:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <button type="button" onClick={onClose} aria-label="Chiudi autenticazione" className="absolute inset-0 bg-black/80 backdrop-blur-2xl" />
-          <motion.div className="relative z-10 w-full max-w-md rounded-[34px] border border-white/10 bg-[rgba(25,25,25,0.78)] p-6 backdrop-blur-2xl" initial={{ y: -20, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0, scale: 0.98 }} transition={{ duration: 0.24, ease: 'easeOut' }}>
-            <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full border border-white/15 bg-white/10 p-1.5 text-white/70 hover:text-white" aria-label="Chiudi"><X className="h-4 w-4" /></button>
-            <p className="text-[11px] font-light uppercase tracking-[0.24em] text-white/60">Security Gate</p>
-            <h3 className="mt-2 pr-10 text-xl font-semibold text-white">Autorizza: {pendingAlarmState ? getAlarmStateLabel(pendingAlarmState) : ''}</h3>
-            <p className="mt-2 text-sm text-white/60">{pendingStateRequiresCode ? `${alarmCodeTypeLabel} richiesto dall'entita selezionata.` : "L'entita selezionata non richiede codice per questa azione."}</p>
-            {prefersBiometric ? (
-              <button type="button" onClick={onVerifyWithBiometric} disabled={isAuthBusy || !supportsBiometric} className={cn('mt-5 flex w-full items-center justify-center gap-2 rounded-[22px] border px-4 py-3.5 text-sm font-semibold', isAuthBusy || !supportsBiometric ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40' : 'border-white/20 bg-white/12 text-white hover:bg-white/18')}>
-                <Fingerprint className="h-4 w-4" /> Sblocca con Face ID / Impronta
-              </button>
-            ) : null}
-            {pendingStateRequiresCode ? (
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                <div className="flex items-center gap-2"><span className="inline-flex rounded-full border border-white/10 bg-white/10 p-1.5"><KeyRound className="h-3.5 w-3.5 text-white/85" /></span><p className="text-xs font-light uppercase tracking-[0.18em] text-white/60">{isAlarmCodeNumeric ? 'Tastierino Numerico' : 'Codice Allarme'}</p></div>
-                <input type="password" value={authPinInput} onChange={(event) => onPinInputChange(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none focus:border-white/30" placeholder={isAlarmCodeNumeric ? 'Inserisci PIN' : 'Inserisci codice'} />
-                {isAlarmCodeNumeric ? (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => <button key={d} type="button" onClick={() => onPushPinDigit(d)} className="h-10 rounded-xl border border-white/10 bg-white/[0.06] text-sm font-semibold text-white hover:bg-white/[0.12]">{d}</button>)}
-                    <button type="button" onClick={onClearPin} className="h-10 rounded-xl border border-white/10 bg-white/[0.06] text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75 hover:bg-white/[0.12]">Clear</button>
-                    <button type="button" onClick={() => onPushPinDigit('0')} className="h-10 rounded-xl border border-white/10 bg-white/[0.06] text-sm font-semibold text-white hover:bg-white/[0.12]">0</button>
-                    <button type="button" onClick={onPopPinDigit} className="h-10 rounded-xl border border-white/10 bg-white/[0.06] text-sm font-semibold text-white hover:bg-white/[0.12]">Del</button>
-                  </div>
-                ) : null}
-                <button type="button" onClick={onVerifyWithPin} disabled={isAuthBusy} className={cn('mt-3 w-full rounded-2xl border px-3 py-2.5 text-sm font-semibold', isAuthBusy ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40' : 'border-white/20 bg-white/[0.08] text-white hover:bg-white/[0.14]')}>Conferma con {alarmCodeTypeLabel}</button>
-              </div>
-            ) : (
-              <button type="button" onClick={onVerifyWithPin} disabled={isAuthBusy} className={cn('mt-4 w-full rounded-2xl border px-3 py-3 text-sm font-semibold', isAuthBusy ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40' : 'border-white/20 bg-white/[0.08] text-white hover:bg-white/[0.14]')}>Conferma cambio stato</button>
-            )}
-            {authError ? <p className="mt-3 text-xs text-rose-200/90">{authError}</p> : null}
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
-  );
-}
 export function SecurityDashboard({
   isEditMode = false,
   suppressBrowserNavigation = false,
@@ -840,6 +796,14 @@ export function SecurityDashboard({
   const availableAlarmEntities = useMemo(
     () => (alarmEntityOptions.length > 0 ? [...new Set(alarmEntityOptions)] : Object.keys(haStates).filter((id) => id.startsWith('alarm_control_panel.'))).sort((a, b) => a.localeCompare(b, 'it-IT')),
     [alarmEntityOptions, haStates],
+  );
+  const alarmDropdownOptions = useMemo(
+    () =>
+      availableAlarmEntities.map((entityId) => ({
+        id: entityId,
+        name: `${haStates[entityId]?.rawAttributes?.friendly_name ?? ''}`.trim() || entityId,
+      })),
+    [availableAlarmEntities, haStates],
   );
 
   const availableSensorEntities = useMemo(
@@ -944,6 +908,7 @@ export function SecurityDashboard({
   const supportsBiometric = biometricAvailable && biometricCredentialId.length > 0;
   const prefersBiometric = authMode === 'biometric' || authMode === 'auto';
   const pendingStateRequiresCode = pendingAlarmState ? isAlarmCodeRequiredForState(pendingAlarmState, activeAlarmAttributes) : false;
+  const pendingAuthRequiresCode = pendingStateRequiresCode || authMode === 'pin' || !supportsBiometric;
 
   const appendLog = (message, type = 'info') => {
     setLogs((curr) => [{ id: Date.now() + Math.round(Math.random() * 1000), time: toItalianClockTime(new Date()), message, type }, ...curr].slice(0, 10));
@@ -1184,7 +1149,7 @@ export function SecurityDashboard({
   const verifyWithPin = async () => {
     if (!pendingAlarmState) return;
 
-    if (pendingStateRequiresCode) {
+    if (pendingAuthRequiresCode) {
       const cleanedInput = sanitizeAlarmCode(authPinInput, alarmCodeFormat);
       if (cleanedInput.length === 0) {
         setAuthError(`Inserisci ${alarmCodeTypeLabel.toLowerCase()} di sicurezza.`);
@@ -1197,7 +1162,7 @@ export function SecurityDashboard({
       }
       setIsAuthBusy(true);
       try {
-        await applyAlarmState(pendingAlarmState, cleanedInput);
+        await applyAlarmState(pendingAlarmState, pendingStateRequiresCode ? cleanedInput : undefined);
       } finally {
         setIsAuthBusy(false);
       }
@@ -1345,7 +1310,7 @@ export function SecurityDashboard({
   return (
     <div className={cn('h-full w-full overflow-y-auto', isCameraDirectoryView ? 'p-0' : 'px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-6 lg:p-8')} style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}>
       {!isCameraDirectoryView ? (
-        <header className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+        <header className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.15rem]">Sicurezza</h1>
@@ -1385,7 +1350,7 @@ export function SecurityDashboard({
                 disabled={isAlarmTransitioning}
               />
             ) : (
-              <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+              <section className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Config</p>
@@ -1397,13 +1362,14 @@ export function SecurityDashboard({
                 <div className="mt-5 space-y-4">
                   <label className="block">
                     <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">Entita allarme</span>
-                    <select value={selectedAlarmEntityId} onChange={(event) => setSelectedAlarmEntityId(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/15 bg-black/25 px-3 py-2.5 text-sm text-white outline-none focus:border-white/35">
-                      {availableAlarmEntities.length === 0 ? <option value="">Nessuna entita alarm_control_panel trovata</option> : null}
-                      {availableAlarmEntities.map((entityId) => {
-                        const label = `${haStates[entityId]?.rawAttributes?.friendly_name ?? ''}`.trim() || entityId;
-                        return <option key={entityId} value={entityId}>{label}</option>;
-                      })}
-                    </select>
+                    <GlassDropdown
+                      className="mt-2"
+                      options={alarmDropdownOptions}
+                      selected={alarmDropdownOptions.find((option) => option.id === selectedAlarmEntityId) ?? null}
+                      onChange={(option) => setSelectedAlarmEntityId(option.id)}
+                      placeholder="Nessuna entita alarm_control_panel trovata"
+                      disabled={alarmDropdownOptions.length === 0}
+                    />
                   </label>
 
                   <div>
@@ -1424,7 +1390,7 @@ export function SecurityDashboard({
                     <label className="block">
                       <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">{alarmCodeTypeLabel} sicurezza</span>
                       <div className="relative mt-2">
-                        <input type={isSecurityPinVisible ? 'text' : 'password'} value={securityPin} onChange={(event) => setSecurityPin(sanitizeAlarmCode(event.target.value, alarmCodeFormat))} className="w-full rounded-2xl border border-white/15 bg-black/25 px-3 py-2.5 pr-11 text-sm text-white outline-none focus:border-white/35" placeholder={isAlarmCodeNumeric ? 'Inserisci PIN allarme' : 'Inserisci codice allarme'} />
+                        <input type={isSecurityPinVisible ? 'text' : 'password'} value={securityPin} onChange={(event) => setSecurityPin(sanitizeAlarmCode(event.target.value, alarmCodeFormat))} className="liquid-glass-card w-full px-3 py-2.5 pr-11 text-sm text-white outline-none focus:border-white/35" placeholder={isAlarmCodeNumeric ? 'Inserisci PIN allarme' : 'Inserisci codice allarme'} />
                         <button type="button" onClick={() => setIsSecurityPinVisible((curr) => !curr)} className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center text-white/60 hover:text-white" aria-label={isSecurityPinVisible ? 'Nascondi codice' : 'Mostra codice'}>
                           {isSecurityPinVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -1474,7 +1440,7 @@ export function SecurityDashboard({
             />
 
             {UI_FLAGS.showEventFeed ? (
-              <section className="rounded-[26px] border border-white/10 bg-[rgba(25,25,25,0.3)] p-4 backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+              <section className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-light uppercase tracking-[0.28em] text-white/60">Eventi Recenti</p>
@@ -1529,7 +1495,7 @@ export function SecurityDashboard({
       <SecurityAuthModal
         isOpen={isAuthModalOpen}
         pendingAlarmState={pendingAlarmState}
-        pendingStateRequiresCode={pendingStateRequiresCode}
+        pendingStateRequiresCode={pendingAuthRequiresCode}
         authError={authError}
         isAuthBusy={isAuthBusy}
         supportsBiometric={supportsBiometric}

@@ -5,9 +5,11 @@ import { GridTestView } from './pages/GridTestView';
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/grid-test/*" element={<GridTestView />} />
-      <Route path="*" element={<EmbeddedDashboardExamplePage />} />
-    </Routes>
+    <div className="apple-bg-main min-h-screen">
+      <Routes>
+        <Route path="/grid-test/*" element={<GridTestView />} />
+        <Route path="*" element={<EmbeddedDashboardExamplePage />} />
+      </Routes>
+    </div>
   );
 }

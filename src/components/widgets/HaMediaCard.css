@@ -46,7 +46,7 @@
 }
 
 .ha-media-card--playing .ha-media-card__bg {
-  filter: blur(28px) saturate(1.22) brightness(0.76);
+  filter: blur(2px) saturate(1) brightness(0.9);
 }
 
 .ha-media-card--playing .ha-media-card__overlay {

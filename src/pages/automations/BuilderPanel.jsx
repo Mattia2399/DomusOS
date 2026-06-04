@@ -41,7 +41,7 @@ function SequenceTimerPill({ label, value, onChange, onClear }) {
         onChange={(eventInput) =>
           onChange(Math.max(0, Number.parseInt(eventInput.target.value || '0', 10) || 0))
         }
-        className="w-20 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-sm text-white focus:border-emerald-300/45 focus:outline-none"
+        className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-sm text-white focus:border-emerald-300/45 focus:outline-none"
       />
       <span className="text-xs text-white/60">s</span>
       <button
@@ -186,7 +186,7 @@ export function BuilderPanel({
                 type="time"
                 value={eventTime}
                 onChange={(eventInput) => onEventTimeChange(eventInput.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-base text-white focus:border-emerald-300/45 focus:outline-none"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base text-white focus:border-emerald-300/45 focus:outline-none"
               />
             </motion.div>
           ) : null}

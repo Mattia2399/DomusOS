@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  Fingerprint,
   KeyRound,
   Link2,
   MapPin,
@@ -15,6 +16,7 @@ import {
   RotateCcw,
   Route,
   Smartphone,
+  ShieldCheck,
   SunMedium,
   Plus,
   Upload,
@@ -24,10 +26,21 @@ import {
 import {
   DASHBOARD_WALLPAPER_PRESETS,
   type DashboardTheme,
+  type DashboardThemeMode,
   type DashboardWallpaperPreset,
   type SidebarQuickPath,
 } from '../../hooks/useProfileSettings';
+import GlassDropdown from '../ui/GlassDropdown';
 import type { HaConnectionStatus } from '../../hooks/useHaLiveConnection';
+import {
+  createStoredBiometricCredential,
+  isPlatformBiometricAvailable,
+  readSecurityAuthMode,
+  readSecurityBiometricCredentialId,
+  type SecurityAuthMode,
+  writeSecurityAuthMode,
+  writeSecurityBiometricCredentialId,
+} from '../../services/securityBiometric';
 import {
   applyDashboardUserDataPayload,
   buildDashboardUserDataPayload,
@@ -49,7 +62,9 @@ type ProfilePanelProps = {
   movementPoints?: ProfileMovementMapPoint[];
   movementUpdatedLabel?: string;
   theme: DashboardTheme;
+  themeMode: DashboardThemeMode;
   onThemeChange: (theme: DashboardTheme) => void;
+  onThemeModeChange: (themeMode: DashboardThemeMode) => void;
   wallpaper: DashboardWallpaperPreset;
   onWallpaperChange: (wallpaper: DashboardWallpaperPreset) => void;
   developerMode: boolean;
@@ -90,7 +105,14 @@ type ProfilePanelProps = {
   onRelinkCurrentDevice?: (userId: string, deviceId: string) => void;
 };
 
-export type ProfileSectionId = 'theme' | 'movements' | 'members' | 'ha' | 'config';
+const MEMBER_DASHBOARD_SOURCE_OPTIONS = [
+  { id: '', name: 'Seleziona modalita' },
+  { id: 'mirror', name: 'Sincronizza con Creatore (Specchio)' },
+  { id: 'clone', name: 'Dashboard Indipendente (Copia)' },
+  { id: 'empty', name: 'Dashboard Vuota' },
+];
+
+export type ProfileSectionId = 'theme' | 'movements' | 'members' | 'security' | 'ha' | 'config';
 
 export type ProfileMovementTimelineEntry = {
   id: string;
@@ -125,6 +147,7 @@ const PROFILE_SECTIONS: { id: ProfileSectionId; label: string; hint: string }[] 
   { id: 'theme', label: 'Tema e Sfondo', hint: 'Aspetto dashboard' },
   { id: 'movements', label: 'Spostamenti', hint: 'Timeline e mappa' },
   { id: 'members', label: 'Persone/Membri', hint: 'Utenti e ruoli' },
+  { id: 'security', label: 'Sicurezza', hint: 'Biometria globale' },
   { id: 'ha', label: 'Home Assistant', hint: 'Connessione live' },
   { id: 'config', label: 'Configurazione', hint: 'Backup e reset' },
 ];
@@ -351,7 +374,9 @@ export function ProfilePanel({
   movementPoints = [],
   movementUpdatedLabel,
   theme,
+  themeMode,
   onThemeChange,
+  onThemeModeChange,
   wallpaper,
   onWallpaperChange,
   developerMode,
@@ -400,9 +425,18 @@ export function ProfilePanel({
   const [haActionError, setHaActionError] = useState<string | null>(null);
   const [configActionError, setConfigActionError] = useState<string | null>(null);
   const [isConfigActionBusy, setIsConfigActionBusy] = useState(false);
+  const [securityAuthMode, setSecurityAuthMode] = useState<SecurityAuthMode>(() => readSecurityAuthMode());
+  const [securityBiometricCredentialId, setSecurityBiometricCredentialId] = useState(() =>
+    readSecurityBiometricCredentialId(),
+  );
+  const [isSecurityBiometricAvailable, setIsSecurityBiometricAvailable] = useState(false);
+  const [isSecurityBiometricBusy, setIsSecurityBiometricBusy] = useState(false);
+  const [securityActionFeedback, setSecurityActionFeedback] = useState<{
+    tone: 'idle' | 'success' | 'error';
+    text: string;
+  }>({ tone: 'idle', text: '' });
   const [profileAvatarSrc, setProfileAvatarSrc] = useState(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
-  const [isGuestAccessModalOpen, setIsGuestAccessModalOpen] = useState(false);
-  const [membersInspectorMode, setMembersInspectorMode] = useState<'members' | 'guest' | 'share'>('guest');
+  const [membersInspectorMode, setMembersInspectorMode] = useState<'overview' | 'members' | 'guest' | 'share'>('overview');
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [memberSourceSelectionById, setMemberSourceSelectionById] = useState<Record<string, string>>({});
   const [memberActionFeedback, setMemberActionFeedback] = useState<{
@@ -432,10 +466,10 @@ export function ProfilePanel({
       setHaActionError(null);
       setConfigActionError(null);
       setIsConfigActionBusy(false);
+      setSecurityActionFeedback({ tone: 'idle', text: '' });
       setActiveSection('theme');
       setIsCompactDetailOpen(false);
-      setIsGuestAccessModalOpen(false);
-      setMembersInspectorMode('guest');
+      setMembersInspectorMode('overview');
       setExpandedMemberId(null);
       setMemberSourceSelectionById({});
       setMemberActionFeedback({ tone: 'idle', text: '' });
@@ -447,12 +481,32 @@ export function ProfilePanel({
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       setActiveSection(initialSection);
+      setSecurityAuthMode(readSecurityAuthMode());
+      setSecurityBiometricCredentialId(readSecurityBiometricCredentialId());
       if (initialSection === 'members') {
-        setMembersInspectorMode('members');
+        setMembersInspectorMode('overview');
       }
     }
     wasOpenRef.current = isOpen;
   }, [initialSection, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    const checkBiometricAvailability = async () => {
+      const available = await isPlatformBiometricAvailable();
+      if (!cancelled) {
+        setIsSecurityBiometricAvailable(available);
+      }
+    };
+    void checkBiometricAvailability();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     setProfileAvatarSrc(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
@@ -477,7 +531,6 @@ export function ProfilePanel({
   useEffect(() => {
     if (!isCompactViewport) {
       setIsCompactDetailOpen(false);
-      setIsGuestAccessModalOpen(false);
     }
   }, [isCompactViewport]);
 
@@ -540,8 +593,26 @@ export function ProfilePanel({
   const showMenuOnCompact = isCompactViewport && !isCompactDetailOpen;
   const showDetailOnCompact = isCompactViewport && isCompactDetailOpen;
   const isCompactFullScreenPage = isCompactViewport;
-  const compactPageHeaderTitle = showDetailOnCompact ? activeSectionMeta.label : 'Profilo';
-  const compactPageHeaderSubtitle = showDetailOnCompact ? 'Impostazioni' : 'Impostazioni account';
+  const membersSubpageTitle =
+    membersInspectorMode === 'members'
+      ? 'Membri casa'
+      : membersInspectorMode === 'guest'
+        ? 'Accessi ospiti'
+        : membersInspectorMode === 'share'
+          ? 'Condivisione'
+          : '';
+  const compactPageHeaderTitle =
+    showDetailOnCompact && activeSection === 'members' && membersSubpageTitle
+      ? membersSubpageTitle
+      : showDetailOnCompact
+        ? activeSectionMeta.label
+        : 'Profilo';
+  const compactPageHeaderSubtitle =
+    showDetailOnCompact && activeSection === 'members' && membersSubpageTitle
+      ? 'Membri'
+      : showDetailOnCompact
+        ? 'Impostazioni'
+        : 'Impostazioni account';
   const compactDisplayName = userAvatarAlt?.trim() || 'Utente';
   const compactDisplayEmail = userEmail?.trim() || 'Email non disponibile';
   const compactDisplayRole = userRoleLabel?.trim() || 'Utente';
@@ -807,16 +878,6 @@ export function ProfilePanel({
     setGuestAccessCopyState('idle');
   };
 
-  const handleOpenGuestAccessModal = () => {
-    refreshGuestAccessQr();
-    setIsGuestAccessModalOpen(true);
-  };
-
-  const handleCloseGuestAccessModal = () => {
-    setIsGuestAccessModalOpen(false);
-    setGuestAccessCopyState('idle');
-  };
-
   const handleCopyGuestAccessUrl = async () => {
     if (!guestAccessUrl) {
       setGuestAccessCopyState('error');
@@ -835,25 +896,16 @@ export function ProfilePanel({
 
   const handleGuestAccessPrimaryAction = () => {
     setMembersInspectorMode('guest');
-    if (isCompactViewport) {
-      handleOpenGuestAccessModal();
-      return;
-    }
     refreshGuestAccessQr();
   };
 
   const handleMembersPrimaryAction = () => {
     setMembersInspectorMode('members');
-    if (isCompactViewport) {
-      setIsGuestAccessModalOpen(true);
-    }
   };
 
   const handleShareDashboardPrimaryAction = () => {
     setMembersInspectorMode('share');
-    if (isCompactViewport) {
-      setIsGuestAccessModalOpen(true);
-    }
+    setDashboardShareFeedback({ tone: 'idle', text: '' });
   };
 
   const handleSelectMemberSource = (member: ProfileHouseMember, sourceMode: string) => {
@@ -1143,6 +1195,9 @@ export function ProfilePanel({
   };
 
   const handleSectionSelect = (sectionId: ProfileSectionId) => {
+    if (sectionId !== 'members') {
+      setMembersInspectorMode('overview');
+    }
     setActiveSection(sectionId);
     if (isCompactViewport) {
       setIsCompactDetailOpen(true);
@@ -1197,6 +1252,66 @@ export function ProfilePanel({
     }
   };
 
+  const handleSecurityAuthModeChange = (mode: SecurityAuthMode) => {
+    setSecurityAuthMode(mode);
+    writeSecurityAuthMode(mode);
+    setSecurityActionFeedback({
+      tone: 'success',
+      text:
+        mode === 'biometric'
+          ? 'Biometria impostata come metodo preferito.'
+          : mode === 'pin'
+            ? 'Biometria disattivata per le conferme globali.'
+            : 'Modalita automatica aggiornata.',
+    });
+  };
+
+  const handleConfigureSecurityBiometric = async () => {
+    if (!isSecurityBiometricAvailable) {
+      setSecurityActionFeedback({
+        tone: 'error',
+        text: 'Biometria non disponibile su questo browser o dispositivo.',
+      });
+      return;
+    }
+
+    setIsSecurityBiometricBusy(true);
+    setSecurityActionFeedback({ tone: 'idle', text: '' });
+    try {
+      const credentialId = await createStoredBiometricCredential();
+      if (!credentialId) {
+        setSecurityActionFeedback({
+          tone: 'error',
+          text: 'Configurazione biometrica annullata o non riuscita.',
+        });
+        return;
+      }
+      writeSecurityBiometricCredentialId(credentialId);
+      writeSecurityAuthMode('biometric');
+      setSecurityBiometricCredentialId(credentialId);
+      setSecurityAuthMode('biometric');
+      setSecurityActionFeedback({
+        tone: 'success',
+        text: 'Biometria configurata. Ora e disponibile per le conferme di sicurezza.',
+      });
+    } finally {
+      setIsSecurityBiometricBusy(false);
+    }
+  };
+
+  const handleRemoveSecurityBiometric = () => {
+    writeSecurityBiometricCredentialId('');
+    if (securityAuthMode === 'biometric') {
+      writeSecurityAuthMode('auto');
+      setSecurityAuthMode('auto');
+    }
+    setSecurityBiometricCredentialId('');
+    setSecurityActionFeedback({
+      tone: 'success',
+      text: 'Biometria rimossa da questo dispositivo.',
+    });
+  };
+
   const isLightTheme = theme === 'light';
   const panelShellClass =
     'border-[color:var(--profile-sheet-border)] bg-[var(--profile-sheet-bg)] text-[color:var(--profile-sheet-text)] shadow-[0_34px_100px_var(--profile-sheet-shadow)]';
@@ -1214,8 +1329,7 @@ export function ProfilePanel({
     'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)] text-[color:var(--profile-sheet-text)] hover:bg-[color:var(--profile-sheet-surface-strong)] hover:shadow-[0_10px_24px_var(--profile-sheet-shadow-soft)]';
   const menuHintActiveClass = 'text-[color:rgb(var(--profile-sheet-accent-rgb)/0.96)]';
   const menuHintInactiveClass = 'text-[color:var(--profile-sheet-muted)]';
-  const sectionSurfaceClass =
-    'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_20px_46px_var(--profile-sheet-shadow)]';
+  const sectionSurfaceClass = '';
   const sectionEyebrowClass = 'text-[color:var(--profile-sheet-muted)]';
   const subduedTextClass = 'text-[color:var(--profile-sheet-muted)]';
   const subtleTextClass = 'text-[color:var(--profile-sheet-muted)]';
@@ -1235,7 +1349,7 @@ export function ProfilePanel({
     ? 'border-rose-300/90 bg-[linear-gradient(140deg,rgba(254,205,211,0.92)_0%,rgba(255,228,230,0.9)_100%)] text-rose-900 shadow-[0_10px_22px_rgba(225,29,72,0.18)] hover:brightness-105'
     : 'border-rose-300/50 bg-[linear-gradient(140deg,rgba(225,29,72,0.3)_0%,rgba(251,113,133,0.22)_100%)] text-rose-100 shadow-[0_12px_24px_rgba(190,24,93,0.3)] hover:brightness-110';
   const infoCardClass =
-    'rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)] p-3 text-xs text-[color:var(--profile-sheet-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]';
+    'rounded-2xl px-0 py-2 text-xs text-[color:var(--profile-sheet-muted)]';
   const errorTextClass = isLightTheme ? 'text-xs text-rose-700' : 'text-xs text-rose-200';
   const statusBadgeClass =
     haStatus === 'connected'
@@ -1250,17 +1364,79 @@ export function ProfilePanel({
           ? 'border-slate-300/85 bg-slate-100/86 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.1)]'
           : 'border-white/18 bg-white/[0.08] text-white/70 shadow-[0_10px_22px_rgba(2,6,23,0.32)]';
   const buttonMotionClass =
-    'transition-all duration-200 hover:-translate-y-px active:translate-y-0 disabled:hover:translate-y-0';
+    'btn-premium transition-all duration-200 hover:-translate-y-px active:translate-y-0 disabled:hover:translate-y-0';
   const touchMotionClass = 'transition-all duration-200 active:scale-[0.99]';
+  const sectionShellClass = `p-1 sm:p-2 ${sectionSurfaceClass}`;
+  const flatEntryClass = 'rounded-2xl px-0 py-0';
+  const flatEntryPaddedClass = 'rounded-2xl px-1 py-2 sm:px-0';
+  const compactTwoColumnGridClass = 'grid grid-cols-2 gap-2 sm:gap-3';
+  const compactThreeColumnGridClass = 'grid grid-cols-3 gap-2 sm:gap-3';
+  const compactActionButtonClass =
+    'min-h-[2.75rem] rounded-xl border px-2.5 py-2.5 text-xs font-semibold sm:min-h-0 sm:px-4 sm:py-3 sm:text-sm';
+  const compactPillButtonClass =
+    'rounded-xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm';
   const compactMenuIconClass =
     'flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-muted)]';
+  const settingsGroupClass = isLightTheme
+    ? 'overflow-hidden rounded-[1.45rem] bg-white/46 backdrop-blur-2xl'
+    : 'overflow-hidden rounded-[1.45rem] bg-white/[0.085] backdrop-blur-2xl';
+  const settingsRowClass =
+    'flex min-h-[3.45rem] w-full items-center gap-3 px-3.5 py-3 text-left sm:px-4';
+  const settingsDividerClass = isLightTheme ? 'border-t border-slate-200/45' : 'border-t border-white/10';
+  const settingsIconClass = isLightTheme
+    ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/55 text-slate-600'
+    : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/74';
+  const settingsTitleClass = 'text-sm font-medium text-[color:var(--profile-sheet-title)]';
+  const settingsSubtitleClass = 'mt-0.5 text-[11px] leading-snug text-[color:var(--profile-sheet-muted)]';
   const handleCompactPageBack = () => {
+    if (activeSection === 'members' && membersInspectorMode !== 'overview') {
+      setMembersInspectorMode('overview');
+      return;
+    }
     if (showDetailOnCompact) {
       setIsCompactDetailOpen(false);
       return;
     }
     onClose();
   };
+  const renderAppleSwitch = ({
+    checked,
+    onChange,
+    disabled = false,
+    label,
+  }: {
+    checked: boolean;
+    onChange: (nextChecked: boolean) => void;
+    disabled?: boolean;
+    label: string;
+  }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/60 disabled:cursor-not-allowed disabled:opacity-45 ${
+        checked
+          ? 'bg-lime-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]'
+          : isLightTheme
+            ? 'bg-slate-300'
+            : 'bg-white/18'
+      }`}
+    >
+      <span
+        className={`absolute left-[3px] h-[1.625rem] w-[1.625rem] rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-transform duration-200 ${
+          checked ? 'translate-x-[1.25rem]' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+  const renderSettingsIcon = (Icon: React.ComponentType<{ size?: number; className?: string }>) => (
+    <span className={settingsIconClass}>
+      <Icon size={16} />
+    </span>
+  );
   const renderGuestAccessPanel = ({
     withCloseButton,
     qrSize,
@@ -1268,27 +1444,24 @@ export function ProfilePanel({
     withCloseButton: boolean;
     qrSize: number;
   }) => (
-    <div className={`rounded-[1.6rem] border p-4 ${menuSurfaceClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Accessi Ospiti</p>
+    <div className="p-0">
+      {withCloseButton ? (
+        <div className="flex items-start justify-between gap-3">
           <h4 className="mt-1 text-base font-semibold text-[color:var(--profile-sheet-title)]">
-            Accessi Temporanei (Ospiti)
+            Accessi temporanei
           </h4>
-        </div>
-        {withCloseButton ? (
           <button
             type="button"
-            onClick={handleCloseGuestAccessModal}
+            onClick={() => setMembersInspectorMode('overview')}
             className={`flex h-9 w-9 items-center justify-center rounded-full ${touchMotionClass} ${closeButtonClass}`}
-            aria-label="Chiudi modale ospiti"
+            aria-label="Torna a Membri"
           >
             <X size={15} />
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <div className={`mt-4 grid grid-cols-1 gap-2 ${withCloseButton ? 'sm:grid-cols-3' : ''}`}>
+      <div className={`mt-4 ${withCloseButton ? compactThreeColumnGridClass : 'grid grid-cols-1 gap-2'}`}>
         {GUEST_ACCESS_LAYOUT_PRESETS.map((layout) => {
           const isSelected = selectedGuestLayout.id === layout.id;
           return (
@@ -1299,7 +1472,7 @@ export function ProfilePanel({
                 setSelectedGuestLayoutId(layout.id);
                 refreshGuestAccessQr();
               }}
-              className={`rounded-2xl border px-3 py-3 text-left ${buttonMotionClass} ${
+              className={`rounded-2xl border px-2.5 py-3 text-left ${buttonMotionClass} ${
                 isSelected ? menuActiveClass : menuInactiveClass
               }`}
             >
@@ -1312,7 +1485,7 @@ export function ProfilePanel({
         })}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)] p-3">
+      <div className={`mt-4 ${flatEntryPaddedClass}`}>
         <label className="block">
           <span className={`text-xs uppercase tracking-[0.16em] ${subduedTextClass}`}>Scadenza accesso</span>
           <input
@@ -1334,11 +1507,11 @@ export function ProfilePanel({
 
       <div className="mt-5 flex justify-center">
         {guestAccessUrl ? (
-          <div className="rounded-[1.6rem] bg-white p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)]">
+          <div className="rounded-[1.6rem] bg-white p-4">
             <QRCodeSVG value={guestAccessUrl} size={qrSize} includeMargin level="M" />
           </div>
         ) : (
-          <div className={`rounded-2xl border px-4 py-5 text-center text-xs ${subduedTextClass}`}>
+          <div className={`rounded-2xl px-4 py-5 text-center text-xs ${subduedTextClass}`}>
             URL ospite non disponibile.
           </div>
         )}
@@ -1353,11 +1526,11 @@ export function ProfilePanel({
         <span className="font-semibold text-[color:var(--profile-sheet-title)]">{guestAccessExpiresLabel}</span>
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+      <div className={`mt-3 ${compactTwoColumnGridClass}`}>
         <button
           type="button"
           onClick={refreshGuestAccessQr}
-          className={`rounded-xl border px-4 py-2 text-sm font-semibold ${buttonMotionClass} ${lightNeutralButtonClass}`}
+          className={`${compactPillButtonClass} ${buttonMotionClass} ${lightNeutralButtonClass}`}
         >
           Rigenera QR
         </button>
@@ -1365,7 +1538,7 @@ export function ProfilePanel({
           type="button"
           onClick={handleCopyGuestAccessUrl}
           disabled={isGuestAccessExpiryInvalid}
-          className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55 ${buttonMotionClass} ${accentBlueButtonClass}`}
+          className={`${compactPillButtonClass} disabled:cursor-not-allowed disabled:opacity-55 ${buttonMotionClass} ${accentBlueButtonClass}`}
         >
           Copia Link
         </button>
@@ -1382,8 +1555,7 @@ export function ProfilePanel({
     </div>
   );
   const renderMembersAccessPanel = () => (
-    <div className={`rounded-[1.6rem] border p-4 ${menuSurfaceClass}`}>
-      <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Members</p>
+    <div className="p-0">
       <h4 className="mt-1 text-base font-semibold text-[color:var(--profile-sheet-title)]">
         Utenti e Ruoli
       </h4>
@@ -1408,14 +1580,7 @@ export function ProfilePanel({
             );
 
             return (
-              <div
-                key={member.id}
-                className={`overflow-hidden rounded-2xl border ${
-                  member.isCurrent
-                    ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.16)]'
-                    : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)]'
-                }`}
-              >
+              <div key={member.id} className="overflow-hidden rounded-2xl">
                 <button
                   type="button"
                   onClick={() => {
@@ -1450,7 +1615,7 @@ export function ProfilePanel({
                       {member.isCurrent ? 'Account corrente' : 'Utente registrato'}
                     </p>
                   </div>
-                  <span className="rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--profile-sheet-title)]">
+                  <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--profile-sheet-title)]">
                     {member.roleLabel?.trim() || 'Membro'}
                   </span>
                   {canConfigureMember ? (
@@ -1472,22 +1637,21 @@ export function ProfilePanel({
                       transition={{ duration: 0.22, ease: 'easeOut' }}
                       className="overflow-hidden"
                     >
-                      <div className="border-t border-[color:var(--profile-sheet-border)] px-3 pb-3 pt-3">
+                      <div className="px-3 pb-3 pt-2">
                         <label className="block">
                           <span className={`text-[11px] uppercase tracking-[0.14em] ${subduedTextClass}`}>
                             Sorgente Dashboard
                           </span>
-                          <select
-                            value={sourceSelection}
+                          <GlassDropdown
+                            className="mt-2"
+                            options={MEMBER_DASHBOARD_SOURCE_OPTIONS}
+                            selected={
+                              MEMBER_DASHBOARD_SOURCE_OPTIONS.find((option) => option.id === sourceSelection) ??
+                              MEMBER_DASHBOARD_SOURCE_OPTIONS[0]
+                            }
                             disabled={!onMirrorLayout || !onCloneLayout || !onCreateEmptyLayout}
-                            onChange={(event) => handleSelectMemberSource(member, event.target.value)}
-                            className="mt-2 w-full rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] px-3 py-2 text-sm text-[color:var(--profile-sheet-title)] outline-none focus:border-[color:rgb(var(--profile-sheet-accent-rgb)/0.62)] focus:ring-2 focus:ring-[rgb(var(--profile-sheet-accent-rgb)/0.26)]"
-                          >
-                            <option value="">Seleziona modalita</option>
-                            <option value="mirror">Sincronizza con Creatore (Specchio)</option>
-                            <option value="clone">Dashboard Indipendente (Copia)</option>
-                            <option value="empty">Dashboard Vuota</option>
-                          </select>
+                            onChange={(option) => handleSelectMemberSource(member, option.id)}
+                          />
                         </label>
 
                         <p className={`mt-2 text-[11px] ${menuTitleClass}`}>
@@ -1501,38 +1665,33 @@ export function ProfilePanel({
                         </p>
 
                         {!layoutState.isMirror ? (
-                          <label className="mt-3 flex items-center justify-between rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-3 py-2.5">
+                          <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2.5">
                             <span className="text-sm font-medium text-[color:var(--profile-sheet-title)]">
                               Consenti Modifiche
                             </span>
-                            <input
-                              type="checkbox"
-                              checked={layoutState.allowEdits}
-                              disabled={!onSetUserEditPermission}
-                              onChange={(event) =>
-                                handleToggleMemberEditPermission(member, event.target.checked)
-                              }
-                              className={`h-4 w-4 rounded text-blue-500 focus:ring-blue-400/60 ${
-                                isLightTheme ? 'border-slate-300 bg-white' : 'border-white/20 bg-white/10'
-                              }`}
-                            />
-                          </label>
+                            {renderAppleSwitch({
+                              checked: layoutState.allowEdits,
+                              disabled: !onSetUserEditPermission,
+                              label: `Consenti modifiche ${member.name}`,
+                              onChange: (nextChecked) => handleToggleMemberEditPermission(member, nextChecked),
+                            })}
+                          </div>
                         ) : (
                           <p className={`mt-3 text-[11px] ${subduedTextClass}`}>
                             Modalita specchio attiva: layout in sola lettura sincronizzata.
                           </p>
                         )}
 
-                        <div className="mt-3 rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-3 py-2.5">
+                        <div className="mt-3 rounded-xl px-3 py-2.5">
                           <p className="text-sm font-medium text-[color:var(--profile-sheet-title)]">
                             Pagine Visibili
                           </p>
                           {normalizedAvailableSidebarPaths.length > 0 ? (
                             <div className="mt-2 space-y-2">
                               {normalizedAvailableSidebarPaths.map((pathEntry) => (
-                                <label
+                                <div
                                   key={`${member.id}-${pathEntry.id}`}
-                                  className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] px-2.5 py-1.5"
+                                  className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5"
                                 >
                                   <div className="min-w-0">
                                     <p className="truncate text-sm text-[color:var(--profile-sheet-title)]">
@@ -1542,22 +1701,14 @@ export function ProfilePanel({
                                       {pathEntry.path}
                                     </p>
                                   </div>
-                                  <input
-                                    type="checkbox"
-                                    checked={memberAllowedSidebarPathIds.has(pathEntry.id)}
-                                    disabled={!onSetUserVisibleSidebarPaths}
-                                    onChange={(event) =>
-                                      handleToggleMemberSidebarPathVisibility(
-                                        member,
-                                        pathEntry.id,
-                                        event.target.checked,
-                                      )
-                                    }
-                                    className={`h-4 w-4 rounded text-blue-500 focus:ring-blue-400/60 ${
-                                      isLightTheme ? 'border-slate-300 bg-white' : 'border-white/20 bg-white/10'
-                                    }`}
-                                  />
-                                </label>
+                                  {renderAppleSwitch({
+                                    checked: memberAllowedSidebarPathIds.has(pathEntry.id),
+                                    disabled: !onSetUserVisibleSidebarPaths,
+                                    label: `Mostra ${pathEntry.label} per ${member.name}`,
+                                    onChange: (nextChecked) =>
+                                      handleToggleMemberSidebarPathVisibility(member, pathEntry.id, nextChecked),
+                                  })}
+                                </div>
                               ))}
                             </div>
                           ) : (
@@ -1575,7 +1726,7 @@ export function ProfilePanel({
           })}
         </div>
       ) : (
-        <div className={`mt-4 rounded-2xl border px-4 py-5 text-center text-xs ${subduedTextClass}`}>
+        <div className={`mt-4 rounded-2xl px-4 py-5 text-center text-xs ${subduedTextClass}`}>
           Nessun utente disponibile.
         </div>
       )}
@@ -1587,25 +1738,22 @@ export function ProfilePanel({
     </div>
   );
   const renderDashboardSharePanel = ({ withCloseButton }: { withCloseButton: boolean }) => (
-    <div className={`rounded-[1.6rem] border p-4 ${menuSurfaceClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Condividi Dashboard</p>
+    <div className="p-0">
+      {withCloseButton ? (
+        <div className="flex items-start justify-between gap-3">
           <h4 className="mt-1 text-base font-semibold text-[color:var(--profile-sheet-title)]">
-            Configurazione Totale
+            Condivisione dashboard
           </h4>
-        </div>
-        {withCloseButton ? (
           <button
             type="button"
-            onClick={handleCloseGuestAccessModal}
+            onClick={() => setMembersInspectorMode('overview')}
             className={`flex h-9 w-9 items-center justify-center rounded-full ${touchMotionClass} ${closeButtonClass}`}
-            aria-label="Chiudi condivisione dashboard"
+            aria-label="Torna a Membri"
           >
             <X size={15} />
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <p className={`mt-2 text-xs ${subduedTextClass}`}>
         Metodo consigliato: esporta un file JSON e importalo sugli altri dispositivi.
@@ -1614,18 +1762,18 @@ export function ProfilePanel({
         Ruolo corrente: <span className="font-semibold text-[color:var(--profile-sheet-title)]">{currentDashboardShareRoleLabel}</span>
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className={`mt-4 ${compactTwoColumnGridClass}`}>
         <button
           type="button"
           onClick={handleDownloadDashboardShareToken}
-          className={`rounded-xl border px-4 py-3 text-sm font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
+          className={`${compactActionButtonClass} ${buttonMotionClass} ${accentBlueButtonClass}`}
         >
           Scarica JSON
         </button>
         <button
           type="button"
           onClick={handleOpenDashboardShareImportFile}
-          className={`rounded-xl border px-4 py-3 text-sm font-semibold ${buttonMotionClass} ${lightNeutralButtonClass}`}
+          className={`${compactActionButtonClass} ${buttonMotionClass} ${lightNeutralButtonClass}`}
         >
           Importa da JSON
         </button>
@@ -1638,7 +1786,7 @@ export function ProfilePanel({
         />
       </div>
 
-      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-[11px] ${menuTitleClass}`}>
+      <div className={`mt-3 rounded-xl px-3 py-2.5 text-[11px] ${menuTitleClass}`}>
         Importa da JSON applica automaticamente la configurazione e ricarica la dashboard.
       </div>
 
@@ -1785,9 +1933,11 @@ export function ProfilePanel({
                       ? Route
                       : section.id === 'members'
                         ? Users
-                      : section.id === 'ha'
-                        ? Link2
-                        : RotateCcw;
+                        : section.id === 'security'
+                          ? ShieldCheck
+                          : section.id === 'ha'
+                            ? Link2
+                            : RotateCcw;
                 return (
                   <button
                     key={section.id}
@@ -1820,41 +1970,59 @@ export function ProfilePanel({
           </aside>
 
           <div
-            className={`min-h-0 overflow-y-auto pr-1 sm:pr-2 ${
+            className={`min-h-0 overflow-y-auto pr-0 sm:pr-2 ${
               showDetailOnCompact ? 'block' : 'hidden md:block'
             }`}
           >
             {activeSection === 'theme' ? (
-              <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
-                <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Tema</p>
-                <h3 className="mt-2 text-lg font-semibold">Aspetto Home Premium</h3>
+              <section className={sectionShellClass}>
+                <h3 className="text-lg font-semibold">Colori</h3>
 
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => onThemeChange('dark')}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium ${buttonMotionClass} ${
-                      theme === 'dark' ? accentBlueButtonClass : menuInactiveClass
-                    }`}
-                  >
-                    <Moon size={16} />
-                    Dark
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onThemeChange('light')}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium ${buttonMotionClass} ${
-                      theme === 'light' ? accentBlueButtonClass : menuInactiveClass
-                    }`}
-                  >
-                    <SunMedium size={16} />
-                    Light
-                  </button>
+                <div className={`mt-5 ${settingsGroupClass}`}>
+                  <div className="px-3.5 py-3 sm:px-4">
+                    <div className="flex items-center gap-3">
+                      {renderSettingsIcon(SunMedium)}
+                    <div className="min-w-0 flex-1">
+                        <p className={settingsTitleClass}>Modalita</p>
+                        <p className={settingsSubtitleClass}>Scegli come applicare il tema della dashboard.</p>
+                    </div>
+                    </div>
+                    <div
+                      className={`mt-3 grid grid-cols-3 rounded-full p-1 ${
+                        isLightTheme ? 'bg-white/50' : 'bg-white/10'
+                      }`}
+                    >
+                      {[
+                        { id: 'auto' as const, label: 'Auto' },
+                        { id: 'light' as const, label: 'Light' },
+                        { id: 'dark' as const, label: 'Dark' },
+                      ].map((option) => {
+                        const isSelected = themeMode === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => onThemeModeChange(option.id)}
+                            className={`rounded-full px-3 py-2 text-xs font-semibold transition-all ${
+                              isSelected
+                                ? isLightTheme
+                                  ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.12)]'
+                                  : 'bg-white/88 text-slate-950 shadow-[0_6px_18px_rgba(0,0,0,0.25)]'
+                                : 'text-[color:var(--profile-sheet-muted)]'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-6">
-                  <p className={`text-xs uppercase tracking-[0.16em] ${sectionEyebrowClass}`}>Sfondi Blur</p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                    <div className="px-3.5 pt-3 sm:px-4">
+                      <p className={settingsTitleClass}>Sfondo</p>
+                    </div>
                     {DASHBOARD_WALLPAPER_PRESETS.map((preset) => {
                       const isSelected = wallpaper === preset.id;
                       return (
@@ -1862,32 +2030,35 @@ export function ProfilePanel({
                           key={preset.id}
                           type="button"
                           onClick={() => onWallpaperChange(preset.id)}
-                          className={`rounded-2xl border p-2 text-left ${buttonMotionClass} ${
-                            isSelected
-                              ? isLightTheme
-                                ? 'border-blue-300 bg-blue-100 shadow-[0_0_0_1px_rgba(59,130,246,0.22)]'
-                                : 'border-blue-300/45 bg-blue-500/16 shadow-[0_0_0_1px_rgba(147,197,253,0.28)]'
-                              : menuInactiveClass
-                          }`}
+                          className={`${settingsRowClass} ${buttonMotionClass}`}
                         >
                           <div
-                            className={`relative h-20 overflow-hidden rounded-xl border ${
-                              isLightTheme ? 'border-slate-300/70' : 'border-white/10'
+                            className={`relative h-8 w-8 shrink-0 overflow-hidden rounded-lg ${
+                              isLightTheme ? 'bg-slate-100' : 'bg-white/8'
                             }`}
                           >
                             <div
                               className={`profile-wallpaper-thumb absolute inset-[-16%] ${WALLPAPER_PREVIEW_CLASS_BY_ID[preset.id]}`}
                             />
-                            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,10,16,0.16)_0%,rgba(8,10,16,0.44)_100%)]" />
                           </div>
-                          <p className={`mt-2 text-sm font-semibold ${isLightTheme ? 'text-slate-800' : 'text-white/90'}`}>
-                            {preset.label}
-                          </p>
-                          <p className={`text-xs ${subduedTextClass}`}>{preset.description}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className={settingsTitleClass}>{preset.label}</p>
+                            <p className={settingsSubtitleClass}>{preset.description}</p>
+                          </div>
+                          <span
+                            className={`text-sm font-semibold ${
+                              isSelected
+                                ? isLightTheme
+                                  ? 'text-blue-600'
+                                  : 'text-blue-300'
+                                : subtleTextClass
+                            }`}
+                          >
+                            {isSelected ? 'Attivo' : ''}
+                          </span>
                         </button>
                       );
                     })}
-                  </div>
                 </div>
 
                 <p className={`mt-5 text-xs ${subduedTextClass}`}>
@@ -1897,36 +2068,44 @@ export function ProfilePanel({
             ) : null}
 
             {activeSection === 'movements' ? (
-              <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
-                <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Spostamenti</p>
-                <h3 className="mt-2 text-lg font-semibold">Timeline e Mappa Utente</h3>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className={`rounded-2xl border px-4 py-3 ${menuSurfaceClass}`}>
-                    <p className={`text-[11px] uppercase tracking-[0.18em] ${menuTitleClass}`}>Dispositivi utente</p>
-                    <div className="mt-2 flex items-end gap-2">
-                      <Smartphone size={16} className={subtleTextClass} />
-                      <p className="text-2xl font-semibold leading-none text-[color:var(--profile-sheet-title)]">
-                        {movementDeviceCount}
-                      </p>
+              <section className={sectionShellClass}>
+                <h3 className="text-lg font-semibold">Riepilogo</h3>
+
+                <div className={`mt-5 ${settingsGroupClass}`}>
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(Smartphone)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Dispositivi utente</p>
+                      <p className={settingsSubtitleClass}>Tracker posizione collegati.</p>
                     </div>
+                    <span className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">
+                      {movementDeviceCount}
+                    </span>
                   </div>
-                  <div className={`rounded-2xl border px-4 py-3 ${menuSurfaceClass}`}>
-                    <p className={`text-[11px] uppercase tracking-[0.18em] ${menuTitleClass}`}>Ultimo aggiornamento</p>
-                    <p className="mt-2 text-sm font-medium text-[color:var(--profile-sheet-title)]">
+                  <div className={settingsDividerClass} />
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(Route)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Ultimo aggiornamento</p>
+                    </div>
+                    <span className="max-w-[45%] truncate text-right text-xs font-medium text-[color:var(--profile-sheet-muted)]">
                       {movementUpdatedLabel?.trim() || 'In attesa dati'}
-                    </p>
+                    </span>
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-                  <div className={`rounded-2xl border p-3 ${menuSurfaceClass}`}>
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">Mappa spostamenti</p>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${menuInactiveClass}`}>
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                  <div className="px-3.5 py-3 sm:px-4">
+                    <div className="flex items-center gap-3">
+                      {renderSettingsIcon(MapPin)}
+                      <div className="min-w-0 flex-1">
+                        <p className={settingsTitleClass}>Mappa spostamenti</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${menuTitleClass}`}>
                         {movementMapPoints.length} tappe
                       </span>
                     </div>
-                    <div className="relative h-44 overflow-hidden rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)] sm:h-52">
+                    <div className="relative mt-3 h-44 overflow-hidden rounded-2xl sm:h-52">
                       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(255,255,255,0.16),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0)_100%)]" />
                       <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(to_right,rgba(255,255,255,0.22)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.22)_1px,transparent_1px)] [background-size:28px_28px]" />
                       {movementMapPlotPoints.length > 0 ? (
@@ -1973,19 +2152,17 @@ export function ProfilePanel({
                       )}
                     </div>
                   </div>
+                </div>
 
-                  <div className={`rounded-2xl border p-3 ${menuSurfaceClass}`}>
-                    <p className="mb-2 text-sm font-semibold text-[color:var(--profile-sheet-title)]">Timeline spostamenti</p>
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                  <div className="px-3.5 py-3 sm:px-4">
+                    <p className={settingsTitleClass}>Timeline</p>
                     {movementTimelineEntries.length > 0 ? (
-                      <div className="max-h-56 space-y-2 overflow-y-auto pr-1 sm:max-h-[20rem]">
+                      <div className="mt-2 max-h-56 overflow-y-auto sm:max-h-[20rem]">
                         {movementTimelineEntries.map((entry) => (
                           <div
                             key={entry.id}
-                            className={`rounded-xl border px-3 py-2 ${
-                              entry.isCurrent
-                                ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.18)]'
-                                : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)]'
-                            }`}
+                            className="py-2"
                           >
                             <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">{entry.title}</p>
                             {entry.subtitle ? <p className={`mt-0.5 text-xs ${subduedTextClass}`}>{entry.subtitle}</p> : null}
@@ -1994,7 +2171,7 @@ export function ProfilePanel({
                         ))}
                       </div>
                     ) : (
-                      <div className={`rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-soft)] px-3 py-6 text-center text-xs ${subduedTextClass}`}>
+                      <div className={`rounded-xl px-3 py-6 text-center text-xs ${subduedTextClass}`}>
                         Nessun evento di spostamento disponibile per questo utente.
                       </div>
                     )}
@@ -2010,187 +2187,312 @@ export function ProfilePanel({
             ) : null}
 
             {activeSection === 'members' ? (
-              <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
-                <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Persone</p>
-                <h3 className="mt-2 text-lg font-semibold">Membri casa connessa</h3>
-                <p className={`mt-3 text-xs ${subduedTextClass}`}>
-                  Persone attualmente registrate in Home Assistant.
-                </p>
+              <section className={sectionShellClass}>
+                {membersInspectorMode === 'overview' ? (
+                  <>
+                    <h3 className="text-lg font-semibold">Membri</h3>
+                    <p className={`mt-3 text-xs ${subduedTextClass}`}>
+                      Persone attualmente registrate in Home Assistant.
+                    </p>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] md:items-start">
-                  <div className="space-y-4">
-                    <button
-                      type="button"
-                      onClick={handleMembersPrimaryAction}
-                      className={`w-full rounded-[1.6rem] border px-4 py-3.5 ${
-                        membersInspectorMode === 'members'
-                          ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.3)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.2)_100%)]'
-                          : isLightTheme
-                            ? 'border-slate-300/80 bg-slate-200/70'
-                            : 'border-white/14 bg-white/[0.09]'
-                      } text-left ${buttonMotionClass}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-base font-semibold text-[color:var(--profile-sheet-title)]">Members</p>
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/10 text-[color:var(--profile-sheet-title)]">
-                          <Plus size={15} />
-                        </span>
-                      </div>
-
-                      {visibleHouseMembers.length > 0 ? (
-                        <div className="mt-4 flex items-center">
-                          {visibleHouseMembers.map((member, index) => (
-                            <div
-                              key={member.id}
-                              className={`relative ${index === 0 ? '' : '-ml-2'}`}
-                              title={member.name}
-                            >
-                              {member.avatarUrl ? (
-                                <img
-                                  src={member.avatarUrl}
-                                  alt={`Membro ${member.name}`}
-                                  className="h-9 w-9 rounded-full border-2 border-white/80 object-cover"
-                                />
-                              ) : (
-                                <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-slate-300 text-[11px] font-semibold text-slate-700">
-                                  {member.name
-                                    .split(/\s+/)
-                                    .filter(Boolean)
-                                    .slice(0, 2)
-                                    .map((part) => part.charAt(0).toUpperCase())
-                                    .join('') || '?'}
-                                </span>
-                              )}
-                              {member.isCurrent ? (
-                                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white/90 bg-emerald-400" />
-                              ) : null}
-                            </div>
-                          ))}
-                          {hiddenHouseMembersCount > 0 ? (
-                            <span className="-ml-2 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/70 text-[11px] font-semibold text-slate-700">
-                              +{hiddenHouseMembersCount}
-                            </span>
-                          ) : null}
+                    <div className={`mt-5 ${settingsGroupClass}`}>
+                      <button
+                        type="button"
+                        onClick={handleMembersPrimaryAction}
+                        className={`${settingsRowClass} ${buttonMotionClass}`}
+                      >
+                        {renderSettingsIcon(Users)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Membri</p>
+                          <p className={settingsSubtitleClass}>
+                            {visibleHouseMembers.length > 0
+                              ? `${visibleHouseMembers.length} persone disponibili`
+                              : 'Nessun membro disponibile'}
+                          </p>
                         </div>
-                      ) : (
-                        <p className="mt-4 text-xs text-[color:var(--profile-sheet-muted)]">
-                          Nessun membro disponibile.
-                        </p>
-                      )}
-                    </button>
-
-                    <div
-                      className={`rounded-[1.6rem] border p-4 ${menuSurfaceClass} ${
-                        membersInspectorMode === 'guest'
-                          ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]'
-                          : ''
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">
-                        Accessi Temporanei (Ospiti)
-                      </p>
-                      <p className={`mt-1 text-xs ${subduedTextClass}`}>
-                        Crea un QR istantaneo per condividere un layout dedicato agli ospiti.
-                      </p>
+                        {visibleHouseMembers.length > 0 ? (
+                          <div className="hidden items-center sm:flex">
+                            {visibleHouseMembers.map((member, index) => (
+                              <div
+                                key={member.id}
+                                className={`relative ${index === 0 ? '' : '-ml-2'}`}
+                                title={member.name}
+                              >
+                                {member.avatarUrl ? (
+                                  <img
+                                    src={member.avatarUrl}
+                                    alt={`Membro ${member.name}`}
+                                    className="h-8 w-8 rounded-full border-2 border-white/80 object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/80 bg-slate-300 text-[10px] font-semibold text-slate-700">
+                                    {member.name
+                                      .split(/\s+/)
+                                      .filter(Boolean)
+                                      .slice(0, 2)
+                                      .map((part) => part.charAt(0).toUpperCase())
+                                      .join('') || '?'}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <ChevronRight size={16} className={subtleTextClass} />
+                      </button>
+                      <div className={settingsDividerClass} />
                       <button
                         type="button"
                         onClick={handleGuestAccessPrimaryAction}
-                        className={`mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-base font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
+                        className={`${settingsRowClass} ${buttonMotionClass}`}
                       >
-                        <QrCode size={20} />
-                        {isCompactViewport ? 'Genera QR Ospiti' : 'Aggiorna QR Ospiti'}
+                        {renderSettingsIcon(QrCode)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Accessi ospiti</p>
+                          <p className={settingsSubtitleClass}>Genera QR o link temporaneo.</p>
+                        </div>
+                        <ChevronRight size={16} className={subtleTextClass} />
                       </button>
-                    </div>
-
-                    <div
-                      className={`rounded-[1.6rem] border p-4 ${menuSurfaceClass} ${
-                        membersInspectorMode === 'share'
-                          ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]'
-                          : ''
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">
-                        Condividi Dashboard
-                      </p>
-                      <p className={`mt-1 text-xs ${subduedTextClass}`}>
-                        Esporta/importa la configurazione completa tramite file JSON.
-                      </p>
+                      <div className={settingsDividerClass} />
                       <button
                         type="button"
                         onClick={handleShareDashboardPrimaryAction}
-                        className={`mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-base font-semibold ${buttonMotionClass} ${accentBlueButtonClass}`}
+                        className={`${settingsRowClass} ${buttonMotionClass}`}
                       >
-                        <Users size={20} />
-                        Apri Condivisione
+                        {renderSettingsIcon(Upload)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Condividi dashboard</p>
+                          <p className={settingsSubtitleClass}>Esporta o importa JSON.</p>
+                        </div>
+                        <ChevronRight size={16} className={subtleTextClass} />
                       </button>
                     </div>
-                  </div>
-
-                  <div className="hidden md:block md:sticky md:top-0">
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMembersInspectorMode('overview')}
+                      className={`mb-4 inline-flex items-center gap-2 text-sm font-semibold ${buttonMotionClass} ${clearButtonClass}`}
+                    >
+                      <ChevronLeft size={16} />
+                      Membri
+                    </button>
+                    <h3 className="text-lg font-semibold">
+                      {membersInspectorMode === 'members'
+                        ? 'Membri casa'
+                        : membersInspectorMode === 'share'
+                          ? 'Condivisione dashboard'
+                          : 'Accessi ospiti'}
+                    </h3>
                     {membersInspectorMode === 'members'
                       ? renderMembersAccessPanel()
                       : membersInspectorMode === 'share'
                         ? renderDashboardSharePanel({ withCloseButton: false })
-                        : renderGuestAccessPanel({ withCloseButton: false, qrSize: 280 })}
+                        : renderGuestAccessPanel({ withCloseButton: false, qrSize: isCompactViewport ? 230 : 280 })}
+                  </>
+                )}
+              </section>
+            ) : null}
+
+            {activeSection === 'security' ? (
+              <section className={sectionShellClass}>
+                <h3 className="text-lg font-semibold">Autenticazione</h3>
+                <p className={`mt-3 text-xs ${subduedTextClass}`}>
+                  Configura qui Face ID, impronta o autenticazione di sistema. La stessa credenziale potra essere
+                  riutilizzata da lock card e future azioni sensibili.
+                </p>
+
+                <div className={`mt-5 ${settingsGroupClass}`}>
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(Fingerprint)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Biometria dispositivo</p>
+                      <p className={settingsSubtitleClass}>
+                        {isSecurityBiometricAvailable ? 'Disponibile' : 'Non disponibile'}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold ${
+                        isSecurityBiometricAvailable
+                          ? isLightTheme
+                            ? 'text-emerald-700'
+                            : 'text-emerald-200'
+                          : subtleTextClass
+                      }`}
+                    >
+                      {isSecurityBiometricAvailable ? 'On' : 'Off'}
+                    </span>
+                  </div>
+                  <div className={settingsDividerClass} />
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(ShieldCheck)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Credenziale globale</p>
+                      <p className={settingsSubtitleClass}>Salvata localmente su questo dispositivo.</p>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold ${
+                        securityBiometricCredentialId
+                          ? isLightTheme
+                            ? 'text-emerald-700'
+                            : 'text-emerald-200'
+                          : subtleTextClass
+                      }`}
+                    >
+                      {securityBiometricCredentialId ? 'Attiva' : 'Off'}
+                    </span>
                   </div>
                 </div>
+
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                  {[
+                    { id: 'auto' as const, label: 'Automatico', hint: 'Usa la migliore opzione' },
+                    { id: 'biometric' as const, label: 'Biometria', hint: 'Face ID o impronta' },
+                    { id: 'pin' as const, label: 'Manuale', hint: 'Nessuna biometria' },
+                  ].map((option, index) => (
+                    <React.Fragment key={option.id}>
+                      {index > 0 ? <div className={settingsDividerClass} /> : null}
+                      <button
+                        type="button"
+                        onClick={() => handleSecurityAuthModeChange(option.id)}
+                        className={`${settingsRowClass} ${buttonMotionClass}`}
+                      >
+                        {renderSettingsIcon(option.id === 'biometric' ? Fingerprint : option.id === 'pin' ? KeyRound : ShieldCheck)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>{option.label}</p>
+                          <p className={settingsSubtitleClass}>{option.hint}</p>
+                        </div>
+                        <span
+                          className={`text-sm font-semibold ${
+                            securityAuthMode === option.id
+                              ? isLightTheme
+                                ? 'text-blue-600'
+                                : 'text-blue-300'
+                              : subtleTextClass
+                          }`}
+                        >
+                          {securityAuthMode === option.id ? '✓' : ''}
+                        </span>
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                  <button
+                    type="button"
+                    onClick={() => void handleConfigureSecurityBiometric()}
+                    disabled={isSecurityBiometricBusy || !isSecurityBiometricAvailable}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                  >
+                    {renderSettingsIcon(Fingerprint)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>
+                        {isSecurityBiometricBusy
+                          ? 'Configurazione...'
+                          : securityBiometricCredentialId
+                            ? 'Rigenera biometria'
+                            : 'Configura biometria'}
+                      </p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
+                  </button>
+                  {securityBiometricCredentialId ? (
+                    <>
+                      <div className={settingsDividerClass} />
+                      <button
+                        type="button"
+                        onClick={handleRemoveSecurityBiometric}
+                        disabled={isSecurityBiometricBusy}
+                        className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                      >
+                        {renderSettingsIcon(RotateCcw)}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-rose-500">Rimuovi biometria</p>
+                        </div>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+
+                {!isSecurityBiometricAvailable ? (
+                  <div className={`mt-4 ${infoCardClass}`}>
+                    Se sei in sviluppo locale, usa localhost o HTTPS. Su browser non compatibili il riconoscimento
+                    biometrico non puo essere avviato.
+                  </div>
+                ) : null}
+
+                {securityActionFeedback.text ? (
+                  <p
+                    className={`mt-3 text-xs ${
+                      securityActionFeedback.tone === 'error'
+                        ? isLightTheme
+                          ? 'text-rose-700'
+                          : 'text-rose-200'
+                        : isLightTheme
+                          ? 'text-emerald-700'
+                          : 'text-emerald-200'
+                    }`}
+                  >
+                    {securityActionFeedback.text}
+                  </p>
+                ) : null}
               </section>
             ) : null}
 
             {activeSection === 'ha' ? (
-              <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
-                <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Home Assistant</p>
-                <h3 className="mt-2 text-lg font-semibold">Connessione HA Live</h3>
-                <div className="mt-4 space-y-4">
-                  <label className="block">
-                    <span className={`text-xs uppercase tracking-[0.16em] ${subduedTextClass}`}>URL</span>
-                    <div className="relative mt-2">
+              <section className={sectionShellClass}>
+                <h3 className="text-lg font-semibold">Connessione</h3>
+                <div className={`mt-5 ${settingsGroupClass}`}>
+                  <label className={settingsRowClass}>
+                    {renderSettingsIcon(Link2)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>URL</p>
                       <input
                         value={haUrl}
                         onChange={(event) => onUrlChange(event.target.value)}
                         placeholder="http://homeassistant.local:8123"
                         disabled={isManagedByParent}
-                        className={inputClass}
+                        className="mt-1 w-full bg-transparent text-sm text-[color:var(--profile-sheet-muted)] outline-none placeholder:text-[color:var(--profile-sheet-muted)]/70"
                       />
-                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${inputIconClass}`}>
-                        <Link2 size={16} />
-                      </span>
                     </div>
                   </label>
-                  <label className="block">
-                    <span className={`text-xs uppercase tracking-[0.16em] ${subduedTextClass}`}>Token</span>
-                    <div className="relative mt-2">
+                  <div className={settingsDividerClass} />
+                  <label className={settingsRowClass}>
+                    {renderSettingsIcon(KeyRound)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Token</p>
                       <input
                         type={showToken ? 'text' : 'password'}
                         value={haToken}
                         onChange={(event) => onTokenChange(event.target.value)}
                         placeholder="Incolla il token di Home Assistant"
                         disabled={isManagedByParent}
-                        className={inputClass}
+                        className="mt-1 w-full bg-transparent text-sm text-[color:var(--profile-sheet-muted)] outline-none placeholder:text-[color:var(--profile-sheet-muted)]/70"
                       />
+                    </div>
                       <button
                         type="button"
                         onClick={() => setShowToken((prev) => !prev)}
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 ${touchMotionClass} ${iconButtonClass}`}
+                      className={`${touchMotionClass} ${iconButtonClass}`}
                         aria-label={showToken ? 'Nascondi token' : 'Mostra token'}
                       >
                         {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
-                    </div>
                   </label>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className={`inline-flex items-center gap-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-white/60'}`}>
-                      <input
-                        type="checkbox"
-                        checked={haRememberToken}
-                        onChange={(event) => onRememberTokenChange(event.target.checked)}
-                        disabled={isManagedByParent}
-                        className={`h-4 w-4 rounded text-blue-500 focus:ring-blue-400/60 ${
-                          isLightTheme ? 'border-slate-300 bg-white' : 'border-white/20 bg-white/10'
-                        }`}
-                      />
-                      Ricorda token
-                    </label>
+                  <div className={settingsDividerClass} />
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(Eye)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Ricorda token</p>
+                    </div>
+                    {renderAppleSwitch({
+                      checked: haRememberToken,
+                      onChange: onRememberTokenChange,
+                      disabled: isManagedByParent,
+                      label: 'Ricorda token',
+                    })}
                     <button
                       type="button"
                       onClick={() => {
@@ -2198,147 +2500,158 @@ export function ProfilePanel({
                         onRememberTokenChange(false);
                       }}
                       disabled={isManagedByParent}
-                      className={`text-xs uppercase tracking-[0.18em] ${buttonMotionClass} ${clearButtonClass}`}
+                      className={`text-xs font-semibold ${buttonMotionClass} ${clearButtonClass}`}
                     >
                       Clear
                     </button>
                   </div>
+                </div>
+
+                <div className={`mt-4 ${settingsGroupClass}`}>
                   {isManagedByParent ? (
-                    <div className={infoCardClass}>
+                    <div className={settingsRowClass}>
+                      {renderSettingsIcon(Link2)}
+                      <p className={`text-xs ${subduedTextClass}`}>
                       Connessione live gestita automaticamente dal pannello Home Assistant (iframe).
+                      </p>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap items-center gap-3">
+                    <>
                       <button
                         type="button"
                         onClick={handleStartOAuth}
                         disabled={isOAuthBusy || !canStartOAuth}
-                        className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${accentEmeraldButtonClass}`}
+                        className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                       >
-                        <KeyRound size={16} />
-                        {isOAuthBusy ? 'OAuth...' : 'Accedi con OAuth'}
+                        {renderSettingsIcon(KeyRound)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>{isOAuthBusy ? 'OAuth...' : 'Accedi con OAuth'}</p>
+                        </div>
+                        <ChevronRight size={16} className={subtleTextClass} />
                       </button>
+                      <div className={settingsDividerClass} />
                       {isConnected ? (
                         <button
                           type="button"
                           onClick={onDisconnect}
-                          className={`rounded-xl border px-4 py-2 text-sm font-semibold ${buttonMotionClass} ${accentRoseButtonClass}`}
+                          className={`${settingsRowClass} ${buttonMotionClass}`}
                         >
-                          Disconnetti
+                          {renderSettingsIcon(RotateCcw)}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-rose-500">Disconnetti</p>
+                          </div>
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={onConnect}
                           disabled={isConnecting || !canConnect}
-                          className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${accentBlueButtonClass}`}
+                          className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                         >
-                          {isConnecting ? 'Connessione...' : 'Connetti'}
+                          {renderSettingsIcon(Link2)}
+                          <div className="min-w-0 flex-1">
+                            <p className={settingsTitleClass}>{isConnecting ? 'Connessione...' : 'Connetti'}</p>
+                          </div>
+                          <ChevronRight size={16} className={subtleTextClass} />
                         </button>
                       )}
-                      <span
-                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeClass}`}
-                      >
-                        HA {haStatus}
-                      </span>
-                    </div>
-                  )}
-                  {isManagedByParent ? (
-                    <span
-                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeClass}`}
-                    >
-                      HA {haStatus}
-                    </span>
-                  ) : null}
-                  {haErrorMessage ? <p className={errorTextClass}>{haErrorMessage}</p> : null}
-                  {isManagedByParent ? null : (
-                    <p className={`text-xs ${subtleTextClass}`}>
-                      OAuth e il metodo consigliato: evita token long-lived copiati manualmente.
-                    </p>
-                  )}
-                  {isManagedByParent ? null : haRememberToken ? (
-                    <div className={infoCardClass}>
-                      Il token viene salvato in localStorage. Usa Clear se non vuoi conservarlo.
-                    </div>
-                  ) : (
-                    <p className={`text-xs ${subtleTextClass}`}>
-                      Il token non viene salvato. Dovrai reinserirlo al prossimo accesso.
-                    </p>
+                    </>
                   )}
                 </div>
+                <p className={`mt-3 text-xs ${subtleTextClass}`}>
+                  Stato HA: {haStatus}. OAuth e il metodo consigliato per evitare token long-lived copiati manualmente.
+                </p>
+                {haErrorMessage ? <p className={`mt-2 ${errorTextClass}`}>{haErrorMessage}</p> : null}
               </section>
             ) : null}
 
             {activeSection === 'config' ? (
-              <section className={`rounded-[2rem] border p-5 sm:p-6 ${sectionSurfaceClass}`}>
-                <p className={`text-xs uppercase tracking-[0.18em] ${sectionEyebrowClass}`}>Configurazione</p>
-                <h3 className="mt-2 text-lg font-semibold">Backup, Ripristino e Reset</h3>
+              <section className={sectionShellClass}>
+                <h3 className="text-lg font-semibold">Backup e dati</h3>
                 <p className={`mt-3 text-xs ${subduedTextClass}`}>
                   Esporta la configurazione corrente in JSON, ripristinala da file o azzera tutto. Dopo
                   ripristino/reset la pagina viene ricaricata.
                 </p>
                 {enterpriseControlsEnabled ? (
                   <>
-                    <div
-                      className={`mt-4 rounded-2xl border px-4 py-3 ${
-                        isLightTheme ? 'border-slate-300/80 bg-slate-100/70' : 'border-white/10 bg-white/[0.04]'
-                      }`}
-                    >
-                      <p className={`text-[11px] ${menuTitleClass}`}>
-                        ID Dispositivo:{' '}
-                        <span className="font-semibold text-[color:var(--profile-sheet-title)]">
+                    <div className={`mt-5 ${settingsGroupClass}`}>
+                      <div className={settingsRowClass}>
+                        {renderSettingsIcon(Smartphone)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>ID dispositivo</p>
+                        </div>
+                        <span className="max-w-[48%] truncate text-right text-xs font-medium text-[color:var(--profile-sheet-muted)]">
                           {normalizedDashboardDeviceId || 'non disponibile'}
                         </span>
-                      </p>
-                      <p className={`mt-1 text-[11px] ${menuTitleClass}`}>
-                        Storage Config:{' '}
-                        <span className="font-semibold text-[color:var(--profile-sheet-title)]">
+                      </div>
+                      <div className={settingsDividerClass} />
+                      <div className={settingsRowClass}>
+                        {renderSettingsIcon(Download)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Storage config</p>
+                        </div>
+                        <span className="max-w-[48%] truncate text-right text-xs font-medium text-[color:var(--profile-sheet-muted)]">
                           {dashboardConfigSyncMode === 'shared'
                             ? 'Condiviso HA'
                             : dashboardConfigSyncMode === 'user_data'
                               ? 'Per-account (fallback)'
                               : 'Rilevamento...'}
                         </span>
-                      </p>
+                      </div>
                       {dashboardCurrentLayoutId ? (
-                        <p className={`mt-1 text-[11px] ${menuTitleClass}`}>
-                          Layout corrente:{' '}
-                          <span className="font-semibold text-[color:var(--profile-sheet-title)]">
+                        <>
+                          <div className={settingsDividerClass} />
+                          <div className={settingsRowClass}>
+                            {renderSettingsIcon(Route)}
+                            <div className="min-w-0 flex-1">
+                              <p className={settingsTitleClass}>Layout corrente</p>
+                            </div>
+                            <span className="max-w-[48%] truncate text-right text-xs font-medium text-[color:var(--profile-sheet-muted)]">
                             {dashboardCurrentLayoutId}
-                          </span>{' '}
-                          {dashboardCurrentLayoutSource ? `(${dashboardCurrentLayoutSource})` : ''}
-                        </p>
+                              {dashboardCurrentLayoutSource ? ` (${dashboardCurrentLayoutSource})` : ''}
+                            </span>
+                          </div>
+                        </>
                       ) : null}
                     </div>
-                    <div className={`mt-4 rounded-2xl border px-4 py-4 ${menuSurfaceClass}`}>
-                      <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">Gestione Schermo</p>
-                      <p className={`mt-1 text-xs ${subduedTextClass}`}>
-                        Scegli se questo display usa il layout condiviso oppure un layout dedicato locale.
-                      </p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={handleRelinkCurrentDeviceLayout}
-                          disabled={!canManageCurrentDeviceLayout || isConfigActionBusy}
-                          className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${
-                            !isCurrentDeviceDetached ? accentBlueButtonClass : lightNeutralButtonClass
-                          }`}
-                        >
-                          Usa Layout Principale (Responsivo)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleUnlinkCurrentDeviceLayout}
-                          disabled={!canManageCurrentDeviceLayout || isConfigActionBusy}
-                          className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${
-                            isCurrentDeviceDetached ? accentBlueButtonClass : lightNeutralButtonClass
-                          }`}
-                        >
-                          Sgancia Dispositivo (Layout Dedicato)
-                        </button>
-                      </div>
+                    <div className={`mt-4 ${settingsGroupClass}`}>
+                      <button
+                        type="button"
+                        onClick={handleRelinkCurrentDeviceLayout}
+                        disabled={!canManageCurrentDeviceLayout || isConfigActionBusy}
+                        className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                      >
+                        {renderSettingsIcon(Route)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Usa layout principale</p>
+                          <p className={settingsSubtitleClass}>Responsivo e condiviso.</p>
+                        </div>
+                        {!isCurrentDeviceDetached ? (
+                          <span className={isLightTheme ? 'text-sm font-semibold text-blue-600' : 'text-sm font-semibold text-blue-300'}>✓</span>
+                        ) : (
+                          <ChevronRight size={16} className={subtleTextClass} />
+                        )}
+                      </button>
+                      <div className={settingsDividerClass} />
+                      <button
+                        type="button"
+                        onClick={handleUnlinkCurrentDeviceLayout}
+                        disabled={!canManageCurrentDeviceLayout || isConfigActionBusy}
+                        className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                      >
+                        {renderSettingsIcon(Smartphone)}
+                        <div className="min-w-0 flex-1">
+                          <p className={settingsTitleClass}>Layout dedicato</p>
+                          <p className={settingsSubtitleClass}>Specifico per questo dispositivo.</p>
+                        </div>
+                        {isCurrentDeviceDetached ? (
+                          <span className={isLightTheme ? 'text-sm font-semibold text-blue-600' : 'text-sm font-semibold text-blue-300'}>✓</span>
+                        ) : (
+                          <ChevronRight size={16} className={subtleTextClass} />
+                        )}
+                      </button>
                       {dashboardCurrentUserIsMirror ? (
-                        <p className={`mt-2 text-[11px] ${subduedTextClass}`}>
+                        <p className={`px-3.5 pb-3 text-[11px] ${subduedTextClass}`}>
                           Layout corrente in modalita specchio: sola lettura sincronizzata.
                         </p>
                       ) : null}
@@ -2350,55 +2663,58 @@ export function ProfilePanel({
                     </div>
                   </>
                 ) : null}
-                <div
-                  className={`mt-5 rounded-2xl border px-4 py-3 ${
-                    isLightTheme ? 'border-slate-300/80 bg-slate-100/70' : 'border-white/10 bg-white/[0.04]'
-                  }`}
-                >
-                  <label
-                    className={`inline-flex items-center gap-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-white/70'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={developerMode}
-                      onChange={(event) => onDeveloperModeChange(event.target.checked)}
-                      className={`h-4 w-4 rounded text-blue-500 focus:ring-blue-400/60 ${
-                        isLightTheme ? 'border-slate-300 bg-white' : 'border-white/20 bg-white/10'
-                      }`}
-                    />
-                    Modalita sviluppatore
-                  </label>
-                  <p className={`mt-2 text-xs ${subtleTextClass}`}>
-                    Mostra nel canvas debug colonne e righe.
-                  </p>
+                <div className={`mt-4 ${settingsGroupClass}`}>
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(KeyRound)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Modalita sviluppatore</p>
+                      <p className={settingsSubtitleClass}>Mostra debug colonne e righe.</p>
+                    </div>
+                    {renderAppleSwitch({
+                      checked: developerMode,
+                      onChange: onDeveloperModeChange,
+                      label: 'Modalita sviluppatore',
+                    })}
+                  </div>
                 </div>
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className={`mt-4 ${settingsGroupClass}`}>
                   <button
                     type="button"
                     onClick={handleDownloadBackup}
                     disabled={isConfigActionBusy}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${lightNeutralButtonClass}`}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                   >
-                    <Download size={16} />
-                    Scarica Backup
+                    {renderSettingsIcon(Download)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Scarica backup</p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
                   </button>
+                  <div className={settingsDividerClass} />
                   <button
                     type="button"
                     onClick={() => restoreInputRef.current?.click()}
                     disabled={isConfigActionBusy}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${accentBlueButtonClass}`}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                   >
-                    <Upload size={16} />
-                    Ripristina da File
+                    {renderSettingsIcon(Upload)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Ripristina da file</p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
                   </button>
+                  <div className={settingsDividerClass} />
                   <button
                     type="button"
                     onClick={handleResetAll}
                     disabled={isConfigActionBusy}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass} ${accentRoseButtonClass}`}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                   >
-                    <RotateCcw size={16} />
-                    Reset Totale
+                    {renderSettingsIcon(RotateCcw)}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-rose-500">Reset totale</p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
                   </button>
                 </div>
                 <input
@@ -2416,30 +2732,6 @@ export function ProfilePanel({
           </div>
         </div>
 
-        {isCompactViewport && isGuestAccessModalOpen ? (
-          <div className="absolute inset-0 z-[8] flex items-center justify-center p-3 sm:p-6">
-            <button
-              type="button"
-              onClick={handleCloseGuestAccessModal}
-              className="absolute inset-0 bg-black/55 backdrop-blur-[5px]"
-              aria-label="Chiudi accessi ospiti"
-            />
-            <div
-              className={`relative w-full max-w-[560px] rounded-[2rem] border p-5 sm:p-6 ${
-                isLightTheme
-                  ? 'border-slate-300/95 bg-slate-100 text-slate-900 shadow-[0_35px_90px_rgba(15,23,42,0.28)]'
-                  : 'border-slate-700/95 bg-slate-900 text-slate-100 shadow-[0_35px_90px_rgba(2,6,23,0.82)]'
-              }`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {membersInspectorMode === 'members'
-                ? renderMembersAccessPanel()
-                : membersInspectorMode === 'share'
-                  ? renderDashboardSharePanel({ withCloseButton: true })
-                  : renderGuestAccessPanel({ withCloseButton: true, qrSize: 230 })}
-            </div>
-          </div>
-        ) : null}
         </div>
       </div>
     </div>

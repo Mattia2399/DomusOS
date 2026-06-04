@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   BarChart3,
   DoorOpen,
@@ -18,6 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import { ContextSidebar } from '../settings/ContextSidebar';
+import GlassDropdown, { type GlassDropdownOption } from '../ui/GlassDropdown';
+import { WidgetCardRenderer } from '../widgets/CardRenderer';
 import { MiniRing } from '../widgets/micro/MiniRing';
 import { MicroButton } from '../widgets/micro/MicroButton';
 import { MicroSuperChart } from '../widgets/micro/MicroSuperChart';
@@ -41,6 +44,7 @@ import type {
   WidgetKind,
   MicroWidget,
 } from '../../types/dashboardModels';
+import { ROOT_CANVAS_COLS } from '../../types/dashboardModels';
 import {
   SIDEBAR_PATH_ICON_KEYS,
   type SidebarQuickPath,
@@ -49,6 +53,13 @@ import {
 import type { DashboardTheme } from '../../hooks/useProfileSettings';
 import { getGreetingDefaults } from '../widgets/GreetingCard';
 import { getSceneIconNode, SCENE_ICON_OPTIONS, SCENES_CATALOG } from '../widgets/ScenesCard';
+import { GRID_ENGINE_COLS } from './DashboardGrid';
+import { resolveWidgetTypeLayoutSpan } from './dashboardBreakpointConfig';
+import type {
+  DashboardGridBreakpoint,
+  WidgetTypeBreakpointLayoutOverride,
+  WidgetTypeLayoutOverrides,
+} from '../../types/widgetTypeLayout';
 
 type ContextSidebarActions = {
   toggleLamp: () => void;
@@ -75,13 +86,13 @@ type ContextSidebarActions = {
   cycleSpeakerRepeatMode: () => void;
   selectSpeakerOutputDevice: (deviceId: string) => void;
   toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
-  disarmAlarm: (code?: string) => void;
-  armAlarmHome: (code?: string) => void;
-  armAlarmAway: (code?: string) => void;
-  armAlarmNight: (code?: string) => void;
-  armAlarmVacation: (code?: string) => void;
-  armAlarmCustomBypass: (code?: string) => void;
-  triggerAlarm: (code?: string) => void;
+  disarmAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
+  armAlarmHome: (code?: string) => boolean | void | Promise<boolean | void>;
+  armAlarmAway: (code?: string) => boolean | void | Promise<boolean | void>;
+  armAlarmNight: (code?: string) => boolean | void | Promise<boolean | void>;
+  armAlarmVacation: (code?: string) => boolean | void | Promise<boolean | void>;
+  armAlarmCustomBypass: (code?: string) => boolean | void | Promise<boolean | void>;
+  triggerAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
   startVacuum: () => void;
   pauseVacuum: () => void;
   stopVacuum: () => void;
@@ -92,7 +103,7 @@ type ContextSidebarActions = {
   setVacuumFanSpeed: (fanSpeed: string) => void;
   sendVacuumCommand: (command: string, params?: unknown) => void;
   lockDoor: (code?: string) => void;
-  unlockDoor: (code?: string) => void;
+  unlockDoor: (code?: string) => boolean | void;
   openDoor: (code?: string) => void;
   openCover: () => void;
   closeCover: () => void;
@@ -118,6 +129,25 @@ const SIDEBAR_PATH_ICON_MAP: Record<SidebarQuickPathIconKey, typeof LayoutGrid> 
   media: Music2,
 };
 
+const STACK_SECTION_MIN_COLUMNS = 2;
+const WEATHER_UNIT_OPTIONS: GlassDropdownOption[] = [
+  { id: 'C', name: '\u00B0C' },
+  { id: 'F', name: '\u00B0F' },
+];
+const WEATHER_LAYOUT_OPTIONS: GlassDropdownOption[] = [
+  { id: 'auto', name: 'Auto' },
+  { id: 'card', name: 'Card' },
+  { id: 'chip', name: 'Chip' },
+];
+const WEATHER_FORECAST_TYPE_OPTIONS: GlassDropdownOption[] = [
+  { id: 'daily', name: 'Giornaliero' },
+  { id: 'hourly', name: 'Orario' },
+];
+const SCENE_ACTION_TYPE_OPTIONS: GlassDropdownOption[] = [
+  { id: 'script', name: 'Script' },
+  { id: 'service', name: 'Servizio' },
+];
+
 const DEFAULT_ACTIVITY_LOG_HOURS = 24;
 const DEFAULT_ACTIVITY_LOG_ENTRIES = 6;
 const MIN_ACTIVITY_LOG_HOURS = 1;
@@ -132,6 +162,15 @@ const SCENE_ACTION_SERVICE_SUGGESTIONS = [
   'media_player.media_play_pause',
   'vacuum.start',
 ];
+const GRID_LAYOUT_PREVIEW_MAX_ROWS = 6;
+const GRID_BREAKPOINT_LABEL: Record<DashboardGridBreakpoint, string> = {
+  '2xl': '2XL',
+  xs: 'XS',
+  sm: 'SM',
+  md: 'MD',
+  lg: 'LG',
+  xl: 'XL',
+};
 
 function clampActivityLogHours(value: number) {
   return Math.max(MIN_ACTIVITY_LOG_HOURS, Math.min(MAX_ACTIVITY_LOG_HOURS, Math.round(value)));
@@ -139,6 +178,14 @@ function clampActivityLogHours(value: number) {
 
 function clampActivityLogEntries(value: number) {
   return Math.max(MIN_ACTIVITY_LOG_ENTRIES, Math.min(MAX_ACTIVITY_LOG_ENTRIES, Math.round(value)));
+}
+
+function findDropdownOption(options: GlassDropdownOption[], id: string | number) {
+  return options.find((option) => option.id === String(id)) ?? options[0] ?? null;
+}
+
+function clampGridSpan(value: number, max: number) {
+  return Math.max(1, Math.min(max, Math.round(value)));
 }
 
 const WEATHER_LAYOUT_PREVIEWS: Record<
@@ -307,7 +354,7 @@ function resolveWeatherSecondaryInfoOptions(weather: DashboardStateShape['weathe
 
 type RightSidebarManagerProps = {
   isEditMode: boolean;
-  isXs?: boolean;
+  isCompactViewport?: boolean;
   theme?: DashboardTheme;
   activeDevice: ActiveDevice | null;
   onCloseContextSidebar: () => void;
@@ -328,12 +375,15 @@ type RightSidebarManagerProps = {
     status?: string;
     codeArmRequired?: boolean;
     unlockCode?: string;
+    requireAuthToDisarm?: boolean;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
   };
@@ -367,10 +417,12 @@ type RightSidebarManagerProps = {
     status?: string;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
@@ -404,11 +456,18 @@ type RightSidebarManagerProps = {
   selectedSidebarPath: SidebarQuickPath | null;
   sidebarPaths?: SidebarQuickPath[];
   weatherConfig: DashboardSection | null;
+  activeGridBreakpoint: DashboardGridBreakpoint;
+  widgetTypeLayoutOverrides?: WidgetTypeLayoutOverrides;
   entityOptions: Record<WidgetKind, string[]>;
   haEntityIds?: string[];
   haConnected?: boolean;
   haStates?: MockEntityStateMap;
   onUpdateWidget: (id: string, updater: (widget: Widget) => Widget) => void;
+  onUpdateWidgetTypeLayoutOverride: (
+    kind: WidgetKind,
+    breakpoint: DashboardGridBreakpoint,
+    nextOverride: WidgetTypeBreakpointLayoutOverride | null,
+  ) => void;
   onUpdateSection: (id: string, updater: (section: DashboardSection) => DashboardSection) => void;
   onUpdateSidebarPath: (id: string, patch: Partial<Omit<SidebarQuickPath, 'id'>>) => void;
   onRemoveSelectedWidget: () => void;
@@ -690,7 +749,7 @@ function renderMicroWidgetPreview(widget: MicroWidget, state: MockEntityState | 
 
 export function RightSidebarManager({
   isEditMode,
-  isXs = false,
+  isCompactViewport = false,
   theme = 'dark',
   activeDevice,
   onCloseContextSidebar,
@@ -712,11 +771,14 @@ export function RightSidebarManager({
   selectedSidebarPath,
   sidebarPaths = [],
   weatherConfig,
+  activeGridBreakpoint,
+  widgetTypeLayoutOverrides = {},
   entityOptions,
   haEntityIds = [],
   haConnected = false,
   haStates = {},
   onUpdateWidget,
+  onUpdateWidgetTypeLayoutOverride,
   onUpdateSection,
   onUpdateSidebarPath,
   onRemoveSelectedWidget,
@@ -731,12 +793,21 @@ export function RightSidebarManager({
   const [microWidgetCatalogEntity, setMicroWidgetCatalogEntity] = React.useState('');
   const [microWidgetCatalogDomainFilter, setMicroWidgetCatalogDomainFilter] = React.useState('all');
   const [selectedMicroWidgetId, setSelectedMicroWidgetId] = React.useState<string | null>(null);
+  const [widgetConfigTab, setWidgetConfigTab] = React.useState<'layout' | 'settings'>('settings');
   const selectedWidgetMicroWidgets = selectedWidget?.widgets;
+  const hasEditSelection = Boolean(selectedWidget || selectedSection || selectedSidebarPath);
   const contextSheetStartYRef = React.useRef<number | null>(null);
   const contextSheetPointerIdRef = React.useRef<number | null>(null);
   const contextSheetDragOffsetRef = React.useRef(0);
   const CONTEXT_SHEET_CLOSE_THRESHOLD_PX = 88;
-  const shouldShowXsContextSheet = !isEditMode && isXs && Boolean(activeDevice);
+  const shouldShowCompactContextSheet = !isEditMode && isCompactViewport && Boolean(activeDevice);
+  const shouldShowCompactEditSheet = isEditMode && isCompactViewport && hasEditSelection;
+  const shouldShowAnyCompactSheet = shouldShowCompactContextSheet || shouldShowCompactEditSheet;
+  const isLightTheme = theme === 'light';
+
+  React.useEffect(() => {
+    setWidgetConfigTab('settings');
+  }, [selectedWidget?.id]);
 
   const resetContextSheetDrag = React.useCallback(() => {
     setIsContextSheetDragging(false);
@@ -785,10 +856,10 @@ export function RightSidebarManager({
     [onCloseContextSidebar, resetContextSheetDrag],
   );
   React.useEffect(() => {
-    if (!shouldShowXsContextSheet) {
+    if (!shouldShowAnyCompactSheet) {
       resetContextSheetDrag();
     }
-  }, [resetContextSheetDrag, shouldShowXsContextSheet]);
+  }, [resetContextSheetDrag, shouldShowAnyCompactSheet]);
   React.useEffect(() => {
     setIsMicroWidgetCatalogOpen(false);
   }, [isEditMode, selectedWidget?.id]);
@@ -812,90 +883,217 @@ export function RightSidebarManager({
     });
   }, [selectedWidgetMicroWidgets]);
 
-  if (!isEditMode) {
-    if (isXs) {
-      const contextIsOpen = Boolean(activeDevice);
-      return (
-        <>
-          {contextIsOpen ? (
-            <button
-              type="button"
-              onClick={onCloseContextSidebar}
-              className="fixed inset-0 z-[188] bg-black/60 backdrop-blur-3xl"
-              aria-label="Chiudi pannello contestuale"
-            />
-          ) : null}
+  const applyWidgetTypeLayoutSelection = React.useCallback(
+    (nextW: number, nextH: number) => {
+      if (!selectedWidget) {
+        return;
+      }
+      const layoutCols = Math.max(1, Math.round(GRID_ENGINE_COLS[activeGridBreakpoint] ?? 1));
+      const safeW = clampGridSpan(nextW, layoutCols);
+      const safeH = clampGridSpan(nextH, GRID_LAYOUT_PREVIEW_MAX_ROWS);
+      const runtimeH =
+        selectedWidget.kind === 'light' && selectedWidget.isOn && safeH <= 1
+          ? 2
+          : safeH;
 
-          <div
-            className={`fixed inset-x-0 bottom-0 z-[189] px-0.5 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] transition-all duration-220 ${
-              contextIsOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
-            }`}
-          >
-            <div
-              className="flex max-h-[84dvh] min-h-[16rem] w-full flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/[0.08] backdrop-blur-3xl shadow-[0_32px_90px_rgba(15,23,42,0.42)] transition-transform duration-220 ease-out"
-              style={
-                contextSheetDragOffset > 0
-                  ? { transform: `translateY(${contextSheetDragOffset}px)`, transitionDuration: '0ms' }
-                  : undefined
-              }
-            >
-              <div
-                className={`flex justify-center pt-2 pb-1 touch-none ${
-                  isContextSheetDragging ? 'cursor-grabbing' : 'cursor-grab'
-                }`}
-                onPointerDown={handleContextSheetDragStart}
-                onPointerMove={handleContextSheetDragMove}
-                onPointerUp={finishContextSheetDrag}
-                onPointerCancel={finishContextSheetDrag}
-              >
-                <span className="h-1 w-11 rounded-full bg-white/28" />
+      onUpdateWidget(selectedWidget.id, (widget) => ({
+        ...widget,
+        layout: {
+          ...widget.layout,
+          w: safeW,
+          h: runtimeH,
+        },
+      }));
+
+      if (selectedWidget.kind === 'light') {
+        onUpdateWidgetTypeLayoutOverride(selectedWidget.kind, activeGridBreakpoint, {
+          w: safeW,
+          hOn: safeH,
+          hOff: safeH,
+        });
+        return;
+      }
+      onUpdateWidgetTypeLayoutOverride(selectedWidget.kind, activeGridBreakpoint, {
+        w: safeW,
+        h: safeH,
+      });
+    },
+    [activeGridBreakpoint, onUpdateWidget, onUpdateWidgetTypeLayoutOverride, selectedWidget],
+  );
+
+  const resetWidgetTypeLayoutSelection = React.useCallback(() => {
+    if (!selectedWidget) {
+      return;
+    }
+    onUpdateWidgetTypeLayoutOverride(selectedWidget.kind, activeGridBreakpoint, null);
+  }, [activeGridBreakpoint, onUpdateWidgetTypeLayoutOverride, selectedWidget]);
+
+  const contextDeviceTitle = activeDevice?.name?.trim() || 'Dispositivo';
+  const contextDeviceSubtitle =
+    typeof activeDevice?.status === 'string' && activeDevice.status.trim().length > 0
+      ? activeDevice.status.trim()
+      : 'Controlli dispositivo';
+  const renderAppleSwitch = ({
+    checked,
+    onChange,
+    disabled = false,
+    label,
+  }: {
+    checked: boolean;
+    onChange: (nextChecked: boolean) => void;
+    disabled?: boolean;
+    label: string;
+  }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/60 disabled:cursor-not-allowed disabled:opacity-45 ${
+        checked
+          ? 'bg-lime-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]'
+          : isLightTheme
+            ? 'bg-slate-300'
+            : 'bg-white/18'
+      }`}
+    >
+      <span
+        className={`absolute left-[3px] h-[1.625rem] w-[1.625rem] rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-transform duration-200 ${
+          checked ? 'translate-x-[1.25rem]' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+  const contextSidebarPanel = (
+    <ContextSidebar
+      activeDevice={activeDevice}
+      isEditMode={isEditMode}
+      theme={theme}
+      onClose={onCloseContextSidebar}
+      showCloseButton={false}
+      externalScrollContainer
+      haStates={haStates}
+      microChartHistoryByEntity={microChartHistoryByEntity}
+      lamp={state.lamp}
+      climate={state.climate}
+      camera={camera}
+      speaker={state.speaker}
+      vacuum={vacuum}
+      vacuumAreas={vacuumAreas}
+      weather={state.weather}
+      alarm={alarm}
+      lock={lock}
+      cover={cover}
+      weatherConfig={
+        weatherConfig
+          ? {
+              unit: weatherConfig.weatherUnit,
+              forecastType: weatherConfig.weatherForecastType,
+              forecastDays: weatherConfig.weatherForecastDays,
+              forecastDensity: weatherConfig.weatherForecastDensity,
+              conditionOverride: weatherConfig.weatherCondition,
+              showPrecipitation: weatherConfig.weatherShowPrecipitation,
+              showWind: weatherConfig.weatherShowWind,
+            }
+          : undefined
+      }
+      actions={actions}
+      onToggleMicroWidget={onToggleMicroWidget}
+      onSetMicroSliderValue={onSetMicroSliderValue}
+      onNavigateMicroWidgetPage={onNavigateMicroWidgetPage}
+    />
+  );
+
+  if (!isEditMode) {
+    if (isCompactViewport) {
+      return (
+        <AnimatePresence>
+          {activeDevice ? (
+            <React.Fragment>
+              <motion.button
+                key="device-context-overlay"
+                type="button"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={onCloseContextSidebar}
+                className="fixed inset-0 z-[188] bg-black/60 backdrop-blur-sm transition-opacity"
+                aria-label="Chiudi pannello contestuale"
+              />
+
+              <div className="fixed inset-0 z-[189] pointer-events-none flex items-end">
+                <motion.section
+                  key="device-context-mobile"
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className="w-full"
+                >
+                  <div
+                    className="device-context-surface pointer-events-auto flex w-full max-h-[92dvh] flex-col overflow-hidden rounded-t-[2rem] border-l border-white/[0.08] bg-white/[0.02] shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl"
+                    style={
+                      contextSheetDragOffset > 0
+                        ? { transform: `translateY(${contextSheetDragOffset}px)`, transitionDuration: '0ms' }
+                        : undefined
+                    }
+                  >
+                    <div
+                      className={`touch-none ${isContextSheetDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                      onPointerDown={handleContextSheetDragStart}
+                      onPointerMove={handleContextSheetDragMove}
+                      onPointerUp={finishContextSheetDrag}
+                      onPointerCancel={finishContextSheetDrag}
+                    >
+                      <span className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-4 mb-2" />
+                    </div>
+
+                    <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-3 md:px-5 md:pt-5 md:pb-4">
+                      <div className="min-w-0">
+                        <h2 className="truncate text-white font-semibold tracking-tight text-xl">{contextDeviceTitle}</h2>
+                        <p className="mt-1 text-[#8E8E93] text-sm">{contextDeviceSubtitle}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onCloseContextSidebar}
+                        className="btn-premium w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 active:scale-95 transition-all"
+                        aria-label="Chiudi popup dispositivo"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)]">
+                      {contextSidebarPanel}
+                    </div>
+                  </div>
+                </motion.section>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-1 pb-1">
-                <ContextSidebar
-                  activeDevice={activeDevice}
-                  isEditMode={isEditMode}
-                  theme={theme}
-                  onClose={onCloseContextSidebar}
-                  showCloseButton={false}
-                  externalScrollContainer
-                  haStates={haStates}
-                  microChartHistoryByEntity={microChartHistoryByEntity}
-                  lamp={state.lamp}
-                  climate={state.climate}
-                  camera={camera}
-                  speaker={state.speaker}
-                  vacuum={vacuum}
-                  vacuumAreas={vacuumAreas}
-                  weather={state.weather}
-                  alarm={alarm}
-                  lock={lock}
-                  cover={cover}
-                  weatherConfig={
-                    weatherConfig
-                      ? {
-                          unit: weatherConfig.weatherUnit,
-                          forecastType: weatherConfig.weatherForecastType,
-                          forecastDays: weatherConfig.weatherForecastDays,
-                          forecastDensity: weatherConfig.weatherForecastDensity,
-                          conditionOverride: weatherConfig.weatherCondition,
-                          showPrecipitation: weatherConfig.weatherShowPrecipitation,
-                          showWind: weatherConfig.weatherShowWind,
-                        }
-                      : undefined
-                  }
-                  actions={actions}
-                  onToggleMicroWidget={onToggleMicroWidget}
-                  onSetMicroSliderValue={onSetMicroSliderValue}
-                  onNavigateMicroWidgetPage={onNavigateMicroWidgetPage}
-                />
-              </div>
-            </div>
-          </div>
-        </>
+
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: `
+                    .device-context-surface button {
+                      transition-property: transform, background-color, color, border-color;
+                      transition-duration: 300ms;
+                    }
+                    .device-context-surface button:active {
+                      transform: scale(0.95);
+                    }
+                  `,
+                }}
+              />
+            </React.Fragment>
+          ) : null}
+        </AnimatePresence>
       );
     }
+
     return (
-      <div className={sidebarWidthClass}>
+      <div className={`${sidebarWidthClass} overflow-hidden rounded-[2rem] border-l border-white/[0.08] bg-white/[0.02] shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl`}>
         <ContextSidebar
           activeDevice={activeDevice}
           isEditMode={isEditMode}
@@ -948,12 +1146,42 @@ export function RightSidebarManager({
   const weatherForecastDays = selectedSection?.weatherForecastDays ?? 4;
   const weatherSecondaryInfo = selectedSection?.weatherSecondaryInfo ?? 'auto';
   const weatherSecondaryInfoOptions = resolveWeatherSecondaryInfoOptions(state.weather);
+  const weatherSecondaryDropdownOptions = weatherSecondaryInfoOptions.map((option) => ({
+    id: option.value,
+    name: option.label,
+  }));
   const weatherSecondaryInfoValues = new Set(weatherSecondaryInfoOptions.map((option) => option.value));
   const safeWeatherSecondaryInfo = weatherSecondaryInfoValues.has(weatherSecondaryInfo)
     ? weatherSecondaryInfo
     : 'auto';
   const weatherSelectedInfoMeta = WEATHER_SECONDARY_INFO_META[safeWeatherSecondaryInfo];
   const weatherLayoutPreview = WEATHER_LAYOUT_PREVIEWS[weatherLayout];
+  const weatherForecastDayOptions = (weatherForecastType === 'hourly' ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7]).map(
+    (days) => ({
+      id: String(days),
+      name: `${days} ${weatherForecastType === 'hourly' ? 'ore' : 'giorni'}`,
+    }),
+  );
+  const isStackGridSection = selectedSection?.kind === 'stack-grid';
+  const activeCanvasCols = Math.max(1, Math.round(GRID_ENGINE_COLS[activeGridBreakpoint] ?? 1));
+  const stackColumnOptionMax = ROOT_CANVAS_COLS;
+  const stackManualColumnOptions = Array.from({ length: stackColumnOptionMax - STACK_SECTION_MIN_COLUMNS + 1 }, (_, index) => {
+    const option = STACK_SECTION_MIN_COLUMNS + index;
+    return {
+      id: String(option),
+      name: `${option} colonne`,
+    };
+  });
+  const stackColumnsAutoMode = isStackGridSection && selectedSection?.stackColumnsMode !== 'manual';
+  const stackCanvasColumnOptions = isStackGridSection
+    ? [
+        {
+          id: 'auto',
+          name: 'Auto (da contenuto)',
+        },
+        ...stackManualColumnOptions,
+      ]
+    : stackManualColumnOptions;
   const weatherEntitySuggestions = haConnected
     ? haEntityIds.filter((entityId) => entityId.startsWith('weather.'))
     : [];
@@ -980,7 +1208,69 @@ export function RightSidebarManager({
   const stackCanvasColumns =
     selectedSection?.kind === 'stack-vertical' || !selectedSection
       ? 1
-      : Math.max(2, Math.round(selectedSection.layout.w));
+      : Math.max(STACK_SECTION_MIN_COLUMNS, Math.min(stackColumnOptionMax, Math.round(selectedSection.layout.w)));
+  const stackCanvasColumnSelectionId =
+    selectedSection?.kind === 'stack-vertical' || !selectedSection
+      ? '1'
+      : stackColumnsAutoMode
+        ? 'auto'
+        : String(stackCanvasColumns);
+  const layoutEditorCols = activeCanvasCols;
+  const selectedWidgetLayoutSpan = selectedWidget
+    ? resolveWidgetTypeLayoutSpan(selectedWidget.kind, activeGridBreakpoint, widgetTypeLayoutOverrides)
+    : null;
+  const selectedWidgetTypeOverride = selectedWidget
+    ? widgetTypeLayoutOverrides[selectedWidget.kind]?.[activeGridBreakpoint]
+    : undefined;
+  const layoutPickerWidth = clampGridSpan(selectedWidgetLayoutSpan?.w ?? 1, layoutEditorCols);
+  const layoutPickerHeight = clampGridSpan(selectedWidgetLayoutSpan?.h ?? 1, GRID_LAYOUT_PREVIEW_MAX_ROWS);
+  const layoutPreviewRows = Math.max(GRID_LAYOUT_PREVIEW_MAX_ROWS, layoutPickerHeight);
+  const isCompactLayoutEditor = activeGridBreakpoint === 'sm' || activeGridBreakpoint === 'xs';
+  const layoutGridCompactCellPx = 38;
+  const layoutGridCompactMaxWidth = isCompactLayoutEditor
+    ? layoutEditorCols * layoutGridCompactCellPx + Math.max(0, layoutEditorCols - 1) * 6 + 16
+    : null;
+  const selectedWidgetLiveEntity = selectedWidget
+    ? resolveEntityStateById(haStates, selectedWidget.entityId)
+    : undefined;
+  const selectedWidgetSensorHistory =
+    selectedWidget?.kind === 'sensor'
+      ? resolveEntityHistoryById(microChartHistoryByEntity, selectedWidget.entityId)
+      : undefined;
+  const selectedWidgetPreviewValue =
+    toFiniteNumber(selectedWidgetLiveEntity?.numericValue) ??
+    toFiniteNumber(selectedWidget?.value) ??
+    0;
+  const layoutPreviewCardGapPx = isCompactLayoutEditor ? 10 : 12;
+  const layoutPreviewCellWidthPx = isCompactLayoutEditor ? 96 : 88;
+  const layoutPreviewCellHeightPx = isCompactLayoutEditor ? 54 : 58;
+  const layoutPreviewCardWidthPx = Math.max(
+    isCompactLayoutEditor ? 96 : 104,
+    Math.min(
+      isCompactLayoutEditor ? 312 : 368,
+      layoutPickerWidth * layoutPreviewCellWidthPx + Math.max(0, layoutPickerWidth - 1) * layoutPreviewCardGapPx,
+    ),
+  );
+  const layoutPreviewCardHeightPx = Math.max(
+    isCompactLayoutEditor ? 96 : 110,
+    Math.min(
+      isCompactLayoutEditor ? 312 : 368,
+      layoutPickerHeight * layoutPreviewCellHeightPx + Math.max(0, layoutPickerHeight - 1) * layoutPreviewCardGapPx,
+    ),
+  );
+  const isLightLayoutType = selectedWidget?.kind === 'light';
+  const selectedWidgetPreview = selectedWidget
+    ? {
+        ...selectedWidget,
+        layout: {
+          ...selectedWidget.layout,
+          w: layoutPickerWidth,
+          h: isLightLayoutType && selectedWidget.isOn && layoutPickerHeight <= 1
+            ? 2
+            : layoutPickerHeight,
+        },
+      }
+    : null;
 
   const entityDomain = selectedWidget
     ? selectedWidget.kind === 'media'
@@ -1142,7 +1432,6 @@ export function RightSidebarManager({
     selectedWidget?.kind === 'sensor'
       ? selectedWidget.id.replace(/[^a-zA-Z0-9_-]/g, '-')
       : 'sensor-widget';
-  const hasEditSelection = Boolean(selectedWidget || selectedSection || selectedSidebarPath);
   const resolveSceneAction = (sceneId: SceneKey): SceneActionConfig => {
     const configured = sceneActions[sceneId];
     if (configured) {
@@ -1238,9 +1527,47 @@ export function RightSidebarManager({
       sceneActions: Object.keys(nextSceneActions).length ? nextSceneActions : undefined,
     };
   };
+  const isCompactEditOverlayMode = isEditMode && isCompactViewport;
+  const compactEditPanelVisible = isCompactEditOverlayMode && hasEditSelection;
+  const editSidebarContainerClass = isCompactEditOverlayMode
+    ? `fixed inset-x-0 bottom-0 z-[219] flex max-h-[92dvh] min-h-[16rem] w-full flex-col rounded-t-[2rem] border border-white/[0.08] bg-white/[0.02] p-3 py-2 shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl transition-all duration-250 ${
+        compactEditPanelVisible ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
+      }`
+    : `${sidebarWidthClass} flex flex-col rounded-[2rem] border-l border-white/[0.08] bg-white/[0.02] p-3 py-1 shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl sm:p-4 sm:py-2 lg:p-5`;
+  const editSidebarStyle =
+    isCompactEditOverlayMode && contextSheetDragOffset > 0
+      ? { transform: `translateY(${contextSheetDragOffset}px)`, transitionDuration: '0ms' }
+      : undefined;
 
   return (
-    <aside className={`${sidebarWidthClass} py-1 sm:py-2 rounded-[2rem] bg-white/5 border border-white/8 backdrop-blur-xl p-3 sm:p-4 lg:p-5 flex flex-col`}>
+    <>
+      <AnimatePresence>
+        {compactEditPanelVisible ? (
+          <motion.button
+            key="edit-sidebar-overlay"
+            type="button"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onCloseContextSidebar}
+            className="fixed inset-0 z-[218] bg-black/60 backdrop-blur-sm transition-opacity"
+            aria-label="Chiudi pannello configurazione"
+          />
+        ) : null}
+      </AnimatePresence>
+      <aside className={editSidebarContainerClass} style={editSidebarStyle}>
+      {isCompactEditOverlayMode ? (
+        <div
+          className={`mb-2 flex justify-center touch-none ${isContextSheetDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onPointerDown={handleContextSheetDragStart}
+          onPointerMove={handleContextSheetDragMove}
+          onPointerUp={finishContextSheetDrag}
+          onPointerCancel={finishContextSheetDrag}
+        >
+          <span className="h-1.5 w-12 rounded-full bg-white/20" />
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-white/50">Builder</p>
@@ -1259,7 +1586,7 @@ export function RightSidebarManager({
         ) : null}
       </div>
       {!selectedWidget && !selectedSection && !selectedSidebarPath ? (
-        <div className="flex-1 mt-5 rounded-2xl border border-dashed border-white/15 bg-black/20 flex items-center justify-center text-center p-6">
+        <div className="liquid-glass-card flex-1 mt-5 rounded-2xl border-dashed flex items-center justify-center text-center p-6">
           <p className="text-sm text-white/60">
             Seleziona una card, sezione o path
             <br />
@@ -1438,7 +1765,7 @@ export function RightSidebarManager({
                     className="w-full resize-none rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </label>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-3">
+                <div className="liquid-glass-card p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-white/55">Meteo nella card</p>
@@ -1465,7 +1792,7 @@ export function RightSidebarManager({
                   </div>
                   {showWeather ? (
                     <div className="space-y-3 border-t border-white/10 pt-3">
-                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                      <div className="liquid-glass-card rounded-xl px-3 py-2.5">
                         <p className="text-[11px] font-medium text-white/78">Layout meteo responsive</p>
                         <p className="mt-1 text-[11px] text-white/52">
                           In questa card unificata il meteo usa chip su xs/sm e card previsioni su md/lg.
@@ -1473,23 +1800,16 @@ export function RightSidebarManager({
                       </div>
                       <label className="block">
                         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Unita</p>
-                        <select
-                          value={weatherUnit}
-                          onChange={(event) =>
+                        <GlassDropdown
+                          options={WEATHER_UNIT_OPTIONS}
+                          selected={findDropdownOption(WEATHER_UNIT_OPTIONS, weatherUnit)}
+                          onChange={(option) =>
                             onUpdateSection(selectedSection.id, (section) => ({
                               ...section,
-                              weatherUnit: event.target.value as typeof weatherUnit,
+                              weatherUnit: option.id as typeof weatherUnit,
                             }))
                           }
-                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                        >
-                          <option value="C" className="bg-[#0d1118]">
-                            {'\u00B0C'}
-                          </option>
-                          <option value="F" className="bg-[#0d1118]">
-                            {'\u00B0F'}
-                          </option>
-                        </select>
+                        />
                       </label>
                       <label className="block">
                         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita meteo</p>
@@ -1513,67 +1833,48 @@ export function RightSidebarManager({
                       </label>
                       <label className="block">
                         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Seconda info</p>
-                        <select
-                          value={safeWeatherSecondaryInfo}
-                          onChange={(event) =>
+                        <GlassDropdown
+                          options={weatherSecondaryDropdownOptions}
+                          selected={findDropdownOption(weatherSecondaryDropdownOptions, safeWeatherSecondaryInfo)}
+                          onChange={(option) =>
                             onUpdateSection(selectedSection.id, (section) => ({
                               ...section,
-                              weatherSecondaryInfo: event.target.value as WeatherSecondaryInfo,
+                              weatherSecondaryInfo: option.id as WeatherSecondaryInfo,
                             }))
                           }
-                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                        >
-                          {weatherSecondaryInfoOptions.map((option) => (
-                            <option key={option.value} value={option.value} className="bg-[#0d1118]">
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                        />
                         <p className="mt-2 text-[11px] text-white/52">{weatherSelectedInfoMeta.description}</p>
                       </label>
                       <label className="block">
                         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Forecast</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <select
-                            value={weatherForecastType}
-                            onChange={(event) =>
+                          <GlassDropdown
+                            options={WEATHER_FORECAST_TYPE_OPTIONS}
+                            selected={findDropdownOption(WEATHER_FORECAST_TYPE_OPTIONS, weatherForecastType)}
+                            onChange={(option) =>
                               onUpdateSection(selectedSection.id, (section) => ({
                                 ...section,
-                                weatherForecastType: event.target.value as typeof weatherForecastType,
+                                weatherForecastType: option.id as typeof weatherForecastType,
                                 weatherForecastDays: Math.max(
                                   1,
                                   Math.min(
-                                    event.target.value === 'hourly' ? 8 : 7,
+                                    option.id === 'hourly' ? 8 : 7,
                                     section.weatherForecastDays ?? 4,
                                   ),
                                 ),
                               }))
                             }
-                            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                          >
-                            <option value="daily" className="bg-[#0d1118]">
-                              Giornaliero
-                            </option>
-                            <option value="hourly" className="bg-[#0d1118]">
-                              Orario
-                            </option>
-                          </select>
-                          <select
-                            value={weatherForecastDays}
-                            onChange={(event) =>
+                          />
+                          <GlassDropdown
+                            options={weatherForecastDayOptions}
+                            selected={findDropdownOption(weatherForecastDayOptions, weatherForecastDays)}
+                            onChange={(option) =>
                               onUpdateSection(selectedSection.id, (section) => ({
                                 ...section,
-                                weatherForecastDays: Number(event.target.value),
+                                weatherForecastDays: Number(option.id),
                               }))
                             }
-                            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                          >
-                            {(weatherForecastType === 'hourly' ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7]).map((days) => (
-                              <option key={days} value={days} className="bg-[#0d1118]">
-                                {days} {weatherForecastType === 'hourly' ? 'ore' : 'giorni'}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
                       </label>
                     </div>
@@ -1594,27 +1895,17 @@ export function RightSidebarManager({
             <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Layout</p>
-                <select
-                  value={weatherLayout}
-                  onChange={(event) =>
+                <GlassDropdown
+                  options={WEATHER_LAYOUT_OPTIONS}
+                  selected={findDropdownOption(WEATHER_LAYOUT_OPTIONS, weatherLayout)}
+                  onChange={(option) =>
                     onUpdateSection(selectedSection.id, (section) => ({
                       ...section,
-                      weatherLayout: event.target.value as typeof weatherLayout,
+                      weatherLayout: option.id as typeof weatherLayout,
                     }))
                   }
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                >
-                  <option value="auto" className="bg-[#0d1118]">
-                    Auto
-                  </option>
-                  <option value="card" className="bg-[#0d1118]">
-                    Card
-                  </option>
-                  <option value="chip" className="bg-[#0d1118]">
-                    Chip
-                  </option>
-                </select>
-                <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                />
+                <div className="liquid-glass-card mt-2 rounded-xl px-3 py-2.5">
                   <p className="text-[11px] font-medium text-white/78">{weatherLayoutPreview.title}</p>
                   <p className="mt-1 text-[11px] text-white/52">{weatherLayoutPreview.description}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1631,23 +1922,16 @@ export function RightSidebarManager({
               </label>
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Unita</p>
-                <select
-                  value={weatherUnit}
-                  onChange={(event) =>
+                <GlassDropdown
+                  options={WEATHER_UNIT_OPTIONS}
+                  selected={findDropdownOption(WEATHER_UNIT_OPTIONS, weatherUnit)}
+                  onChange={(option) =>
                     onUpdateSection(selectedSection.id, (section) => ({
                       ...section,
-                      weatherUnit: event.target.value as typeof weatherUnit,
+                      weatherUnit: option.id as typeof weatherUnit,
                     }))
                   }
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                >
-                  <option value="C" className="bg-[#0d1118]">
-                    {'\u00B0C'}
-                  </option>
-                  <option value="F" className="bg-[#0d1118]">
-                    {'\u00B0F'}
-                  </option>
-                </select>
+                />
               </label>
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita meteo</p>
@@ -1683,7 +1967,7 @@ export function RightSidebarManager({
                     >
                       <HelpCircle size={12} />
                     </button>
-                    <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-xl border border-white/15 bg-[#0d1118]/95 px-3 py-2 text-[11px] leading-relaxed text-white/80 opacity-0 shadow-xl backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <span className="liquid-glass-card pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-xl px-3 py-2 text-[11px] leading-relaxed text-white/80 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                       Per forecast live completi (giornaliero + orario) e dati meteo piu ricchi, consigliamo
                       l'integrazione OpenWeatherMap in modalita v3.0.
                       <a
@@ -1700,67 +1984,48 @@ export function RightSidebarManager({
               </label>
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Seconda info</p>
-                <select
-                  value={safeWeatherSecondaryInfo}
-                  onChange={(event) =>
+                <GlassDropdown
+                  options={weatherSecondaryDropdownOptions}
+                  selected={findDropdownOption(weatherSecondaryDropdownOptions, safeWeatherSecondaryInfo)}
+                  onChange={(option) =>
                     onUpdateSection(selectedSection.id, (section) => ({
                       ...section,
-                      weatherSecondaryInfo: event.target.value as WeatherSecondaryInfo,
+                      weatherSecondaryInfo: option.id as WeatherSecondaryInfo,
                     }))
                   }
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                >
-                  {weatherSecondaryInfoOptions.map((option) => (
-                    <option key={option.value} value={option.value} className="bg-[#0d1118]">
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                />
                 <p className="mt-2 text-[11px] text-white/52">{weatherSelectedInfoMeta.description}</p>
               </label>
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Forecast</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <select
-                    value={weatherForecastType}
-                    onChange={(event) =>
+                  <GlassDropdown
+                    options={WEATHER_FORECAST_TYPE_OPTIONS}
+                    selected={findDropdownOption(WEATHER_FORECAST_TYPE_OPTIONS, weatherForecastType)}
+                    onChange={(option) =>
                       onUpdateSection(selectedSection.id, (section) => ({
                         ...section,
-                        weatherForecastType: event.target.value as typeof weatherForecastType,
+                        weatherForecastType: option.id as typeof weatherForecastType,
                         weatherForecastDays: Math.max(
                           1,
                           Math.min(
-                            event.target.value === 'hourly' ? 8 : 7,
+                            option.id === 'hourly' ? 8 : 7,
                             section.weatherForecastDays ?? 4,
                           ),
                         ),
                       }))
                     }
-                    className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                  >
-                    <option value="daily" className="bg-[#0d1118]">
-                      Giornaliero
-                    </option>
-                    <option value="hourly" className="bg-[#0d1118]">
-                      Orario
-                    </option>
-                  </select>
-                  <select
-                    value={weatherForecastDays}
-                    onChange={(event) =>
+                  />
+                  <GlassDropdown
+                    options={weatherForecastDayOptions}
+                    selected={findDropdownOption(weatherForecastDayOptions, weatherForecastDays)}
+                    onChange={(option) =>
                       onUpdateSection(selectedSection.id, (section) => ({
                         ...section,
-                        weatherForecastDays: Number(event.target.value),
+                        weatherForecastDays: Number(option.id),
                       }))
                     }
-                    className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                  >
-                    {(weatherForecastType === 'hourly' ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7]).map((days) => (
-                      <option key={days} value={days} className="bg-[#0d1118]">
-                        {days} {weatherForecastType === 'hourly' ? 'ore' : 'giorni'}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 <p className="mt-2 text-[11px] text-white/50">
                   Le opzioni forecast sono visibili in modalita card e in auto quando la card ha spazio sufficiente.
@@ -1862,33 +2127,40 @@ export function RightSidebarManager({
 
                         <label className="block">
                           <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-white/45">Icona</p>
-                          <select
-                            value={sceneIcons[scene.id] ?? ''}
-                            onChange={(event) => {
-                              const nextValue = event.target.value as SceneIconKey | '';
+                          <GlassDropdown
+                            options={[
+                              { id: '', name: `Predefinita (${resolveSceneIconLabel(scene.defaultIcon)})` },
+                              ...SCENE_ICON_OPTIONS.map((iconOption) => ({
+                                id: iconOption.id,
+                                name: iconOption.label,
+                              })),
+                            ]}
+                            selected={findDropdownOption(
+                              [
+                                { id: '', name: `Predefinita (${resolveSceneIconLabel(scene.defaultIcon)})` },
+                                ...SCENE_ICON_OPTIONS.map((iconOption) => ({
+                                  id: iconOption.id,
+                                  name: iconOption.label,
+                                })),
+                              ],
+                              sceneIcons[scene.id] ?? '',
+                            )}
+                            onChange={(option) => {
+                              const nextValue = option.id as SceneIconKey | '';
                               onUpdateSection(selectedSection.id, (section) =>
                                 upsertSceneIcon(section, scene.id, nextValue),
                               );
                             }}
-                            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-blue-300/60"
-                          >
-                            <option value="" className="bg-[#0d1118]">
-                              Predefinita ({resolveSceneIconLabel(scene.defaultIcon)})
-                            </option>
-                            {SCENE_ICON_OPTIONS.map((iconOption) => (
-                              <option key={iconOption.id} value={iconOption.id} className="bg-[#0d1118]">
-                                {iconOption.label}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </label>
 
                         <label className="block">
                           <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-white/45">Tipo azione</p>
-                          <select
-                            value={actionType}
-                            onChange={(event) => {
-                              const nextType = event.target.value as SceneActionType;
+                          <GlassDropdown
+                            options={SCENE_ACTION_TYPE_OPTIONS}
+                            selected={findDropdownOption(SCENE_ACTION_TYPE_OPTIONS, actionType)}
+                            onChange={(option) => {
+                              const nextType = option.id as SceneActionType;
                               onUpdateSection(selectedSection.id, (section) =>
                                 upsertSceneAction(section, scene.id, (current) => ({
                                   ...current,
@@ -1896,15 +2168,7 @@ export function RightSidebarManager({
                                 })),
                               );
                             }}
-                            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-blue-300/60"
-                          >
-                            <option value="script" className="bg-[#0d1118]">
-                              Script
-                            </option>
-                            <option value="service" className="bg-[#0d1118]">
-                              Servizio
-                            </option>
-                          </select>
+                          />
                         </label>
 
                         {actionType === 'script' ? (
@@ -2068,15 +2332,54 @@ export function RightSidebarManager({
                   />
                 </label>
                 {selectedSection.kind !== 'stack-vertical' ? (
-                  <div className="block">
+                  <label className="block">
                     <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Colonne</p>
-                    <div className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white/90">
-                      {stackCanvasColumns} colonne (auto)
-                    </div>
+                    <GlassDropdown
+                      options={stackCanvasColumnOptions}
+                      selected={findDropdownOption(stackCanvasColumnOptions, stackCanvasColumnSelectionId)}
+                      onChange={(option) => {
+                        if (selectedSection.kind === 'stack-grid' && option.id === 'auto') {
+                          onUpdateSection(selectedSection.id, (section) => ({
+                            ...section,
+                            stackColumnsMode: 'auto',
+                          }));
+                          return;
+                        }
+                        const requestedCols = Math.max(
+                          STACK_SECTION_MIN_COLUMNS,
+                          Math.min(stackColumnOptionMax, Math.round(Number(option.id) || STACK_SECTION_MIN_COLUMNS)),
+                        );
+                        onUpdateSection(selectedSection.id, (section) => {
+                          const safeW = Math.max(
+                            STACK_SECTION_MIN_COLUMNS,
+                            Math.min(stackColumnOptionMax, requestedCols),
+                          );
+                          const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
+                          return {
+                            ...section,
+                            ...(section.kind === 'stack-grid'
+                              ? {
+                                  stackColumnsMode: 'manual' as const,
+                                  stackColumns: safeW,
+                                }
+                              : {}),
+                            layout: {
+                              ...section.layout,
+                              w: safeW,
+                              x: Math.min(section.layout.x, maxX),
+                            },
+                          };
+                        });
+                      }}
+                    />
                     <p className="mt-2 text-[11px] text-white/55">
-                      Le colonne seguono la larghezza della sezione nel canvas. Ridimensiona la sezione per cambiare la griglia interna.
+                      {selectedSection.kind === 'stack-grid'
+                        ? stackColumnsAutoMode
+                          ? 'Auto: la larghezza viene calcolata dalle card interne.'
+                          : 'Manuale: imposta quante colonne canvas deve occupare lo stack.'
+                        : 'Imposta quante colonne canvas deve occupare lo stack.'}
                     </p>
-                  </div>
+                  </label>
                 ) : null}
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -2156,7 +2459,9 @@ export function RightSidebarManager({
                     ? 'Stack verticale con una sola colonna.'
                     : selectedSection.kind === 'stack-horizontal'
                       ? 'Stack orizzontale: usa la griglia derivata dal canvas.'
-                      : 'Stack a griglia: colonne automatiche derivate dal canvas.'}
+                      : stackColumnsAutoMode
+                        ? 'Stack a griglia: larghezza automatica derivata dalle card interne.'
+                        : 'Stack a griglia: larghezza manuale impostata dal pannello.'}
                 </p>
               </div>
               <button
@@ -2169,13 +2474,152 @@ export function RightSidebarManager({
               </button>
             </>
           ) : (
-            <div className="flex-1 rounded-2xl border border-dashed border-white/15 bg-black/20 flex items-center justify-center text-center p-6">
+            <div className="liquid-glass-card flex-1 rounded-2xl border-dashed flex items-center justify-center text-center p-6">
               <p className="text-sm text-white/60">Questa sezione non e configurabile.</p>
             </div>
           )}
         </div>
       ) : (
         <div className="flex-1 mt-5 flex flex-col min-h-0">
+          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <button
+              type="button"
+              onClick={() => setWidgetConfigTab('layout')}
+              className={`rounded-lg px-3 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
+                widgetConfigTab === 'layout'
+                  ? 'border border-blue-300/45 bg-blue-500/20 text-blue-100'
+                  : 'border border-transparent bg-transparent text-white/60 hover:bg-white/8 hover:text-white'
+              }`}
+            >
+              Layout
+            </button>
+            <button
+              type="button"
+              onClick={() => setWidgetConfigTab('settings')}
+              className={`rounded-lg px-3 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
+                widgetConfigTab === 'settings'
+                  ? 'border border-blue-300/45 bg-blue-500/20 text-blue-100'
+                  : 'border border-transparent bg-transparent text-white/60 hover:bg-white/8 hover:text-white'
+              }`}
+            >
+              Setting
+            </button>
+          </div>
+
+          {widgetConfigTab === 'layout' ? (
+            <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-1">
+              <div className="liquid-glass-card p-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-white/55">Layout per tipo card</p>
+                <p className="mt-1 text-[11px] text-white/50">
+                  Questa configurazione si applica a tutte le card di tipo {selectedWidget.kind}.
+                </p>
+              </div>
+              <div className="liquid-glass-card p-3">
+                <p className="text-[11px] text-white/55">
+                  La griglia si adatta automaticamente allo schermo corrente ({layoutEditorCols} colonne disponibili).
+                </p>
+              </div>
+              <div className="hidden flex-wrap gap-1.5">
+                {[activeGridBreakpoint].map((breakpoint) => {
+                  const active = true;
+                  return (
+                    <button
+                      key={breakpoint}
+                      type="button"
+                      onClick={() => void breakpoint}
+                      className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                        active
+                          ? 'border-blue-300/55 bg-blue-500/20 text-blue-100'
+                          : 'border-white/14 bg-white/[0.04] text-white/70 hover:border-white/30 hover:text-white'
+                      }`}
+                    >
+                      {GRID_BREAKPOINT_LABEL[breakpoint]} · {GRID_ENGINE_COLS[breakpoint]} col
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="liquid-glass-card p-3">
+                <div
+                  className="grid w-full gap-1.5 rounded-xl border border-white/10 bg-white/[0.02] p-2"
+                  style={{
+                    gridTemplateColumns: `repeat(${layoutEditorCols}, minmax(0, 1fr))`,
+                    ...(layoutGridCompactMaxWidth
+                      ? { maxWidth: `${layoutGridCompactMaxWidth}px`, marginInline: 'auto' }
+                      : null),
+                  }}
+                >
+                  {Array.from({ length: layoutPreviewRows }).map((_, rowIndex) =>
+                    Array.from({ length: layoutEditorCols }).map((__, colIndex) => {
+                      const cellW = colIndex + 1;
+                      const cellH = rowIndex + 1;
+                      const isActive = cellW === layoutPickerWidth && cellH === layoutPickerHeight;
+                      const isInside = colIndex < layoutPickerWidth && rowIndex < layoutPickerHeight;
+                      return (
+                        <button
+                          key={`${rowIndex}-${colIndex}`}
+                          type="button"
+                          onClick={() => applyWidgetTypeLayoutSelection(cellW, cellH)}
+                          className={`${isCompactLayoutEditor ? 'aspect-square rounded-[5px]' : 'aspect-square rounded-[6px]'} border transition-colors ${
+                            isActive
+                              ? 'border-blue-200 bg-blue-400/55'
+                              : isInside
+                                ? 'border-blue-300/30 bg-blue-500/22'
+                                : 'border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.08]'
+                          }`}
+                          aria-label={`Imposta ${cellW} colonne per ${cellH} righe`}
+                        />
+                      );
+                    }),
+                  )}
+                </div>
+                <p className="mt-3 text-[11px] text-white/55">
+                  Selezione attiva: {layoutPickerWidth} colonne × {layoutPickerHeight} righe
+                  {isLightLayoutType ? ' (luce on/off allineate)' : ''}.
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-white/45">
+                    {selectedWidgetTypeOverride ? 'Override attivo su questa vista.' : 'Usi il preset base del sistema.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={resetWidgetTypeLayoutSelection}
+                    className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:bg-white/[0.1] hover:text-white"
+                    disabled={!selectedWidgetTypeOverride}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div className="liquid-glass-card p-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-white/55">Preview card</p>
+                <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                  <div
+                    className="mx-auto overflow-hidden rounded-[1.45rem] transition-[width,height] duration-200"
+                    style={{
+                      width: `${layoutPreviewCardWidthPx}px`,
+                      height: `${layoutPreviewCardHeightPx}px`,
+                    }}
+                  >
+                    <WidgetCardRenderer
+                      widget={selectedWidgetPreview ?? selectedWidget}
+                      dashboardState={state}
+                      isEditMode={false}
+                      isSelected={false}
+                      value={selectedWidgetPreviewValue}
+                      sensorHistory={selectedWidgetSensorHistory}
+                      onClick={() => undefined}
+                      liveEntity={selectedWidgetLiveEntity}
+                      gridBreakpoint={activeGridBreakpoint}
+                    />
+                  </div>
+                  <p className="mt-2 text-center text-[10px] uppercase tracking-[0.14em] text-white/45">
+                    Preview: {layoutPickerWidth}x{layoutPickerHeight}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className={widgetConfigTab === 'settings' ? 'contents' : 'hidden'}>
           <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
             <label className="block">
               <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Titolo</p>
@@ -2215,7 +2659,7 @@ export function RightSidebarManager({
                   : 'Puoi scegliere dal catalogo o digitare una entita personalizzata.'}
               </p>
             </label>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-3 shadow-lg backdrop-blur-xl">
               <div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-white/50">Dispositivi correlati</p>
@@ -2236,7 +2680,7 @@ export function RightSidebarManager({
                 ))}
               </datalist>
 
-              <div className="mt-3 rounded-2xl border border-white/12 bg-white/[0.04] p-3">
+              <div className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-3 shadow-lg backdrop-blur-xl">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-white/52">Anteprima pannello live</p>
                 <div className="mt-2 grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
                   {microWidgets.map((microWidget, microWidgetIndex) => {
@@ -2607,7 +3051,7 @@ export function RightSidebarManager({
             </div>
             {selectedWidget.kind === 'sensor' ? (
               <>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="liquid-glass-card p-3">
                   <p className="text-[11px] text-white/55">
                     Entita opzionali per metadati sensore. Se lasci vuoto, il pannello contestuale prova a leggere
                     batteria, stato e connessione dagli attributi dell&apos;entita principale.
@@ -2676,49 +3120,87 @@ export function RightSidebarManager({
               </>
             ) : null}
             {selectedWidget.kind === 'alarm' ? (
-              <label className="block">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Sicurezza Locale</p>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={selectedWidget.alarmUnlockCode ?? ''}
-                  onChange={(event) =>
-                    onUpdateWidget(selectedWidget.id, (widget) => ({
-                      ...widget,
-                      alarmUnlockCode: event.target.value.slice(0, 24),
-                    }))
-                  }
-                  placeholder="Es. 1234"
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                />
-                <p className="mt-2 text-[11px] text-white/45">
-                  I pulsanti allarme in dashboard saranno attivi solo quando il codice inserito nel pannello contestuale combacia.
-                </p>
-              </label>
+              <div className="space-y-3">
+                <label className="block">
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Sicurezza Locale</p>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={selectedWidget.alarmUnlockCode ?? ''}
+                    onChange={(event) =>
+                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                        ...widget,
+                        alarmUnlockCode: event.target.value.slice(0, 24),
+                      }))
+                    }
+                    placeholder="Es. 1234"
+                    className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                  />
+                  <p className="mt-2 text-[11px] text-white/45">
+                    I pulsanti allarme in dashboard saranno attivi solo quando il codice inserito nel pannello contestuale combacia.
+                  </p>
+                </label>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <span className="min-w-0">
+                    <span className="block text-xs uppercase tracking-[0.16em] text-white/50">Biometria cambio stato</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-white/45">
+                      Richiede Face ID / impronta nativa prima di modificare lo stato dell&apos;allarme.
+                    </span>
+                  </span>
+                  {renderAppleSwitch({
+                    checked: selectedWidget.alarmRequireAuthToDisarm ?? false,
+                    label: 'Attiva biometria cambio stato allarme',
+                    onChange: (nextChecked) =>
+                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                        ...widget,
+                        alarmRequireAuthToDisarm: nextChecked,
+                      })),
+                  })}
+                </div>
+              </div>
             ) : null}
             {selectedWidget.kind === 'lock' ? (
-              <label className="block">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Serratura Locale</p>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={selectedWidget.lockCode ?? ''}
-                  onChange={(event) =>
-                    onUpdateWidget(selectedWidget.id, (widget) => ({
-                      ...widget,
-                      lockCode: event.target.value.slice(0, 24),
-                    }))
-                  }
-                  placeholder="Es. 1234"
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-                />
-                <p className="mt-2 text-[11px] text-white/45">
-                  Usato come codice predefinito per lock/unlock/open quando l&apos;entita lo richiede.
-                </p>
-              </label>
+              <div className="space-y-3">
+                <label className="block">
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Serratura Locale</p>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={selectedWidget.lockCode ?? ''}
+                    onChange={(event) =>
+                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                        ...widget,
+                        lockCode: event.target.value.slice(0, 24),
+                      }))
+                    }
+                    placeholder="Es. 1234"
+                    className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                  />
+                  <p className="mt-2 text-[11px] text-white/45">
+                    Usato come codice predefinito per lock/unlock/open quando l&apos;entita lo richiede.
+                  </p>
+                </label>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <span className="min-w-0">
+                    <span className="block text-xs uppercase tracking-[0.16em] text-white/50">Biometria sblocco</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-white/45">
+                      Richiede Face ID / impronta nativa prima di inviare lo sblocco.
+                    </span>
+                  </span>
+                  {renderAppleSwitch({
+                    checked: selectedWidget.lockRequireAuthToUnlock ?? false,
+                    label: 'Attiva biometria sblocco',
+                    onChange: (nextChecked) =>
+                      onUpdateWidget(selectedWidget.id, (widget) => ({
+                        ...widget,
+                        lockRequireAuthToUnlock: nextChecked,
+                      })),
+                  })}
+                </div>
+              </div>
             ) : null}
             {selectedWidget.kind === 'alarm' || selectedWidget.kind === 'lock' ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-3">
+              <div className="liquid-glass-card p-3 space-y-3">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-white/50">Attivita recente</p>
                 <label className="block">
                   <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Elementi visibili</p>
@@ -2755,7 +3237,8 @@ export function RightSidebarManager({
                   />
                 </label>
                 <p className="text-[11px] text-white/45">
-                  Scegli quante righe mostrare e quante ore di storico interrogare da Home Assistant.
+                  Scegli quante righe mostrare e quante ore interrogare dal Logbook reale di Home Assistant.
+                  Se i dati non sono disponibili, il pannello lo indichera chiaramente.
                 </p>
               </div>
             ) : null}
@@ -2769,6 +3252,7 @@ export function RightSidebarManager({
             Rimuovi Card
           </button>
         </div>
+        </div>
       )}
 
       {isEditMode &&
@@ -2777,11 +3261,11 @@ export function RightSidebarManager({
       typeof document !== 'undefined'
         ? createPortal(
             <div
-              className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-3xl flex items-center justify-center p-4 sm:p-6"
+              className="fixed inset-0 z-[220] bg-black/60 backdrop-blur-3xl flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-6"
               onClick={() => setIsMicroWidgetCatalogOpen(false)}
             >
               <div
-                className="w-full max-w-3xl max-h-[88dvh] overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.08] backdrop-blur-3xl p-4 sm:p-6"
+                className="h-full w-full max-h-none overflow-hidden rounded-none border-0 bg-white/[0.08] backdrop-blur-3xl p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:h-auto md:max-h-[88dvh] md:max-w-3xl md:rounded-[2rem] md:border md:border-white/10 md:p-6"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -2800,7 +3284,7 @@ export function RightSidebarManager({
                   </button>
                 </div>
 
-                <div className="max-h-[calc(88dvh-7.5rem)] overflow-y-auto custom-scrollbar pr-1">
+                <div className="max-h-none overflow-y-auto custom-scrollbar pr-1 md:max-h-[calc(88dvh-7.5rem)]">
                   <label className="block">
                     <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita da associare</p>
                     <input
@@ -2954,7 +3438,8 @@ export function RightSidebarManager({
             document.body,
           )
         : null}
-    </aside>
+      </aside>
+    </>
   );
 }
 

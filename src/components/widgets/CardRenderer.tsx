@@ -13,6 +13,7 @@ import { GreetingCard } from './GreetingCard';
 import { GreetingWeatherCard } from './GreetingWeatherCard';
 import { WeatherCard } from './WeatherCard';
 import { ScenesCard, SCENES_CATALOG } from './ScenesCard';
+import { resolveCardVariant } from './cardVariant';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { ROOT_CANVAS_ROW_UNITS, type DashboardSection, type SceneKey, type Widget } from '../../types/dashboardModels';
 import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
@@ -33,6 +34,7 @@ type WidgetCardRendererProps = {
   isSelected: boolean;
   value: number;
   sensorHistory?: number[];
+  sensorBatteryEntity?: MockEntityState;
   onClick: () => void;
   onLightBrightnessChange?: (widget: Widget, value: number) => void;
   onClimateTargetTempChange?: (widget: Widget, value: number) => void;
@@ -47,7 +49,7 @@ type WidgetCardRendererProps = {
   onAlarmArm?: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onVacuumStartPause?: (widget: Widget) => void;
   onVacuumReturnToBase?: (widget: Widget) => void;
-  onLockToggle?: (widget: Widget) => void;
+  onLockToggle?: (widget: Widget) => boolean | void;
   onLockOpen?: (widget: Widget) => void;
   onMembersOpenPanel?: (widget: Widget) => void;
   liveEntity?: MockEntityState;
@@ -62,6 +64,7 @@ function WidgetCardRendererComponent({
   isSelected,
   value,
   sensorHistory,
+  sensorBatteryEntity,
   onClick,
   onLightBrightnessChange,
   onClimateTargetTempChange,
@@ -83,6 +86,8 @@ function WidgetCardRendererComponent({
   gridBreakpoint,
   houseMembers,
 }: WidgetCardRendererProps) {
+  const cardVariant = resolveCardVariant(widget);
+
   if (widget.kind === 'climate') {
     return (
       <ClimateCard
@@ -181,6 +186,7 @@ function WidgetCardRendererComponent({
         onOpenDoor={() => onLockOpen?.(widget)}
         liveEntity={liveEntity}
         gridBreakpoint={gridBreakpoint}
+        variant={cardVariant}
       />
     );
   }
@@ -217,10 +223,12 @@ function WidgetCardRendererComponent({
       isSelected={isSelected}
       value={value}
       sensorHistory={sensorHistory}
+      batteryEntity={sensorBatteryEntity}
       isEditMode={isEditMode}
       onClick={onClick}
       liveEntity={liveEntity}
       gridBreakpoint={gridBreakpoint}
+      variant={cardVariant}
     />
   );
 }
@@ -274,6 +282,9 @@ function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nex
     return false;
   }
   if (kind === 'sensor') {
+    if (!areWidgetEntitiesEqual(prevProps.sensorBatteryEntity, nextProps.sensorBatteryEntity)) {
+      return false;
+    }
     if (prevProps.value !== nextProps.value) {
       return false;
     }

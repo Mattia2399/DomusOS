@@ -104,10 +104,10 @@ export function CoverCard({
       ? 'mt-0.5 text-[10px] text-white/45'
       : 'mt-1 text-[11px] text-white/45';
   const railClass = isTinyCard
-    ? 'relative h-full min-h-0 w-8 rounded-lg border border-white/10 bg-black/25 overflow-hidden shadow-[inset_0_6px_14px_rgba(0,0,0,0.26)]'
+    ? 'relative h-full min-h-0 w-8 rounded-lg border border-white/10 bg-white/[0.04] overflow-hidden shadow-[inset_0_6px_14px_rgba(0,0,0,0.26)]'
     : isDenseCard
-      ? 'relative h-full min-h-0 w-9 rounded-lg border border-white/10 bg-black/25 overflow-hidden shadow-[inset_0_8px_18px_rgba(0,0,0,0.28)]'
-      : 'relative h-full min-h-0 w-12 rounded-xl border border-white/10 bg-black/25 overflow-hidden shadow-[inset_0_8px_18px_rgba(0,0,0,0.28)]';
+      ? 'relative h-full min-h-0 w-9 rounded-lg border border-white/10 bg-white/[0.04] overflow-hidden shadow-[inset_0_8px_18px_rgba(0,0,0,0.28)]'
+      : 'relative h-full min-h-0 w-12 rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden shadow-[inset_0_8px_18px_rgba(0,0,0,0.28)]';
   const showTilt = hasTilt && !isTinyCard;
 
   return (

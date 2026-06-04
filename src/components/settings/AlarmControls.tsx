@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Delete, Home, LockOpen, Moon, Plane, Shield, ShieldBan, ShieldEllipsis, ShieldPlus, ShieldQuestionMark } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Home, LockOpen, Moon, Plane, Shield, ShieldBan, ShieldEllipsis, ShieldPlus, ShieldQuestionMark } from 'lucide-react';
+import SecurityAuthModal from '../security/SecurityAuthModal';
 import {
   ALARM_FEATURE_ARM_AWAY,
   ALARM_FEATURE_ARM_CUSTOM_BYPASS,
@@ -13,6 +14,8 @@ import {
 } from '../../utils/alarmUtils';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 
+type AlarmActionResult = boolean | void | Promise<boolean | void>;
+
 interface AlarmControlsProps {
   alarm: {
     name: string;
@@ -20,22 +23,25 @@ interface AlarmControlsProps {
     status?: string;
     codeArmRequired?: boolean;
     unlockCode?: string;
+    requireAuthToDisarm?: boolean;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
   };
-  onDisarm: (code?: string) => void;
-  onArmHome: (code?: string) => void;
-  onArmAway: (code?: string) => void;
-  onArmNight: (code?: string) => void;
-  onArmVacation: (code?: string) => void;
-  onArmCustomBypass: (code?: string) => void;
-  onTrigger: (code?: string) => void;
+  onDisarm: (code?: string) => AlarmActionResult;
+  onArmHome: (code?: string) => AlarmActionResult;
+  onArmAway: (code?: string) => AlarmActionResult;
+  onArmNight: (code?: string) => AlarmActionResult;
+  onArmVacation: (code?: string) => AlarmActionResult;
+  onArmCustomBypass: (code?: string) => AlarmActionResult;
+  onTrigger: (code?: string) => AlarmActionResult;
 }
 
 type AlarmModeItem = {
@@ -44,12 +50,22 @@ type AlarmModeItem = {
   state: string;
   feature: number;
   icon: React.ReactNode;
-  onPress: (code?: string) => void;
+  onPress: (code?: string) => AlarmActionResult;
 };
 
 type TimelineEntry = {
   id: string;
   text: string;
+};
+
+type PendingAlarmAction = {
+  id: 'disarm' | 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass' | 'trigger';
+  label: string;
+  state?: string;
+  icon: React.ReactNode;
+  onPress: (code?: string) => AlarmActionResult;
+  timelineText?: string;
+  variant?: 'default' | 'danger' | 'safe';
 };
 
 function resolveHeaderIcon(state: string) {
@@ -110,7 +126,9 @@ export function AlarmControls({
   onArmCustomBypass,
   onTrigger,
 }: AlarmControlsProps) {
-  const [alarmCode, setAlarmCode] = useState('');
+  const [pendingAction, setPendingAction] = useState<PendingAlarmAction | null>(null);
+  const [authCode, setAuthCode] = useState('');
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
   const maxTimelineEntries = useMemo(() => {
     const parsed = Number(alarm.activityLogLimit);
     if (!Number.isFinite(parsed)) {
@@ -127,25 +145,48 @@ export function AlarmControls({
     ? alarm.rawAttributes.code_format.toLowerCase()
     : undefined;
   const numericCodeMode = codeFormat !== 'text';
+  const alarmCodeTypeLabel = numericCodeMode ? 'PIN' : 'Codice';
   const unlockCode = alarm.unlockCode?.trim() ?? '';
   const unlockCodeActive = unlockCode.length > 0;
-  const trimmedCode = alarmCode.trim();
-  const codeMissing = codeRequired && trimmedCode.length === 0;
-  const codeMismatch = unlockCodeActive && trimmedCode !== unlockCode;
+  const trimmedCode = authCode.trim();
+  const pendingCanUseBiometric = Boolean(pendingAction && alarm.requireAuthToDisarm);
+  const pendingNeedsCode = Boolean(pendingAction && (codeRequired || unlockCodeActive));
+  const codeMissing = pendingNeedsCode && trimmedCode.length === 0;
+  const codeMismatch = pendingNeedsCode && unlockCodeActive && trimmedCode !== unlockCode;
   const actionLocked = codeMissing || codeMismatch;
+  const authError = codeMissing
+    ? `Inserisci ${alarmCodeTypeLabel.toLowerCase()} per confermare.`
+    : codeMismatch
+      ? `${alarmCodeTypeLabel} non valido.`
+      : '';
   const HeaderIcon = resolveHeaderIcon(normalizedState);
   const headerAccent = resolveHeaderAccent(normalizedState);
   const codeLengthLimit = 12;
   const timelineActor = changedBy || 'Sistema';
+  const shouldUseLocalTimeline = !alarm.activityTimelineStatus || alarm.activityTimelineStatus === 'offline';
+  const isTransitioning = normalizedState === 'pending' || normalizedState === 'arming' || normalizedState === 'disarming';
+  const activeBadgeLabel =
+    normalizedState === 'triggered'
+      ? 'Allarme'
+      : normalizedState === 'disarmed'
+        ? 'Disattivo'
+        : isTransitioning
+          ? 'In corso'
+          : 'Attiva';
 
   useEffect(() => {
     const incoming = (alarm.activityTimeline ?? []).slice(0, maxTimelineEntries);
-    setTimeline((previous) => (incoming.length > 0 ? incoming : previous));
-  }, [alarm.activityTimeline, maxTimelineEntries]);
+    setTimeline((previous) => {
+      if (!shouldUseLocalTimeline) {
+        return incoming;
+      }
+      return incoming.length > 0 ? incoming : previous;
+    });
+  }, [alarm.activityTimeline, maxTimelineEntries, shouldUseLocalTimeline]);
 
   useEffect(() => {
     setTimeline((alarm.activityTimeline ?? []).slice(0, maxTimelineEntries));
-  }, [alarm.name, alarm.activityTimeline, maxTimelineEntries]);
+  }, [alarm.name, alarm.activityTimeline, alarm.activityTimelineStatus, maxTimelineEntries]);
 
   const modes = useMemo<AlarmModeItem[]>(
     () => [
@@ -199,6 +240,71 @@ export function AlarmControls({
     ? modes.filter((mode) => alarmSupportsFeature(supportedFeatures, mode.feature))
     : modes.filter((mode) => mode.id === 'home' || mode.id === 'away' || mode.id === 'night');
   const triggerSupported = hasFeatureMask ? alarmSupportsFeature(supportedFeatures, ALARM_FEATURE_TRIGGER) : false;
+  const currentModeLabel =
+    normalizedState === 'disarmed'
+      ? 'Disinserito'
+      : supportedModes.find((mode) => mode.state === normalizedState)?.label ?? translatedState;
+  const currentModeCaption =
+    normalizedState === 'triggered'
+      ? 'Richiede attenzione immediata'
+      : normalizedState === 'disarmed'
+        ? 'Sistema non inserito'
+        : isTransitioning
+          ? 'Cambio modalita in corso'
+          : 'Protezione in corso';
+  const modeActions = useMemo<PendingAlarmAction[]>(
+    () => [
+      {
+        id: 'disarm',
+        label: 'Disinserito',
+        state: 'disarmed',
+        icon: <LockOpen size={15} />,
+        onPress: onDisarm,
+        timelineText: `${timelineActor} ha disinserito ${formatTimeLabel(new Date())}`,
+        variant: 'safe',
+      },
+      ...supportedModes.map((mode) => ({
+        id: mode.id,
+        label: mode.label,
+        state: mode.state,
+        icon: mode.icon,
+        onPress: mode.onPress,
+        timelineText: `${timelineActor} ha inserito ${mode.label} ${formatTimeLabel(new Date())}`,
+        variant: 'default' as const,
+      })),
+    ],
+    [onDisarm, supportedModes, timelineActor],
+  );
+  const triggerAction = useMemo<PendingAlarmAction | null>(
+    () =>
+      triggerSupported
+        ? {
+            id: 'trigger',
+            label: 'Trigger allarme',
+            state: 'triggered',
+            icon: <AlertTriangle size={15} />,
+            onPress: onTrigger,
+            variant: 'danger',
+          }
+        : null,
+    [onTrigger, triggerSupported],
+  );
+  const activityUnavailableMessage = useMemo(() => {
+    const historyHours = Math.max(1, Math.round(Number(alarm.activityLogHours) || 24));
+    if (alarm.activityTimelineStatus === 'loading') {
+      return 'Caricamento attività reali da Home Assistant...';
+    }
+    if (alarm.activityTimelineStatus === 'empty') {
+      return `Nessuna attività reale trovata nelle ultime ${historyHours} ore.`;
+    }
+    if (alarm.activityTimelineStatus === 'unavailable') {
+      return 'Attività reale non disponibile: il logbook di Home Assistant non ha risposto.';
+    }
+    if (alarm.activityTimelineStatus === 'offline') {
+      return 'Connetti Home Assistant per vedere attività reali dell’allarme.';
+    }
+    return 'Nessuna attività reale disponibile per questo allarme.';
+  }, [alarm.activityLogHours, alarm.activityTimelineStatus]);
 
   const pushTimeline = (text: string) => {
     setTimeline((prev) => [
@@ -210,11 +316,37 @@ export function AlarmControls({
     ].slice(0, maxTimelineEntries));
   };
 
-  const handleAction = (action: (code?: string) => void, timelineText?: string) => {
-    const code = trimmedCode.length ? trimmedCode : undefined;
-    action(code);
-    if (timelineText) {
-      pushTimeline(timelineText);
+  const openActionDialog = (action: PendingAlarmAction) => {
+    setPendingAction(action);
+    setAuthCode('');
+  };
+
+  const closeActionDialog = () => {
+    if (isAuthBusy) {
+      return;
+    }
+    setPendingAction(null);
+    setAuthCode('');
+  };
+
+  const confirmPendingAction = async (useBiometric = false) => {
+    if (!pendingAction || isAuthBusy || (!useBiometric && actionLocked)) {
+      return;
+    }
+    const code = !useBiometric && pendingNeedsCode && trimmedCode.length ? trimmedCode : undefined;
+    setIsAuthBusy(true);
+    try {
+      const didRun = await pendingAction.onPress(code);
+      if (didRun === false) {
+        return;
+      }
+      if (pendingAction.timelineText && shouldUseLocalTimeline) {
+        pushTimeline(pendingAction.timelineText);
+      }
+      setPendingAction(null);
+      setAuthCode('');
+    } finally {
+      setIsAuthBusy(false);
     }
   };
 
@@ -222,15 +354,15 @@ export function AlarmControls({
     if (trimmedCode.length >= codeLengthLimit) {
       return;
     }
-    setAlarmCode((current) => `${current}${digit}`.slice(0, codeLengthLimit));
+    setAuthCode((current) => `${current}${digit}`.slice(0, codeLengthLimit));
   };
 
   const popCodeDigit = () => {
-    setAlarmCode((current) => current.slice(0, -1));
+    setAuthCode((current) => current.slice(0, -1));
   };
 
   const clearCode = () => {
-    setAlarmCode('');
+    setAuthCode('');
   };
 
   return (
@@ -248,134 +380,97 @@ export function AlarmControls({
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-white/50">Codice</p>
-          {codeRequired ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/45 bg-amber-500/18 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-amber-100">
-              Richiesto
+        <div className={`mb-4 overflow-hidden rounded-[1.75rem] border bg-gradient-to-br ${headerAccent} px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_34px_rgba(0,0,0,0.18)]`}>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">Modalita attuale</p>
+            <span className="shrink-0 rounded-full border border-white/14 bg-white/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/80">
+              {activeBadgeLabel}
             </span>
-          ) : null}
-        </div>
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={alarmCode}
-          onChange={(event) =>
-            setAlarmCode(
-              numericCodeMode
-                ? event.target.value.replace(/[^\d]/g, '').slice(0, codeLengthLimit)
-                : event.target.value.slice(0, codeLengthLimit),
-            )
-          }
-          placeholder="Inserisci codice allarme"
-          className="w-full rounded-2xl bg-black/25 border border-white/12 px-4 py-3 text-sm text-white outline-none focus:border-blue-300/60"
-        />
-        {numericCodeMode ? (
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-              <button
-                key={digit}
-                type="button"
-                onClick={() => pushCodeDigit(digit)}
-                className="h-12 rounded-2xl border border-white/12 bg-white/8 text-white font-semibold text-base backdrop-blur-md transition-all hover:bg-white/14 active:scale-[0.97]"
-              >
-                {digit}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={clearCode}
-              className="h-12 rounded-2xl border border-white/12 bg-white/8 text-white/80 text-xs uppercase tracking-[0.16em] font-semibold backdrop-blur-md transition-all hover:bg-white/14 active:scale-[0.97]"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={() => pushCodeDigit('0')}
-              className="h-12 rounded-2xl border border-white/12 bg-white/8 text-white font-semibold text-base backdrop-blur-md transition-all hover:bg-white/14 active:scale-[0.97]"
-            >
-              0
-            </button>
-            <button
-              type="button"
-              onClick={popCodeDigit}
-              className="h-12 rounded-2xl border border-white/12 bg-white/8 text-white/90 flex items-center justify-center backdrop-blur-md transition-all hover:bg-white/14 active:scale-[0.97]"
-              aria-label="Cancella ultimo numero"
-            >
-              <Delete size={16} />
-            </button>
           </div>
-        ) : null}
-        {codeMissing ? (
-          <p className="mt-3 text-xs text-amber-100/90">Inserisci il codice per eseguire le azioni di inserimento/disinserimento.</p>
-        ) : null}
-        {codeMismatch ? (
-          <p className="mt-2 text-xs text-rose-100/90">Codice non valido: azioni bloccate finche non coincide.</p>
-        ) : null}
-      </div>
-
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <p className="text-xs uppercase tracking-[0.18em] text-white/50 mb-4">Modalita allarme</p>
-        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
-          {supportedModes.map((mode) => {
+          <div className="mt-3 flex items-center gap-3">
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/18 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${normalizedState === 'triggered' ? 'animate-pulse' : ''}`}>
+              <HeaderIcon size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold leading-tight text-white">{currentModeLabel}</p>
+              <p className="truncate text-xs font-medium text-white/62">{currentModeCaption}</p>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs uppercase tracking-[0.18em] text-white/50 mb-3">Modalita disponibili</p>
+        <div className="flex items-stretch gap-2">
+          {modeActions.map((mode) => {
             const isActive = normalizedState === mode.state;
             return (
               <button
                 key={mode.id}
                 type="button"
-                onClick={() => handleAction(mode.onPress, `${timelineActor} ha inserito ${mode.label} ${formatTimeLabel(new Date())}`)}
-                disabled={actionLocked}
-                className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                onClick={() => openActionDialog(mode)}
+                disabled={isActive}
+                title={mode.label}
+                className={`flex min-h-12 min-w-0 flex-1 items-center justify-center rounded-2xl border px-2.5 py-3 text-center transition-colors ${
                   isActive
-                    ? 'border-blue-300/45 bg-blue-500/20 text-blue-100'
+                    ? 'cursor-default border-white/18 bg-white/12 text-white'
+                    : mode.variant === 'safe'
+                      ? 'border-emerald-300/35 bg-emerald-500/14 text-emerald-100 hover:bg-emerald-500/22'
                     : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10'
-                } ${actionLocked ? 'opacity-55 cursor-not-allowed' : ''}`}
+                }`}
               >
-                <span className="inline-flex items-center gap-2 text-sm font-medium">
+                <span className="inline-flex min-w-0 items-center justify-center gap-1.5 text-sm font-medium">
                   {mode.icon}
-                  {mode.label}
+                  <span className="hidden truncate min-[430px]:inline">{mode.label}</span>
                 </span>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3">
-          <button
-            type="button"
-            onClick={() => handleAction(onDisarm, `${timelineActor} ha disinserito ${formatTimeLabel(new Date())}`)}
-            disabled={actionLocked}
-            className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
-              normalizedState === 'disarmed'
-                ? 'border-emerald-300/45 bg-emerald-500/18 text-emerald-100'
-                : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10'
-            } ${actionLocked ? 'opacity-55 cursor-not-allowed' : ''}`}
-          >
-            <span className="inline-flex items-center gap-2 text-sm font-medium">
-              <LockOpen size={15} />
-              Disinserisci
-            </span>
-          </button>
-
-          {triggerSupported ? (
+        {triggerAction ? (
+          <div className="mt-4 grid grid-cols-1 gap-3">
             <button
               type="button"
-              onClick={() => handleAction(onTrigger)}
-              disabled={actionLocked}
+              onClick={() => openActionDialog(triggerAction)}
               className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
                 normalizedState === 'triggered'
                   ? 'border-rose-300/45 bg-rose-500/26 text-rose-100'
                   : 'border-rose-300/30 bg-rose-500/12 text-rose-100 hover:bg-rose-500/20'
-              } ${actionLocked ? 'opacity-55 cursor-not-allowed' : ''}`}
+              }`}
             >
               <span className="inline-flex items-center gap-2 text-sm font-medium">
                 <AlertTriangle size={15} />
                 Trigger allarme
               </span>
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
+
+      <SecurityAuthModal
+        isOpen={Boolean(pendingAction)}
+        pendingAlarmState={pendingAction?.state ?? null}
+        pendingStateRequiresCode={pendingNeedsCode}
+        authError={authError}
+        isAuthBusy={isAuthBusy}
+        supportsBiometric={pendingCanUseBiometric}
+        prefersBiometric={pendingCanUseBiometric}
+        isAlarmCodeNumeric={numericCodeMode}
+        alarmCodeTypeLabel={alarmCodeTypeLabel}
+        authPinInput={authCode}
+        onPinInputChange={(value) =>
+          setAuthCode(
+            numericCodeMode
+              ? value.replace(/[^\d]/g, '').slice(0, codeLengthLimit)
+              : value.slice(0, codeLengthLimit),
+          )
+        }
+        onVerifyWithPin={() => confirmPendingAction(pendingCanUseBiometric && !pendingNeedsCode)}
+        onVerifyWithBiometric={() => confirmPendingAction(true)}
+        onPushPinDigit={pushCodeDigit}
+        onPopPinDigit={popCodeDigit}
+        onClearPin={clearCode}
+        onClose={closeActionDialog}
+        usePortal
+      />
 
       <div className={CONTEXT_PANEL_LAYOUT.section}>
         <p className="text-[11px] font-semibold tracking-[0.2em] text-white/55">ATTIVITA RECENTE</p>
@@ -391,7 +486,7 @@ export function AlarmControls({
             ))
           ) : (
             <div className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/58">
-              Nessuna attivita recente disponibile.
+              {activityUnavailableMessage}
             </div>
           )}
         </div>

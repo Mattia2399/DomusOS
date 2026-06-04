@@ -401,7 +401,7 @@ export function LightControlsPanel({
             />
           ))}
         </div>
-        <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-3">
+        <div className="liquid-glass-card mt-5 p-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs uppercase tracking-[0.14em] text-white/55">Picker colore</p>
             <button
@@ -431,7 +431,7 @@ export function LightControlsPanel({
           >
             <div className="flex items-center justify-between">
               <span className="text-sm text-white/80">Colore personalizzato</span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs text-white/80">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-2.5 py-1 text-xs text-white/80">
                 <span
                   className="h-4 w-4 rounded-full border border-white/30"
                   style={{ backgroundColor: pickerColor }}

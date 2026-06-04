@@ -580,7 +580,7 @@ export function MediaControlsPanel({
             </div>
           </div>
 
-          <div className="mt-4 rounded-full bg-black/20 backdrop-blur-md border border-white/5 p-2 flex items-center justify-center gap-2.5">
+          <div className="mt-4 rounded-full bg-white/[0.04] backdrop-blur-md border border-white/5 p-2 flex items-center justify-center gap-2.5">
             <button
               type="button"
               className={`w-9 h-9 rounded-full border text-white flex items-center justify-center transition-colors ${
@@ -655,7 +655,7 @@ export function MediaControlsPanel({
             >
               <Repeat size={15} />
               {resolvedRepeatMode === 'one' ? (
-                <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white/25 bg-slate-900/90 px-1 text-[9px] font-semibold leading-none text-white">
+                <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white/25 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
                   1
                 </span>
               ) : null}

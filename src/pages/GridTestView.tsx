@@ -328,7 +328,7 @@ export function GridTestView() {
   };
 
   return (
-    <main className="min-h-screen w-full bg-slate-950 text-white">
+    <main className="apple-bg-main min-h-screen w-full">
       <section className="mx-auto flex w-full max-w-[1600px] flex-col gap-10 px-4 py-6 sm:px-6 lg:px-10">
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-[0.2em] text-white/60">Grid Engine Test</p>

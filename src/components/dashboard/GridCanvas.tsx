@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy';
-import { LayoutGrid, Plus, X } from 'lucide-react';
+import { LayoutGrid, MoreHorizontal, Plus, X } from 'lucide-react';
 import { SectionCardRenderer, WidgetCardRenderer } from '../widgets/CardRenderer';
 import { SCENES_CATALOG } from '../widgets/ScenesCard';
 import {
@@ -21,6 +21,7 @@ import type {
   WidgetKind,
   SceneKey,
 } from '../../types/dashboardModels';
+import type { WidgetTypeLayoutOverrides } from '../../types/widgetTypeLayout';
 import { ROOT_CANVAS_COLS, ROOT_CANVAS_ROW_UNITS, SECTION_CATALOG, WIDGET_CATALOG } from '../../types/dashboardModels';
 import {
   ALARM_WIDGET_SPAN_BY_BREAKPOINT,
@@ -32,8 +33,18 @@ import {
   MEMBERS_WIDGET_SPAN_BY_BREAKPOINT,
   MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
   SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
+  SCENES_SECTION_SPAN_BY_BREAKPOINT,
   VACUUM_WIDGET_SPAN_BY_BREAKPOINT,
+  resolveWidgetTypeLayoutSpan,
 } from './dashboardBreakpointConfig';
+import {
+  adaptToMobileColumns,
+  compactLayoutUp,
+  normalizeRuntimeLayout,
+  packLayoutDense,
+  resolveClosestParentBreakpointWithLayout,
+  scaleLayoutColumns,
+} from './gridEngineGeometry';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -52,6 +63,7 @@ type GridCanvasProps = {
   isEditMode: boolean;
   developerMode: boolean;
   isXsViewport: boolean;
+  onActiveBreakpointChange?: (breakpoint: GridBreakpoint) => void;
   topRightOverlay?: React.ReactNode;
   state: DashboardStateShape;
   sections: DashboardSection[];
@@ -60,6 +72,7 @@ type GridCanvasProps = {
   selectedWidgetId: string | null;
   selectedSectionId: string | null;
   isCatalogOpen: boolean;
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
   onOpenCatalog: () => void;
   onCloseCatalog: () => void;
   onSelectWidget: (id: string | null) => void;
@@ -81,7 +94,7 @@ type GridCanvasProps = {
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onWidgetVacuumStartPause: (widget: Widget) => void;
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
-  onWidgetLockToggle: (widget: Widget) => void;
+  onWidgetLockToggle: (widget: Widget) => boolean | void;
   onWidgetLockOpen: (widget: Widget) => void;
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
@@ -150,20 +163,6 @@ function resolveActiveBreakpoint(viewportWidth: number): GridBreakpoint {
   return viewportWidth >= GRID_ENGINE_BREAKPOINTS.sm ? 'sm' : 'xs';
 }
 
-function normalizeRuntimeLayout(next: readonly GridItem[], cols: number): GridItem[] {
-  const safeCols = Math.max(1, Math.round(cols));
-  return next.map((item) => {
-    const safeW = Math.min(safeCols, Math.max(1, Math.round(item.w)));
-    return {
-      i: item.i,
-      x: Math.min(Math.max(0, Math.round(item.x)), Math.max(0, safeCols - safeW)),
-      y: Math.max(0, Math.round(item.y)),
-      w: safeW,
-      h: Math.max(1, Math.round(item.h)),
-    };
-  });
-}
-
 function toGridLayouts(layouts: ResponsiveLayouts<GridBreakpoint>): GridLayouts {
   const next: GridLayouts = {};
   GRID_ENGINE_BREAKPOINT_ORDER.forEach((breakpoint) => {
@@ -211,129 +210,45 @@ function normalizeGridItems(next: readonly GridItem[]): GridItem[] {
   }));
 }
 
-function scaleLayoutColumns(item: GridItem, sourceCols: number, targetCols: number): GridItem {
-  const safeSourceCols = Math.max(1, sourceCols);
-  const safeTargetCols = Math.max(1, targetCols);
-  const normalizedY = Math.max(0, Math.round(item.y));
-  const normalizedH = Math.max(1, Math.round(item.h));
-  const normalizedW = Math.max(1, Math.round(item.w));
-  const normalizedX = Math.max(0, Math.round(item.x));
-
-  if (safeSourceCols === safeTargetCols) {
-    const safeSameW = Math.min(safeTargetCols, normalizedW);
-    const sameMaxX = Math.max(0, safeTargetCols - safeSameW);
-    return {
-      i: item.i,
-      x: Math.min(normalizedX, sameMaxX),
-      y: normalizedY,
-      w: safeSameW,
-      h: normalizedH,
-    };
-  }
-
-  const sourceSafeW = Math.min(safeSourceCols, normalizedW);
-  const sourceMaxX = Math.max(0, safeSourceCols - sourceSafeW);
-  const sourceSafeX = Math.min(normalizedX, sourceMaxX);
-  const sourceLeft = sourceSafeX / safeSourceCols;
-  const sourceRight = (sourceSafeX + sourceSafeW) / safeSourceCols;
-  let safeX = Math.floor(sourceLeft * safeTargetCols);
-  let safeRight = Math.ceil(sourceRight * safeTargetCols);
-  safeX = Math.min(Math.max(0, safeX), Math.max(0, safeTargetCols - 1));
-  safeRight = Math.max(safeX + 1, Math.min(safeTargetCols, safeRight));
-  const safeW = Math.max(1, safeRight - safeX);
-  const maxX = Math.max(0, safeTargetCols - safeW);
-  safeX = Math.min(safeX, maxX);
-  return {
-    i: item.i,
-    x: safeX,
-    y: normalizedY,
-    w: safeW,
-    h: normalizedH,
-  };
-}
-
-function intersects(first: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>, second: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>) {
-  return (
-    first.x < second.x + second.w &&
-    first.x + first.w > second.x &&
-    first.y < second.y + second.h &&
-    first.y + first.h > second.y
-  );
-}
-
-function sortByTopLeft(layouts: GridItem[]) {
-  return [...layouts].sort((first, second) => {
-    const firstY = Math.max(0, Math.round(first.y));
-    const secondY = Math.max(0, Math.round(second.y));
-    if (firstY !== secondY) {
-      return firstY - secondY;
-    }
-    const firstX = Math.max(0, Math.round(first.x));
-    const secondX = Math.max(0, Math.round(second.x));
-    if (firstX !== secondX) {
-      return firstX - secondX;
-    }
-    return first.i.localeCompare(second.i, 'it-IT');
-  });
-}
-
-function compactLayoutUp(layouts: GridItem[], cols: number): GridItem[] {
-  const safeCols = Math.max(1, Math.round(cols));
-  const placed: GridItem[] = [];
-  const ordered = sortByTopLeft(layouts);
-
-  ordered.forEach((item) => {
-    const safeW = Math.min(safeCols, Math.max(1, Math.round(item.w)));
-    const safeH = Math.max(1, Math.round(item.h));
-    const safeX = Math.min(Math.max(0, Math.round(item.x)), Math.max(0, safeCols - safeW));
-    let safeY = Math.max(0, Math.round(item.y));
-
-    while (safeY > 0) {
-      const candidate = { x: safeX, y: safeY - 1, w: safeW, h: safeH };
-      if (placed.some((existing) => intersects(candidate, existing))) {
-        break;
-      }
-      safeY -= 1;
-    }
-
-    placed.push({
-      i: item.i,
-      x: safeX,
-      y: safeY,
-      w: safeW,
-      h: safeH,
-    });
-  });
-
-  return placed;
-}
-
-function isSmallOneByOne(item: GridItem) {
-  return Math.max(1, Math.round(item.w)) === 1 && Math.max(1, Math.round(item.h)) === 1;
-}
-
 function enforceLightWidgetSpan(
   layouts: GridItem[],
   breakpoint: GridBreakpoint,
   cols: number,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
+  useExplicitLightSpan: boolean,
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
 ): GridItem[] {
   if (lightWidgetStateById.size === 0) {
     return normalizeRuntimeLayout(layouts, cols);
   }
-  const span = LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+  const span = resolveWidgetTypeLayoutSpan('light', breakpoint, widgetTypeLayoutOverrides);
   const safeCols = Math.max(1, Math.round(cols));
-  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
   return normalizeRuntimeLayout(
     layouts.map((item) => {
       const lightIsOn = lightWidgetStateById.get(item.i);
       if (lightIsOn === undefined) {
         return item;
       }
-      const forcedH = Math.max(1, Math.round(lightIsOn ? span.hOn : span.hOff));
+      const currentW = Math.max(1, Math.round(item.w));
+      const nextW = useExplicitLightSpan
+        ? Math.min(safeCols, Math.max(1, Math.round(span.w)))
+        : Math.min(safeCols, currentW);
+      const currentH = Math.max(1, Math.round(item.h));
+      const configuredH = Math.max(1, Math.round(lightIsOn ? span.hOn : span.hOff));
+      const forcedH = useExplicitLightSpan
+        ? lightIsOn && configuredH <= 1
+          ? Math.max(2, Math.round(span.hOn))
+          : configuredH
+        : lightIsOn
+        ? currentH <= 1
+          ? Math.max(2, Math.round(span.hOn))
+          : currentH
+        : currentH <= 2
+          ? Math.max(1, Math.round(span.hOff))
+          : currentH;
       return {
         ...item,
-        w: forcedW,
+        w: nextW,
         h: forcedH,
       };
     }),
@@ -509,34 +424,6 @@ function enforceAlarmWidgetSpan(
   );
 }
 
-function enforceLockWidgetSpan(
-  layouts: GridItem[],
-  breakpoint: GridBreakpoint,
-  cols: number,
-  lockWidgetIds: ReadonlySet<string>,
-): GridItem[] {
-  if (lockWidgetIds.size === 0) {
-    return normalizeRuntimeLayout(layouts, cols);
-  }
-  const span = LOCK_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
-  const safeCols = Math.max(1, Math.round(cols));
-  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
-  const forcedH = Math.max(1, Math.round(span.h));
-  return normalizeRuntimeLayout(
-    layouts.map((item) => {
-      if (!lockWidgetIds.has(item.i)) {
-        return item;
-      }
-      return {
-        ...item,
-        w: forcedW,
-        h: forcedH,
-      };
-    }),
-    safeCols,
-  );
-}
-
 function enforceVacuumWidgetSpan(
   layouts: GridItem[],
   breakpoint: GridBreakpoint,
@@ -593,8 +480,192 @@ function enforceCoverWidgetSpan(
   );
 }
 
+function enforceSimpleWidgetKindSpan(
+  layouts: GridItem[],
+  kind: Exclude<WidgetKind, 'light'>,
+  breakpoint: GridBreakpoint,
+  cols: number,
+  widgetIds: ReadonlySet<string>,
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  enforceSpan: boolean,
+): GridItem[] {
+  if (widgetIds.size === 0 || !enforceSpan) {
+    return normalizeRuntimeLayout(layouts, cols);
+  }
+  const span = resolveWidgetTypeLayoutSpan(kind, breakpoint, widgetTypeLayoutOverrides);
+  const safeCols = Math.max(1, Math.round(cols));
+  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+  const forcedH = Math.max(1, Math.round(span.h));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!widgetIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        w: forcedW,
+        h: forcedH,
+      };
+    }),
+    safeCols,
+  );
+}
+
+function enforceLockWidgetSpan(
+  layouts: GridItem[],
+  breakpoint: GridBreakpoint,
+  cols: number,
+  lockWidgetIds: ReadonlySet<string>,
+): GridItem[] {
+  if (lockWidgetIds.size === 0) {
+    return normalizeRuntimeLayout(layouts, cols);
+  }
+  const span = LOCK_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+  const safeCols = Math.max(1, Math.round(cols));
+  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+  const forcedH = Math.max(1, Math.round(span.h));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!lockWidgetIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        w: forcedW,
+        h: forcedH,
+      };
+    }),
+    safeCols,
+  );
+}
+
 function enforceRootWidgetSpans(
   layouts: GridItem[],
+  breakpoint: GridBreakpoint,
+  cols: number,
+  scenesSectionIds: ReadonlySet<string>,
+  lightWidgetStateById: ReadonlyMap<string, boolean>,
+  useExplicitLightSpan: boolean,
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  climateWidgetIds: ReadonlySet<string>,
+  cameraWidgetIds: ReadonlySet<string>,
+  mediaWidgetIds: ReadonlySet<string>,
+  sensorWidgetIds: ReadonlySet<string>,
+  membersWidgetIds: ReadonlySet<string>,
+  alarmWidgetIds: ReadonlySet<string>,
+  vacuumWidgetIds: ReadonlySet<string>,
+  lockWidgetIds: ReadonlySet<string>,
+  coverWidgetIds: ReadonlySet<string>,
+): GridItem[] {
+  const scenesSpan = SCENES_SECTION_SPAN_BY_BREAKPOINT[breakpoint];
+  const safeScenesW = Math.min(Math.max(1, Math.round(cols)), Math.max(1, Math.round(scenesSpan.w)));
+  const safeScenesH = Math.max(1, Math.round(scenesSpan.h));
+  const withScenes = normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!scenesSectionIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        x: 0,
+        w: safeScenesW,
+        h: safeScenesH,
+      };
+    }),
+    cols,
+  );
+  const withLight = enforceLightWidgetSpan(
+    withScenes,
+    breakpoint,
+    cols,
+    lightWidgetStateById,
+    useExplicitLightSpan,
+    widgetTypeLayoutOverrides,
+  );
+  const withClimate = enforceSimpleWidgetKindSpan(
+    withLight,
+    'climate',
+    breakpoint,
+    cols,
+    climateWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.climate?.[breakpoint]),
+  );
+  const withCamera = enforceSimpleWidgetKindSpan(
+    withClimate,
+    'camera',
+    breakpoint,
+    cols,
+    cameraWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.camera?.[breakpoint]),
+  );
+  const withMedia = enforceSimpleWidgetKindSpan(
+    withCamera,
+    'media',
+    breakpoint,
+    cols,
+    mediaWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.media?.[breakpoint]),
+  );
+  const withSensor = enforceSimpleWidgetKindSpan(
+    withMedia,
+    'sensor',
+    breakpoint,
+    cols,
+    sensorWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.sensor?.[breakpoint]),
+  );
+  const withMembers = enforceSimpleWidgetKindSpan(
+    withSensor,
+    'members',
+    breakpoint,
+    cols,
+    membersWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.members?.[breakpoint]),
+  );
+  const withAlarm = enforceSimpleWidgetKindSpan(
+    withMembers,
+    'alarm',
+    breakpoint,
+    cols,
+    alarmWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.alarm?.[breakpoint]),
+  );
+  const withVacuum = enforceSimpleWidgetKindSpan(
+    withAlarm,
+    'vacuum',
+    breakpoint,
+    cols,
+    vacuumWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.vacuum?.[breakpoint]),
+  );
+  const withLock = enforceSimpleWidgetKindSpan(
+    withVacuum,
+    'lock',
+    breakpoint,
+    cols,
+    lockWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.lock?.[breakpoint]),
+  );
+  return enforceSimpleWidgetKindSpan(
+    withLock,
+    'cover',
+    breakpoint,
+    cols,
+    coverWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.cover?.[breakpoint]),
+  );
+}
+
+function resolveRootMobileCompactIds(
   breakpoint: GridBreakpoint,
   cols: number,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
@@ -604,79 +675,39 @@ function enforceRootWidgetSpans(
   sensorWidgetIds: ReadonlySet<string>,
   membersWidgetIds: ReadonlySet<string>,
   alarmWidgetIds: ReadonlySet<string>,
-  lockWidgetIds: ReadonlySet<string>,
   vacuumWidgetIds: ReadonlySet<string>,
+  lockWidgetIds: ReadonlySet<string>,
   coverWidgetIds: ReadonlySet<string>,
-): GridItem[] {
-  const withLight = enforceLightWidgetSpan(layouts, breakpoint, cols, lightWidgetStateById);
-  const withClimate = enforceClimateWidgetSpan(withLight, breakpoint, cols, climateWidgetIds);
-  const withCamera = enforceCameraWidgetSpan(withClimate, breakpoint, cols, cameraWidgetIds);
-  const withMedia = enforceMediaWidgetSpan(withCamera, breakpoint, cols, mediaWidgetIds);
-  const withSensor = enforceSensorWidgetSpan(withMedia, breakpoint, cols, sensorWidgetIds);
-  const withMembers = enforceMembersWidgetSpan(withSensor, breakpoint, cols, membersWidgetIds);
-  const withAlarm = enforceAlarmWidgetSpan(withMembers, breakpoint, cols, alarmWidgetIds);
-  const withLock = enforceLockWidgetSpan(withAlarm, breakpoint, cols, lockWidgetIds);
-  const withVacuum = enforceVacuumWidgetSpan(withLock, breakpoint, cols, vacuumWidgetIds);
-  return enforceCoverWidgetSpan(withVacuum, breakpoint, cols, coverWidgetIds);
-}
-
-function adaptToMobileColumns(
-  layouts: GridItem[],
-  sourceCols: number,
-  targetCols: number,
-  smallOneByOneIds?: ReadonlySet<string>,
-): GridItem[] {
-  const safeCols = Math.max(1, Math.round(targetCols));
-  const halfSpan = Math.max(1, Math.floor(safeCols / 2));
-  const ordered = sortByTopLeft(layouts.map((item) => scaleLayoutColumns(item, sourceCols, safeCols)));
-  const placed: GridItem[] = [];
-
-  ordered.forEach((source) => {
-    const safeH = Math.max(1, Math.round(source.h));
-    const isSmallItem = smallOneByOneIds ? smallOneByOneIds.has(source.i) : isSmallOneByOne(source);
-    const safeW = isSmallItem ? Math.min(safeCols, halfSpan) : safeCols;
-    const preferredX =
-      safeW === safeCols
-        ? 0
-        : source.x + source.w / 2 >= safeCols / 2
-          ? Math.max(0, safeCols - safeW)
-          : 0;
-    const fallbackXs: number[] = [];
-    for (let x = 0; x <= safeCols - safeW; x += 1) {
-      if (x !== preferredX) {
-        fallbackXs.push(x);
-      }
+) {
+  const compactIds = new Set<string>();
+  const safeCols = Math.max(1, Math.round(cols));
+  const addIfNarrowerThanGrid = (ids: Iterable<string>, spanWidth: number) => {
+    if (Math.max(1, Math.round(spanWidth)) >= safeCols) {
+      return;
     }
-    const candidateXs = [preferredX, ...fallbackXs];
-    let safeY = Math.max(0, Math.round(source.y));
-    let placedItem: GridItem | null = null;
-
-    while (!placedItem) {
-      const availableX = candidateXs.find((candidateX) => {
-        const candidate = { x: candidateX, y: safeY, w: safeW, h: safeH };
-        return !placed.some((existing) => intersects(candidate, existing));
-      });
-      if (availableX !== undefined) {
-        placedItem = {
-          i: source.i,
-          x: availableX,
-          y: safeY,
-          w: safeW,
-          h: safeH,
-        };
-        break;
-      }
-      safeY += 1;
+    for (const id of ids) {
+      compactIds.add(id);
     }
+  };
 
-    placed.push(placedItem);
-  });
+  addIfNarrowerThanGrid(lightWidgetStateById.keys(), LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(climateWidgetIds, CLIMATE_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(cameraWidgetIds, CAMERA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(mediaWidgetIds, MEDIA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(sensorWidgetIds, SENSOR_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(membersWidgetIds, MEMBERS_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(alarmWidgetIds, ALARM_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(vacuumWidgetIds, VACUUM_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(lockWidgetIds, LOCK_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(coverWidgetIds, COVER_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
 
-  return compactLayoutUp(placed, safeCols);
+  return compactIds;
 }
 
 function buildResponsiveLayoutsFromDesktop(
   desktopLayout: GridItem[],
+  scenesSectionIds: ReadonlySet<string>,
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
@@ -684,8 +715,8 @@ function buildResponsiveLayoutsFromDesktop(
   sensorWidgetIds: ReadonlySet<string>,
   membersWidgetIds: ReadonlySet<string>,
   alarmWidgetIds: ReadonlySet<string>,
-  lockWidgetIds: ReadonlySet<string>,
   vacuumWidgetIds: ReadonlySet<string>,
+  lockWidgetIds: ReadonlySet<string>,
   coverWidgetIds: ReadonlySet<string>,
 ): GridLayouts {
   const xl = compactLayoutUp(
@@ -693,108 +724,151 @@ function buildResponsiveLayoutsFromDesktop(
       normalizeRuntimeLayout(desktopLayout, GRID_ENGINE_XL_COLS),
       'xl',
       GRID_ENGINE_XL_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.xl),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_XL_COLS,
   );
-  const twoXl = compactLayoutUp(
+  const twoXl = packLayoutDense(
     enforceRootWidgetSpans(
       xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_2XL_COLS)),
       '2xl',
       GRID_ENGINE_2XL_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.['2xl']),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_2XL_COLS,
   );
-  const lg = compactLayoutUp(
+  const lg = packLayoutDense(
     enforceRootWidgetSpans(
       xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_LG_COLS)),
       'lg',
       GRID_ENGINE_LG_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.lg),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_LG_COLS,
   );
-  const smallOneByOneIds = new Set(
-    xl.filter((item) => isSmallOneByOne(item)).map((item) => item.i),
-  );
-  const md = compactLayoutUp(
+  const md = packLayoutDense(
     enforceRootWidgetSpans(
       lg.map((item) => scaleLayoutColumns(item, GRID_ENGINE_LG_COLS, GRID_ENGINE_MD_COLS)),
       'md',
       GRID_ENGINE_MD_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.md),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_MD_COLS,
   );
-  const sm = compactLayoutUp(
+  const smCompactIds = resolveRootMobileCompactIds(
+    'sm',
+    GRID_ENGINE_SM_COLS,
+    lightWidgetStateById,
+    climateWidgetIds,
+    cameraWidgetIds,
+    mediaWidgetIds,
+    sensorWidgetIds,
+    membersWidgetIds,
+    alarmWidgetIds,
+    vacuumWidgetIds,
+    lockWidgetIds,
+    coverWidgetIds,
+  );
+  const sm = packLayoutDense(
     enforceRootWidgetSpans(
-      adaptToMobileColumns(lg, GRID_ENGINE_LG_COLS, GRID_ENGINE_SM_COLS, smallOneByOneIds),
+      adaptToMobileColumns(lg, GRID_ENGINE_LG_COLS, GRID_ENGINE_SM_COLS, smCompactIds),
       'sm',
       GRID_ENGINE_SM_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.sm),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_SM_COLS,
   );
-  const xs = compactLayoutUp(
+  const xsCompactIds = resolveRootMobileCompactIds(
+    'xs',
+    GRID_ENGINE_XS_COLS,
+    lightWidgetStateById,
+    climateWidgetIds,
+    cameraWidgetIds,
+    mediaWidgetIds,
+    sensorWidgetIds,
+    membersWidgetIds,
+    alarmWidgetIds,
+    vacuumWidgetIds,
+    lockWidgetIds,
+    coverWidgetIds,
+  );
+  const xs = packLayoutDense(
     enforceRootWidgetSpans(
-      adaptToMobileColumns(sm, GRID_ENGINE_SM_COLS, GRID_ENGINE_XS_COLS, smallOneByOneIds),
+      adaptToMobileColumns(sm, GRID_ENGINE_SM_COLS, GRID_ENGINE_XS_COLS, xsCompactIds),
       'xs',
       GRID_ENGINE_XS_COLS,
+      scenesSectionIds,
       lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.xs),
+      widgetTypeLayoutOverrides,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
       sensorWidgetIds,
       membersWidgetIds,
       alarmWidgetIds,
-      lockWidgetIds,
       vacuumWidgetIds,
+      lockWidgetIds,
       coverWidgetIds,
     ),
     GRID_ENGINE_XS_COLS,
@@ -806,6 +880,7 @@ export function GridCanvas({
   isEditMode,
   developerMode,
   isXsViewport,
+  onActiveBreakpointChange,
   topRightOverlay,
   state,
   sections,
@@ -814,6 +889,7 @@ export function GridCanvas({
   selectedWidgetId,
   selectedSectionId,
   isCatalogOpen,
+  widgetTypeLayoutOverrides,
   onOpenCatalog,
   onCloseCatalog,
   onSelectWidget,
@@ -855,6 +931,8 @@ export function GridCanvas({
   const xsLongPressTriggeredRef = useRef(false);
   const xsSuppressNextCardClickRef = useRef(false);
   const runtimeGridHostRef = useRef<HTMLDivElement | null>(null);
+  const canvasDragStartItemRef = useRef<GridItem | null>(null);
+  const hasCanvasDragMovedRef = useRef(false);
   const stableRuntimeGridWidthRef = useRef(0);
   const lastLiveGridEngineLayoutsRef = useRef<GridLayouts>({});
   const [isMounted, setIsMounted] = useState(false);
@@ -862,6 +940,12 @@ export function GridCanvas({
   const [gridEngineActiveBreakpoint, setGridEngineActiveBreakpoint] = useState<GridBreakpoint>(() =>
     resolveActiveBreakpoint(getViewportWidth()),
   );
+  useEffect(() => {
+    if (!onActiveBreakpointChange) {
+      return;
+    }
+    onActiveBreakpointChange(gridEngineActiveBreakpoint);
+  }, [gridEngineActiveBreakpoint, onActiveBreakpointChange]);
   const [gridEngineLayouts, setGridEngineLayouts] = useState<GridLayouts>({});
   const clearXsLongPressTimer = useCallback(() => {
     if (xsLongPressTimerRef.current !== null) {
@@ -876,6 +960,8 @@ export function GridCanvas({
     xsLongPressTriggeredRef.current = false;
   }, [clearXsLongPressTimer]);
   const isXsLongPressMode = !isEditMode && isXsViewport;
+  const isCompactEditCardMenuMode =
+    isEditMode && (gridEngineActiveBreakpoint === 'xs' || gridEngineActiveBreakpoint === 'sm');
   const handleXsLongPressStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, widget: Widget) => {
       if (!isXsLongPressMode) {
@@ -1065,20 +1151,20 @@ export function GridCanvas({
       ),
     [rootWidgets],
   );
-  const rootLockWidgetIds = useMemo(
-    () =>
-      new Set(
-        rootWidgets
-          .filter((widget) => widget.kind === 'lock')
-          .map((widget) => widget.id),
-      ),
-    [rootWidgets],
-  );
   const rootVacuumWidgetIds = useMemo(
     () =>
       new Set(
         rootWidgets
           .filter((widget) => widget.kind === 'vacuum')
+          .map((widget) => widget.id),
+      ),
+    [rootWidgets],
+  );
+  const rootLockWidgetIds = useMemo(
+    () =>
+      new Set(
+        rootWidgets
+          .filter((widget) => widget.kind === 'lock')
           .map((widget) => widget.id),
       ),
     [rootWidgets],
@@ -1091,6 +1177,10 @@ export function GridCanvas({
           .map((widget) => widget.id),
       ),
     [rootWidgets],
+  );
+  const rootScenesSectionIds = useMemo(
+    () => new Set(sections.filter((section) => section.kind === 'scenes').map((section) => section.id)),
+    [sections],
   );
   const desktopLayout = useMemo<GridItem[]>(
     () =>
@@ -1116,6 +1206,8 @@ export function GridCanvas({
     () =>
       buildResponsiveLayoutsFromDesktop(
         desktopLayout,
+        rootScenesSectionIds,
+        widgetTypeLayoutOverrides,
         rootLightWidgetStateById,
         rootClimateWidgetIds,
         rootCameraWidgetIds,
@@ -1123,12 +1215,14 @@ export function GridCanvas({
         rootSensorWidgetIds,
         rootMembersWidgetIds,
         rootAlarmWidgetIds,
-        rootLockWidgetIds,
         rootVacuumWidgetIds,
+        rootLockWidgetIds,
         rootCoverWidgetIds,
       ),
     [
       desktopLayout,
+      widgetTypeLayoutOverrides,
+      rootScenesSectionIds,
       rootLightWidgetStateById,
       rootClimateWidgetIds,
       rootCameraWidgetIds,
@@ -1136,7 +1230,6 @@ export function GridCanvas({
       rootSensorWidgetIds,
       rootMembersWidgetIds,
       rootAlarmWidgetIds,
-      rootLockWidgetIds,
       rootVacuumWidgetIds,
       rootCoverWidgetIds,
     ],
@@ -1157,19 +1250,90 @@ export function GridCanvas({
     const totalGap = GRID_ENGINE_GAP_PX * Math.max(0, gridEngineActiveCols - 1);
     return Math.max(1, (safeWidth - totalGap) / Math.max(1, gridEngineActiveCols));
   }, [gridEngineActiveBreakpoint, gridEngineActiveCols, runtimeGridEffectiveWidth]);
+  const normalizeRootLayoutForBreakpoint = useCallback(
+    (layouts: GridItem[], breakpoint: GridBreakpoint, cols: number) =>
+      compactLayoutUp(
+        enforceRootWidgetSpans(
+          normalizeRuntimeLayout(layouts, cols),
+          breakpoint,
+          cols,
+          rootScenesSectionIds,
+          rootLightWidgetStateById,
+          Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
+          widgetTypeLayoutOverrides,
+          rootClimateWidgetIds,
+          rootCameraWidgetIds,
+          rootMediaWidgetIds,
+          rootSensorWidgetIds,
+          rootMembersWidgetIds,
+          rootAlarmWidgetIds,
+          rootVacuumWidgetIds,
+          rootLockWidgetIds,
+          rootCoverWidgetIds,
+        ),
+        cols,
+      ),
+    [
+      rootLightWidgetStateById,
+      widgetTypeLayoutOverrides,
+      rootScenesSectionIds,
+      rootClimateWidgetIds,
+      rootCameraWidgetIds,
+      rootMediaWidgetIds,
+      rootSensorWidgetIds,
+      rootMembersWidgetIds,
+      rootAlarmWidgetIds,
+      rootVacuumWidgetIds,
+      rootLockWidgetIds,
+      rootCoverWidgetIds,
+    ],
+  );
   useEffect(() => {
     if (isCanvasInteractingRef.current) {
       return;
     }
-    setGridEngineLayouts((current) =>
-      sameGridLayouts(current, derivedGridEngineLayouts) ? current : derivedGridEngineLayouts,
-    );
-  }, [derivedGridEngineLayouts]);
+    setGridEngineLayouts((current) => {
+      let changed = false;
+      const next: GridLayouts = { ...current };
+
+      GRID_ENGINE_BREAKPOINT_ORDER.forEach((breakpoint) => {
+        const cols = GRID_ENGINE_COLS[breakpoint];
+        const derived = derivedGridEngineLayouts[breakpoint] ?? [];
+        const currentLayout = current[breakpoint] ?? [];
+        const currentById = new Map(currentLayout.map((item) => [item.i, item]));
+        const merged: GridItem[] = derived.map((derivedItem) => {
+          const currentItem = currentById.get(derivedItem.i);
+          if (!currentItem) {
+            return derivedItem;
+          }
+          const mergedItem: GridItem = {
+            ...currentItem,
+            // Keep user positioning for this breakpoint, but always consume the
+            // latest span generated by the layout engine (type overrides/panel).
+            w: derivedItem.w,
+            h: derivedItem.h,
+          };
+          if (rootScenesSectionIds.has(derivedItem.i)) {
+            mergedItem.x = derivedItem.x;
+          }
+          return mergedItem;
+        });
+
+        const normalized = normalizeRootLayoutForBreakpoint(merged, breakpoint, cols);
+        if (!sameGridLayout(currentLayout, normalized)) {
+          next[breakpoint] = normalized;
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [derivedGridEngineLayouts, normalizeRootLayoutForBreakpoint]);
   const liveGridEngineLayouts = useMemo<GridLayouts>(() => {
     const merged: GridLayouts = {};
     GRID_ENGINE_BREAKPOINT_ORDER.forEach((breakpoint) => {
-      const source = gridEngineLayouts[breakpoint] ?? derivedGridEngineLayouts[breakpoint] ?? [];
-      merged[breakpoint] = normalizeRuntimeLayout(source, GRID_ENGINE_COLS[breakpoint]);
+      const source = gridEngineLayouts[breakpoint] ?? [];
+      merged[breakpoint] = normalizeRootLayoutForBreakpoint(source, breakpoint, GRID_ENGINE_COLS[breakpoint]);
     });
     const previous = lastLiveGridEngineLayoutsRef.current;
     if (sameGridLayouts(previous, merged)) {
@@ -1177,7 +1341,7 @@ export function GridCanvas({
     }
     lastLiveGridEngineLayoutsRef.current = merged;
     return merged;
-  }, [derivedGridEngineLayouts, gridEngineLayouts]);
+  }, [gridEngineLayouts, normalizeRootLayoutForBreakpoint, widgetTypeLayoutOverrides]);
   const liveGridEngineLayout = liveGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
   const liveGridUsedRows = useMemo(
     () =>
@@ -1191,6 +1355,17 @@ export function GridCanvas({
     () => new Map(liveGridEngineLayout.map((item) => [item.i, item])),
     [liveGridEngineLayout],
   );
+  const hasGridItemMoved = useCallback((start: GridItem | null, next: GridItem | undefined | null) => {
+    if (!start || !next) {
+      return false;
+    }
+    return (
+      Math.round(start.x) !== Math.round(next.x) ||
+      Math.round(start.y) !== Math.round(next.y) ||
+      Math.round(start.w) !== Math.round(next.w) ||
+      Math.round(start.h) !== Math.round(next.h)
+    );
+  }, []);
   const layoutSections = useMemo(
     () => SECTION_CATALOG.filter((item) => !WIDGET_GROUP_SECTION_KINDS.includes(item.kind)),
     [],
@@ -1200,6 +1375,14 @@ export function GridCanvas({
     [],
   );
   const sectionIdSet = useMemo(() => new Set(sections.map((section) => section.id)), [sections]);
+  const sectionById = useMemo(
+    () => new Map(sections.map((section) => [section.id, section] as const)),
+    [sections],
+  );
+  const sectionKindById = useMemo(
+    () => new Map(sections.map((section) => [section.id, section.kind] as const)),
+    [sections],
+  );
   const rootWidgetIdSet = useMemo(() => new Set(rootWidgets.map((widget) => widget.id)), [rootWidgets]);
   const commitGridEngineLayouts = useCallback(
     (layouts: GridLayouts, activeLayout?: GridItem[]) => {
@@ -1214,15 +1397,18 @@ export function GridCanvas({
           source,
           GRID_ENGINE_CANONICAL_BREAKPOINT,
           GRID_ENGINE_CANONICAL_COLS,
+          rootScenesSectionIds,
           rootLightWidgetStateById,
+          Boolean(widgetTypeLayoutOverrides.light?.[GRID_ENGINE_CANONICAL_BREAKPOINT]),
+          widgetTypeLayoutOverrides,
           rootClimateWidgetIds,
           rootCameraWidgetIds,
           rootMediaWidgetIds,
           rootSensorWidgetIds,
           rootMembersWidgetIds,
           rootAlarmWidgetIds,
-          rootLockWidgetIds,
           rootVacuumWidgetIds,
+          rootLockWidgetIds,
           rootCoverWidgetIds,
         ),
         GRID_ENGINE_CANONICAL_COLS,
@@ -1246,94 +1432,61 @@ export function GridCanvas({
     [
       gridEngineActiveBreakpoint,
       onSectionsLayoutChange,
+      rootScenesSectionIds,
       rootClimateWidgetIds,
       rootCameraWidgetIds,
       rootMediaWidgetIds,
       rootSensorWidgetIds,
       rootMembersWidgetIds,
       rootAlarmWidgetIds,
-      rootLockWidgetIds,
       rootVacuumWidgetIds,
+      rootLockWidgetIds,
       rootCoverWidgetIds,
       rootLightWidgetStateById,
+      widgetTypeLayoutOverrides,
     ],
   );
   const updateGridEngineLayouts = useCallback(
     (nextLayouts: ResponsiveLayouts<GridBreakpoint>) => {
       const parsed = toGridLayouts(nextLayouts);
-      const xlSource = (parsed.xl && parsed.xl.length > 0
-        ? parsed.xl
-        : parsed['2xl'] && parsed['2xl'].length > 0
-          ? parsed['2xl'].map((item) => scaleLayoutColumns(item, GRID_ENGINE_2XL_COLS, GRID_ENGINE_XL_COLS))
-          : derivedGridEngineLayouts.xl ?? derivedGridEngineLayouts['2xl']) ?? [];
-      const xl = compactLayoutUp(
-        enforceRootWidgetSpans(
-          xlSource,
-          'xl',
-          GRID_ENGINE_XL_COLS,
-          rootLightWidgetStateById,
-          rootClimateWidgetIds,
-          rootCameraWidgetIds,
-          rootMediaWidgetIds,
-          rootSensorWidgetIds,
-          rootMembersWidgetIds,
-          rootAlarmWidgetIds,
-          rootLockWidgetIds,
-          rootVacuumWidgetIds,
-          rootCoverWidgetIds,
-        ),
-        GRID_ENGINE_XL_COLS,
-      );
-      const twoXl = compactLayoutUp(
-        enforceRootWidgetSpans(
-          parsed['2xl'] ??
-            xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_2XL_COLS)),
-          '2xl',
-          GRID_ENGINE_2XL_COLS,
-          rootLightWidgetStateById,
-          rootClimateWidgetIds,
-          rootCameraWidgetIds,
-          rootMediaWidgetIds,
-          rootSensorWidgetIds,
-          rootMembersWidgetIds,
-          rootAlarmWidgetIds,
-          rootLockWidgetIds,
-          rootVacuumWidgetIds,
-          rootCoverWidgetIds,
-        ),
-        GRID_ENGINE_2XL_COLS,
-      );
-      const lg = compactLayoutUp(
-        enforceRootWidgetSpans(
-          parsed.lg ?? xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_LG_COLS)),
-          'lg',
-          GRID_ENGINE_LG_COLS,
-          rootLightWidgetStateById,
-          rootClimateWidgetIds,
-          rootCameraWidgetIds,
-          rootMediaWidgetIds,
-          rootSensorWidgetIds,
-          rootMembersWidgetIds,
-          rootAlarmWidgetIds,
-          rootLockWidgetIds,
-          rootVacuumWidgetIds,
-          rootCoverWidgetIds,
-        ),
-        GRID_ENGINE_LG_COLS,
-      );
-      const smallOneByOneIds = new Set(
-        xl.filter((item) => isSmallOneByOne(item)).map((item) => item.i),
-      );
-      const withResponsiveRules: GridLayouts = {
-        '2xl': twoXl,
-        xl,
-        lg,
-        md: compactLayoutUp(
-          enforceRootWidgetSpans(
-            parsed.md ??
-              lg.map((item) => scaleLayoutColumns(item, GRID_ENGINE_LG_COLS, GRID_ENGINE_MD_COLS)),
-            'md',
-            GRID_ENGINE_MD_COLS,
+      const next: GridLayouts = { ...gridEngineLayouts };
+      const currentCols = GRID_ENGINE_COLS[gridEngineActiveBreakpoint];
+      const incomingActive = parsed[gridEngineActiveBreakpoint] ?? [];
+      const hasIncomingActive = incomingActive.length > 0;
+
+      if (hasIncomingActive) {
+        next[gridEngineActiveBreakpoint] = normalizeRootLayoutForBreakpoint(
+          incomingActive,
+          gridEngineActiveBreakpoint,
+          currentCols,
+        );
+      } else {
+        const existingLayout = next[gridEngineActiveBreakpoint];
+        if (existingLayout && existingLayout.length > 0) {
+          next[gridEngineActiveBreakpoint] = normalizeRootLayoutForBreakpoint(
+            existingLayout,
+            gridEngineActiveBreakpoint,
+            currentCols,
+          );
+        } else {
+          const parentBreakpoint =
+            resolveClosestParentBreakpointWithLayout(next, gridEngineActiveBreakpoint, GRID_ENGINE_BREAKPOINT_ORDER) ??
+            resolveClosestParentBreakpointWithLayout(
+              derivedGridEngineLayouts,
+              gridEngineActiveBreakpoint,
+              GRID_ENGINE_BREAKPOINT_ORDER,
+            );
+          const parentLayout =
+            (parentBreakpoint
+              ? next[parentBreakpoint]?.length
+                ? next[parentBreakpoint]
+                : derivedGridEngineLayouts[parentBreakpoint]
+              : undefined) ?? derivedGridEngineLayouts.xl ?? derivedGridEngineLayouts['2xl'] ?? [];
+          const parentCols = parentBreakpoint ? GRID_ENGINE_COLS[parentBreakpoint] : GRID_ENGINE_XL_COLS;
+          const isMobile = gridEngineActiveBreakpoint === 'sm' || gridEngineActiveBreakpoint === 'xs';
+          const compactMobileIds = resolveRootMobileCompactIds(
+            gridEngineActiveBreakpoint,
+            currentCols,
             rootLightWidgetStateById,
             rootClimateWidgetIds,
             rootCameraWidgetIds,
@@ -1341,81 +1494,114 @@ export function GridCanvas({
             rootSensorWidgetIds,
             rootMembersWidgetIds,
             rootAlarmWidgetIds,
-            rootLockWidgetIds,
             rootVacuumWidgetIds,
+            rootLockWidgetIds,
             rootCoverWidgetIds,
-          ),
-          GRID_ENGINE_MD_COLS,
-        ),
-        sm: compactLayoutUp(
-          enforceRootWidgetSpans(
-            adaptToMobileColumns(
-              parsed.sm ?? lg,
-              parsed.sm ? GRID_ENGINE_SM_COLS : GRID_ENGINE_LG_COLS,
-              GRID_ENGINE_SM_COLS,
-              smallOneByOneIds,
+          );
+          const generated = isMobile
+            ? adaptToMobileColumns(parentLayout, parentCols, currentCols, compactMobileIds)
+            : packLayoutDense(
+                parentLayout.map((item) => scaleLayoutColumns(item, parentCols, currentCols)),
+                currentCols,
+              );
+          next[gridEngineActiveBreakpoint] = packLayoutDense(
+            enforceRootWidgetSpans(
+              normalizeRuntimeLayout(generated, currentCols),
+              gridEngineActiveBreakpoint,
+              currentCols,
+              rootScenesSectionIds,
+              rootLightWidgetStateById,
+              Boolean(widgetTypeLayoutOverrides.light?.[gridEngineActiveBreakpoint]),
+              widgetTypeLayoutOverrides,
+              rootClimateWidgetIds,
+              rootCameraWidgetIds,
+              rootMediaWidgetIds,
+              rootSensorWidgetIds,
+              rootMembersWidgetIds,
+              rootAlarmWidgetIds,
+              rootVacuumWidgetIds,
+              rootLockWidgetIds,
+              rootCoverWidgetIds,
             ),
-            'sm',
-            GRID_ENGINE_SM_COLS,
-            rootLightWidgetStateById,
-            rootClimateWidgetIds,
-            rootCameraWidgetIds,
-            rootMediaWidgetIds,
-            rootSensorWidgetIds,
-            rootMembersWidgetIds,
-            rootAlarmWidgetIds,
-            rootLockWidgetIds,
-            rootVacuumWidgetIds,
-            rootCoverWidgetIds,
-          ),
-          GRID_ENGINE_SM_COLS,
-        ),
-        xs: compactLayoutUp(
-          enforceRootWidgetSpans(
-            adaptToMobileColumns(
-              parsed.xs ?? parsed.sm ?? lg,
-              parsed.xs ? GRID_ENGINE_XS_COLS : parsed.sm ? GRID_ENGINE_SM_COLS : GRID_ENGINE_LG_COLS,
-              GRID_ENGINE_XS_COLS,
-              smallOneByOneIds,
-            ),
-            'xs',
-            GRID_ENGINE_XS_COLS,
-            rootLightWidgetStateById,
-            rootClimateWidgetIds,
-            rootCameraWidgetIds,
-            rootMediaWidgetIds,
-            rootSensorWidgetIds,
-            rootMembersWidgetIds,
-            rootAlarmWidgetIds,
-            rootLockWidgetIds,
-            rootVacuumWidgetIds,
-            rootCoverWidgetIds,
-          ),
-          GRID_ENGINE_XS_COLS,
-        ),
-      };
-      setGridEngineLayouts((current) =>
-        sameGridLayouts(current, withResponsiveRules) ? current : withResponsiveRules,
-      );
-      return withResponsiveRules;
+            currentCols,
+          );
+        }
+      }
+
+      setGridEngineLayouts((current) => (sameGridLayouts(current, next) ? current : next));
+      return next;
     },
     [
-      derivedGridEngineLayouts['2xl'],
-      derivedGridEngineLayouts.xl,
-      rootClimateWidgetIds,
-      rootCameraWidgetIds,
-      rootMediaWidgetIds,
-      rootSensorWidgetIds,
-      rootMembersWidgetIds,
+      derivedGridEngineLayouts,
+      gridEngineActiveBreakpoint,
+      gridEngineLayouts,
+      normalizeRootLayoutForBreakpoint,
+      rootScenesSectionIds,
       rootAlarmWidgetIds,
-      rootLockWidgetIds,
-      rootVacuumWidgetIds,
+      rootCameraWidgetIds,
+      rootClimateWidgetIds,
       rootCoverWidgetIds,
+      rootLockWidgetIds,
       rootLightWidgetStateById,
+      rootMediaWidgetIds,
+      rootMembersWidgetIds,
+      rootSensorWidgetIds,
+      rootVacuumWidgetIds,
+      widgetTypeLayoutOverrides,
+    ],
+  );
+  const handleGridStackUsedRowsChange = useCallback(
+    (sectionId: string, usedRows: number) => {
+      if (sectionKindById.get(sectionId) !== 'stack-grid') {
+        return;
+      }
+      const section = sectionById.get(sectionId);
+      const headerVisible =
+        Boolean(section) &&
+        section.stackShowHeader !== false &&
+        typeof section.title === 'string' &&
+        section.title.trim().length > 0;
+      // Stack header is rendered outside StackGrid (in GridCanvas), so
+      // add one root row unit when visible to prevent bottom clipping.
+      const safeRows = Math.max(1, Math.round(usedRows) + (headerVisible ? 1 : 0));
+      const activeLayout = liveGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
+      const currentItem = activeLayout.find((item) => item.i === sectionId);
+      if (!currentItem) {
+        return;
+      }
+      const currentRows = Math.max(1, Math.round(currentItem.h));
+      if (currentRows === safeRows) {
+        return;
+      }
+
+      const nextActiveLayout = activeLayout.map((item) =>
+        item.i === sectionId
+          ? {
+              ...item,
+              h: safeRows,
+            }
+          : item,
+      );
+      const committed = updateGridEngineLayouts({
+        ...liveGridEngineLayouts,
+        [gridEngineActiveBreakpoint]: nextActiveLayout,
+      } as ResponsiveLayouts<GridBreakpoint>);
+      commitGridEngineLayouts(committed, nextActiveLayout);
+    },
+    [
+      sectionById,
+      sectionKindById,
+      liveGridEngineLayouts,
+      gridEngineActiveBreakpoint,
+      updateGridEngineLayouts,
+      commitGridEngineLayouts,
     ],
   );
   const focusCanvasOverlayItem = useCallback(
     (itemId: string) => {
+      if (isCompactEditCardMenuMode) {
+        return;
+      }
       if (sectionIdSet.has(itemId)) {
         onSelectSection(itemId);
         onSelectWidget(null);
@@ -1426,7 +1612,7 @@ export function GridCanvas({
         onSelectSection(null);
       }
     },
-    [onSelectSection, onSelectWidget, rootWidgetIdSet, sectionIdSet],
+    [isCompactEditCardMenuMode, onSelectSection, onSelectWidget, rootWidgetIdSet, sectionIdSet],
   );
   const renderSectionCard = useCallback(
     (
@@ -1497,10 +1683,13 @@ export function GridCanvas({
             if (!isEditMode) {
               return;
             }
+            const targetNode = event.target as Element | null;
+            if (targetNode?.closest('.builder-grid,.widget-action')) {
+              return;
+            }
             if (event.pointerType === 'mouse' && event.button !== 0) {
               return;
             }
-            event.stopPropagation();
             onSelectSection(section.id);
           }}
           onClick={(event) => {
@@ -1589,6 +1778,7 @@ export function GridCanvas({
                 houseMembers={houseMembers}
                 section={section}
                 gridBreakpoint={gridEngineActiveBreakpoint}
+                widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
                 sectionCanvasCols={sectionCanvasCols}
                 stackWidgets={stackWidgets}
                 isSelected={isEditMode && selectedSectionId === section.id}
@@ -1620,6 +1810,7 @@ export function GridCanvas({
                 haConnected={haConnected}
                 haStates={haStates}
                 sensorHistoryByEntity={sensorHistoryByEntity}
+                onGridStackUsedRowsChange={handleGridStackUsedRowsChange}
               />
             </div>
           )}
@@ -1658,6 +1849,7 @@ export function GridCanvas({
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
       onWidgetVacuumStartPause,
+      handleGridStackUsedRowsChange,
       onSelectWidget,
       isXsViewport,
       runningSceneBySectionId,
@@ -1686,7 +1878,7 @@ export function GridCanvas({
             <div className="pointer-events-none absolute inset-0 rounded-[2rem] dashboard-edit-overlay" />
           ) : null}
           {developerMode ? (
-            <div className="pointer-events-none absolute left-4 top-4 z-30 rounded-xl border border-cyan-300/35 bg-slate-950/65 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-cyan-100">
+            <div className="liquid-glass-card pointer-events-none absolute left-4 top-4 z-30 rounded-xl px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-cyan-100">
               {`dev ${gridEngineActiveBreakpoint} | cols ${gridEngineActiveCols} | rows ${Math.max(1, liveGridUsedRows)}`}
             </div>
           ) : null}
@@ -1701,11 +1893,11 @@ export function GridCanvas({
               rowHeight={GRID_ENGINE_ROW_UNIT}
               margin={[GRID_ENGINE_GAP_PX, GRID_ENGINE_GAP_PX]}
               containerPadding={GRID_ENGINE_CONTAINER_PADDING}
+              useCSSTransforms
               compactType="vertical"
               preventCollision={false}
               isDraggable={isEditMode}
               isResizable={isEditMode}
-              resizeHandles={['se']}
               draggableCancel=".builder-grid,.widget-action,.section-action,.react-resizable-handle"
               onBreakpointChange={(nextBreakpoint) => {
                 setGridEngineActiveBreakpoint(nextBreakpoint as GridBreakpoint);
@@ -1715,35 +1907,71 @@ export function GridCanvas({
                   return;
                 }
                 isCanvasInteractingRef.current = true;
+                canvasDragStartItemRef.current = newItem ? ({ ...(newItem as GridItem) }) : null;
+                hasCanvasDragMovedRef.current = false;
                 if (newItem?.i) {
                   focusCanvasOverlayItem(newItem.i);
                 }
               }}
-              onResizeStart={(_, __, newItem) => {
+              onDrag={(_, __, newItem) => {
                 if (!isEditMode) {
                   return;
                 }
-                isCanvasInteractingRef.current = true;
-                if (newItem?.i) {
-                  focusCanvasOverlayItem(newItem.i);
+                if (hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined)) {
+                  hasCanvasDragMovedRef.current = true;
                 }
               }}
-              onDragStop={(layout) => {
+              onDragStop={(layout, _oldItem, newItem) => {
                 if (!isEditMode) {
                   return;
                 }
+                const hasMoved =
+                  hasCanvasDragMovedRef.current ||
+                  hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined);
                 isCanvasInteractingRef.current = false;
+                canvasDragStartItemRef.current = null;
+                hasCanvasDragMovedRef.current = false;
+                if (!hasMoved) {
+                  return;
+                }
                 const committed = updateGridEngineLayouts({
                   ...liveGridEngineLayouts,
                   [gridEngineActiveBreakpoint]: layout as GridItem[],
                 });
                 commitGridEngineLayouts(committed, layout as GridItem[]);
               }}
-              onResizeStop={(layout) => {
+              onResizeStart={(_, __, newItem) => {
                 if (!isEditMode) {
                   return;
                 }
+                isCanvasInteractingRef.current = true;
+                canvasDragStartItemRef.current = newItem ? ({ ...(newItem as GridItem) }) : null;
+                hasCanvasDragMovedRef.current = false;
+                if (newItem?.i) {
+                  focusCanvasOverlayItem(newItem.i);
+                }
+              }}
+              onResize={(_, __, newItem) => {
+                if (!isEditMode) {
+                  return;
+                }
+                if (hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined)) {
+                  hasCanvasDragMovedRef.current = true;
+                }
+              }}
+              onResizeStop={(layout, _oldItem, newItem) => {
+                if (!isEditMode) {
+                  return;
+                }
+                const hasMoved =
+                  hasCanvasDragMovedRef.current ||
+                  hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined);
                 isCanvasInteractingRef.current = false;
+                canvasDragStartItemRef.current = null;
+                hasCanvasDragMovedRef.current = false;
+                if (!hasMoved) {
+                  return;
+                }
                 const committed = updateGridEngineLayouts({
                   ...liveGridEngineLayouts,
                   [gridEngineActiveBreakpoint]: layout as GridItem[],
@@ -1751,11 +1979,10 @@ export function GridCanvas({
                 commitGridEngineLayouts(committed, layout as GridItem[]);
               }}
               onLayoutChange={(layout, layouts) => {
-                if (!isEditMode || !isCanvasInteractingRef.current) {
+                if (!isEditMode || !isCanvasInteractingRef.current || !hasCanvasDragMovedRef.current) {
                   return;
                 }
-                const nextLayouts = updateGridEngineLayouts(layouts as ResponsiveLayouts<GridBreakpoint>);
-                commitGridEngineLayouts(nextLayouts, layout as GridItem[]);
+                updateGridEngineLayouts(layouts as ResponsiveLayouts<GridBreakpoint>);
               }}
             >
               {sections.map((section) => {
@@ -1789,6 +2016,20 @@ export function GridCanvas({
                   widget.entityId === 'sensor.nest_wifi_download'
                     ? state.wifiDownloadMbps
                     : widget.value ?? 0;
+                const runtimeLayoutItem = liveGridEngineLayoutMap.get(widget.id);
+                const runtimeWidget = runtimeLayoutItem
+                  ? {
+                      ...widget,
+                      layout: {
+                        ...widget.layout,
+                        i: widget.id,
+                        x: runtimeLayoutItem.x,
+                        y: runtimeLayoutItem.y,
+                        w: runtimeLayoutItem.w,
+                        h: runtimeLayoutItem.h,
+                      },
+                    }
+                  : widget;
                 return (
                   <div
                     key={widget.id}
@@ -1803,7 +2044,7 @@ export function GridCanvas({
                     }
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (isEditMode) {
+                      if (isEditMode && !isCompactEditCardMenuMode) {
                         onSelectWidget(widget.id);
                       }
                     }}
@@ -1812,8 +2053,11 @@ export function GridCanvas({
                         handleXsLongPressStart(event, widget);
                         return;
                       }
-                      event.stopPropagation();
-                      onSelectWidget(widget.id);
+                      // In edit mode, let RGL own pointerdown for drag-start.
+                      // Selection still happens via click (non-drag) or onDragStart.
+                      if (isCompactEditCardMenuMode) {
+                        return;
+                      }
                     }}
                     onPointerMove={(event) => {
                       if (isEditMode) {
@@ -1841,13 +2085,16 @@ export function GridCanvas({
                     }}
                   >
                     <WidgetCardRenderer
-                      widget={widget}
+                      widget={runtimeWidget}
                       dashboardState={state}
                       isEditMode={false}
                       isSelected={selectedWidgetId === widget.id}
                       gridBreakpoint={gridEngineActiveBreakpoint}
                       value={value}
                       onClick={() => {
+                        if (isCompactEditCardMenuMode) {
+                          return;
+                        }
                         if (isXsLongPressMode) {
                           if (xsSuppressNextCardClickRef.current) {
                             xsSuppressNextCardClickRef.current = false;
@@ -1878,9 +2125,30 @@ export function GridCanvas({
                       onLockOpen={onWidgetLockOpen}
                       onMembersOpenPanel={() => onOpenMembersPanel()}
                       liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                      sensorBatteryEntity={
+                        haConnected && widget.sensorBatteryEntityId ? haStates[widget.sensorBatteryEntityId] : undefined
+                      }
                       sensorHistory={sensorHistoryByEntity[widget.entityId]}
                       houseMembers={houseMembers}
                     />
+                    {isCompactEditCardMenuMode ? (
+                      <button
+                        type="button"
+                        className="widget-action absolute right-2 top-2 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelectWidget(widget.id);
+                          onSelectSection(null);
+                        }}
+                        aria-label={`Configura ${widget.title || widget.id}`}
+                        title="Configura card"
+                      >
+                        <MoreHorizontal size={18} aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1902,11 +2170,11 @@ export function GridCanvas({
 
       {isEditMode && isCatalogOpen ? (
         <div
-          className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-3xl flex items-center justify-center p-6"
+          className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-3xl flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-6"
           onClick={onCloseCatalog}
         >
           <div
-            className="w-full max-w-3xl rounded-[2rem] border border-white/10 bg-white/[0.08] backdrop-blur-3xl p-6"
+            className="liquid-glass-panel h-full w-full max-h-none overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] custom-scrollbar md:h-auto md:max-w-3xl md:rounded-[2rem] md:border md:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -1923,7 +2191,7 @@ export function GridCanvas({
               </button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <div className="liquid-glass-card p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-white/45 mb-3">Blocchi Dashboard</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {layoutSections.map((item) => (
@@ -1931,7 +2199,7 @@ export function GridCanvas({
                       key={item.kind}
                       type="button"
                       onClick={() => onAddSection(item.kind)}
-                      className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 p-3 text-left"
+                      className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
@@ -1943,7 +2211,7 @@ export function GridCanvas({
                   ))}
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <div className="liquid-glass-card p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-white/45 mb-3">Widget Stack</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {WIDGET_CATALOG.map((item) => (
@@ -1951,7 +2219,7 @@ export function GridCanvas({
                       key={item.kind}
                       type="button"
                       onClick={() => onAddWidget(item.kind)}
-                      className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 p-3 text-left"
+                      className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
@@ -1970,7 +2238,7 @@ export function GridCanvas({
                         key={item.kind}
                         type="button"
                         onClick={() => onAddSection(item.kind)}
-                        className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 p-3 text-left"
+                        className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
@@ -2021,10 +2289,24 @@ export function GridCanvas({
               transition: opacity 180ms ease;
             }
 
+            .builder-grid .react-resizable-handle-se {
+              z-index: 80 !important;
+            }
+
+            .sections-grid .react-resizable-handle-se {
+              z-index: 140 !important;
+            }
+
             .builder-grid.is-editing .react-resizable-handle-se,
             .sections-grid.is-editing .react-resizable-handle-se {
               opacity: 1;
               pointer-events: auto;
+            }
+
+            .sections-grid .react-grid-item:not(.react-draggable-dragging):not(.react-resizable-resizing) {
+              transition-property: transform, width, height;
+              transition-duration: 260ms;
+              transition-timing-function: cubic-bezier(0.22, 0.9, 0.25, 1);
             }
 
             .builder-grid.horizontal-stack {

@@ -64,7 +64,7 @@ export function GuidedSetupOverlay({
       />
 
       <div
-        className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f1727]/95 p-6 sm:p-8 text-white shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+        className="liquid-glass-panel relative w-full max-w-2xl overflow-hidden p-6 sm:p-8 text-white"
         onClick={(event) => event.stopPropagation()}
       >
         <p className="text-[11px] uppercase tracking-[0.2em] text-sky-200/80">{tag}</p>

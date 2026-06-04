@@ -455,7 +455,6 @@ export function ScenesCard({
               buttonSizeClass={sceneButtonSizeClass}
               labelClass={sceneLabelClass}
               labelMinHeightClass={sceneLabelMinHeightClass}
-              singleLine={isSingleLineLayout}
               onClick={() => {
                 if (isEditMode || isRunning) {
                   return;
@@ -471,11 +470,7 @@ export function ScenesCard({
                 key={`add-${scene.id}`}
                 type="button"
                 onClick={() => onAddScene?.(scene.id)}
-                className={`widget-action w-full min-w-0 ${sceneCellPaddingClass} ${
-                  isSingleLineLayout
-                    ? `flex items-center justify-center ${sceneItemGapClass}`
-                    : `flex flex-col items-center justify-center ${sceneItemGapClass}`
-                } group`}
+                className={`widget-action flex w-full min-w-0 flex-col items-center justify-center ${sceneCellPaddingClass} ${sceneItemGapClass} group`}
               >
                 <div className={`${sceneButtonSizeClass} rounded-full border border-white/20 border-dashed bg-white/5 flex items-center justify-center text-white/65 transition-colors group-hover:text-white group-hover:border-white/40 group-hover:bg-white/10`}>
                   <Plus size={isSingleLineLayout ? (isTinyCard ? 13 : 14) : isTinyCard ? 16 : isDenseLayout ? 18 : 20} />
@@ -503,7 +498,6 @@ function SceneButton({
   buttonSizeClass,
   labelClass,
   labelMinHeightClass,
-  singleLine = false,
   onClick,
 }: {
   icon: React.ReactNode;
@@ -519,7 +513,6 @@ function SceneButton({
   buttonSizeClass: string;
   labelClass: string;
   labelMinHeightClass: string;
-  singleLine?: boolean;
   onClick?: () => void;
 }) {
   const iconVariants = SCENE_ICON_MOTION_VARIANTS[iconKey] ?? SCENE_ICON_MOTION_VARIANTS.music;
@@ -534,9 +527,7 @@ function SceneButton({
 
   return (
     <div
-      className={`w-full min-w-0 ${cellPaddingClass} ${
-        singleLine ? `flex items-center justify-center ${itemGapClass}` : `flex flex-col items-center justify-center ${itemGapClass} pb-0.5`
-      }`}
+      className={`flex w-full min-w-0 flex-col items-center justify-center ${cellPaddingClass} ${itemGapClass} pb-0.5`}
     >
       <motion.button
         type="button"
@@ -592,9 +583,7 @@ function SceneButton({
       </motion.button>
 
       <span
-        className={`${labelClass} ${longLabelClass} ${labelMinHeightClass} inline-flex items-center ${
-          singleLine ? 'max-w-full truncate justify-start text-left' : 'max-w-full justify-center text-center'
-        } text-white/70 font-medium`}
+        className={`${labelClass} ${longLabelClass} ${labelMinHeightClass} inline-flex max-w-full items-center justify-center text-center text-white/70 font-medium`}
       >
         {label}
       </span>

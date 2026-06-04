@@ -18,33 +18,58 @@ function isActiveState(state: MockEntityState | undefined) {
 
 export function MicroToggle({ widget, state, onToggle }: MicroToggleProps) {
   const activeFromState = isActiveState(state);
-  const [optimisticActive, setOptimisticActive] = React.useState<boolean | null>(null);
   const [tapPulse, setTapPulse] = React.useState(false);
-  const previousStateActiveRef = React.useRef(activeFromState);
+  const [isPending, setIsPending] = React.useState(false);
+  const pendingTargetRef = React.useRef<boolean | null>(null);
   const tapPulseTimerRef = React.useRef<number | null>(null);
+  const pendingTimeoutRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    if (previousStateActiveRef.current !== activeFromState) {
-      previousStateActiveRef.current = activeFromState;
-      setOptimisticActive(null);
+    if (!isPending || pendingTargetRef.current === null) {
+      return;
     }
-  }, [activeFromState]);
+    if (activeFromState === pendingTargetRef.current) {
+      pendingTargetRef.current = null;
+      setIsPending(false);
+      if (pendingTimeoutRef.current !== null) {
+        window.clearTimeout(pendingTimeoutRef.current);
+        pendingTimeoutRef.current = null;
+      }
+    }
+  }, [activeFromState, isPending]);
+
   React.useEffect(
     () => () => {
       if (tapPulseTimerRef.current !== null) {
         window.clearTimeout(tapPulseTimerRef.current);
       }
+      if (pendingTimeoutRef.current !== null) {
+        window.clearTimeout(pendingTimeoutRef.current);
+      }
     },
     [],
   );
 
-  const active = optimisticActive ?? activeFromState;
+  const visualActive = activeFromState;
   const label = widget.label?.trim() || state?.rawAttributes?.friendly_name?.toString() || widget.entity;
-  const status = state?.stateLabel ?? state?.state ?? (active ? 'On' : 'Off');
+  const status = state?.stateLabel ?? state?.state ?? (visualActive ? 'On' : 'Off');
 
   const handleToggle = () => {
-    const nextActive = !active;
-    setOptimisticActive(nextActive);
+    if (isPending || !onToggle) {
+      return;
+    }
+    const nextActive = !activeFromState;
+    pendingTargetRef.current = nextActive;
+    setIsPending(true);
+    if (pendingTimeoutRef.current !== null) {
+      window.clearTimeout(pendingTimeoutRef.current);
+    }
+    pendingTimeoutRef.current = window.setTimeout(() => {
+      pendingTargetRef.current = null;
+      setIsPending(false);
+      pendingTimeoutRef.current = null;
+    }, 1700);
+
     setTapPulse(true);
     if (tapPulseTimerRef.current !== null) {
       window.clearTimeout(tapPulseTimerRef.current);
@@ -53,13 +78,13 @@ export function MicroToggle({ widget, state, onToggle }: MicroToggleProps) {
       setTapPulse(false);
       tapPulseTimerRef.current = null;
     }, 180);
-    onToggle?.(nextActive);
+    onToggle(nextActive);
   };
 
   return (
     <div
       className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
-        active
+        visualActive
           ? 'border-sky-300/35 bg-sky-500/12 shadow-[0_0_20px_rgba(56,189,248,0.2)]'
           : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'
       } ${tapPulse ? 'scale-[0.995]' : ''}`}
@@ -73,19 +98,26 @@ export function MicroToggle({ widget, state, onToggle }: MicroToggleProps) {
         <button
           type="button"
           onClick={handleToggle}
+          disabled={isPending}
           className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-all duration-200 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
-            active
+            visualActive
               ? 'border-sky-300/55 bg-sky-400/45 shadow-[0_0_18px_rgba(56,189,248,0.28)]'
               : 'border-white/22 bg-white/12'
-          }`}
+          } ${isPending ? 'cursor-wait opacity-75' : ''}`}
           aria-label={`Toggle ${label}`}
-          aria-pressed={active}
+          aria-pressed={visualActive}
         >
-          <span
-            className={`absolute left-[2px] top-[2px] h-[1.375rem] w-[1.375rem] rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.35)] transition-transform ${
-              active ? 'translate-x-[1.25rem]' : 'translate-x-0'
-            }`}
-          />
+          {isPending ? (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
+            </span>
+          ) : (
+            <span
+              className={`absolute left-[2px] top-[2px] h-[1.375rem] w-[1.375rem] rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.35)] transition-transform ${
+                visualActive ? 'translate-x-[1.25rem]' : 'translate-x-0'
+              }`}
+            />
+          )}
         </button>
       </div>
     </div>

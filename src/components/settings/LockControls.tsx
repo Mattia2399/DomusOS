@@ -10,16 +10,18 @@ type LockControlsProps = {
     status?: string;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
   };
   onLock: (code?: string) => void;
-  onUnlock: (code?: string) => void;
+  onUnlock: (code?: string) => boolean | void;
   onOpen: (code?: string) => void;
 };
 
@@ -95,6 +97,7 @@ export function LockControls({
   }, [lock.activityLogLimit]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(() => (lock.activityTimeline ?? []).slice(0, maxTimelineEntries));
   const timelineActor = lock.changedBy?.trim() || 'Sistema';
+  const shouldUseLocalTimeline = !lock.activityTimelineStatus || lock.activityTimelineStatus === 'offline';
 
   useEffect(() => {
     setSimulatedState(normalizeLockState(lock.state));
@@ -102,12 +105,17 @@ export function LockControls({
 
   useEffect(() => {
     const incoming = (lock.activityTimeline ?? []).slice(0, maxTimelineEntries);
-    setTimeline((previous) => (incoming.length > 0 ? incoming : previous));
-  }, [lock.activityTimeline, maxTimelineEntries]);
+    setTimeline((previous) => {
+      if (!shouldUseLocalTimeline) {
+        return incoming;
+      }
+      return incoming.length > 0 ? incoming : previous;
+    });
+  }, [lock.activityTimeline, maxTimelineEntries, shouldUseLocalTimeline]);
 
   useEffect(() => {
     setTimeline((lock.activityTimeline ?? []).slice(0, maxTimelineEntries));
-  }, [lock.name, lock.activityTimeline, maxTimelineEntries]);
+  }, [lock.name, lock.activityTimeline, lock.activityTimelineStatus, maxTimelineEntries]);
 
   const isLocked = simulatedState === 'locked' || simulatedState === 'locking';
   const statusLabel = translateLockState(simulatedState);
@@ -132,9 +140,14 @@ export function LockControls({
     enabled: isLocked,
     durationMs: 1000,
     onComplete: () => {
+      const didUnlock = onUnlock(actionCode);
+      if (didUnlock === false) {
+        return;
+      }
       setSimulatedState('unlocked');
-      onUnlock(actionCode);
-      pushTimeline(`${timelineActor} ha sbloccato ${formatTimeLabel(new Date())}`);
+      if (shouldUseLocalTimeline) {
+        pushTimeline(`${timelineActor} ha sbloccato ${formatTimeLabel(new Date())}`);
+      }
     },
   });
 
@@ -146,6 +159,22 @@ export function LockControls({
     }
     return 'bg-red-950/30';
   }, [isLocked]);
+  const activityUnavailableMessage = useMemo(() => {
+    const historyHours = Math.max(1, Math.round(Number(lock.activityLogHours) || 24));
+    if (lock.activityTimelineStatus === 'loading') {
+      return 'Caricamento attività reali da Home Assistant...';
+    }
+    if (lock.activityTimelineStatus === 'empty') {
+      return `Nessuna attività reale trovata nelle ultime ${historyHours} ore.`;
+    }
+    if (lock.activityTimelineStatus === 'unavailable') {
+      return 'Attività reale non disponibile: il logbook di Home Assistant non ha risposto.';
+    }
+    if (lock.activityTimelineStatus === 'offline') {
+      return 'Connetti Home Assistant per vedere attività reali della serratura.';
+    }
+    return 'Nessuna attività reale disponibile per questa serratura.';
+  }, [lock.activityLogHours, lock.activityTimelineStatus]);
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
@@ -228,7 +257,9 @@ export function LockControls({
               }
               setSimulatedState('locked');
               onLock(actionCode);
-              pushTimeline(`${timelineActor} ha bloccato ${formatTimeLabel(new Date())}`);
+              if (shouldUseLocalTimeline) {
+                pushTimeline(`${timelineActor} ha bloccato ${formatTimeLabel(new Date())}`);
+              }
             }}
             disabled={isLocked}
             className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
@@ -246,9 +277,14 @@ export function LockControls({
               if (!isLocked) {
                 return;
               }
+              const didUnlock = onUnlock(actionCode);
+              if (didUnlock === false) {
+                return;
+              }
               setSimulatedState('unlocked');
-              onUnlock(actionCode);
-              pushTimeline(`${timelineActor} ha sbloccato ${formatTimeLabel(new Date())}`);
+              if (shouldUseLocalTimeline) {
+                pushTimeline(`${timelineActor} ha sbloccato ${formatTimeLabel(new Date())}`);
+              }
             }}
             disabled={!isLocked}
             className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
@@ -277,7 +313,7 @@ export function LockControls({
             ))
           ) : (
             <div className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/58">
-              Nessuna attivita recente disponibile.
+              {activityUnavailableMessage}
             </div>
           )}
         </div>

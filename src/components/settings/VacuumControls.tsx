@@ -411,7 +411,7 @@ export function VacuumControls({
         </div>
 
         {supportsMap && vacuum.mapUrl ? (
-          <div className="mt-4 rounded-2xl border border-white/8 bg-black/25 overflow-hidden">
+          <div className="liquid-glass-card mt-4 overflow-hidden">
             <img
               src={vacuum.mapUrl}
               alt="Mappa pulizia"

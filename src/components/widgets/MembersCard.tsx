@@ -68,7 +68,7 @@ export function MembersCard({
       }`}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden border border-blue-300/35 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,rgba(255,255,255,0.06)_100%)] ${cardRadiusClass} ${
+        className={`liquid-glass-card relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} ${
           isTinyCard ? 'px-3 py-2.5' : 'px-4 py-3.5'
         }`}
       >
@@ -96,7 +96,7 @@ export function MembersCard({
               }}
               className={`pointer-events-auto relative z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/15 text-white/90 transition-colors ${
                 canOpenMembersPanel
-                  ? 'hover:bg-black/25'
+                  ? 'btn-premium hover:bg-white/[0.08]'
                   : 'cursor-default opacity-60'
               }`}
               aria-label="Apri pannello membri"

@@ -79,6 +79,7 @@
 }
 
 .light-card-ui__icon-shell {
+  position: relative;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -86,6 +87,17 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 38px;
+}
+
+.light-card-ui__icon-shell--pending::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.96);
+  animation: light-card-ui-pending-spin 900ms linear infinite;
+  pointer-events: none;
 }
 
 .light-card-ui__icon {
@@ -306,6 +318,12 @@
     0 6px 12px rgba(12, 18, 32, 0.16);
 }
 
+.light-card-ui--off .light-card-ui__icon-shell--pending::after,
+.light-card-ui--unavailable .light-card-ui__icon-shell--pending::after {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: rgba(255, 255, 255, 1);
+}
+
 .light-card-ui--off .light-card-ui__icon,
 .light-card-ui--unavailable .light-card-ui__icon {
   color: rgba(255, 255, 255, 0.86);
@@ -365,9 +383,11 @@
 
 .dashboard-light-card--single-row-off .light-card-ui__meta {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   padding-bottom: 0;
+  min-width: 0;
 }
 
 .dashboard-light-card--single-row-off .light-card-ui__name {
@@ -386,7 +406,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 0 1 auto;
+  max-width: 100%;
 }
 
 .dashboard-light-card--single-row-off .light-card-ui__timer-badge {
@@ -398,6 +418,12 @@
 .dashboard-light-card--single-row-off .light-card-ui__timer-icon {
   width: 10px;
   height: 10px;
+}
+
+@keyframes light-card-ui-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 

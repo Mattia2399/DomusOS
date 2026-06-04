@@ -44,15 +44,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
-          <div className="w-full max-w-lg rounded-[28px] border border-white/12 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.96))] p-6 shadow-[0_28px_80px_rgba(2,6,23,0.55)]">
+        <div className="apple-bg-main flex min-h-screen items-center justify-center px-4 text-slate-100">
+          <div className="liquid-glass-panel w-full max-w-lg rounded-[28px] p-6">
             <div className="text-xs uppercase tracking-[0.24em] text-rose-300">Application Error</div>
             <h2 className="mt-2 text-2xl font-semibold text-white">Qualcosa è andato storto</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
               Abbiamo intercettato un errore runtime per evitare il crash completo dell&apos;app.
             </p>
             {this.state.errorMessage ? (
-              <div className="mt-4 rounded-2xl border border-white/12 bg-slate-900/80 px-3 py-2 text-xs text-slate-300">
+              <div className="liquid-glass-card mt-4 px-3 py-2 text-xs text-slate-300">
                 {this.state.errorMessage}
               </div>
             ) : null}

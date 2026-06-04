@@ -345,7 +345,7 @@ export function AcquaDetail({
             }}
             transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <div className="relative h-full w-full overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/25">
+            <div className="relative h-full w-full overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.04]">
               <motion.div
                 className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-cyan-600/85 via-cyan-400/82 to-cyan-200/75"
                 style={{ height: `${fillPct}%` }}

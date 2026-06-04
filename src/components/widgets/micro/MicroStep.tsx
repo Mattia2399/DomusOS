@@ -8,6 +8,11 @@ type MicroStepProps = {
   onValueChange?: (value: number) => void;
 };
 
+type CommandPhase = 'idle' | 'pending' | 'sent';
+
+const SEND_DELAY_MS = 2200;
+const SENT_BADGE_MS = 900;
+
 function parseNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -85,21 +90,85 @@ export function MicroStep({ widget, state, onValueChange }: MicroStepProps) {
   const { min, max, step } = React.useMemo(() => normalizeStepMeta(state), [state]);
   const isDisabled = max <= min;
   const currentValue = React.useMemo(() => resolveCurrentValue(state, min, max), [max, min, state]);
+  const [draftValue, setDraftValue] = React.useState(currentValue);
+  const [commandPhase, setCommandPhase] = React.useState<CommandPhase>('idle');
   const stepDecimals = React.useMemo(() => resolveStepDecimals(step), [step]);
   const displayDecimals = Math.min(stepDecimals, 4);
-  const formattedValue = `${currentValue.toFixed(displayDecimals)}${unit ? ` ${unit}` : ''}`;
+  const sendTimerRef = React.useRef<number | null>(null);
+  const sentTimerRef = React.useRef<number | null>(null);
+  const queuedValueRef = React.useRef<number | null>(null);
 
-  const canDecrease = !isDisabled && currentValue > min;
-  const canIncrease = !isDisabled && currentValue < max;
+  const clearSendTimer = React.useCallback(() => {
+    if (sendTimerRef.current !== null) {
+      window.clearTimeout(sendTimerRef.current);
+      sendTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSentTimer = React.useCallback(() => {
+    if (sentTimerRef.current !== null) {
+      window.clearTimeout(sentTimerRef.current);
+      sentTimerRef.current = null;
+    }
+  }, []);
+
+  const queueSend = React.useCallback(
+    (value: number, delayMs: number) => {
+      if (!onValueChange) {
+        return;
+      }
+      queuedValueRef.current = value;
+      setCommandPhase('pending');
+      clearSendTimer();
+      clearSentTimer();
+      sendTimerRef.current = window.setTimeout(() => {
+        const queued = queuedValueRef.current;
+        if (queued !== null) {
+          onValueChange(queued);
+        }
+        setCommandPhase('sent');
+        sendTimerRef.current = null;
+        clearSentTimer();
+        sentTimerRef.current = window.setTimeout(() => {
+          setCommandPhase('idle');
+          sentTimerRef.current = null;
+        }, SENT_BADGE_MS);
+      }, delayMs);
+    },
+    [clearSendTimer, clearSentTimer, onValueChange],
+  );
+
+  React.useEffect(() => {
+    if (commandPhase === 'idle') {
+      setDraftValue(currentValue);
+    }
+  }, [commandPhase, currentValue]);
+
+  React.useEffect(
+    () => () => {
+      clearSendTimer();
+      clearSentTimer();
+    },
+    [clearSendTimer, clearSentTimer],
+  );
+
+  const workingValue = commandPhase === 'idle' ? currentValue : draftValue;
+  const formattedValue = `${workingValue.toFixed(displayDecimals)}${unit ? ` ${unit}` : ''}`;
+  const canDecrease = !isDisabled && workingValue > min;
+  const canIncrease = !isDisabled && workingValue < max;
 
   const handleStep = (direction: 'up' | 'down') => {
-    if (isDisabled) {
+    if (isDisabled || !onValueChange) {
       return;
     }
-    const rawNextValue = direction === 'up' ? currentValue + step : currentValue - step;
+    const rawNextValue = direction === 'up' ? workingValue + step : workingValue - step;
     const safeNextValue = clamp(alignToStep(rawNextValue, min, step), min, max);
-    onValueChange?.(safeNextValue);
+    setDraftValue(safeNextValue);
+    queueSend(safeNextValue, SEND_DELAY_MS);
   };
+
+  const isPending = commandPhase === 'pending';
+  const isSent = commandPhase === 'sent';
 
   return (
     <div
@@ -110,7 +179,17 @@ export function MicroStep({ widget, state, onValueChange }: MicroStepProps) {
       }`}
     >
       <div className="flex h-full min-w-0 flex-col gap-2">
-        <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
+          <div className="inline-flex items-center gap-1.5">
+            {isPending ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-sky-200/90 border-t-transparent" />
+            ) : isSent ? (
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.85)]" />
+            ) : null}
+            <p className="text-[11px] font-semibold leading-tight text-white/72">{formattedValue}</p>
+          </div>
+        </div>
 
         <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-2 py-1.5">
           <button

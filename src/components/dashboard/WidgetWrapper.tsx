@@ -161,7 +161,7 @@ function WidgetWrapperComponent({
         className={clsx(
           'relative h-full w-full min-h-0 min-w-0 overflow-hidden',
           chrome === 'apple'
-            ? 'rounded-3xl border border-white/10 bg-white/10'
+            ? 'liquid-glass-card rounded-3xl'
             : 'bg-transparent',
         )}
       >

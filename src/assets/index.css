@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@config "../../tailwind.config.js";
 
 @font-face {
   font-family: "SF Pro Text";
@@ -125,6 +126,36 @@
   --font-mono: "SF Pro Text";
 }
 
+@layer components {
+  /* Sfondo dell'app (se non c'è già un wallpaper animato) */
+  .apple-bg-main {
+    @apply bg-[#050505] text-white antialiased selection:bg-[#0A84FF]/30;
+  }
+
+  /* Pannelli grandi, Modali, Sidebar di Navigazione */
+  .liquid-glass-panel {
+    @apply bg-white/[0.02] backdrop-blur-3xl border border-white/[0.08] shadow-[0_0_40px_rgba(0,0,0,0.3)] rounded-[2rem];
+  }
+
+  /* Singole Card sulla Dashboard o dentro i Modali */
+  .liquid-glass-card {
+    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] shadow-lg rounded-2xl transition-all duration-300;
+  }
+
+  /* Glow per gli stati attivi (Usa queste classi aggiuntive quando un widget è ON) */
+  .glow-active-orange {
+    @apply shadow-[0_0_20px_rgba(255,159,10,0.3)];
+  }
+  .glow-active-blue {
+    @apply shadow-[0_0_20px_rgba(10,132,255,0.3)];
+  }
+
+  /* Feedback touch nativo */
+  .btn-premium {
+    @apply active:scale-95 transition-transform duration-300 ease-out select-none cursor-pointer;
+  }
+}
+
 html,
 body,
 #root {
@@ -138,7 +169,7 @@ body {
 
 body {
   margin: 0;
-  background: #020617;
+  background: #050505;
   color: #f8fafc;
   font-family: "SF Pro Text";
   touch-action: manipulation;
@@ -176,6 +207,15 @@ body {
   --profile-sheet-shadow-soft: rgb(8 47 73 / 0.34);
   --profile-sheet-accent-rgb: 122 205 255;
   --profile-sheet-accent-rgb-2: 124 138 255;
+  --selection-ring-primary-rgb: var(--profile-sheet-accent-rgb);
+  --selection-ring-secondary-rgb: 15 23 42;
+  --selection-ring-outer-rgb: var(--profile-sheet-accent-rgb-2);
+  --selection-ring-primary-width: 1.5px;
+  --selection-ring-secondary-width: 2.5px;
+  --selection-ring-outer-width: 1px;
+  --selection-ring-primary-alpha: 0.62;
+  --selection-ring-secondary-alpha: 0.22;
+  --selection-ring-outer-alpha: 0.26;
 }
 
 .dashboard-theme-light {
@@ -193,6 +233,15 @@ body {
   --profile-sheet-shadow-soft: rgb(30 64 175 / 0.2);
   --profile-sheet-accent-rgb: 96 165 250;
   --profile-sheet-accent-rgb-2: 56 189 248;
+  --selection-ring-primary-rgb: 37 99 235;
+  --selection-ring-secondary-rgb: 255 255 255;
+  --selection-ring-outer-rgb: 14 165 233;
+  --selection-ring-primary-width: 1.25px;
+  --selection-ring-secondary-width: 2px;
+  --selection-ring-outer-width: 1px;
+  --selection-ring-primary-alpha: 0.52;
+  --selection-ring-secondary-alpha: 0.34;
+  --selection-ring-outer-alpha: 0.22;
 }
 
 .dashboard-wallpaper-home-hub {
@@ -264,6 +313,18 @@ body {
     radial-gradient(circle at 84% 80%, rgb(255 199 129 / 0.24), transparent 36%);
 }
 
+.dashboard-theme-light.dashboard-wallpaper-total-white .dashboard-wallpaper-layer::before {
+  filter: blur(74px) saturate(1.02) brightness(0.96) contrast(1.03);
+  opacity: 0.92;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white .dashboard-wallpaper-layer::after {
+  background:
+    linear-gradient(160deg, rgb(248 251 255 / 0.44) 0%, rgb(225 233 246 / 0.62) 100%),
+    radial-gradient(circle at 10% 12%, rgb(255 255 255 / 0.5), transparent 38%),
+    radial-gradient(circle at 84% 80%, rgb(168 190 227 / 0.18), transparent 40%);
+}
+
 .dashboard-wallpaper-home-hub .dashboard-wallpaper-layer::before {
   background-image:
     radial-gradient(circle at 72% 88%, rgb(255 184 86 / 0.52), transparent 40%),
@@ -298,6 +359,40 @@ body {
     radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.98), transparent 45%),
     radial-gradient(circle at 80% 75%, rgb(237 242 255 / 0.95), transparent 48%),
     linear-gradient(160deg, rgb(255 255 255 / 0.99), rgb(248 250 255 / 0.98));
+}
+
+.dashboard-theme-dark.dashboard-wallpaper-total-white .dashboard-wallpaper-layer::before {
+  filter: blur(78px) saturate(0.96) brightness(0.64) contrast(1.04);
+  opacity: 0.84;
+}
+
+.dashboard-theme-dark.dashboard-wallpaper-total-white .dashboard-wallpaper-layer::after {
+  background:
+    linear-gradient(160deg, rgb(8 14 24 / 0.44) 0%, rgb(8 14 24 / 0.66) 100%),
+    radial-gradient(circle at 9% 14%, rgb(166 191 232 / 0.2), transparent 40%),
+    radial-gradient(circle at 84% 80%, rgb(140 171 226 / 0.15), transparent 42%);
+}
+
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="text-white/"] {
+  color: rgb(235 242 250 / 0.82) !important;
+}
+
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/5"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/8"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/10"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/12"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/[0.08]"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="bg-white/[0.1]"] {
+  background-color: rgb(255 255 255 / 0.11) !important;
+}
+
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/8"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/10"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/12"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/14"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/15"],
+.dashboard-theme-dark.dashboard-wallpaper-total-white [class*="border-white/18"] {
+  border-color: rgb(255 255 255 / 0.17) !important;
 }
 
 .dashboard-wallpaper-total-black .dashboard-wallpaper-layer::before {
@@ -447,6 +542,159 @@ body {
 
 .dashboard-theme-light [class*="bg-black/"] {
   background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white {
+  --total-white-surface-cool-from: rgb(255 255 255 / 0.66);
+  --total-white-surface-cool-to: rgb(241 247 255 / 0.56);
+  --total-white-surface-neutral-from: rgb(255 255 255 / 0.74);
+  --total-white-surface-neutral-to: rgb(237 244 253 / 0.64);
+  --total-white-surface-deep-from: rgb(255 255 255 / 0.82);
+  --total-white-surface-deep-to: rgb(233 241 252 / 0.72);
+  --total-white-border-soft: rgb(136 153 178 / 0.25);
+  --total-white-border-medium: rgb(120 138 165 / 0.3);
+  --total-white-border-strong: rgb(105 124 152 / 0.36);
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="text-white/"] {
+  color: rgba(15, 23, 42, 0.76) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/5"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/8"] {
+  background-color: rgb(255 255 255 / 0.48) !important;
+  background-image: linear-gradient(
+    158deg,
+    var(--total-white-surface-cool-from),
+    var(--total-white-surface-cool-to)
+  ) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/10"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/[0.08]"] {
+  background-color: rgb(255 255 255 / 0.56) !important;
+  background-image: linear-gradient(
+    158deg,
+    var(--total-white-surface-neutral-from),
+    var(--total-white-surface-neutral-to)
+  ) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/12"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-white/[0.1]"] {
+  background-color: rgb(255 255 255 / 0.62) !important;
+  background-image: linear-gradient(
+    158deg,
+    var(--total-white-surface-deep-from),
+    var(--total-white-surface-deep-to)
+  ) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/5"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/10"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/8"] {
+  border-color: var(--total-white-border-soft) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/12"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/15"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/18"] {
+  border-color: var(--total-white-border-medium) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="border-white/18"] {
+  border-color: var(--total-white-border-strong) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="bg-black/"] {
+  background-color: rgba(148, 163, 184, 0.18) !important;
+  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.58), rgb(227 236 248 / 0.52)) !important;
+}
+
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="rounded-2xl"][class*="bg-white/"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="rounded-3xl"][class*="bg-white/"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="rounded-[2rem]"][class*="bg-white/"],
+.dashboard-theme-light.dashboard-wallpaper-total-white [class*="rounded-[1.5rem]"][class*="bg-white/"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.62),
+    0 10px 26px rgb(148 163 184 / 0.14) !important;
+}
+
+.rooms-dashboard {
+  color: var(--dashboard-text);
+}
+
+.rooms-dashboard::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.045), transparent 32%),
+    linear-gradient(120deg, rgb(var(--profile-sheet-accent-rgb) / 0.08), transparent 38%),
+    linear-gradient(300deg, rgb(var(--profile-sheet-accent-rgb-2) / 0.075), transparent 42%);
+}
+
+.rooms-surface {
+  border-radius: 24px;
+  border: 1px solid rgb(255 255 255 / 0.065);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.082), rgb(255 255 255 / 0.038)),
+    rgb(10 12 18 / 0.16);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 18px 48px rgb(0 0 0 / 0.15);
+  backdrop-filter: blur(28px) saturate(1.06);
+}
+
+.rooms-chip {
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.72);
+}
+
+.rooms-chip:hover {
+  background: rgb(255 255 255 / 0.16);
+  color: rgb(255 255 255 / 0.94);
+}
+
+.rooms-chip-active {
+  background: rgb(255 255 255 / 0.92);
+  color: rgb(12 16 24 / 0.95);
+  box-shadow: 0 10px 24px rgb(255 255 255 / 0.16);
+}
+
+.dashboard-theme-light .rooms-dashboard::before {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.24), transparent 34%),
+    linear-gradient(120deg, rgb(var(--profile-sheet-accent-rgb) / 0.1), transparent 42%),
+    linear-gradient(300deg, rgb(var(--profile-sheet-accent-rgb-2) / 0.08), transparent 46%);
+}
+
+.dashboard-theme-light .rooms-surface {
+  border-color: rgb(15 23 42 / 0.075);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.58), rgb(255 255 255 / 0.34)),
+    rgb(255 255 255 / 0.24);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.62),
+    0 18px 44px rgb(15 23 42 / 0.09);
+}
+
+.dashboard-theme-light .rooms-chip {
+  background: rgb(15 23 42 / 0.06);
+  color: rgb(15 23 42 / 0.68);
+}
+
+.dashboard-theme-light .rooms-chip:hover {
+  background: rgb(15 23 42 / 0.1);
+  color: rgb(15 23 42 / 0.9);
+}
+
+.dashboard-theme-light .rooms-chip-active {
+  background: rgb(15 23 42 / 0.92);
+  color: rgb(255 255 255 / 0.96);
+  box-shadow: 0 14px 30px rgb(15 23 42 / 0.16);
 }
 
 .editor-theme {
@@ -909,7 +1157,7 @@ textarea,
   border-radius: inherit;
   z-index: 30;
   box-shadow:
-    inset 0 0 0 2px rgba(147, 197, 253, 0.95),
-    inset 0 0 0 3px rgba(15, 23, 42, 0.35),
-    0 0 0 1px rgba(56, 189, 248, 0.42);
+    inset 0 0 0 var(--selection-ring-primary-width, 2px) rgb(var(--selection-ring-primary-rgb, 147 197 253) / var(--selection-ring-primary-alpha, 0.95)),
+    inset 0 0 0 var(--selection-ring-secondary-width, 3px) rgb(var(--selection-ring-secondary-rgb, 15 23 42) / var(--selection-ring-secondary-alpha, 0.35)),
+    0 0 0 var(--selection-ring-outer-width, 1px) rgb(var(--selection-ring-outer-rgb, 56 189 248) / var(--selection-ring-outer-alpha, 0.42));
 }

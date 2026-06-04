@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import './HaCameraCard.css';
 
@@ -26,6 +26,9 @@ export function HaCameraCard({
 }: HaCameraCardProps) {
   const longPressTimerRef = useRef<number | null>(null);
   const [streamFailed, setStreamFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
+  const [lastFrameImage, setLastFrameImage] = useState('');
+  const [isVisualLoading, setIsVisualLoading] = useState(false);
   const supportsLongPress = Boolean(onLongPress && entityId);
 
   const cameraEntityId = useMemo(() => {
@@ -41,8 +44,25 @@ export function HaCameraCard({
   const fallbackImage =
     resolveStringAttribute(attributes, 'entity_picture') ||
     resolveStringAttribute(attributes, 'cameraUrl');
-  const visualUrl = streamFailed ? fallbackImage : streamUrl || fallbackImage;
+  const activeStreamUrl = streamFailed || !isLive ? '' : streamUrl;
+  const currentFallbackImage = fallbackFailed ? '' : fallbackImage;
+  const offlineFrameImage = currentFallbackImage || lastFrameImage;
+  const visualUrl = activeStreamUrl || offlineFrameImage;
   const hasVisual = visualUrl.length > 0;
+  const isShowingFallback = !activeStreamUrl && visualUrl.length > 0 && visualUrl === currentFallbackImage;
+  const isShowingLastFrame = !activeStreamUrl && visualUrl.length > 0 && visualUrl === lastFrameImage && !isShowingFallback;
+  const showLoadingOverlay = hasVisual && isVisualLoading;
+  const statusClass = showLoadingOverlay
+    ? 'ha-camera-card__status--loading'
+    : isLive
+      ? ''
+      : 'ha-camera-card__status--offline';
+  const dotStateClass = showLoadingOverlay
+    ? 'ha-camera-card__live-dot--loading'
+    : isLive
+      ? ''
+      : 'ha-camera-card__live-dot--offline';
+  const statusLabel = showLoadingOverlay ? 'In caricamento' : isLive ? 'Online' : 'Offline';
 
   const clearLongPressTimer = () => {
     if (longPressTimerRef.current !== null) {
@@ -74,7 +94,16 @@ export function HaCameraCard({
 
   useEffect(() => {
     setStreamFailed(false);
-  }, [cameraEntityId, streamUrl, fallbackImage]);
+    setFallbackFailed(false);
+  }, [cameraEntityId, streamUrl, fallbackImage, isLive]);
+
+  useEffect(() => {
+    setLastFrameImage('');
+  }, [cameraEntityId]);
+
+  useEffect(() => {
+    setIsVisualLoading(hasVisual);
+  }, [hasVisual, visualUrl]);
 
   return (
     <div className={`ha-camera-card ${compact ? 'ha-camera-card--compact' : ''}`}>
@@ -91,29 +120,48 @@ export function HaCameraCard({
             src={visualUrl}
             alt={name || 'Camera stream'}
             className="ha-camera-card__stream"
-            onError={() => {
-              if (!streamFailed && fallbackImage) {
-                setStreamFailed(true);
+            onLoad={() => {
+              setIsVisualLoading(false);
+              if (isShowingFallback && currentFallbackImage) {
+                setLastFrameImage(currentFallbackImage);
               }
+            }}
+            onError={() => {
+              if (activeStreamUrl) {
+                setStreamFailed(true);
+                return;
+              }
+              if (isShowingFallback) {
+                setFallbackFailed(true);
+                return;
+              }
+              if (isShowingLastFrame) {
+                setLastFrameImage('');
+              }
+              setIsVisualLoading(false);
             }}
           />
         ) : (
-          <div className="ha-camera-card__placeholder" aria-hidden="true">
+          <div className="ha-camera-card__placeholder">
             <Camera className="ha-camera-card__placeholder-icon" />
+            <div className="ha-camera-card__placeholder-text">Immagine non disponibile</div>
           </div>
         )}
 
-        <div className="ha-camera-card__scrim" aria-hidden="true" />
+        {showLoadingOverlay ? (
+          <div className="ha-camera-card__loading" aria-hidden="true">
+            <span className="ha-camera-card__loading-spinner" />
+          </div>
+        ) : null}
 
-        <div className={`ha-camera-card__live-badge ${isLive ? '' : 'ha-camera-card__live-badge--offline'}`}>
-          <span className={`ha-camera-card__live-dot ${isLive ? '' : 'ha-camera-card__live-dot--offline'}`} />
-          <span className={`ha-camera-card__live-label ${isLive ? '' : 'ha-camera-card__live-label--offline'}`}>
-            {isLive ? 'LIVE' : 'OFFLINE'}
-          </span>
-        </div>
+        <div className="ha-camera-card__scrim" aria-hidden="true" />
 
         <div className="ha-camera-card__footer">
           <div className="ha-camera-card__name">{name || cameraEntityId || 'Camera'}</div>
+          <div className={`ha-camera-card__status ${statusClass}`} aria-label={`Stato camera: ${statusLabel}`}>
+            <span className={`ha-camera-card__live-dot ${dotStateClass}`} aria-hidden="true" />
+            <span className="ha-camera-card__status-label">{statusLabel}</span>
+          </div>
         </div>
       </div>
     </div>

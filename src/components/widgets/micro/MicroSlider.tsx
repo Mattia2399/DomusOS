@@ -9,6 +9,11 @@ type MicroSliderProps = {
   onValueChange?: (value: number) => void;
 };
 
+type CommandPhase = 'idle' | 'pending' | 'sent';
+
+const SEND_DELAY_MS = 2200;
+const SENT_BADGE_MS = 900;
+
 function parseNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -82,41 +87,88 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
   const incomingValue = React.useMemo(() => resolveCurrentValue(state, min, max), [max, min, state]);
   const [draftValue, setDraftValue] = React.useState(incomingValue);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [commandPhase, setCommandPhase] = React.useState<CommandPhase>('idle');
   const stepDecimals = React.useMemo(() => resolveStepDecimals(step), [step]);
   const displayDecimals = Math.min(stepDecimals, 4);
+  const sendTimerRef = React.useRef<number | null>(null);
+  const sentTimerRef = React.useRef<number | null>(null);
+  const queuedValueRef = React.useRef<number | null>(null);
+
+  const clearSendTimer = React.useCallback(() => {
+    if (sendTimerRef.current !== null) {
+      window.clearTimeout(sendTimerRef.current);
+      sendTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSentTimer = React.useCallback(() => {
+    if (sentTimerRef.current !== null) {
+      window.clearTimeout(sentTimerRef.current);
+      sentTimerRef.current = null;
+    }
+  }, []);
+
+  const queueSend = React.useCallback(
+    (value: number, delayMs: number) => {
+      if (!onValueChange) {
+        return;
+      }
+      queuedValueRef.current = value;
+      setCommandPhase('pending');
+      clearSendTimer();
+      clearSentTimer();
+      sendTimerRef.current = window.setTimeout(() => {
+        const queued = queuedValueRef.current;
+        if (queued !== null) {
+          onValueChange(queued);
+        }
+        setCommandPhase('sent');
+        sendTimerRef.current = null;
+        clearSentTimer();
+        sentTimerRef.current = window.setTimeout(() => {
+          setCommandPhase('idle');
+          sentTimerRef.current = null;
+        }, SENT_BADGE_MS);
+      }, delayMs);
+    },
+    [clearSendTimer, clearSentTimer, onValueChange],
+  );
 
   React.useEffect(() => {
-    if (!isDragging) {
+    if (commandPhase === 'idle' && !isDragging) {
       setDraftValue(incomingValue);
     }
-  }, [incomingValue, isDragging]);
+  }, [commandPhase, incomingValue, isDragging]);
+
+  React.useEffect(
+    () => () => {
+      clearSendTimer();
+      clearSentTimer();
+    },
+    [clearSendTimer, clearSentTimer],
+  );
 
   const sliderPercent = max > min ? ((draftValue - min) / (max - min)) * 100 : 0;
   const formattedValue = `${draftValue.toFixed(displayDecimals)}${unit ? ` ${unit}` : ''}`;
-
-  const commitValue = React.useCallback(
-    (value: number) => {
-      if (!sendOnRelease || isDisabled) {
-        return;
-      }
-      onValueChange?.(clamp(value, min, max));
-    },
-    [isDisabled, max, min, onValueChange, sendOnRelease],
-  );
 
   const handleDraftChange = (nextValue: number) => {
     const safeValue = clamp(nextValue, min, max);
     setDraftValue(safeValue);
     if (!sendOnRelease && !isDisabled) {
-      onValueChange?.(safeValue);
+      queueSend(safeValue, 360);
     }
   };
 
   const commitFromInput = (target: HTMLInputElement) => {
     const safeValue = clamp(Number(target.value), min, max);
     setDraftValue(safeValue);
-    commitValue(safeValue);
+    if (!isDisabled) {
+      queueSend(safeValue, SEND_DELAY_MS);
+    }
   };
+
+  const isPending = commandPhase === 'pending';
+  const isSent = commandPhase === 'sent';
 
   return (
     <div
@@ -129,14 +181,17 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
       <div className="flex h-full min-w-0 flex-col justify-between gap-2">
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
-          <p className="shrink-0 text-[11px] font-semibold leading-tight text-white/72">{formattedValue}</p>
+          <div className="inline-flex items-center gap-1.5">
+            {isPending ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-sky-200/90 border-t-transparent" />
+            ) : isSent ? (
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.85)]" />
+            ) : null}
+            <p className="shrink-0 text-[11px] font-semibold leading-tight text-white/72">{formattedValue}</p>
+          </div>
         </div>
 
-        <div
-          className={`relative h-10 rounded-full border border-white/10 bg-black/35 ${
-            isDisabled ? 'opacity-65' : ''
-          }`}
-        >
+        <div className={`relative h-10 rounded-full border border-white/10 bg-black/35 ${isDisabled ? 'opacity-65' : ''}`}>
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-300/80 to-blue-400/85 transition-[width] duration-150"
             style={{ width: `${Math.max(0, Math.min(100, sliderPercent))}%` }}
@@ -151,11 +206,15 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
             onPointerDown={() => setIsDragging(true)}
             onPointerUp={(event) => {
               setIsDragging(false);
-              commitFromInput(event.currentTarget);
+              if (sendOnRelease) {
+                commitFromInput(event.currentTarget);
+              }
             }}
             onPointerCancel={(event) => {
               setIsDragging(false);
-              commitFromInput(event.currentTarget);
+              if (sendOnRelease) {
+                commitFromInput(event.currentTarget);
+              }
             }}
             onKeyUp={(event) => {
               if (!sendOnRelease) {
@@ -176,13 +235,13 @@ export function MicroSlider({ widget, state, sendOnRelease = true, onValueChange
             }}
             onBlur={(event) => {
               setIsDragging(false);
-              commitFromInput(event.currentTarget);
+              if (sendOnRelease) {
+                commitFromInput(event.currentTarget);
+              }
             }}
             onChange={(event) => handleDraftChange(Number(event.target.value))}
             disabled={isDisabled}
-            className={`absolute inset-0 h-full w-full cursor-pointer opacity-0 ${
-              isDisabled ? 'cursor-not-allowed' : ''
-            }`}
+            className={`absolute inset-0 h-full w-full cursor-pointer opacity-0 ${isDisabled ? 'cursor-not-allowed' : ''}`}
             aria-label={`Slider ${label}`}
             aria-valuemin={min}
             aria-valuemax={max}

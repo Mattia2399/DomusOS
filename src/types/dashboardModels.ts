@@ -106,7 +106,9 @@ export type Widget = {
   widgets?: MicroWidget[];
   isFavorite?: boolean;
   alarmUnlockCode?: string;
+  alarmRequireAuthToDisarm?: boolean;
   lockCode?: string;
+  lockRequireAuthToUnlock?: boolean;
   activityLogLimit?: number;
   activityLogHours?: number;
   sensorBatteryEntityId?: string;
@@ -153,6 +155,7 @@ export type DashboardSection = {
   scenesShowBackground?: boolean;
   scenesShowBorder?: boolean;
   stackColumns?: number;
+  stackColumnsMode?: 'auto' | 'manual';
   stackShowBackground?: boolean;
   stackShowBorder?: boolean;
   stackShowHeader?: boolean;

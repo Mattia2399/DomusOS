@@ -5,6 +5,7 @@ import { useDashboardState } from '../../hooks/useDashboardState';
 import { ConsumptionDashboardPage } from '../../pages/Consumi';
 import { AutomationsBuilder } from '../../pages/AutomationsBuilder';
 import AppGallery from '../../pages/AppGallery';
+import RoomsDashboard from '../../pages/RoomsDashboard';
 import SecurityDashboard from '../../pages/SecurityDashboard';
 import { ConsumptionEditorSidebar } from '../settings/ConsumptionEditorSidebar';
 import { LeftSidebar } from './LeftSidebar';
@@ -14,6 +15,10 @@ import { RightSidebarManager } from './RightSidebarManager';
 import { GridCanvas } from './GridCanvas';
 import { FavoritesDrawer } from './FavoritesDrawer';
 import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
+import {
+  normalizeWidgetTypeLayoutOverrides,
+  setActiveWidgetTypeLayoutOverrides,
+} from './dashboardBreakpointConfig';
 import type { CameraPtzDirection } from '../settings/CameraControls';
 import {
   createDemoAgentClient,
@@ -49,6 +54,11 @@ import {
   type WidgetKind,
 } from '../../types/dashboardModels';
 import { loadDashboardLayout, saveDashboardLayout } from '../../services/dashboardStorage';
+import type {
+  DashboardGridBreakpoint,
+  WidgetTypeBreakpointLayoutOverride,
+  WidgetTypeLayoutOverrides,
+} from '../../types/widgetTypeLayout';
 import {
   createConsumptionDashboardData,
   type ConsumptionCardId,
@@ -73,6 +83,13 @@ import {
   serializeDashboardBackup,
 } from '../../services/configBackup';
 import { isOnboardingCompleted, markOnboardingCompleted } from '../../services/onboardingStorage';
+import {
+  isPlatformBiometricAvailable,
+  readSecurityAuthMode,
+  readSecurityBiometricCredentialId,
+  SECURITY_SETTINGS_CHANGE_EVENT,
+  verifyStoredBiometricCredential,
+} from '../../services/securityBiometric';
 import {
   type AlarmServiceName,
   getAlarmStateLabel,
@@ -234,7 +251,10 @@ const HA_OAUTH_CALLBACK_PARAM = 'ha_oauth_callback';
 const HA_OAUTH_SESSION_NONCE_KEY = 'ha.dashboard.oauth.nonce';
 const CLIMATE_PENDING_TTL_MS = 15000;
 const CLIMATE_SEND_DELAY_MS = 5000;
+const LIGHT_TOGGLE_PENDING_TTL_MS = 5000;
+const LIGHT_BRIGHTNESS_PENDING_TTL_MS = 6000;
 const LIGHT_COLOR_PENDING_TTL_MS = 2500;
+const LOCK_PENDING_TTL_MS = 7000;
 const COVER_PENDING_TTL_MS = 7000;
 const SCENE_SCRIPT_START_GRACE_MS = 5000;
 const HA_ACTIVITY_REFRESH_MS = 30000;
@@ -250,6 +270,9 @@ const MIN_ACTIVITY_MAX_ENTRIES = 1;
 const MAX_ACTIVITY_MAX_ENTRIES = 30;
 const CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY = '__dashboard_pending_climate_target';
 const CLIMATE_PENDING_FAN_ATTRIBUTE_KEY = '__dashboard_pending_climate_fan';
+const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
+const LIGHT_BRIGHTNESS_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_brightness';
+const LOCK_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_lock';
 const COVER_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_cover';
 const COVER_PENDING_TILT_ATTRIBUTE_KEY = '__dashboard_pending_cover_tilt';
 const DEFAULT_ACTIVITY_ACTOR = 'Sistema';
@@ -264,6 +287,36 @@ function isXsViewportNow() {
     return false;
   }
   return window.innerWidth < GRID_ENGINE_BREAKPOINTS.sm;
+}
+
+function isCompactViewportNow() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.innerWidth < GRID_ENGINE_BREAKPOINTS.md;
+}
+
+function resolveGridBreakpointFromWidth(width: number): DashboardGridBreakpoint {
+  if (width >= GRID_ENGINE_BREAKPOINTS['2xl']) {
+    return '2xl';
+  }
+  if (width >= GRID_ENGINE_BREAKPOINTS.xl) {
+    return 'xl';
+  }
+  if (width >= GRID_ENGINE_BREAKPOINTS.lg) {
+    return 'lg';
+  }
+  if (width >= GRID_ENGINE_BREAKPOINTS.md) {
+    return 'md';
+  }
+  return width >= GRID_ENGINE_BREAKPOINTS.sm ? 'sm' : 'xs';
+}
+
+function resolveGridBreakpointNow() {
+  if (typeof window === 'undefined') {
+    return 'xl' as DashboardGridBreakpoint;
+  }
+  return resolveGridBreakpointFromWidth(window.innerWidth);
 }
 
 function normalizeHaLabelKey(value: unknown) {
@@ -492,6 +545,24 @@ type LightColorPendingState = {
   expiresAt: number;
 };
 
+type LightTogglePendingState = {
+  targetOn: boolean;
+  expiresAt: number;
+};
+
+type LightBrightnessPendingState = {
+  brightness: number;
+  expiresAt: number;
+};
+
+type LockPendingAction = 'lock' | 'unlock' | 'open';
+
+type LockPendingState = {
+  action: LockPendingAction;
+  targetState: 'locked' | 'unlocked' | 'open';
+  expiresAt: number;
+};
+
 type CoverPendingState = {
   state?: string;
   position?: number;
@@ -504,7 +575,10 @@ type ActivityTimelineEntry = {
   text: string;
   timestampMs: number;
   actor: string;
+  entityId: string | undefined;
 };
+
+type ActivityTimelineStatus = 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
 
 type HaAuthUser = {
   id: string;
@@ -522,9 +596,12 @@ type HaLogbookEvent = {
   state?: string;
   entity_id?: string;
   context_user_id?: string;
+  context_user_name?: string;
   user_id?: string;
+  user_name?: string;
   context?: {
     user_id?: string;
+    user_name?: string;
   };
 };
 
@@ -891,6 +968,35 @@ function resolveAppGalleryFromLocation() {
     return false;
   }
   return isAppGalleryNavigationTarget(window.location.href);
+}
+
+function isRoomsNavigationTarget(path: string) {
+  const target = path.trim();
+  if (!target) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(target, 'http://dashboard.local');
+    const pathname = parsed.pathname.toLowerCase();
+    const hash = parsed.hash.toLowerCase();
+    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
+    const pathSegments = pathname.split('/').filter(Boolean);
+    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
+    const hashSegments = hashNormalized.split('/').filter(Boolean);
+    const pathHasRooms = pathSegments.includes('rooms');
+    const hashHasRooms = hashSegments.includes('rooms') || hashNormalized === 'rooms';
+    return pathHasRooms || hash === '#rooms' || hashHasRooms || view === 'rooms';
+  } catch {
+    return false;
+  }
+}
+
+function resolveRoomsFromLocation() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return isRoomsNavigationTarget(window.location.href);
 }
 
 function isSecurityNavigationTarget(path: string) {
@@ -1594,9 +1700,19 @@ function hasCoverPendingValues(value: CoverPendingState | undefined) {
 
 function toTimestampMs(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value > 1_000_000_000_000_000) {
+      return Math.round(value / 1000);
+    }
+    if (value < 10_000_000_000) {
+      return Math.round(value * 1000);
+    }
     return Math.round(value);
   }
   if (typeof value === 'string') {
+    const numericValue = Number(value.trim());
+    if (Number.isFinite(numericValue) && value.trim().length > 0) {
+      return toTimestampMs(numericValue);
+    }
     const parsed = Date.parse(value);
     if (Number.isFinite(parsed)) {
       return parsed;
@@ -1935,6 +2051,13 @@ function resolveActivityActor(
   userNamesById: Record<string, string>,
   fallbackActor?: string,
 ) {
+  const directUserName =
+    toTrimmedString(event.context_user_name) ??
+    toTrimmedString(event.user_name) ??
+    toTrimmedString(event.context?.user_name);
+  if (directUserName) {
+    return directUserName;
+  }
   const contextUserId =
     toTrimmedString(event.context_user_id) ??
     toTrimmedString(event.user_id) ??
@@ -1967,6 +2090,9 @@ function resolveLockActivityVerb(event: HaLogbookEvent) {
   }
   if (normalizedState === 'open' || message.includes(' open')) {
     return 'ha aperto';
+  }
+  if (normalizedState === 'unavailable' || message.includes('non disponibile') || message.includes('unavailable')) {
+    return 'ha reso non disponibile';
   }
   return 'ha aggiornato la serratura';
 }
@@ -2008,11 +2134,20 @@ function resolveAlarmActivityVerb(event: HaLogbookEvent) {
   return "ha aggiornato l'allarme";
 }
 
+function resolveLockLogbookText(actor: string, verb: string, entityName: string, timestampMs: number) {
+  return `${actor} ${verb} ${entityName} ${formatActivityTimeLabel(timestampMs)}`;
+}
+
+function resolveAlarmLogbookText(actor: string, verb: string, entityName: string, timestampMs: number) {
+  return `${actor} ${verb} ${entityName} ${formatActivityTimeLabel(timestampMs)}`;
+}
+
 function buildTimelineEntries(
   events: HaLogbookEvent[],
   actorResolver: (event: HaLogbookEvent) => string,
   verbResolver: (event: HaLogbookEvent) => string,
   maxEntries: number,
+  textResolver?: (event: HaLogbookEvent, timestampMs: number, actor: string, verb: string) => string,
 ) {
   return events
     .map((event, index) => {
@@ -2020,13 +2155,15 @@ function buildTimelineEntries(
       if (!timestampMs) {
         return null;
       }
+      const entityId = toTrimmedString(event.entity_id);
       const actor = actorResolver(event);
       const verb = verbResolver(event);
       return {
-        id: `${timestampMs}-${index}`,
+        id: `${entityId ?? 'event'}-${timestampMs}-${index}`,
+        entityId,
         timestampMs,
         actor,
-        text: `${actor} ${verb} ${formatActivityTimeLabel(timestampMs)}`,
+        text: textResolver?.(event, timestampMs, actor, verb) ?? `${actor} ${verb} ${formatActivityTimeLabel(timestampMs)}`,
       } satisfies ActivityTimelineEntry;
     })
     .filter((entry): entry is ActivityTimelineEntry => entry !== null)
@@ -2536,6 +2673,16 @@ function translateLockState(state: string) {
   return 'Sconosciuta';
 }
 
+function resolveLockPendingTargetState(action: LockPendingAction) {
+  if (action === 'lock') {
+    return 'locked' as const;
+  }
+  if (action === 'open') {
+    return 'open' as const;
+  }
+  return 'unlocked' as const;
+}
+
 function resolveCameraPreviewUrls(
   entity: MockEntityState | undefined,
   fallbackEntityId: string | undefined,
@@ -2685,7 +2832,9 @@ export function MainBoard() {
   const canUseBrowserRouteNavigation = useMemo(shouldUseBrowserRouteNavigation, []);
   const {
     theme,
+    themeMode,
     setTheme,
+    setThemeMode,
     wallpaper,
     setWallpaper,
     developerMode,
@@ -2739,13 +2888,19 @@ export function MainBoard() {
     [callHaApi, isHaConnected],
   );
   const [climatePendingByEntity, setClimatePendingByEntity] = useState<Record<string, ClimatePendingState>>({});
+  const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
+  const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
   const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
+  const [lockPendingByEntity, setLockPendingByEntity] = useState<Record<string, LockPendingState>>({});
   const [coverPendingByEntity, setCoverPendingByEntity] = useState<Record<string, CoverPendingState>>({});
   const [haUserNamesById, setHaUserNamesById] = useState<Record<string, string>>({});
   const [haUsersById, setHaUsersById] = useState<Record<string, HaAuthUser>>({});
   const [haCurrentUser, setHaCurrentUser] = useState<HaAuthUser | null>(null);
   const [lockTimelineByEntity, setLockTimelineByEntity] = useState<Record<string, ActivityTimelineEntry[]>>({});
+  const [lockActivityStatusByEntity, setLockActivityStatusByEntity] = useState<Record<string, ActivityTimelineStatus>>({});
   const [alarmTimelineByEntity, setAlarmTimelineByEntity] = useState<Record<string, ActivityTimelineEntry[]>>({});
+  const [alarmActivityStatusByEntity, setAlarmActivityStatusByEntity] = useState<Record<string, ActivityTimelineStatus>>({});
+  const [activityRefreshNonce, setActivityRefreshNonce] = useState(0);
   const [haServiceRegistry, setHaServiceRegistry] = useState<HaServiceRegistry | null>(null);
   const [haFavoriteEntityIds, setHaFavoriteEntityIds] = useState<string[]>([]);
   const [haFavoriteLabelDetected, setHaFavoriteLabelDetected] = useState(false);
@@ -2899,12 +3054,19 @@ export function MainBoard() {
       }
       return nextStates;
     };
+    const resolveBaseEntity = (entityId: string): MockEntityState | undefined => {
+      const mergedEntity = nextStates?.[entityId];
+      if (mergedEntity) {
+        return mergedEntity;
+      }
+      return haStates[entityId];
+    };
 
     Object.entries(climatePendingByEntity).forEach(([entityId, pending]) => {
       if (!hasClimatePendingValues(pending)) {
         return;
       }
-      const entity = haStates[entityId];
+      const entity = resolveBaseEntity(entityId);
       if (!entity) {
         return;
       }
@@ -2967,7 +3129,7 @@ export function MainBoard() {
       if (!hasCoverPendingValues(pending)) {
         return;
       }
-      const entity = haStates[entityId];
+      const entity = resolveBaseEntity(entityId);
       if (!entity) {
         return;
       }
@@ -3007,8 +3169,29 @@ export function MainBoard() {
       };
     });
 
+    Object.entries(lightBrightnessPendingByEntity).forEach(([entityId, pending]) => {
+      const entity = resolveBaseEntity(entityId);
+      if (!entity) {
+        return;
+      }
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      rawAttributes[LIGHT_BRIGHTNESS_PENDING_ATTRIBUTE_KEY] = pending.brightness;
+      if (pending.brightness > 0) {
+        rawAttributes.brightness = Math.round((pending.brightness / 100) * 255);
+      } else {
+        delete rawAttributes.brightness;
+      }
+
+      ensureNextStates()[entityId] = {
+        ...entity,
+        brightness: pending.brightness,
+        numericValue: pending.brightness,
+        rawAttributes,
+      };
+    });
+
     Object.entries(lightColorPendingByEntity).forEach(([entityId, pending]) => {
-      const entity = haStates[entityId];
+      const entity = resolveBaseEntity(entityId);
       if (!entity) {
         return;
       }
@@ -3030,11 +3213,51 @@ export function MainBoard() {
       };
     });
 
+    Object.entries(lightTogglePendingByEntity).forEach(([entityId, pending]) => {
+      const entity = resolveBaseEntity(entityId);
+      if (!entity) {
+        return;
+      }
+
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      rawAttributes[LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY] = pending.targetOn;
+
+      ensureNextStates()[entityId] = {
+        ...entity,
+        state: pending.targetOn ? 'on' : 'off',
+        toggleOn: pending.targetOn,
+        rawAttributes,
+      };
+    });
+
+    Object.entries(lockPendingByEntity).forEach(([entityId, pending]) => {
+      const entity = resolveBaseEntity(entityId);
+      if (!entity) {
+        return;
+      }
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      rawAttributes[LOCK_PENDING_ATTRIBUTE_KEY] = pending.action;
+
+      ensureNextStates()[entityId] = {
+        ...entity,
+        state: pending.targetState,
+        stateLabel: pending.targetState,
+        toggleOn: pending.targetState === 'locked',
+        rawAttributes,
+      };
+    });
+
     return nextStates ?? haStates;
-  }, [climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightColorPendingByEntity]);
+  }, [climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity]);
   const initialLayoutRef = useRef(loadDashboardLayout());
   const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
   const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
+  const [widgetTypeLayoutOverrides, setWidgetTypeLayoutOverrides] = useState<WidgetTypeLayoutOverrides>(() => {
+    const normalized = normalizeWidgetTypeLayoutOverrides(initialLayoutRef.current.widgetTypeLayoutOverrides);
+    setActiveWidgetTypeLayoutOverrides(normalized);
+    return normalized;
+  });
+  setActiveWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides);
   const weatherConfigSection = useMemo(() => {
     const greetingWithWeather = sections.find(
       (section) => section.kind === 'greeting' && (section.showWeather ?? false),
@@ -3060,9 +3283,15 @@ export function MainBoard() {
     haCallApi: callHaApi,
   });
   const [activeDevice, setActiveDevice] = useState<ActiveDevice | null>(null);
+  const [isLockAuthBusy, setIsLockAuthBusy] = useState(false);
+  const [isLockBiometricAvailable, setIsLockBiometricAvailable] = useState(false);
+  const [lockAuthMode, setLockAuthMode] = useState(() => readSecurityAuthMode());
+  const [lockBiometricCredentialId, setLockBiometricCredentialId] = useState(() => readSecurityBiometricCredentialId());
   const [sensorHistoryByEntity, setSensorHistoryByEntity] = useState<Record<string, number[]>>({});
   const [isEditMode, setIsEditMode] = useState(false);
   const [isXsViewport, setIsXsViewport] = useState(isXsViewportNow);
+  const [isCompactViewport, setIsCompactViewport] = useState(isCompactViewportNow);
+  const [activeGridBreakpoint, setActiveGridBreakpoint] = useState<DashboardGridBreakpoint>(resolveGridBreakpointNow);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [selectedSidebarPathId, setSelectedSidebarPathId] = useState<string | null>(null);
@@ -3075,6 +3304,7 @@ export function MainBoard() {
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
   const [isAutomationView, setIsAutomationView] = useState(resolveAutomationFromLocation);
   const [isAppGalleryView, setIsAppGalleryView] = useState(resolveAppGalleryFromLocation);
+  const [isRoomsView, setIsRoomsView] = useState(resolveRoomsFromLocation);
   const [isSecurityView, setIsSecurityView] = useState(resolveSecurityFromLocation);
   const [isSecurityCamerasView, setIsSecurityCamerasView] = useState(resolveSecurityCamerasFromLocation);
   const [isEditAvailableForRoute, setIsEditAvailableForRoute] = useState(resolveEditAvailabilityFromLocation);
@@ -3097,7 +3327,12 @@ export function MainBoard() {
   const climatePendingTimeoutRef = useRef<Record<string, number>>({});
   const climateSendDelayTimeoutRef = useRef<Record<string, number>>({});
   const climateQueuedCommandRef = useRef<Record<string, ClimateQueuedCommand>>({});
+  const lightTogglePendingTimeoutRef = useRef<Record<string, number>>({});
+  const lightBrightnessPendingTimeoutRef = useRef<Record<string, number>>({});
   const lightColorPendingTimeoutRef = useRef<Record<string, number>>({});
+  const lockPendingTimeoutRef = useRef<Record<string, number>>({});
+  const lockActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
+  const alarmActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
   const coverPendingTimeoutRef = useRef<Record<string, number>>({});
   const activityFetchSeqRef = useRef(0);
   const vacuumReturnToBaseTimeoutRef = useRef<Record<string, number>>({});
@@ -3107,6 +3342,161 @@ export function MainBoard() {
   const reconnectInFlightRef = useRef(false);
   const hadSuccessfulConnectionRef = useRef(false);
   const sensorHistoryInFlightRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkBiometricAvailability = async () => {
+      const available = await isPlatformBiometricAvailable();
+      if (!cancelled) {
+        setIsLockBiometricAvailable(available);
+      }
+    };
+    void checkBiometricAvailability();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncSecuritySettings = () => {
+      setLockAuthMode(readSecurityAuthMode());
+      setLockBiometricCredentialId(readSecurityBiometricCredentialId());
+    };
+
+    window.addEventListener(SECURITY_SETTINGS_CHANGE_EVENT, syncSecuritySettings);
+    window.addEventListener('storage', syncSecuritySettings);
+    return () => {
+      window.removeEventListener(SECURITY_SETTINGS_CHANGE_EVENT, syncSecuritySettings);
+      window.removeEventListener('storage', syncSecuritySettings);
+    };
+  }, []);
+
+  const clearTimeoutRegistry = (timeoutRef: React.MutableRefObject<Record<string, number>>) => {
+    const timers = timeoutRef.current;
+    Object.values(timers).forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timeoutRef.current = {};
+  };
+
+  const clearTimeoutForEntity = (
+    timeoutRef: React.MutableRefObject<Record<string, number>>,
+    entityId: string,
+  ) => {
+    const timeoutId = timeoutRef.current[entityId];
+    if (timeoutId === undefined) {
+      return;
+    }
+    window.clearTimeout(timeoutId);
+    delete timeoutRef.current[entityId];
+  };
+
+  const clearTimeoutArrayForEntity = (
+    timeoutRef: React.MutableRefObject<Record<string, number[]>>,
+    entityId: string,
+  ) => {
+    const timeoutIds = timeoutRef.current[entityId];
+    if (!timeoutIds) {
+      return;
+    }
+    timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    delete timeoutRef.current[entityId];
+  };
+
+  const clearTimeoutArrayRegistry = (timeoutRef: React.MutableRefObject<Record<string, number[]>>) => {
+    Object.values(timeoutRef.current).forEach((timeoutIds) => {
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    });
+    timeoutRef.current = {};
+  };
+
+  const scheduleLockActivityRefresh = (entityId: string) => {
+    const normalizedEntityId = entityId.trim();
+    if (!normalizedEntityId) {
+      return;
+    }
+    clearTimeoutArrayForEntity(lockActivityRefreshTimeoutRef, normalizedEntityId);
+    setLockTimelineByEntity((current) => ({
+      ...current,
+      [normalizedEntityId]: [],
+    }));
+    setLockActivityStatusByEntity((current) => ({
+      ...current,
+      [normalizedEntityId]: 'loading',
+    }));
+    setActivityRefreshNonce((current) => current + 1);
+    lockActivityRefreshTimeoutRef.current[normalizedEntityId] = [900, 2600, 5200].map((delayMs) =>
+      window.setTimeout(() => {
+        setActivityRefreshNonce((current) => current + 1);
+      }, delayMs),
+    );
+  };
+
+  const scheduleAlarmActivityRefresh = (entityId: string) => {
+    const normalizedEntityId = entityId.trim();
+    if (!normalizedEntityId) {
+      return;
+    }
+    clearTimeoutArrayForEntity(alarmActivityRefreshTimeoutRef, normalizedEntityId);
+    setAlarmTimelineByEntity((current) => ({
+      ...current,
+      [normalizedEntityId]: [],
+    }));
+    setAlarmActivityStatusByEntity((current) => ({
+      ...current,
+      [normalizedEntityId]: 'loading',
+    }));
+    setActivityRefreshNonce((current) => current + 1);
+    alarmActivityRefreshTimeoutRef.current[normalizedEntityId] = [900, 2600, 5200].map((delayMs) =>
+      window.setTimeout(() => {
+        setActivityRefreshNonce((current) => current + 1);
+      }, delayMs),
+    );
+  };
+
+  const removePendingEntities = <TPendingEntry,>(
+    setPendingByEntity: React.Dispatch<React.SetStateAction<Record<string, TPendingEntry>>>,
+    entityIds: string[],
+  ) => {
+    if (entityIds.length === 0) {
+      return;
+    }
+    setPendingByEntity((current) => {
+      let changed = false;
+      const next = { ...current };
+      entityIds.forEach((entityId) => {
+        if (!(entityId in next)) {
+          return;
+        }
+        changed = true;
+        delete next[entityId];
+      });
+      return changed ? next : current;
+    });
+  };
+
+  const setEntityPendingWithExpiry = <TPendingEntry,>(
+    entityId: string,
+    entry: TPendingEntry,
+    ttlMs: number,
+    timeoutRef: React.MutableRefObject<Record<string, number>>,
+    setPendingByEntity: React.Dispatch<React.SetStateAction<Record<string, TPendingEntry>>>,
+  ) => {
+    clearTimeoutForEntity(timeoutRef, entityId);
+    setPendingByEntity((current) => ({
+      ...current,
+      [entityId]: entry,
+    }));
+    timeoutRef.current[entityId] = window.setTimeout(() => {
+      setPendingByEntity((current) => {
+        if (!(entityId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[entityId];
+        return next;
+      });
+      delete timeoutRef.current[entityId];
+    }, ttlMs);
+  };
 
   useEffect(() => {
     if (isHaConnected) {
@@ -3119,7 +3509,9 @@ export function MainBoard() {
   useEffect(() => {
     const updateViewport = () => {
       const nextXs = isXsViewportNow();
+      const nextCompact = isCompactViewportNow();
       setIsXsViewport((current) => (current === nextXs ? current : nextXs));
+      setIsCompactViewport((current) => (current === nextCompact ? current : nextCompact));
     };
 
     updateViewport();
@@ -3182,19 +3574,33 @@ export function MainBoard() {
   const COVER_WIDGET_MIN_HEIGHT = 2;
   const MEMBERS_WIDGET_MIN_WIDTH = 3;
   const MEMBERS_WIDGET_MIN_HEIGHT = 2;
+  const STACK_SECTION_AUTO_MIN_COLUMNS = 2;
+  const STACK_SECTION_AUTO_MAX_COLUMNS = ROOT_CANVAS_COLS;
   const isStackSection = (section: DashboardSection) =>
     section.kind === 'stack-vertical' || section.kind === 'stack-horizontal' || section.kind === 'stack-grid';
+  const isStackGridAutoColumns = (section: DashboardSection) =>
+    section.kind === 'stack-grid' && section.stackColumnsMode !== 'manual';
   const firstStackSectionId = useMemo(
     () => sections.find((section) => isStackSection(section))?.id ?? null,
     [sections],
   );
+  const clampAutoStackSectionColumns = (value: number) =>
+    Math.max(STACK_SECTION_AUTO_MIN_COLUMNS, Math.min(STACK_SECTION_AUTO_MAX_COLUMNS, Math.round(value)));
+  const resolveUsedColumnsForStackSection = (sectionId: string, sourceWidgets: Widget[]) =>
+    sourceWidgets
+      .filter((widget) => widget.parentSectionId === sectionId)
+      .reduce((maxCols, widget) => {
+        const safeX = Math.max(0, Math.round(widget.layout.x));
+        const safeW = Math.max(1, Math.round(widget.layout.w));
+        return Math.max(maxCols, safeX + safeW);
+      }, 0);
   const resolveStackColumns = (section: DashboardSection) => {
     if (section.kind === 'stack-vertical') {
       return 1;
     }
     if (section.kind === 'stack-grid') {
-      // Keep stack-grid canonical layout wide, then adapt per runtime breakpoint in StackGrid.
-      return ROOT_CANVAS_COLS;
+      // Grid stack columns always follow the root canvas span of the section.
+      return Math.max(1, Math.round(section.layout.w));
     }
     return Math.max(1, Math.round(section.layout.w));
   };
@@ -3213,13 +3619,6 @@ export function MainBoard() {
         ...next,
         x: 0,
         w: 1,
-      };
-    }
-
-    if (section.kind === 'stack-horizontal') {
-      next = {
-        ...next,
-        h: 1,
       };
     }
 
@@ -3271,6 +3670,9 @@ export function MainBoard() {
     }
     if (section.kind === 'scenes') {
       return SCENES_SECTION_ROWS;
+    }
+    if (section.kind === 'stack-grid') {
+      return 1;
     }
     return ROOT_CANVAS_ROW_UNITS * 2;
   };
@@ -3330,8 +3732,17 @@ export function MainBoard() {
     }
     return normalizeLayoutForStack(parentSection, layout);
   };
-  const resolveLightHeightRows = (_widget: Widget, nextIsOn: boolean) =>
-    nextIsOn ? LIGHT_WIDGET_HEIGHT_ON : LIGHT_WIDGET_HEIGHT_OFF;
+  const resolveLightHeightRows = (widget: Widget, nextIsOn: boolean) => {
+    const currentHeight = Math.max(1, Math.round(widget.layout.h));
+    if (nextIsOn && currentHeight <= LIGHT_WIDGET_HEIGHT_OFF) {
+      return LIGHT_WIDGET_HEIGHT_ON;
+    }
+    if (!nextIsOn && currentHeight <= LIGHT_WIDGET_HEIGHT_ON) {
+      return LIGHT_WIDGET_HEIGHT_OFF;
+    }
+    return currentHeight;
+  };
+  const resolveLockMinimumHeightRows = () => (activeGridBreakpoint === 'xs' || activeGridBreakpoint === 'sm' ? 1 : 2);
   const toWidgetLayoutRows = (_widget: Widget, rows: number) => rows;
   const resolveWidgetMinimumLayout = (
     widget: Widget,
@@ -3351,7 +3762,7 @@ export function MainBoard() {
       i: widget.id,
       x: widget.layout.x,
       y: widget.layout.y,
-      w: Math.max(2, Math.round(widget.layout.w)),
+      w: Math.max(1, Math.round(widget.layout.w)),
       h: nextHeight,
     });
   };
@@ -3397,7 +3808,7 @@ export function MainBoard() {
   const resolveMembersLayout = (widget: Widget): GridItem =>
     resolveWidgetMinimumLayout(widget, MEMBERS_WIDGET_MIN_WIDTH, MEMBERS_WIDGET_MIN_HEIGHT);
   const resolveLockLayout = (widget: Widget): GridItem =>
-    resolveWidgetMinimumLayout(widget, 1, toWidgetLayoutRows(widget, 1));
+    resolveWidgetMinimumLayout(widget, 1, toWidgetLayoutRows(widget, resolveLockMinimumHeightRows()));
   const resolveWidgetLayoutByKind = (widget: Widget, nextLayout: GridItem): GridItem => {
     const draftWidget: Widget = {
       ...widget,
@@ -3438,9 +3849,7 @@ export function MainBoard() {
   const sameLayout = (a: GridItem, b: GridItem) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
   const layoutExpandsFootprint = (previous: GridItem, next: GridItem) =>
     next.w > previous.w ||
-    next.h > previous.h ||
-    next.x + next.w > previous.x + previous.w ||
-    next.y + next.h > previous.y + previous.h;
+    next.h > previous.h;
   const intersects = (a: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>, b: Pick<GridItem, 'x' | 'y' | 'w' | 'h'>) =>
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   const findFirstFreePosition = (
@@ -3615,17 +4024,22 @@ export function MainBoard() {
         }
         return first.id.localeCompare(second.id, 'it-IT');
       });
+      let cursorX = 0;
       const compactedById = new Map(
-        ordered.map((widget, index) => [
-          widget.id,
-          resolveWidgetLayoutByKind(widget, normalizeLayoutForStack(section, {
-            i: widget.id,
-            x: index,
-            y: 0,
-            w: 1,
-            h: 1,
-          })),
-        ]),
+        ordered.map((widget) => {
+          const normalizedLayout = resolveWidgetLayoutByKind(
+            widget,
+            normalizeLayoutForStack(section, {
+              i: widget.id,
+              x: cursorX,
+              y: 0,
+              w: Math.max(1, Math.round(widget.layout.w)),
+              h: Math.max(1, Math.round(widget.layout.h)),
+            }),
+          );
+          cursorX += normalizedLayout.w;
+          return [widget.id, normalizedLayout] as const;
+        }),
       );
       return nextWidgets.map((widget) => {
         const layout = compactedById.get(widget.id);
@@ -3714,19 +4128,38 @@ export function MainBoard() {
     section: DashboardSection,
     nextWidgets: Widget[],
     anchorWidgetId: string,
+    restrictToAnchorColumns = false,
   ): Widget[] => {
     const stackWidgets = nextWidgets.filter((widget) => widget.parentSectionId === section.id);
     if (!stackWidgets.length) {
       return nextWidgets;
     }
 
+    const normalizedLayouts = stackWidgets.map((widget) =>
+      resolveWidgetLayoutByKind(widget, normalizeLayoutForStack(section, widget.layout)),
+    );
+    const stackCols = resolveStackColumns(section);
+    const anchorLayout = normalizedLayouts.find((layout) => layout.i === anchorWidgetId);
+    if (!anchorLayout) {
+      return nextWidgets;
+    }
+
+    const layoutsForPush =
+      restrictToAnchorColumns && section.kind !== 'stack-horizontal'
+        ? normalizedLayouts.filter((layout) => {
+            const layoutLeft = layout.x;
+            const layoutRight = layout.x + layout.w;
+            const anchorLeft = anchorLayout.x;
+            const anchorRight = anchorLayout.x + anchorLayout.w;
+            return layoutLeft < anchorRight && layoutRight > anchorLeft;
+          })
+        : normalizedLayouts;
+
     const pushedLayoutMap = new Map(
       pushLayoutsDownFromAnchor(
-        stackWidgets.map((widget) =>
-          resolveWidgetLayoutByKind(widget, normalizeLayoutForStack(section, widget.layout)),
-        ),
+        layoutsForPush,
         anchorWidgetId,
-        resolveStackColumns(section),
+        stackCols,
       ).map((layout) => [layout.i, layout]),
     );
 
@@ -3899,12 +4332,14 @@ export function MainBoard() {
             ? CLIMATE_WIDGET_HEIGHT
             : kind === 'light'
               ? LIGHT_WIDGET_HEIGHT_OFF
-            : kind === 'sensor' || kind === 'lock'
+            : kind === 'sensor'
               ? 1
-              : kind === 'camera'
-                ? CAMERA_WIDGET_MIN_HEIGHT
-                : kind === 'vacuum'
-                  ? VACUUM_WIDGET_MIN_HEIGHT
+              : kind === 'lock'
+                ? resolveLockMinimumHeightRows()
+                : kind === 'camera'
+                  ? CAMERA_WIDGET_MIN_HEIGHT
+                  : kind === 'vacuum'
+                    ? VACUUM_WIDGET_MIN_HEIGHT
                   : kind === 'cover'
                     ? COVER_WIDGET_MIN_HEIGHT
               : kind === 'media'
@@ -4554,10 +4989,13 @@ export function MainBoard() {
         state: 'disarmed',
         status: getAlarmStateLabel('disarmed'),
         codeArmRequired: false,
+        requireAuthToDisarm: false,
         activityLogLimit: DEFAULT_ACTIVITY_MAX_ENTRIES,
+        activityLogHours: DEFAULT_ACTIVITY_WINDOW_HOURS,
         supportedFeatures: undefined as number | undefined,
         changedBy: undefined as string | undefined,
         activityTimeline: [] as ActivityTimelineEntry[],
+        activityTimelineStatus: 'offline' as ActivityTimelineStatus,
         rawAttributes: undefined as Record<string, unknown> | undefined,
       };
     }
@@ -4571,7 +5009,14 @@ export function MainBoard() {
     );
     const supportedFeatures = resolveAlarmSupportedFeatures(liveEntity);
     const activityLogLimit = resolveActivityMaxEntries(activeWidget.activityLogLimit);
-    const activityTimeline = (alarmTimelineByEntity[activeWidget.entityId] ?? []).slice(0, activityLogLimit);
+    const activityLogHours = resolveActivityWindowHours(activeWidget.activityLogHours);
+    const normalizedAlarmEntityId = normalizeLower(activeWidget.entityId);
+    const activityTimeline = (alarmTimelineByEntity[activeWidget.entityId] ?? [])
+      .filter((entry) => normalizeLower(entry.entityId) === normalizedAlarmEntityId)
+      .slice(0, activityLogLimit);
+    const activityTimelineStatus = isHaConnected
+      ? alarmActivityStatusByEntity[activeWidget.entityId] ?? 'loading'
+      : 'offline';
     const timelineActor = activityTimeline.find((entry) => entry.actor && entry.actor !== DEFAULT_ACTIVITY_ACTOR)?.actor;
     const changedBy = toTrimmedString(rawAttributes?.changed_by) ?? timelineActor ?? haCurrentUser?.name;
     const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
@@ -4584,13 +5029,16 @@ export function MainBoard() {
       status: getAlarmStateLabel(resolvedState),
       codeArmRequired,
       unlockCode: activeWidget.alarmUnlockCode?.trim() || undefined,
+      requireAuthToDisarm: activeWidget.alarmRequireAuthToDisarm ?? false,
       activityLogLimit,
+      activityLogHours,
       supportedFeatures,
       changedBy,
       activityTimeline,
+      activityTimelineStatus,
       rawAttributes,
     };
-  }, [activeWidget, alarmTimelineByEntity, haCurrentUser?.name, haStatesForUi, isHaConnected]);
+  }, [activeWidget, alarmActivityStatusByEntity, alarmTimelineByEntity, haCurrentUser?.name, haStatesForUi, isHaConnected]);
 
   const contextLock = useMemo(() => {
     if (activeWidget?.kind !== 'lock') {
@@ -4600,7 +5048,9 @@ export function MainBoard() {
         status: translateLockState('unknown'),
         changedBy: undefined as string | undefined,
         activityLogLimit: DEFAULT_ACTIVITY_MAX_ENTRIES,
+        activityLogHours: DEFAULT_ACTIVITY_WINDOW_HOURS,
         activityTimeline: [] as ActivityTimelineEntry[],
+        activityTimelineStatus: 'offline' as ActivityTimelineStatus,
         supportedFeatures: undefined as number | undefined,
         rawAttributes: undefined as Record<string, unknown> | undefined,
         lockCode: undefined as string | undefined,
@@ -4620,7 +5070,14 @@ export function MainBoard() {
         ? liveEntity.supportedFeatures
         : rawSupportedFeatures;
     const activityLogLimit = resolveActivityMaxEntries(activeWidget.activityLogLimit);
-    const activityTimeline = (lockTimelineByEntity[activeWidget.entityId] ?? []).slice(0, activityLogLimit);
+    const activityLogHours = resolveActivityWindowHours(activeWidget.activityLogHours);
+    const normalizedLockEntityId = normalizeLower(activeWidget.entityId);
+    const activityTimeline = (lockTimelineByEntity[activeWidget.entityId] ?? [])
+      .filter((entry) => normalizeLower(entry.entityId) === normalizedLockEntityId)
+      .slice(0, activityLogLimit);
+    const activityTimelineStatus = isHaConnected
+      ? lockActivityStatusByEntity[activeWidget.entityId] ?? 'loading'
+      : 'offline';
     const timelineActor = activityTimeline.find((entry) => entry.actor && entry.actor !== DEFAULT_ACTIVITY_ACTOR)?.actor;
     const changedBy = toTrimmedString(rawAttributes?.changed_by) ?? timelineActor ?? haCurrentUser?.name;
 
@@ -4633,12 +5090,14 @@ export function MainBoard() {
       status: translateLockState(stateValue),
       changedBy,
       activityLogLimit,
+      activityLogHours,
       activityTimeline,
+      activityTimelineStatus,
       supportedFeatures,
       rawAttributes,
       lockCode: activeWidget.lockCode?.trim() || undefined,
     };
-  }, [activeWidget, haCurrentUser?.name, haStatesForUi, isHaConnected, lockTimelineByEntity]);
+  }, [activeWidget, haCurrentUser?.name, haStatesForUi, isHaConnected, lockActivityStatusByEntity, lockTimelineByEntity]);
 
   const contextCover = useMemo(() => {
     if (activeWidget?.kind !== 'cover') {
@@ -4718,6 +5177,10 @@ export function MainBoard() {
     return {
       kind: activeWidget.kind,
       entityId,
+      entityName:
+        activeWidget.title ||
+        toTrimmedString(liveEntity?.rawAttributes?.friendly_name) ||
+        entityId,
       activityWindowHours: resolveActivityWindowHours(activeWidget.activityLogHours),
       activityMaxEntries: resolveActivityMaxEntries(activeWidget.activityLogLimit),
       fallbackActor: toTrimmedString(rawAttributes?.changed_by) ?? haCurrentUser?.name,
@@ -5356,6 +5819,7 @@ export function MainBoard() {
 
   const activeActivityKind = activeActivityTarget?.kind;
   const activeActivityEntityId = activeActivityTarget?.entityId;
+  const activeActivityEntityName = activeActivityTarget?.entityName ?? activeActivityEntityId ?? 'Serratura';
   const activeActivityWindowHours = activeActivityTarget?.activityWindowHours ?? DEFAULT_ACTIVITY_WINDOW_HOURS;
   const activeActivityMaxEntries = activeActivityTarget?.activityMaxEntries ?? DEFAULT_ACTIVITY_MAX_ENTRIES;
   const activeActivityFallbackActor = activeActivityTarget?.fallbackActor;
@@ -5368,9 +5832,20 @@ export function MainBoard() {
 
     let cancelled = false;
     const fetchSeq = ++activityFetchSeqRef.current;
+    if (activeActivityKind === 'lock') {
+      setLockActivityStatusByEntity((current) => ({
+        ...current,
+        [activeActivityEntityId]: current[activeActivityEntityId] === 'available' ? 'available' : 'loading',
+      }));
+    } else if (activeActivityKind === 'alarm') {
+      setAlarmActivityStatusByEntity((current) => ({
+        ...current,
+        [activeActivityEntityId]: current[activeActivityEntityId] === 'available' ? 'available' : 'loading',
+      }));
+    }
 
     const loadTimeline = async () => {
-      const endMs = Date.now();
+      const endMs = Date.now() + 2 * 60 * 1000;
       const startMs = endMs - activeActivityWindowHours * 60 * 60 * 1000;
       const payloadWithEntityIds = await callHaApi<unknown>(
         {
@@ -5393,20 +5868,57 @@ export function MainBoard() {
           { reportError: false },
         ));
 
-      if (cancelled || fetchSeq !== activityFetchSeqRef.current || payload === null) {
+      if (cancelled || fetchSeq !== activityFetchSeqRef.current) {
+        return;
+      }
+
+      if (payload === null) {
+        if (activeActivityKind === 'lock') {
+          setLockTimelineByEntity((current) => ({
+            ...current,
+            [activeActivityEntityId]: [],
+          }));
+          setLockActivityStatusByEntity((current) => ({
+            ...current,
+            [activeActivityEntityId]: 'unavailable',
+          }));
+        } else if (activeActivityKind === 'alarm') {
+          setAlarmTimelineByEntity((current) => ({
+            ...current,
+            [activeActivityEntityId]: [],
+          }));
+          setAlarmActivityStatusByEntity((current) => ({
+            ...current,
+            [activeActivityEntityId]: 'unavailable',
+          }));
+        }
         return;
       }
 
       const events = parseHaLogbookEvents(payload);
       const filteredEvents = events.filter((event) => {
-        const eventEntityId = toTrimmedString(event.entity_id);
-        return !eventEntityId || eventEntityId === activeActivityEntityId;
+        const eventEntityId = normalizeLower(toTrimmedString(event.entity_id));
+        return eventEntityId === normalizeLower(activeActivityEntityId);
       });
       const entries = buildTimelineEntries(
         filteredEvents,
-        (event) => resolveActivityActor(event, haUserNamesById, activeActivityFallbackActor ?? haCurrentUser?.name),
+        (event) =>
+          resolveActivityActor(
+            event,
+            haUserNamesById,
+            activeActivityKind === 'lock' || activeActivityKind === 'alarm'
+              ? undefined
+              : activeActivityFallbackActor ?? haCurrentUser?.name,
+          ),
         activeActivityKind === 'lock' ? resolveLockActivityVerb : resolveAlarmActivityVerb,
         activeActivityMaxEntries,
+        activeActivityKind === 'lock'
+          ? (event, timestampMs, actor, verb) =>
+              resolveLockLogbookText(actor, verb, toTrimmedString(event.name) ?? activeActivityEntityName, timestampMs)
+          : activeActivityKind === 'alarm'
+            ? (event, timestampMs, actor, verb) =>
+                resolveAlarmLogbookText(actor, verb, toTrimmedString(event.name) ?? activeActivityEntityName, timestampMs)
+          : undefined,
       );
 
       if (cancelled || fetchSeq !== activityFetchSeqRef.current) {
@@ -5415,28 +5927,26 @@ export function MainBoard() {
 
       if (activeActivityKind === 'lock') {
         setLockTimelineByEntity((current) => {
-          const currentEntries = current[activeActivityEntityId] ?? [];
-          if (entries.length === 0 && currentEntries.length > 0) {
-            return current;
-          }
           return {
             ...current,
             [activeActivityEntityId]: entries,
           };
         });
+        setLockActivityStatusByEntity((current) => ({
+          ...current,
+          [activeActivityEntityId]: entries.length > 0 ? 'available' : 'empty',
+        }));
         return;
       }
 
-      setAlarmTimelineByEntity((current) => {
-        const currentEntries = current[activeActivityEntityId] ?? [];
-        if (entries.length === 0 && currentEntries.length > 0) {
-          return current;
-        }
-        return {
-          ...current,
-          [activeActivityEntityId]: entries,
-        };
-      });
+      setAlarmTimelineByEntity((current) => ({
+        ...current,
+        [activeActivityEntityId]: entries,
+      }));
+      setAlarmActivityStatusByEntity((current) => ({
+        ...current,
+        [activeActivityEntityId]: entries.length > 0 ? 'available' : 'empty',
+      }));
     };
 
     void loadTimeline();
@@ -5450,11 +5960,13 @@ export function MainBoard() {
     };
   }, [
     activeActivityEntityId,
+    activeActivityEntityName,
     activeActivityFallbackActor,
     activeActivityKind,
     activeActivityMaxEntries,
     activeActivityRefreshKey,
     activeActivityWindowHours,
+    activityRefreshNonce,
     callHaApi,
     haCurrentUser?.name,
     haUserNamesById,
@@ -5771,6 +6283,7 @@ export function MainBoard() {
     state.climate.isOn,
     state.climate.currentTemp,
     sections,
+    activeGridBreakpoint,
   ]);
 
   useEffect(() => {
@@ -5781,29 +6294,18 @@ export function MainBoard() {
 
   useEffect(() => {
     return () => {
-      const timers = lightBrightnessDebounceRef.current;
-      Object.values(timers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      lightBrightnessDebounceRef.current = {};
-
-      const climatePendingTimers = climatePendingTimeoutRef.current;
-      Object.values(climatePendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      climatePendingTimeoutRef.current = {};
-      const climateSendTimers = climateSendDelayTimeoutRef.current;
-      Object.values(climateSendTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      climateSendDelayTimeoutRef.current = {};
+      clearTimeoutRegistry(lightBrightnessDebounceRef);
+      clearTimeoutRegistry(climatePendingTimeoutRef);
+      clearTimeoutRegistry(climateSendDelayTimeoutRef);
       climateQueuedCommandRef.current = {};
-
-      const lightColorPendingTimers = lightColorPendingTimeoutRef.current;
-      Object.values(lightColorPendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      lightColorPendingTimeoutRef.current = {};
-
-      const coverPendingTimers = coverPendingTimeoutRef.current;
-      Object.values(coverPendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      coverPendingTimeoutRef.current = {};
-
-      const returnTimers = vacuumReturnToBaseTimeoutRef.current;
-      Object.values(returnTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-      vacuumReturnToBaseTimeoutRef.current = {};
+      clearTimeoutRegistry(lightTogglePendingTimeoutRef);
+      clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
+      clearTimeoutRegistry(lightColorPendingTimeoutRef);
+      clearTimeoutRegistry(lockPendingTimeoutRef);
+      clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
+      clearTimeoutArrayRegistry(alarmActivityRefreshTimeoutRef);
+      clearTimeoutRegistry(coverPendingTimeoutRef);
+      clearTimeoutRegistry(vacuumReturnToBaseTimeoutRef);
     };
   }, []);
 
@@ -5811,42 +6313,42 @@ export function MainBoard() {
     if (isHaConnected) {
       return;
     }
-    const timers = lightBrightnessDebounceRef.current;
-    Object.values(timers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    lightBrightnessDebounceRef.current = {};
-
-    const climatePendingTimers = climatePendingTimeoutRef.current;
-    Object.values(climatePendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    climatePendingTimeoutRef.current = {};
-    const climateSendTimers = climateSendDelayTimeoutRef.current;
-    Object.values(climateSendTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    climateSendDelayTimeoutRef.current = {};
+    clearTimeoutRegistry(lightBrightnessDebounceRef);
+    clearTimeoutRegistry(climatePendingTimeoutRef);
+    clearTimeoutRegistry(climateSendDelayTimeoutRef);
     climateQueuedCommandRef.current = {};
     setClimatePendingByEntity({});
 
-    const lightColorPendingTimers = lightColorPendingTimeoutRef.current;
-    Object.values(lightColorPendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    lightColorPendingTimeoutRef.current = {};
+    clearTimeoutRegistry(lightTogglePendingTimeoutRef);
+    setLightTogglePendingByEntity({});
+
+    clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
+    setLightBrightnessPendingByEntity({});
+
+    clearTimeoutRegistry(lightColorPendingTimeoutRef);
     setLightColorPendingByEntity({});
 
-    const coverPendingTimers = coverPendingTimeoutRef.current;
-    Object.values(coverPendingTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    coverPendingTimeoutRef.current = {};
+    clearTimeoutRegistry(lockPendingTimeoutRef);
+    clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
+    clearTimeoutArrayRegistry(alarmActivityRefreshTimeoutRef);
+    setLockPendingByEntity({});
+    setLockActivityStatusByEntity({});
+
+    clearTimeoutRegistry(coverPendingTimeoutRef);
     setCoverPendingByEntity({});
     setHaUserNamesById({});
     setHaUsersById({});
     setHaCurrentUser(null);
     setLockTimelineByEntity({});
     setAlarmTimelineByEntity({});
+    setAlarmActivityStatusByEntity({});
   }, [isHaConnected]);
 
   useEffect(() => {
     if (!isHaConnected) {
       return;
     }
-    const returnTimers = vacuumReturnToBaseTimeoutRef.current;
-    Object.values(returnTimers).forEach((timeoutId) => window.clearTimeout(timeoutId));
-    vacuumReturnToBaseTimeoutRef.current = {};
+    clearTimeoutRegistry(vacuumReturnToBaseTimeoutRef);
   }, [isHaConnected]);
 
   useEffect(() => {
@@ -5921,6 +6423,62 @@ export function MainBoard() {
   }, [climatePendingByEntity, haStates, isHaConnected]);
 
   useEffect(() => {
+    if (!isHaConnected || Object.keys(lightTogglePendingByEntity).length === 0) {
+      return;
+    }
+
+    const resolvedEntityIds = Object.entries(lightTogglePendingByEntity)
+      .filter(([entityId, pending]) => {
+        const liveEntity = haStates[entityId];
+        if (!liveEntity) {
+          return false;
+        }
+        const liveIsOn =
+          typeof liveEntity.toggleOn === 'boolean'
+            ? liveEntity.toggleOn
+            : normalizeLower(liveEntity.state) === 'on';
+        return liveIsOn === pending.targetOn;
+      })
+      .map(([entityId]) => entityId);
+
+    if (!resolvedEntityIds.length) {
+      return;
+    }
+
+    removePendingEntities(setLightTogglePendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightTogglePendingTimeoutRef, entityId));
+  }, [haStates, isHaConnected, lightTogglePendingByEntity]);
+
+  useEffect(() => {
+    if (!isHaConnected || Object.keys(lightBrightnessPendingByEntity).length === 0) {
+      return;
+    }
+
+    const resolvedEntityIds = Object.entries(lightBrightnessPendingByEntity)
+      .filter(([entityId, pending]) => {
+        const liveEntity = haStates[entityId];
+        if (!liveEntity) {
+          return false;
+        }
+        const liveBrightness =
+          typeof liveEntity.brightness === 'number'
+            ? liveEntity.brightness
+            : typeof liveEntity.numericValue === 'number'
+              ? liveEntity.numericValue
+              : undefined;
+        return Number.isFinite(liveBrightness) && almostEqual(liveBrightness, pending.brightness, 1);
+      })
+      .map(([entityId]) => entityId);
+
+    if (!resolvedEntityIds.length) {
+      return;
+    }
+
+    removePendingEntities(setLightBrightnessPendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightBrightnessPendingTimeoutRef, entityId));
+  }, [haStates, isHaConnected, lightBrightnessPendingByEntity]);
+
+  useEffect(() => {
     if (!isHaConnected || Object.keys(lightColorPendingByEntity).length === 0) {
       return;
     }
@@ -5946,27 +6504,43 @@ export function MainBoard() {
       return;
     }
 
-    setLightColorPendingByEntity((current) => {
-      let changed = false;
-      const next = { ...current };
-      resolvedEntityIds.forEach((entityId) => {
-        if (!(entityId in next)) {
-          return;
-        }
-        changed = true;
-        delete next[entityId];
-      });
-      return changed ? next : current;
-    });
-
-    resolvedEntityIds.forEach((entityId) => {
-      const timeoutId = lightColorPendingTimeoutRef.current[entityId];
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        delete lightColorPendingTimeoutRef.current[entityId];
-      }
-    });
+    removePendingEntities(setLightColorPendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightColorPendingTimeoutRef, entityId));
   }, [haStates, isHaConnected, lightColorPendingByEntity]);
+
+  useEffect(() => {
+    if (!isHaConnected || Object.keys(lockPendingByEntity).length === 0) {
+      return;
+    }
+
+    const resolvedEntityIds = Object.entries(lockPendingByEntity)
+      .filter(([entityId, pending]) => {
+        const liveEntity = haStates[entityId];
+        if (!liveEntity) {
+          return false;
+        }
+
+        const liveState = normalizeLockState(
+          toTrimmedString(liveEntity.state) ??
+            toTrimmedString(liveEntity.stateLabel),
+        );
+        if (pending.targetState === 'locked') {
+          return liveState === 'locked';
+        }
+        if (pending.targetState === 'open') {
+          return liveState === 'open' || liveState === 'unlocked';
+        }
+        return liveState === 'unlocked' || liveState === 'open';
+      })
+      .map(([entityId]) => entityId);
+
+    if (!resolvedEntityIds.length) {
+      return;
+    }
+
+    removePendingEntities(setLockPendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lockPendingTimeoutRef, entityId));
+  }, [haStates, isHaConnected, lockPendingByEntity]);
 
   useEffect(() => {
     if (!isHaConnected || Object.keys(coverPendingByEntity).length === 0) {
@@ -6149,6 +6723,7 @@ export function MainBoard() {
     const nextIsConsumption = isConsumptionNavigationTarget(currentRoute);
     const nextIsAutomation = isAutomationNavigationTarget(currentRoute);
     const nextIsAppGallery = isAppGalleryNavigationTarget(currentRoute);
+    const nextIsRooms = isRoomsNavigationTarget(currentRoute);
     const nextIsSecurity = isSecurityNavigationTarget(currentRoute);
     const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(currentRoute);
     const nextIsKnownRoute =
@@ -6156,6 +6731,7 @@ export function MainBoard() {
       nextIsConsumption ||
       nextIsAutomation ||
       nextIsAppGallery ||
+      nextIsRooms ||
       nextIsSecurity;
     const nextEditAvailability =
       isHomeNavigationTarget(currentRoute) ||
@@ -6166,6 +6742,7 @@ export function MainBoard() {
     setIsConsumptionView(nextIsConsumption);
     setIsAutomationView(nextIsAutomation);
     setIsAppGalleryView(nextIsAppGallery);
+    setIsRoomsView(nextIsRooms);
     setIsSecurityView(nextIsSecurity);
     setIsSecurityCamerasView(nextIsSecurityCameras);
     setIsEditAvailableForRoute(nextEditAvailability);
@@ -6367,8 +6944,8 @@ export function MainBoard() {
   }, [connectHa, haStatus, haToken, haUrl, pendingStoredOAuthReconnectUrl]);
 
   useEffect(() => {
-    saveDashboardLayout(sections, widgets);
-  }, [sections, widgets]);
+    saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides);
+  }, [sections, widgetTypeLayoutOverrides, widgets]);
 
   useEffect(() => {
     setWidgets((prev) => {
@@ -6403,6 +6980,28 @@ export function MainBoard() {
 
   const updateWidget = (id: string, updater: (widget: Widget) => Widget) => {
     setWidgets((prev) => prev.map((widget) => (widget.id === id ? updater(widget) : widget)));
+  };
+
+  const updateWidgetTypeLayoutOverride = (
+    kind: WidgetKind,
+    breakpoint: DashboardGridBreakpoint,
+    nextOverride: WidgetTypeBreakpointLayoutOverride | null,
+  ) => {
+    setWidgetTypeLayoutOverrides((prev) => {
+      const next: WidgetTypeLayoutOverrides = { ...prev };
+      const currentByBreakpoint = { ...(next[kind] ?? {}) };
+      if (nextOverride) {
+        currentByBreakpoint[breakpoint] = nextOverride;
+      } else {
+        delete currentByBreakpoint[breakpoint];
+      }
+      if (Object.keys(currentByBreakpoint).length === 0) {
+        delete next[kind];
+      } else {
+        next[kind] = currentByBreakpoint;
+      }
+      return normalizeWidgetTypeLayoutOverrides(next);
+    });
   };
 
   const updateWidgetWithAutoLayout = (id: string, updater: (widget: Widget) => Widget) => {
@@ -6490,6 +7089,42 @@ export function MainBoard() {
       }),
     );
   };
+  useEffect(() => {
+    setSections((previous) => {
+      let hasChanged = false;
+      const next = previous.map((section) => {
+        if (!isStackGridAutoColumns(section)) {
+          return section;
+        }
+        const usedCols = resolveUsedColumnsForStackSection(section.id, widgets);
+        if (usedCols <= 0) {
+          return section;
+        }
+        const targetCols = clampAutoStackSectionColumns(
+          usedCols,
+        );
+        const maxX = Math.max(0, ROOT_CANVAS_COLS - targetCols);
+        const safeX = Math.min(Math.max(0, Math.round(section.layout.x)), maxX);
+        const safeW = targetCols;
+        const layoutUnchanged =
+          Math.round(section.layout.w) === safeW &&
+          Math.round(section.layout.x) === safeX;
+        if (layoutUnchanged) {
+          return section;
+        }
+        hasChanged = true;
+        return {
+          ...section,
+          layout: {
+            ...section.layout,
+            w: safeW,
+            x: safeX,
+          },
+        };
+      });
+      return hasChanged ? next : previous;
+    });
+  }, [sections, widgets]);
 
   const handleWidgetLayoutChange = (sectionId: string, nextLayout: GridItem[]) => {
     const nextLayoutMap = new Map(nextLayout.map((item) => [item.i, item]));
@@ -6664,7 +7299,12 @@ export function MainBoard() {
           return;
         }
         resolvedWidgets = expandsFootprint
-          ? pushStackSectionLayoutDown(section, resolvedWidgets, nextWidget.id)
+          ? pushStackSectionLayoutDown(
+              section,
+              resolvedWidgets,
+              nextWidget.id,
+              nextWidget.kind === 'light',
+            )
           : compactStackSectionLayout(section, resolvedWidgets);
         return;
       }
@@ -6806,31 +7446,50 @@ export function MainBoard() {
     }, CLIMATE_SEND_DELAY_MS);
   };
 
+  const setLightTogglePending = (entityId: string, targetOn: boolean) => {
+    const expiresAt = Date.now() + LIGHT_TOGGLE_PENDING_TTL_MS;
+    setEntityPendingWithExpiry(
+      entityId,
+      { targetOn, expiresAt },
+      LIGHT_TOGGLE_PENDING_TTL_MS,
+      lightTogglePendingTimeoutRef,
+      setLightTogglePendingByEntity,
+    );
+  };
+
+  const setLightBrightnessPending = (entityId: string, brightness: number) => {
+    const safeBrightness = clamp(Math.round(brightness), 0, 100);
+    const expiresAt = Date.now() + LIGHT_BRIGHTNESS_PENDING_TTL_MS;
+    setEntityPendingWithExpiry(
+      entityId,
+      { brightness: safeBrightness, expiresAt },
+      LIGHT_BRIGHTNESS_PENDING_TTL_MS,
+      lightBrightnessPendingTimeoutRef,
+      setLightBrightnessPendingByEntity,
+    );
+  };
+
   const setLightColorPending = (entityId: string, hsColor: [number, number]) => {
-    const timers = lightColorPendingTimeoutRef.current;
-    const existingTimeout = timers[entityId];
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-    }
     const expiresAt = Date.now() + LIGHT_COLOR_PENDING_TTL_MS;
-    setLightColorPendingByEntity((current) => ({
-      ...current,
-      [entityId]: {
-        hsColor,
-        expiresAt,
-      },
-    }));
-    timers[entityId] = window.setTimeout(() => {
-      setLightColorPendingByEntity((current) => {
-        if (!(entityId in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[entityId];
-        return next;
-      });
-      delete timers[entityId];
-    }, LIGHT_COLOR_PENDING_TTL_MS);
+    setEntityPendingWithExpiry(
+      entityId,
+      { hsColor, expiresAt },
+      LIGHT_COLOR_PENDING_TTL_MS,
+      lightColorPendingTimeoutRef,
+      setLightColorPendingByEntity,
+    );
+  };
+
+  const setLockPending = (entityId: string, action: LockPendingAction) => {
+    const expiresAt = Date.now() + LOCK_PENDING_TTL_MS;
+    const targetState = resolveLockPendingTargetState(action);
+    setEntityPendingWithExpiry(
+      entityId,
+      { action, targetState, expiresAt },
+      LOCK_PENDING_TTL_MS,
+      lockPendingTimeoutRef,
+      setLockPendingByEntity,
+    );
   };
 
   const scheduleCoverPendingExpiry = (entityId: string) => {
@@ -6903,7 +7562,9 @@ export function MainBoard() {
         typeof liveEntity?.toggleOn === 'boolean'
           ? liveEntity.toggleOn
           : targetWidget?.isOn ?? false;
-      applyLocalToggle(!currentIsOn);
+      const nextIsOn = !currentIsOn;
+      setLightTogglePending(entityId, nextIsOn);
+      applyLocalToggle(nextIsOn);
       void callHaService('light', 'toggle', { entity_id: entityId });
       return;
     }
@@ -6919,6 +7580,8 @@ export function MainBoard() {
     const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
     const safeValue = clamp(Math.round(value), 0, 100);
     if (isHaConnected && entityId) {
+      setLightBrightnessPending(entityId, safeValue);
+      setLightTogglePending(entityId, safeValue > 0);
       if (safeValue <= 0) {
         void callHaService('light', 'turn_off', { entity_id: entityId });
       } else {
@@ -7012,6 +7675,8 @@ export function MainBoard() {
     };
 
     if (isHaConnected && widget.entityId) {
+      setLightBrightnessPending(widget.entityId, safeValue);
+      setLightTogglePending(widget.entityId, nextOn);
       scheduleHaLightBrightness(widget.entityId, safeValue);
       applyLocal();
       return;
@@ -7028,6 +7693,7 @@ export function MainBoard() {
     const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
     const safeKelvin = clamp(Math.round(kelvin), 2000, 6500);
     if (isHaConnected && entityId) {
+      setLightTogglePending(entityId, true);
       void callHaService('light', 'turn_on', { entity_id: entityId, color_temp_kelvin: safeKelvin });
       return;
     }
@@ -7049,6 +7715,7 @@ export function MainBoard() {
     const safeHue = clamp(Math.round(hs[0]), 0, 360);
     const safeSat = clamp(Math.round(hs[1]), 0, 100);
     if (isHaConnected && entityId) {
+      setLightTogglePending(entityId, true);
       setLightColorPending(entityId, [safeHue, safeSat]);
       void callHaService('light', 'turn_on', { entity_id: entityId, hs_color: [safeHue, safeSat] });
       return;
@@ -7269,49 +7936,25 @@ export function MainBoard() {
   const resolveAlarmTargetContext = (widget?: Widget) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
     const entityId = targetWidget?.entityId;
+    const defaultCode = targetWidget?.alarmUnlockCode?.trim() || undefined;
     return {
       targetWidget,
       entityId,
+      defaultCode,
     };
   };
 
   const callAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
-    const { targetWidget, entityId } = resolveAlarmTargetContext(widget);
-    const activityMaxEntries = resolveActivityMaxEntries(targetWidget?.activityLogLimit);
-    const trimmedCode = code?.trim();
+    const { targetWidget, entityId, defaultCode } = resolveAlarmTargetContext(widget);
+    const actionCode = code?.trim() || defaultCode;
     if (isHaConnected && entityId) {
-      const optimisticActor = haCurrentUser?.name ?? DEFAULT_ACTIVITY_ACTOR;
-      const optimisticVerb =
-        service === 'alarm_disarm'
-          ? 'ha disinserito'
-          : service === 'alarm_arm_home'
-            ? 'ha inserito Casa'
-            : service === 'alarm_arm_away'
-              ? 'ha inserito Fuori'
-              : service === 'alarm_arm_night'
-                ? 'ha inserito Notte'
-                : service === 'alarm_arm_vacation'
-                  ? 'ha inserito Vacanza'
-                  : service === 'alarm_arm_custom_bypass'
-                    ? 'ha inserito Bypass'
-                    : 'ha attivato il trigger';
-      const optimisticTimestamp = Date.now();
-      const optimisticEntry: ActivityTimelineEntry = {
-        id: `optimistic-alarm-${service}-${optimisticTimestamp}-${Math.random().toString(16).slice(2, 8)}`,
-        text: `${optimisticActor} ${optimisticVerb} ${formatActivityTimeLabel(optimisticTimestamp)}`,
-        timestampMs: optimisticTimestamp,
-        actor: optimisticActor,
-      };
-      setAlarmTimelineByEntity((current) => ({
-        ...current,
-        [entityId]: [optimisticEntry, ...(current[entityId] ?? [])].slice(0, activityMaxEntries),
-      }));
       const payload: Record<string, unknown> = { entity_id: entityId };
-      if (trimmedCode) {
-        payload.code = trimmedCode;
+      if (actionCode) {
+        payload.code = actionCode;
       }
+      scheduleAlarmActivityRefresh(entityId);
       void callHaService('alarm_control_panel', service, payload);
-      return;
+      return true;
     }
     if (targetWidget?.kind === 'alarm') {
       const nextState = resolveAlarmNextState(service);
@@ -7321,34 +7964,82 @@ export function MainBoard() {
         isOn: isAlarmArmedState(nextState),
       }));
     }
+    return true;
+  };
+
+  const requestAuthenticatedAlarmAction = async (service: AlarmServiceName, widget: Widget, code?: string) => {
+    if (isLockAuthBusy) {
+      return false;
+    }
+
+    const targetWidget = widget.kind === 'alarm' ? widget : undefined;
+    if (!targetWidget) {
+      addNotification('alert', 'Allarme non trovato. Riprova dalla card.');
+      return false;
+    }
+
+    const shouldUseBiometric = lockAuthMode !== 'pin';
+    if (!shouldUseBiometric) {
+      return callAlarmAction(service, code, targetWidget);
+    }
+
+    const credentialId = lockBiometricCredentialId.trim();
+    if (!credentialId) {
+      addNotification('warning', 'Configura la biometria da Profilo > Sicurezza per modificare questo allarme.');
+      return false;
+    }
+    if (!isLockBiometricAvailable) {
+      addNotification('warning', 'Biometria non disponibile su questo browser o dispositivo.');
+      return false;
+    }
+
+    setIsLockAuthBusy(true);
+    try {
+      const verified = await verifyStoredBiometricCredential(credentialId);
+      if (!verified) {
+        addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
+        return false;
+      }
+      return callAlarmAction(service, code, targetWidget);
+    } finally {
+      setIsLockAuthBusy(false);
+    }
+  };
+
+  const callProtectedAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
+    const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
+    if (targetWidget?.alarmRequireAuthToDisarm && !code?.trim()) {
+      return requestAuthenticatedAlarmAction(service, targetWidget, code);
+    }
+    return callAlarmAction(service, code, widget);
   };
 
   const disarmAlarm = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_disarm', code, widget);
+    return callProtectedAlarmAction('alarm_disarm', code, widget);
   };
 
   const armAlarmHome = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_arm_home', code, widget);
+    return callProtectedAlarmAction('alarm_arm_home', code, widget);
   };
 
   const armAlarmAway = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_arm_away', code, widget);
+    return callProtectedAlarmAction('alarm_arm_away', code, widget);
   };
 
   const armAlarmNight = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_arm_night', code, widget);
+    return callProtectedAlarmAction('alarm_arm_night', code, widget);
   };
 
   const armAlarmVacation = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_arm_vacation', code, widget);
+    return callProtectedAlarmAction('alarm_arm_vacation', code, widget);
   };
 
   const armAlarmCustomBypass = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_arm_custom_bypass', code, widget);
+    return callProtectedAlarmAction('alarm_arm_custom_bypass', code, widget);
   };
 
   const triggerAlarm = (code?: string, widget?: Widget) => {
-    callAlarmAction('alarm_trigger', code, widget);
+    return callProtectedAlarmAction('alarm_trigger', code, widget);
   };
 
   const armAlarmByMode = (
@@ -7398,27 +8089,22 @@ export function MainBoard() {
 
   const callLockAction = (service: 'lock' | 'unlock' | 'open', code?: string, widget?: Widget) => {
     const { targetWidget, entityId, defaultCode } = resolveLockTargetContext(widget);
-    const activityMaxEntries = resolveActivityMaxEntries(targetWidget?.activityLogLimit);
     const actionCode = code?.trim() || defaultCode;
+    const nextState = service === 'lock' ? 'locked' : service === 'open' ? 'open' : 'unlocked';
 
     if (isHaConnected && entityId) {
-      const optimisticActor = haCurrentUser?.name ?? DEFAULT_ACTIVITY_ACTOR;
-      const optimisticVerb =
-        service === 'lock' ? 'ha bloccato' : service === 'unlock' ? 'ha sbloccato' : 'ha aperto';
-      const optimisticTimestamp = Date.now();
-      const optimisticEntry: ActivityTimelineEntry = {
-        id: `optimistic-lock-${service}-${optimisticTimestamp}-${Math.random().toString(16).slice(2, 8)}`,
-        text: `${optimisticActor} ${optimisticVerb} ${formatActivityTimeLabel(optimisticTimestamp)}`,
-        timestampMs: optimisticTimestamp,
-        actor: optimisticActor,
-      };
-      setLockTimelineByEntity((current) => ({
-        ...current,
-        [entityId]: [optimisticEntry, ...(current[entityId] ?? [])].slice(0, activityMaxEntries),
-      }));
       const payload: Record<string, unknown> = { entity_id: entityId };
       if (actionCode) {
         payload.code = actionCode;
+      }
+      setLockPending(entityId, service);
+      scheduleLockActivityRefresh(entityId);
+      if (targetWidget) {
+        updateWidget(targetWidget.id, (current) => ({
+          ...current,
+          status: nextState,
+          isOn: isLockLockedState(nextState),
+        }));
       }
       void callHaService('lock', service, payload);
       return;
@@ -7428,7 +8114,6 @@ export function MainBoard() {
       return;
     }
 
-    const nextState = service === 'lock' ? 'locked' : service === 'open' ? 'open' : 'unlocked';
     updateWidget(targetWidget.id, (current) => ({
       ...current,
       status: nextState,
@@ -7448,6 +8133,47 @@ export function MainBoard() {
     callLockAction('open', code, widget);
   };
 
+  const requestAuthenticatedLockUnlock = async (widget: Widget, code?: string) => {
+    if (isLockAuthBusy) {
+      return false;
+    }
+
+    const targetWidget = widget.kind === 'lock' ? widget : undefined;
+    if (!targetWidget) {
+      addNotification('alert', 'Serratura non trovata. Riprova dalla card.');
+      return false;
+    }
+
+    const shouldUseBiometric = lockAuthMode !== 'pin';
+    if (!shouldUseBiometric) {
+      unlockDoor(code, targetWidget);
+      return true;
+    }
+
+    const credentialId = lockBiometricCredentialId.trim();
+    if (!credentialId) {
+      addNotification('warning', 'Configura la biometria da Profilo > Sicurezza per sbloccare questa serratura.');
+      return false;
+    }
+    if (!isLockBiometricAvailable) {
+      addNotification('warning', 'Biometria non disponibile su questo browser o dispositivo.');
+      return false;
+    }
+
+    setIsLockAuthBusy(true);
+    try {
+      const verified = await verifyStoredBiometricCredential(credentialId);
+      if (!verified) {
+        addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
+        return false;
+      }
+      unlockDoor(code, targetWidget);
+      return true;
+    } finally {
+      setIsLockAuthBusy(false);
+    }
+  };
+
   const toggleLockDoor = (widget?: Widget) => {
     const { stateValue, rawAttributes, liveEntity } = resolveLockTargetContext(widget);
     const isLocked = isLockLockedState(stateValue);
@@ -7460,13 +8186,29 @@ export function MainBoard() {
 
     if (stateValue === 'open' && supportsOpen) {
       lockDoor(undefined, widget);
-      return;
+      return true;
     }
     if (isLocked) {
+      const targetWidget = widget?.kind === 'lock' ? widget : activeWidget?.kind === 'lock' ? activeWidget : undefined;
+      if (targetWidget?.lockRequireAuthToUnlock) {
+        void requestAuthenticatedLockUnlock(targetWidget);
+        return false;
+      }
       unlockDoor(undefined, widget);
-      return;
+      return true;
     }
     lockDoor(undefined, widget);
+    return true;
+  };
+
+  const unlockDoorFromContext = (code?: string) => {
+    const targetWidget = activeWidget?.kind === 'lock' ? activeWidget : undefined;
+    if (targetWidget?.lockRequireAuthToUnlock) {
+      void requestAuthenticatedLockUnlock(targetWidget, code);
+      return false;
+    }
+    unlockDoor(code, targetWidget);
+    return true;
   };
 
   const resolveCoverTargetContext = (widget?: Widget) => {
@@ -8903,12 +9645,14 @@ export function MainBoard() {
         ? CLIMATE_WIDGET_HEIGHT
         : kind === 'light'
           ? LIGHT_WIDGET_HEIGHT_OFF
-        : kind === 'sensor' || kind === 'lock'
+        : kind === 'sensor'
           ? 1
-          : kind === 'camera'
-            ? CAMERA_WIDGET_MIN_HEIGHT
-            : kind === 'vacuum'
-              ? VACUUM_WIDGET_MIN_HEIGHT
+          : kind === 'lock'
+            ? resolveLockMinimumHeightRows()
+            : kind === 'camera'
+              ? CAMERA_WIDGET_MIN_HEIGHT
+              : kind === 'vacuum'
+                ? VACUUM_WIDGET_MIN_HEIGHT
               : kind === 'cover'
                 ? COVER_WIDGET_MIN_HEIGHT
                 : kind === 'members'
@@ -9081,6 +9825,7 @@ export function MainBoard() {
           ? {
               title: 'Grid Stack',
               stackColumns: 3,
+              stackColumnsMode: 'auto',
               stackShowBackground: true,
               stackShowBorder: true,
               stackShowHeader: true,
@@ -9296,6 +10041,9 @@ export function MainBoard() {
       setEditConfirm(null);
       return;
     }
+    if (editConfirm === 'exit') {
+      saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides);
+    }
     setIsEditMode((prev) => !prev);
     setEditConfirm(null);
   };
@@ -9343,6 +10091,7 @@ export function MainBoard() {
       const nextIsConsumption = isConsumptionNavigationTarget(normalizedRouteForNavigate);
       const nextIsAutomation = isAutomationNavigationTarget(normalizedRouteForNavigate);
       const nextIsAppGallery = isAppGalleryNavigationTarget(normalizedRouteForNavigate);
+      const nextIsRooms = isRoomsNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurity = isSecurityNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(normalizedRouteForNavigate);
       const nextIsKnownRoute =
@@ -9350,6 +10099,7 @@ export function MainBoard() {
         nextIsConsumption ||
         nextIsAutomation ||
         nextIsAppGallery ||
+        nextIsRooms ||
         nextIsSecurity;
       const nextEditAvailability =
         isHomeNavigationTarget(normalizedRouteForNavigate) ||
@@ -9360,6 +10110,7 @@ export function MainBoard() {
       setIsConsumptionView(nextIsConsumption);
       setIsAutomationView(nextIsAutomation);
       setIsAppGalleryView(nextIsAppGallery);
+      setIsRoomsView(nextIsRooms);
       setIsSecurityView(nextIsSecurity);
       setIsSecurityCamerasView(nextIsSecurityCameras);
       setIsEditAvailableForRoute(nextEditAvailability);
@@ -9404,7 +10155,7 @@ export function MainBoard() {
   const profileUserOwnedDeviceCount = profileMovementSource.trackerDeviceCount;
   const isSecurityImmersiveView = isSecurityView && isSecurityCamerasView;
   const isDashboardCanvasView =
-    !isConsumptionView && !isAutomationView && !isAppGalleryView && !isSecurityView;
+    !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView;
   const shouldApplyXsShellBottomInset =
     !isSecurityImmersiveView && isXsViewport && !isDashboardCanvasView;
   const openProfilePanel = (section: ProfileSectionId = 'theme') => {
@@ -9414,7 +10165,7 @@ export function MainBoard() {
 
   return (
     <div
-      className={`relative h-[100dvh] min-h-screen font-sans overflow-hidden flex ${
+      className={`apple-bg-main relative h-[100dvh] min-h-screen font-sans overflow-hidden flex ${
         isSecurityImmersiveView
           ? 'p-0 gap-0'
           : 'py-1.5 px-0.5 sm:p-2 md:p-2.5 lg:p-4 xl:p-5 gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6'
@@ -9422,10 +10173,10 @@ export function MainBoard() {
         shouldApplyXsShellBottomInset
           ? 'pb-[calc(env(safe-area-inset-bottom)+5.9rem)]'
           : ''
-      } selection:bg-blue-500/30 ${
+      } ${
         theme === 'light'
-          ? 'dashboard-theme-light bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]'
-          : 'dashboard-theme-dark bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]'
+          ? 'dashboard-theme-light text-[var(--dashboard-text)]'
+          : 'dashboard-theme-dark text-[var(--dashboard-text)]'
       } dashboard-shell ${dashboardWallpaperClass}`}
     >
       <div aria-hidden className="dashboard-wallpaper-layer" />
@@ -9502,6 +10253,18 @@ export function MainBoard() {
               onNotify={addNotification}
             />
           </div>
+        ) : isRoomsView ? (
+          <div className="h-full min-h-0 flex-1 overflow-hidden">
+            <RoomsDashboard
+              suppressBrowserNavigation={!canUseBrowserRouteNavigation}
+              navigationRoute={internalNavigationRoute}
+              haConnected={isHaConnected}
+              haAreas={haAreas}
+              haStates={haStatesForUi}
+              onCallService={callHaService}
+              onCallApi={callHaApi}
+            />
+          </div>
         ) : isSecurityView ? (
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <SecurityDashboard
@@ -9521,6 +10284,7 @@ export function MainBoard() {
               isEditMode={isEditMode}
               developerMode={developerMode}
               isXsViewport={isXsViewport}
+              onActiveBreakpointChange={setActiveGridBreakpoint}
               topRightOverlay={
                 !isSecurityImmersiveView && isXsViewport ? (
                   <XsNotificationBell
@@ -9539,6 +10303,7 @@ export function MainBoard() {
               selectedWidgetId={selectedWidgetId}
               selectedSectionId={selectedSectionId}
               isCatalogOpen={isCatalogOpen}
+              widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
               onOpenCatalog={() => setIsCatalogOpen(true)}
               onCloseCatalog={() => setIsCatalogOpen(false)}
               onSelectWidget={(id) => {
@@ -9615,7 +10380,7 @@ export function MainBoard() {
                 if (widget.kind !== 'lock') {
                   return;
                 }
-                toggleLockDoor(widget);
+                return toggleLockDoor(widget);
               }}
               onWidgetLockOpen={(widget) => {
                 if (widget.kind !== 'lock') {
@@ -9639,7 +10404,7 @@ export function MainBoard() {
 
             <RightSidebarManager
               isEditMode={isEditMode}
-              isXs={isXsViewport}
+              isCompactViewport={isCompactViewport}
               theme={theme}
               activeDevice={activeDevice}
               onCloseContextSidebar={clearContextSelection}
@@ -9701,7 +10466,7 @@ export function MainBoard() {
                 setVacuumFanSpeed: (fanSpeed) => setVacuumFanSpeed(fanSpeed),
                 sendVacuumCommand: (command, params) => sendVacuumCommand(command, params),
                 lockDoor: (code) => lockDoor(code),
-                unlockDoor: (code) => unlockDoor(code),
+                unlockDoor: (code) => unlockDoorFromContext(code),
                 openDoor: (code) => openDoor(code),
                 openCover: () => openCover(),
                 closeCover: () => closeCover(),
@@ -9721,11 +10486,14 @@ export function MainBoard() {
               selectedSidebarPath={selectedSidebarPath}
               sidebarPaths={visibleSidebarPaths}
               weatherConfig={weatherSection}
+              activeGridBreakpoint={activeGridBreakpoint}
+              widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
               entityOptions={ENTITY_OPTIONS}
               haEntityIds={haEntityIds}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               onUpdateWidget={updateWidget}
+              onUpdateWidgetTypeLayoutOverride={updateWidgetTypeLayoutOverride}
               onUpdateSection={updateSection}
               onUpdateSidebarPath={updateSidebarPath}
               onRemoveSelectedWidget={removeSelectedWidget}
@@ -9742,7 +10510,7 @@ export function MainBoard() {
 
       </main>
 
-      {!isEditMode && !isConsumptionView && !isAutomationView && !isAppGalleryView && !isSecurityView ? (
+      {!isEditMode && !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView ? (
         <FavoritesDrawer
           isOpen={isFavoritesOpen}
           onOpen={() => setIsFavoritesOpen(true)}
@@ -9781,7 +10549,9 @@ export function MainBoard() {
         movementPoints={profileMovementPoints}
         movementUpdatedLabel={profileMovementUpdatedLabel}
         theme={theme}
+        themeMode={themeMode}
         onThemeChange={setTheme}
+        onThemeModeChange={setThemeMode}
         wallpaper={wallpaper}
         onWallpaperChange={setWallpaper}
         developerMode={developerMode}
@@ -9817,7 +10587,7 @@ export function MainBoard() {
       ) : null}
 
       {editConfirm ? (
-        <div className="fixed inset-0 z-[230] flex items-center justify-center p-4 sm:p-8">
+        <div className="fixed inset-0 z-[230] flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-8">
           <button
             type="button"
             onClick={() => setEditConfirm(null)}
@@ -9825,7 +10595,7 @@ export function MainBoard() {
             aria-label="Chiudi conferma"
           />
           <div
-            className="relative w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.08] backdrop-blur-3xl p-6"
+            className="relative h-full w-full overflow-y-auto rounded-none border-0 bg-white/[0.08] backdrop-blur-3xl p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] custom-scrollbar md:h-auto md:max-w-md md:rounded-[2rem] md:border md:border-white/10 md:p-6 md:overflow-visible"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-xs uppercase tracking-[0.2em] text-white/55">

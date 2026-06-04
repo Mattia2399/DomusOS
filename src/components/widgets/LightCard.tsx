@@ -4,6 +4,8 @@ import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
 
+const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
+
 type LightCardProps = {
   widget: Widget;
   state: DashboardStateShape;
@@ -61,7 +63,19 @@ export function LightCard({
   const resolvedRgbColor = hasLiveLightState && liveSupportsColor
     ? liveLightState?.rgbColor ?? liveLightState?.rgb_color
     : undefined;
-  const showBrightnessSlider = cardState === 'on' && Math.max(1, Math.round(widget.layout.h)) >= 2;
+  const rawPendingToggle = liveLightState?.rawAttributes?.[LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY];
+  const pendingToggleTargetOn =
+    typeof rawPendingToggle === 'boolean'
+      ? rawPendingToggle
+      : rawPendingToggle === 'on'
+        ? true
+        : rawPendingToggle === 'off'
+          ? false
+          : undefined;
+  const isPendingToggle = pendingToggleTargetOn !== undefined;
+  const showBrightnessSlider =
+    cardState === 'on' &&
+    widgetHeightUnits >= 2;
 
   return (
     <div
@@ -78,6 +92,8 @@ export function LightCard({
           colorMode={resolvedColorMode}
           hsColor={resolvedHsColor}
           rgbColor={resolvedRgbColor}
+          pendingToggle={isPendingToggle}
+          pendingToggleTargetOn={pendingToggleTargetOn}
           activeTimerEnd={isPrimaryLamp ? state.lamp.activeTimerEnd : undefined}
           showBrightnessSlider={showBrightnessSlider}
           onToggle={!isEditMode ? onClick : undefined}

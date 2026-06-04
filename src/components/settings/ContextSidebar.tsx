@@ -159,12 +159,15 @@ interface ContextSidebarProps {
     status?: string;
     codeArmRequired?: boolean;
     unlockCode?: string;
+    requireAuthToDisarm?: boolean;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
   };
@@ -174,10 +177,12 @@ interface ContextSidebarProps {
     status?: string;
     changedBy?: string;
     activityLogLimit?: number;
+    activityLogHours?: number;
     activityTimeline?: Array<{
       id: string;
       text: string;
     }>;
+    activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
@@ -233,13 +238,13 @@ interface ContextSidebarProps {
     cycleSpeakerRepeatMode: () => void;
     selectSpeakerOutputDevice: (deviceId: string) => void;
     toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
-    disarmAlarm: (code?: string) => void;
-    armAlarmHome: (code?: string) => void;
-    armAlarmAway: (code?: string) => void;
-    armAlarmNight: (code?: string) => void;
-    armAlarmVacation: (code?: string) => void;
-    armAlarmCustomBypass: (code?: string) => void;
-    triggerAlarm: (code?: string) => void;
+    disarmAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
+    armAlarmHome: (code?: string) => boolean | void | Promise<boolean | void>;
+    armAlarmAway: (code?: string) => boolean | void | Promise<boolean | void>;
+    armAlarmNight: (code?: string) => boolean | void | Promise<boolean | void>;
+    armAlarmVacation: (code?: string) => boolean | void | Promise<boolean | void>;
+    armAlarmCustomBypass: (code?: string) => boolean | void | Promise<boolean | void>;
+    triggerAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
     startVacuum: () => void;
     pauseVacuum: () => void;
     stopVacuum: () => void;
@@ -250,7 +255,7 @@ interface ContextSidebarProps {
     setVacuumFanSpeed: (fanSpeed: string) => void;
     sendVacuumCommand: (command: string, params?: unknown) => void;
     lockDoor: (code?: string) => void;
-    unlockDoor: (code?: string) => void;
+    unlockDoor: (code?: string) => boolean | void;
     openDoor: (code?: string) => void;
     openCover: () => void;
     closeCover: () => void;
@@ -408,7 +413,7 @@ export function ContextSidebar({
       ) : null}
 
       {!activeDevice ? (
-        <div className="h-full min-h-0 rounded-[2rem] bg-white/5 backdrop-blur-xl border border-white/8 flex items-center justify-center p-8 text-center">
+        <div className="liquid-glass-panel h-full min-h-0 flex items-center justify-center p-8 text-center">
           <div>
             <span className="mx-auto w-14 h-14 rounded-full bg-white/8 border border-white/12 flex items-center justify-center text-white/85 mb-4">
               <Lightbulb size={22} />
@@ -581,7 +586,7 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'members' ? (
         <div className={CONTEXT_PANEL_LAYOUT.shell}>
-          <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+          <div className="liquid-glass-panel mb-1 p-[clamp(0.9rem,3vw,1.6rem)]">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-300/35 bg-cyan-500/15 text-cyan-100">
                 <Users size={18} />
@@ -595,9 +600,9 @@ export function ContextSidebar({
             </div>
           </div>
 
-          <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+          <div className="liquid-glass-panel mb-1 p-[clamp(0.9rem,3vw,1.6rem)]">
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Mappa Presenze</p>
-            <div className="relative mt-2 h-56 overflow-hidden rounded-xl border border-white/12 bg-gradient-to-br from-slate-900/70 to-slate-800/55">
+            <div className="liquid-glass-card relative mt-2 h-56 overflow-hidden rounded-xl">
               {membersMapPoints.length > 0 ? (
                 <Map
                   ref={membersMapRef}
@@ -648,7 +653,7 @@ export function ContextSidebar({
                 type="button"
                 onClick={centerMapOnCurrentMember}
                 disabled={!currentMemberMapPoint}
-                className="absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white/90 backdrop-blur-xl transition-colors hover:bg-black/60 disabled:cursor-not-allowed disabled:opacity-45"
+                className="btn-premium absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white/90 backdrop-blur-xl transition-colors hover:bg-black/60 disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="Centra sulla mia posizione"
                 title={
                   currentMemberMapPoint
@@ -662,11 +667,11 @@ export function ContextSidebar({
           </div>
 
           {membersMapPoints.length > 0 ? (
-            <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <div className="liquid-glass-card p-[clamp(0.8rem,2.4vw,1.15rem)]">
               <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Membri</p>
               <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                 {membersMapPoints.map((point) => (
-                  <div key={point.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2">
+                  <div key={point.id} className="liquid-glass-card flex items-center justify-between gap-3 rounded-xl px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="relative shrink-0">
                         {point.avatarUrl ? (
@@ -698,7 +703,7 @@ export function ContextSidebar({
                       {(point.devices?.smartwatch ?? 0) > 0 ? (
                         <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
                           <Watch size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-slate-900/90 px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
                             {point.devices?.smartwatch}
                           </span>
                         </span>
@@ -706,7 +711,7 @@ export function ContextSidebar({
                       {(point.devices?.tablet ?? 0) > 0 ? (
                         <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
                           <Tablet size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-slate-900/90 px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
                             {point.devices?.tablet}
                           </span>
                         </span>
@@ -714,7 +719,7 @@ export function ContextSidebar({
                       {(point.devices?.smartphone ?? 0) > 0 ? (
                         <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
                           <Smartphone size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-slate-900/90 px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
                             {point.devices?.smartphone}
                           </span>
                         </span>
@@ -730,7 +735,7 @@ export function ContextSidebar({
 
       {activeDevice ? (
         <div className="px-[clamp(0.75rem,2.8vw,1.5rem)] pb-1">
-          <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
+          <div className="mb-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Dispositivi correlati</p>
             <div className={`mt-3 ${CONTEXT_PANEL_LAYOUT.adaptiveGridTwo}`}>
               {microWidgets.map((microWidget) => {

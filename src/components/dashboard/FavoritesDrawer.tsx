@@ -872,7 +872,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
                   value={conversationEntityId}
                   onChange={(event) => setConversationEntityId(event.target.value)}
                   placeholder="Es. conversation.home_assistant"
-                  className="mt-2 h-10 w-full rounded-xl border border-white/12 bg-black/25 px-3 text-sm text-white placeholder:text-white/45 outline-none focus:border-cyan-300/40"
+                  className="mt-2 h-10 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/45 outline-none focus:border-cyan-300/40"
                 />
                 <datalist id={conversationEntityDatalistId}>
                   {conversationEntitySuggestions.map((entityId) => (
@@ -898,7 +898,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
               </div>
             ) : null}
 
-            <div className="mt-5 rounded-3xl border border-white/10 bg-black/25 p-4">
+            <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Microfono</p>
                 <div className="flex items-center gap-2">

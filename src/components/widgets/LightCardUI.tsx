@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock3, Lightbulb } from 'lucide-react';
 import './LightCardUI.css';
 
@@ -11,6 +11,8 @@ export interface LightCardUIProps {
   colorMode?: string;
   hsColor?: [number, number];
   rgbColor?: [number, number, number];
+  pendingToggle?: boolean;
+  pendingToggleTargetOn?: boolean;
   activeTimerEnd?: number;
   showBrightnessSlider?: boolean;
   onToggle?: () => void;
@@ -111,6 +113,8 @@ export function LightCardUI({
   colorMode,
   hsColor,
   rgbColor,
+  pendingToggle = false,
+  pendingToggleTargetOn,
   activeTimerEnd,
   showBrightnessSlider = true,
   onToggle,
@@ -121,6 +125,10 @@ export function LightCardUI({
   const isUnavailable = state === 'unavailable';
   const longPressTimerRef = useRef<number | null>(null);
   const longPressFiredRef = useRef(false);
+  const skipNextBlurCommitRef = useRef(false);
+  const sliderPendingTimeoutRef = useRef<number | null>(null);
+  const [sliderDraftValue, setSliderDraftValue] = useState<number | null>(null);
+  const [sliderPointerActive, setSliderPointerActive] = useState(false);
 
   const inputScale = useMemo(() => {
     const raw = typeof brightness === 'number' ? brightness : 0;
@@ -134,11 +142,16 @@ export function LightCardUI({
     return Math.round((clamped / inputScale) * 100);
   }, [brightness, inputScale, isOn]);
 
-  const sliderValueLabel = `${normalizedValue}%`;
+  const sliderValue = sliderDraftValue ?? normalizedValue;
+  const sliderValueLabel = `${sliderValue}%`;
   const canRenderSlider = isOn && showBrightnessSlider;
-  const statusText = isOn
-    ? `${statusLabel(state)} \u2022 ${normalizedValue}%`
-    : statusLabel(state);
+  const statusText = pendingToggle
+    ? pendingToggleTargetOn === false
+      ? 'Spegnimento in corso...'
+      : 'Accensione in corso...'
+    : isOn
+      ? `${statusLabel(state)} \u2022 ${sliderValue}%`
+      : statusLabel(state);
   const hasActiveTimer = activeTimerEnd !== undefined;
   const supportsRgb = useMemo(() => {
     const mode = (colorMode ?? '').toLowerCase();
@@ -187,12 +200,56 @@ export function LightCardUI({
     clearLongPressTimer();
   };
 
+  const clearSliderPendingTimeout = () => {
+    if (sliderPendingTimeoutRef.current !== null) {
+      window.clearTimeout(sliderPendingTimeoutRef.current);
+      sliderPendingTimeoutRef.current = null;
+    }
+  };
+
   useEffect(
     () => () => {
       clearLongPressTimer();
+      clearSliderPendingTimeout();
     },
     [],
   );
+
+  useEffect(() => {
+    if (sliderDraftValue === null) {
+      clearSliderPendingTimeout();
+      return;
+    }
+
+    if (sliderPointerActive) {
+      clearSliderPendingTimeout();
+      return;
+    }
+
+    if (Math.abs(normalizedValue - sliderDraftValue) <= 1) {
+      clearSliderPendingTimeout();
+      setSliderDraftValue(null);
+      return;
+    }
+
+    clearSliderPendingTimeout();
+    sliderPendingTimeoutRef.current = window.setTimeout(() => {
+      setSliderDraftValue(null);
+      sliderPendingTimeoutRef.current = null;
+    }, 2200);
+  }, [normalizedValue, sliderDraftValue, sliderPointerActive]);
+
+  const commitBrightnessPercent = (percent: number) => {
+    if (!onBrightnessChange) {
+      return;
+    }
+    const nextPercent = clamp(Math.round(percent), 0, 100);
+    const nextValue =
+      inputScale === 255
+        ? Math.round((nextPercent / 100) * 255)
+        : nextPercent;
+    onBrightnessChange(nextValue);
+  };
 
   return (
     <div
@@ -230,9 +287,13 @@ export function LightCardUI({
         }}
         aria-disabled={isUnavailable}
         aria-pressed={onToggle ? isOn : undefined}
+        aria-busy={pendingToggle || undefined}
       >
         <div className="light-card-ui__header">
-          <span className="light-card-ui__icon-shell" aria-hidden="true">
+          <span
+            className={`light-card-ui__icon-shell${pendingToggle ? ' light-card-ui__icon-shell--pending' : ''}`}
+            aria-hidden="true"
+          >
             <Lightbulb className="light-card-ui__icon" />
           </span>
           <div className="light-card-ui__meta">
@@ -255,25 +316,64 @@ export function LightCardUI({
                 min={0}
                 max={100}
                 step={1}
-                value={normalizedValue}
+                value={sliderValue}
                 aria-label={`Brightness ${name}`}
                 aria-valuetext={sliderValueLabel}
-                onPointerDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  setSliderPointerActive(true);
+                  const target = event.currentTarget;
+                  const nextPercent = clamp(Number(target.value), 0, 100);
+                  setSliderDraftValue(nextPercent);
+                  if (typeof target.setPointerCapture === 'function') {
+                    target.setPointerCapture(event.pointerId);
+                  }
+                }}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  const target = event.currentTarget;
+                  const nextPercent = clamp(Number(target.value), 0, 100);
+                  commitBrightnessPercent(nextPercent);
+                  skipNextBlurCommitRef.current = true;
+                  setSliderPointerActive(false);
+                  setSliderDraftValue(nextPercent);
+                  if (typeof target.hasPointerCapture === 'function' && target.hasPointerCapture(event.pointerId)) {
+                    target.releasePointerCapture(event.pointerId);
+                  }
+                }}
+                onPointerCancel={(event) => {
+                  event.stopPropagation();
+                  setSliderPointerActive(false);
+                  setSliderDraftValue(null);
+                  const target = event.currentTarget;
+                  if (typeof target.hasPointerCapture === 'function' && target.hasPointerCapture(event.pointerId)) {
+                    target.releasePointerCapture(event.pointerId);
+                  }
+                }}
+                onBlur={(event) => {
+                  if (skipNextBlurCommitRef.current) {
+                    skipNextBlurCommitRef.current = false;
+                    return;
+                  }
+                  if (sliderDraftValue === null) {
+                    return;
+                  }
+                  const nextPercent = clamp(Number(event.currentTarget.value), 0, 100);
+                  commitBrightnessPercent(nextPercent);
+                  setSliderPointerActive(false);
+                  setSliderDraftValue(nextPercent);
+                }}
                 onChange={(event) => {
                   if (!onBrightnessChange) {
                     return;
                   }
                   const nextPercent = clamp(Number(event.target.value), 0, 100);
-                  const nextValue =
-                    inputScale === 255
-                      ? Math.round((nextPercent / 100) * 255)
-                      : nextPercent;
-                  onBrightnessChange(nextValue);
+                  setSliderDraftValue(nextPercent);
                 }}
                 disabled={!isOn || isUnavailable || !onBrightnessChange}
                 style={
                   {
-                    ['--light-slider-fill' as string]: `${normalizedValue}%`,
+                    ['--light-slider-fill' as string]: `${sliderValue}%`,
                   } as React.CSSProperties
                 }
               />

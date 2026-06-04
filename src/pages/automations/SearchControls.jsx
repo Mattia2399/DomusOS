@@ -1,4 +1,5 @@
 import React from 'react';
+import GlassDropdown from '../../components/ui/GlassDropdown';
 import {
   SORT_OPTIONS,
   SOURCE_FILTER_OPTIONS,
@@ -15,6 +16,9 @@ export function SearchControls({
   sourceFilter,
   onSourceFilterChange,
 }) {
+  const statusOptions = STATUS_FILTER_OPTIONS.map((entry) => ({ id: entry.value, name: entry.label }));
+  const sortOptions = SORT_OPTIONS.map((entry) => ({ id: entry.value, name: entry.label }));
+
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-neutral-800/40 p-4 backdrop-blur-2xl">
       <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-white/45">
@@ -47,29 +51,17 @@ export function SearchControls({
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <select
-          value={statusFilter}
-          onChange={(eventSelect) => onStatusFilterChange(eventSelect.target.value)}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-emerald-300/45 focus:outline-none"
-        >
-          {STATUS_FILTER_OPTIONS.map((entry) => (
-            <option key={entry.value} value={entry.value} className="bg-neutral-900 text-white">
-              {entry.label}
-            </option>
-          ))}
-        </select>
+        <GlassDropdown
+          options={statusOptions}
+          selected={statusOptions.find((entry) => entry.id === statusFilter) ?? statusOptions[0] ?? null}
+          onChange={(option) => onStatusFilterChange(option.id)}
+        />
 
-        <select
-          value={sortBy}
-          onChange={(eventSelect) => onSortByChange(eventSelect.target.value)}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-emerald-300/45 focus:outline-none"
-        >
-          {SORT_OPTIONS.map((entry) => (
-            <option key={entry.value} value={entry.value} className="bg-neutral-900 text-white">
-              {entry.label}
-            </option>
-          ))}
-        </select>
+        <GlassDropdown
+          options={sortOptions}
+          selected={sortOptions.find((entry) => entry.id === sortBy) ?? sortOptions[0] ?? null}
+          onChange={(option) => onSortByChange(option.id)}
+        />
       </div>
     </section>
   );

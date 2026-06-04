@@ -27,7 +27,7 @@ export function AiComposerPanel() {
         <textarea
           disabled
           placeholder="Esempio: Quando entro in casa dopo il tramonto, accendi le luci ingresso e salotto per 20 minuti."
-          className="mt-4 h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/60 placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-70"
+          className="liquid-glass-card mt-4 h-24 w-full resize-none px-4 py-3 text-sm text-white/60 placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-70"
         />
 
         <button

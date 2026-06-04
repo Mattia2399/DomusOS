@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { loadHaLiveConfig, saveHaLiveConfig } from '../services/haLive';
 
 export type DashboardTheme = 'dark' | 'light';
+export type DashboardThemeMode = DashboardTheme | 'auto';
 export const DASHBOARD_WALLPAPER_PRESETS = [
   { id: 'home-hub', label: 'Home Hub', description: 'Glow oro su base premium' },
   { id: 'ocean-mist', label: 'Ocean Mist', description: 'Freddo azzurro con riflessi' },
@@ -38,12 +39,23 @@ const WALLPAPER_STORAGE_KEY = 'ha.dashboard.wallpaper';
 const SIDEBAR_PATHS_STORAGE_KEY = 'ha.dashboard.sidebarPaths';
 const DEVELOPER_MODE_STORAGE_KEY = 'ha.dashboard.developerMode';
 
-function readStoredTheme(): DashboardTheme {
+function resolveSystemTheme(): DashboardTheme {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'dark';
+  }
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function resolveThemeMode(mode: DashboardThemeMode): DashboardTheme {
+  return mode === 'auto' ? resolveSystemTheme() : mode;
+}
+
+function readStoredThemeMode(): DashboardThemeMode {
   if (typeof window === 'undefined') {
     return 'dark';
   }
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === 'light' ? 'light' : 'dark';
+  return stored === 'auto' || stored === 'light' || stored === 'dark' ? stored : 'dark';
 }
 
 const DEFAULT_WALLPAPER_ID: DashboardWallpaperPreset = DASHBOARD_WALLPAPER_PRESETS[0].id;
@@ -217,7 +229,9 @@ function readStoredSidebarPaths(): SidebarQuickPath[] {
 
 export function useProfileSettings() {
   const initialHaConfig = loadHaLiveConfig();
-  const [theme, setThemeState] = useState<DashboardTheme>(readStoredTheme);
+  const initialThemeMode = readStoredThemeMode();
+  const [themeMode, setThemeModeState] = useState<DashboardThemeMode>(initialThemeMode);
+  const [theme, setThemeState] = useState<DashboardTheme>(() => resolveThemeMode(initialThemeMode));
   const [wallpaper, setWallpaperState] = useState<DashboardWallpaperPreset>(readStoredWallpaper);
   const [developerMode, setDeveloperModeState] = useState<boolean>(readStoredDeveloperMode);
   const [haUrl, setHaUrlState] = useState<string>(initialHaConfig.url);
@@ -226,7 +240,13 @@ export function useProfileSettings() {
   const [sidebarPaths, setSidebarPathsState] = useState<SidebarQuickPath[]>(readStoredSidebarPaths);
 
   const setTheme = (next: DashboardTheme) => {
+    setThemeModeState(next);
     setThemeState(next);
+  };
+
+  const setThemeMode = (next: DashboardThemeMode) => {
+    setThemeModeState(next);
+    setThemeState(resolveThemeMode(next));
   };
 
   const setWallpaper = (next: DashboardWallpaperPreset) => {
@@ -304,8 +324,20 @@ export function useProfileSettings() {
     if (typeof window === 'undefined') {
       return;
     }
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (themeMode !== 'auto' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    const updateSystemTheme = () => setThemeState(mediaQuery.matches ? 'light' : 'dark');
+
+    updateSystemTheme();
+    mediaQuery.addEventListener('change', updateSystemTheme);
+    return () => mediaQuery.removeEventListener('change', updateSystemTheme);
+  }, [themeMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -338,7 +370,9 @@ export function useProfileSettings() {
 
   return {
     theme,
+    themeMode,
     setTheme,
+    setThemeMode,
     wallpaper,
     setWallpaper,
     developerMode,
