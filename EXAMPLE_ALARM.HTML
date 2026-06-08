@@ -1,0 +1,159 @@
+<!DOCTYPE html><html class="dark" lang="it"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Luminescent Sanctuary - Smart Home Alarm</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Google Fonts: Manrope & Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#0f0078",
+                    "surface-bright": "#2c2c2c",
+                    "surface-variant": "#262626",
+                    "on-primary-fixed": "#000000",
+                    "outline": "#767575",
+                    "error-dim": "#d7383b",
+                    "on-secondary-container": "#cdccff",
+                    "surface": "#0e0e0e",
+                    "on-surface-variant": "#adaaaa",
+                    "surface-container-highest": "#262626",
+                    "primary-fixed": "#6c9fff",
+                    "on-primary-container": "#00214f",
+                    "secondary-dim": "#9392ff",
+                    "on-surface": "#ffffff",
+                    "on-error-container": "#ffa8a3",
+                    "on-primary-fixed-variant": "#002a61",
+                    "inverse-on-surface": "#565555",
+                    "secondary-fixed-dim": "#bfbeff",
+                    "tertiary-fixed": "#ff9197",
+                    "tertiary-container": "#fc2a53",
+                    "on-tertiary-fixed": "#39000a",
+                    "tertiary-dim": "#e51245",
+                    "primary-container": "#6c9fff",
+                    "on-primary": "#002c65",
+                    "on-error": "#490006",
+                    "error": "#ff716c",
+                    "surface-tint": "#85adff",
+                    "secondary-container": "#3631b4",
+                    "surface-container-lowest": "#000000",
+                    "surface-container-low": "#131313",
+                    "background": "#0e0e0e",
+                    "on-background": "#ffffff",
+                    "inverse-primary": "#005bc2",
+                    "on-tertiary-container": "#000000",
+                    "on-secondary-fixed-variant": "#403dbe",
+                    "primary-dim": "#0070eb",
+                    "on-secondary-fixed": "#2014a2",
+                    "error-container": "#9f0519",
+                    "secondary": "#9392ff",
+                    "on-tertiary": "#49000f",
+                    "primary-fixed-dim": "#5191ff",
+                    "secondary-fixed": "#cfcdff",
+                    "on-tertiary-fixed-variant": "#79001f",
+                    "surface-dim": "#0e0e0e",
+                    "surface-container-high": "#20201f",
+                    "primary": "#85adff",
+                    "outline-variant": "#484847",
+                    "inverse-surface": "#fcf9f8",
+                    "tertiary": "#ff6f7c",
+                    "surface-container": "#1a1a1a",
+                    "tertiary-fixed-dim": "#ff7984"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": [
+                            "Manrope", "sans-serif"
+                    ],
+                    "display": [
+                            "Manrope", "sans-serif"
+                    ],
+                    "body": [
+                            "Inter", "sans-serif"
+                    ],
+                    "label": [
+                            "Inter", "sans-serif"
+                    ]
+            },
+            "fontSize": {}
+    },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex items-center justify-center p-4 md:p-12 font-body selection:bg-primary/30 antialiased">
+<!-- Presentation Frame -->
+<div class="relative w-full max-w-6xl aspect-[16/9] bg-surface rounded-xl overflow-hidden flex items-center justify-center shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/5 group">
+<!-- Abstract Organic Wallpaper Background -->
+<div class="absolute inset-0 bg-cover bg-center opacity-40 transition-transform duration-1000 group-hover:scale-105" data-alt="A deep OLED black background featuring organic, abstract luminescent liquid waves gently undulating. The scene is illuminated by soft, diffused atmospheric studio lighting in subtle tones of deep space black and faint ethereal blues, creating a premium 'Luminescent Sanctuary' aesthetic. The composition mimics the look of frosted glass layered over a mysterious, modern, high-end digital environment, heavily prioritizing deep blacks and smooth gradient transitions." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCLrtCSxzn_nckAaFb9OlbfLEdzjsILVSyJC517voYY51iLMkPviJPfAFEvzBFUEyJKX1KlwMfLQCbLtHrRSYwkN49gM-of6LXnMKgFFTof9Fm5pMxz72fJr1ypPOgdqimrR1dD645f6HDuqdQFqMRf8kGz7t76BoTgebK1rfYDTU9DQdimeLPiqfgOi97itf7OA9yGBmcjVl_u7BB0lF1BZwCZoHvJ_toSoBQS6jKC0M4POzxD2uBoCEDqPP9Sg4v2hWgNrOTHCy1X');">
+</div>
+<!-- Ambient Lighting Orbs to enhance the glass effect -->
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[100px] pointer-events-none"></div>
+<div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[100px] pointer-events-none"></div>
+<!-- Cards Container -->
+<div class="relative z-10 flex flex-col md:flex-row items-center md:items-stretch gap-8 w-full max-w-4xl px-6">
+<!-- Card 1: COMPACT SLOT (1x1 Bento Grid) -->
+<div class="relative w-full md:w-[340px] bg-white/5 backdrop-blur-3xl rounded-xl flex items-center justify-between shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] border border-white/5 transition-transform duration-500 hover:scale-[1.02] p-4">
+<!-- Micro-thin specular edge light reflection -->
+<div class="absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+<!-- Left: Text -->
+<div class="flex flex-col gap-1.5 z-10">
+<h2 class="font-headline font-bold text-2xl text-on-surface tracking-tight leading-none">Allarme Casa</h2>
+<p class="font-body text-base font-medium text-on-surface-variant">Disinserito</p>
+</div>
+<!-- Right: Icon -->
+<div class="relative z-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md overflow-hidden w-14 h-14">
+<!-- Subtle glow effect inside the icon container -->
+<div class="absolute inset-0 bg-primary/10 blur-xl p-4"></div>
+<span class="material-symbols-outlined text-on-surface-variant text-3xl relative z-10" style="font-variation-settings: 'FILL' 0;">shield_lock</span>
+</div>
+</div>
+<!-- Card 2: EXPANDED VERTICAL SLOT (2x2 Bento Grid) -->
+<div class="relative w-full md:w-[340px] bg-white/5 backdrop-blur-3xl rounded-xl p-8 flex flex-col justify-between shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] border border-white/5 transition-transform duration-500 hover:scale-[1.02]">
+<!-- Micro-thin specular edge light reflection -->
+<div class="absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+<!-- Top Section -->
+<div class="flex items-start justify-between mb-12 z-10">
+<div class="relative w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md">
+<span class="material-symbols-outlined text-on-surface-variant text-2xl" style="font-variation-settings: 'FILL' 0;">shield</span>
+</div>
+<div class="flex flex-col items-end gap-1.5 text-right">
+<h2 class="font-headline font-bold text-xl text-on-surface tracking-tight leading-none">Allarme Casa</h2>
+<p class="font-body text-sm font-medium text-on-surface-variant">Disinserito</p>
+</div>
+</div>
+<!-- Bottom Section: Tactile Buttons -->
+<div class="flex gap-4 mt-auto z-10">
+<!-- Disarma Button -->
+<button class="flex-1 py-4 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 transition-all duration-300 flex items-center justify-center gap-2 group shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)]">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors text-lg" style="font-variation-settings: 'FILL' 0;">lock_open</span>
+<span class="font-body text-sm font-semibold text-on-surface-variant group-hover:text-on-surface transition-colors">Disarma</span>
+</button>
+<!-- Inserisci Button -->
+<button class="flex-1 py-4 rounded-full bg-white/5 hover:bg-primary/20 hover:border-primary/30 border border-white/5 transition-all duration-300 flex items-center justify-center gap-2 group shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)]">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors text-lg" style="font-variation-settings: 'FILL' 0;">lock</span>
+<span class="font-body text-sm font-semibold text-on-surface-variant group-hover:text-primary transition-colors">Inserisci</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+
+
+</body></html>

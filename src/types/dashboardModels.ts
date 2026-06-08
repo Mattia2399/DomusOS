@@ -196,6 +196,8 @@ export const SECTION_CATALOG: Array<{ kind: SectionKind; label: string }> = [
   { kind: 'stack-grid', label: 'Grid Stack' },
 ];
 
+export const FAVORITES_GRID_TITLE = 'Preferiti';
+
 export const INITIAL_WIDGETS: Widget[] = [
   {
     id: 'sensor.nest_wifi_download',

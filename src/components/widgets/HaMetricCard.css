@@ -21,11 +21,15 @@
   gap: 16px;
   overflow: hidden;
   background:
-    linear-gradient(155deg, var(--ha-metric-start, #6d88ff) 0%, var(--ha-metric-end, #4b63ff) 100%),
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--ha-metric-start, #6d88ff) 24%, transparent) 0%,
+      color-mix(in srgb, var(--ha-metric-end, #4b63ff) 14%, transparent) 100%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 40px 60px rgba(12, 18, 32, 0.28),
+    0 0 28px color-mix(in srgb, var(--ha-metric-start, #6d88ff) 22%, transparent),
     0 8px 20px rgba(12, 18, 32, 0.18);
   backdrop-filter: blur(20px);
   color: #f8fbff;

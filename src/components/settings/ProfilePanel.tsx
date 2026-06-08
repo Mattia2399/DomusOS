@@ -32,15 +32,7 @@ import {
 } from '../../hooks/useProfileSettings';
 import GlassDropdown from '../ui/GlassDropdown';
 import type { HaConnectionStatus } from '../../hooks/useHaLiveConnection';
-import {
-  createStoredBiometricCredential,
-  isPlatformBiometricAvailable,
-  readSecurityAuthMode,
-  readSecurityBiometricCredentialId,
-  type SecurityAuthMode,
-  writeSecurityAuthMode,
-  writeSecurityBiometricCredentialId,
-} from '../../services/securityBiometric';
+import { useDeviceAuth } from '../../hooks/useDeviceAuth';
 import {
   applyDashboardUserDataPayload,
   buildDashboardUserDataPayload,
@@ -425,10 +417,6 @@ export function ProfilePanel({
   const [haActionError, setHaActionError] = useState<string | null>(null);
   const [configActionError, setConfigActionError] = useState<string | null>(null);
   const [isConfigActionBusy, setIsConfigActionBusy] = useState(false);
-  const [securityAuthMode, setSecurityAuthMode] = useState<SecurityAuthMode>(() => readSecurityAuthMode());
-  const [securityBiometricCredentialId, setSecurityBiometricCredentialId] = useState(() =>
-    readSecurityBiometricCredentialId(),
-  );
   const [isSecurityBiometricAvailable, setIsSecurityBiometricAvailable] = useState(false);
   const [isSecurityBiometricBusy, setIsSecurityBiometricBusy] = useState(false);
   const [securityActionFeedback, setSecurityActionFeedback] = useState<{
@@ -459,6 +447,11 @@ export function ProfilePanel({
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const dashboardShareImportInputRef = useRef<HTMLInputElement | null>(null);
   const wasOpenRef = useRef(false);
+  const deviceAuth = useDeviceAuth({
+    id: dashboardCurrentUserId ?? userEmail ?? userAvatarAlt ?? 'profile_user',
+    name: userEmail ?? dashboardCurrentUserId ?? 'current_user',
+    displayName: userAvatarAlt ?? userEmail ?? 'Utente Corrente',
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -481,8 +474,6 @@ export function ProfilePanel({
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       setActiveSection(initialSection);
-      setSecurityAuthMode(readSecurityAuthMode());
-      setSecurityBiometricCredentialId(readSecurityBiometricCredentialId());
       if (initialSection === 'members') {
         setMembersInspectorMode('overview');
       }
@@ -497,7 +488,7 @@ export function ProfilePanel({
 
     let cancelled = false;
     const checkBiometricAvailability = async () => {
-      const available = await isPlatformBiometricAvailable();
+      const available = await deviceAuth.isBiometricAvailable();
       if (!cancelled) {
         setIsSecurityBiometricAvailable(available);
       }
@@ -506,7 +497,7 @@ export function ProfilePanel({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [deviceAuth, isOpen]);
 
   useEffect(() => {
     setProfileAvatarSrc(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
@@ -1252,21 +1243,7 @@ export function ProfilePanel({
     }
   };
 
-  const handleSecurityAuthModeChange = (mode: SecurityAuthMode) => {
-    setSecurityAuthMode(mode);
-    writeSecurityAuthMode(mode);
-    setSecurityActionFeedback({
-      tone: 'success',
-      text:
-        mode === 'biometric'
-          ? 'Biometria impostata come metodo preferito.'
-          : mode === 'pin'
-            ? 'Biometria disattivata per le conferme globali.'
-            : 'Modalita automatica aggiornata.',
-    });
-  };
-
-  const handleConfigureSecurityBiometric = async () => {
+  const handleVerifySecurityBiometric = async () => {
     if (!isSecurityBiometricAvailable) {
       setSecurityActionFeedback({
         tone: 'error',
@@ -1277,39 +1254,25 @@ export function ProfilePanel({
 
     setIsSecurityBiometricBusy(true);
     setSecurityActionFeedback({ tone: 'idle', text: '' });
+    const wasEnrolled = deviceAuth.isEnrolled;
     try {
-      const credentialId = await createStoredBiometricCredential();
-      if (!credentialId) {
+      const verified = await deviceAuth.verifyOrEnroll('Profilo sicurezza');
+      if (!verified) {
         setSecurityActionFeedback({
           tone: 'error',
-          text: 'Configurazione biometrica annullata o non riuscita.',
+          text: 'Autenticazione biometrica annullata o non riuscita.',
         });
         return;
       }
-      writeSecurityBiometricCredentialId(credentialId);
-      writeSecurityAuthMode('biometric');
-      setSecurityBiometricCredentialId(credentialId);
-      setSecurityAuthMode('biometric');
       setSecurityActionFeedback({
         tone: 'success',
-        text: 'Biometria configurata. Ora e disponibile per le conferme di sicurezza.',
+        text: wasEnrolled
+          ? 'Autenticazione dispositivo verificata. Sara usata automaticamente per le azioni sensibili.'
+          : 'Passkey dispositivo creata. Da ora verra usata automaticamente per le azioni sensibili.',
       });
     } finally {
       setIsSecurityBiometricBusy(false);
     }
-  };
-
-  const handleRemoveSecurityBiometric = () => {
-    writeSecurityBiometricCredentialId('');
-    if (securityAuthMode === 'biometric') {
-      writeSecurityAuthMode('auto');
-      setSecurityAuthMode('auto');
-    }
-    setSecurityBiometricCredentialId('');
-    setSecurityActionFeedback({
-      tone: 'success',
-      text: 'Biometria rimossa da questo dispositivo.',
-    });
   };
 
   const isLightTheme = theme === 'light';
@@ -1417,16 +1380,10 @@ export function ProfilePanel({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/60 disabled:cursor-not-allowed disabled:opacity-45 ${
-        checked
-          ? 'bg-lime-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]'
-          : isLightTheme
-            ? 'bg-slate-300'
-            : 'bg-white/18'
-      }`}
+      className={`ios-glass-switch ${checked ? 'ios-glass-switch-on' : isLightTheme ? 'bg-white/20' : ''}`}
     >
       <span
-        className={`absolute left-[3px] h-[1.625rem] w-[1.625rem] rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-transform duration-200 ${
+        className={`ios-glass-switch-thumb ${
           checked ? 'translate-x-[1.25rem]' : 'translate-x-0'
         }`}
       />
@@ -1600,7 +1557,7 @@ export function ProfilePanel({
                       className="h-10 w-10 rounded-full border-2 border-white/80 object-cover"
                     />
                   ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/80 bg-slate-300 text-xs font-semibold text-slate-700">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] text-xs font-semibold text-white shadow-lg backdrop-blur-xl">
                       {member.name
                         .split(/\s+/)
                         .filter(Boolean)
@@ -2225,7 +2182,7 @@ export function ProfilePanel({
                                     className="h-8 w-8 rounded-full border-2 border-white/80 object-cover"
                                   />
                                 ) : (
-                                  <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/80 bg-slate-300 text-[10px] font-semibold text-slate-700">
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] text-[10px] font-semibold text-white shadow-lg backdrop-blur-xl">
                                     {member.name
                                       .split(/\s+/)
                                       .filter(Boolean)
@@ -2299,8 +2256,8 @@ export function ProfilePanel({
               <section className={sectionShellClass}>
                 <h3 className="text-lg font-semibold">Autenticazione</h3>
                 <p className={`mt-3 text-xs ${subduedTextClass}`}>
-                  Configura qui Face ID, impronta o autenticazione di sistema. La stessa credenziale potra essere
-                  riutilizzata da lock card e future azioni sensibili.
+                  La dashboard usa WebAuthn nativo del browser. Face ID, impronta o PIN di sistema vengono rilevati
+                  dinamicamente per l'utente corrente.
                 </p>
 
                 <div className={`mt-5 ${settingsGroupClass}`}>
@@ -2309,7 +2266,7 @@ export function ProfilePanel({
                     <div className="min-w-0 flex-1">
                       <p className={settingsTitleClass}>Biometria dispositivo</p>
                       <p className={settingsSubtitleClass}>
-                        {isSecurityBiometricAvailable ? 'Disponibile' : 'Non disponibile'}
+                        {isSecurityBiometricAvailable ? 'Supportata da questo browser' : 'Non disponibile'}
                       </p>
                     </div>
                     <span
@@ -2328,61 +2285,23 @@ export function ProfilePanel({
                   <div className={settingsRowClass}>
                     {renderSettingsIcon(ShieldCheck)}
                     <div className="min-w-0 flex-1">
-                      <p className={settingsTitleClass}>Credenziale globale</p>
-                      <p className={settingsSubtitleClass}>Salvata localmente su questo dispositivo.</p>
+                      <p className={settingsTitleClass}>Modalita</p>
+                      <p className={settingsSubtitleClass}>
+                        {deviceAuth.isEnrolled
+                          ? 'Passkey locale configurata per questo utente.'
+                          : 'Crea una passkey locale prima di usare le azioni sensibili.'}
+                      </p>
                     </div>
-                    <span
-                      className={`text-xs font-semibold ${
-                        securityBiometricCredentialId
-                          ? isLightTheme
-                            ? 'text-emerald-700'
-                            : 'text-emerald-200'
-                          : subtleTextClass
-                      }`}
-                    >
-                      {securityBiometricCredentialId ? 'Attiva' : 'Off'}
+                    <span className={`text-xs font-semibold ${subtleTextClass}`}>
+                      {deviceAuth.isEnrolled ? 'Configurata' : 'Da creare'}
                     </span>
                   </div>
                 </div>
 
                 <div className={`mt-4 ${settingsGroupClass}`}>
-                  {[
-                    { id: 'auto' as const, label: 'Automatico', hint: 'Usa la migliore opzione' },
-                    { id: 'biometric' as const, label: 'Biometria', hint: 'Face ID o impronta' },
-                    { id: 'pin' as const, label: 'Manuale', hint: 'Nessuna biometria' },
-                  ].map((option, index) => (
-                    <React.Fragment key={option.id}>
-                      {index > 0 ? <div className={settingsDividerClass} /> : null}
-                      <button
-                        type="button"
-                        onClick={() => handleSecurityAuthModeChange(option.id)}
-                        className={`${settingsRowClass} ${buttonMotionClass}`}
-                      >
-                        {renderSettingsIcon(option.id === 'biometric' ? Fingerprint : option.id === 'pin' ? KeyRound : ShieldCheck)}
-                        <div className="min-w-0 flex-1">
-                          <p className={settingsTitleClass}>{option.label}</p>
-                          <p className={settingsSubtitleClass}>{option.hint}</p>
-                        </div>
-                        <span
-                          className={`text-sm font-semibold ${
-                            securityAuthMode === option.id
-                              ? isLightTheme
-                                ? 'text-blue-600'
-                                : 'text-blue-300'
-                              : subtleTextClass
-                          }`}
-                        >
-                          {securityAuthMode === option.id ? '✓' : ''}
-                        </span>
-                      </button>
-                    </React.Fragment>
-                  ))}
-                </div>
-
-                <div className={`mt-4 ${settingsGroupClass}`}>
                   <button
                     type="button"
-                    onClick={() => void handleConfigureSecurityBiometric()}
+                    onClick={() => void handleVerifySecurityBiometric()}
                     disabled={isSecurityBiometricBusy || !isSecurityBiometricAvailable}
                     className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
                   >
@@ -2390,30 +2309,13 @@ export function ProfilePanel({
                     <div className="min-w-0 flex-1">
                       <p className={settingsTitleClass}>
                         {isSecurityBiometricBusy
-                          ? 'Configurazione...'
-                          : securityBiometricCredentialId
-                            ? 'Rigenera biometria'
-                            : 'Configura biometria'}
+                          ? deviceAuth.isEnrolled ? 'Verifica...' : 'Creazione...'
+                          : deviceAuth.isEnrolled ? 'Verifica autenticazione dispositivo' : 'Crea passkey dispositivo'}
                       </p>
+                      <p className={settingsSubtitleClass}>Avvia Face ID, impronta o PIN di sistema.</p>
                     </div>
                     <ChevronRight size={16} className={subtleTextClass} />
                   </button>
-                  {securityBiometricCredentialId ? (
-                    <>
-                      <div className={settingsDividerClass} />
-                      <button
-                        type="button"
-                        onClick={handleRemoveSecurityBiometric}
-                        disabled={isSecurityBiometricBusy}
-                        className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
-                      >
-                        {renderSettingsIcon(RotateCcw)}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-rose-500">Rimuovi biometria</p>
-                        </div>
-                      </button>
-                    </>
-                  ) : null}
                 </div>
 
                 {!isSecurityBiometricAvailable ? (

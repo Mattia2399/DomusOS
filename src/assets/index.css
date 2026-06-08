@@ -126,6 +126,33 @@
   --font-mono: "SF Pro Text";
 }
 
+@layer base {
+  /* Reset universale per l'annientamento delle scrollbar e ottimizzazione mobile */
+  html,
+  body,
+  * {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+}
+
 @layer components {
   /* Sfondo dell'app (se non c'è già un wallpaper animato) */
   .apple-bg-main {
@@ -134,7 +161,7 @@
 
   /* Pannelli grandi, Modali, Sidebar di Navigazione */
   .liquid-glass-panel {
-    @apply bg-white/[0.02] backdrop-blur-3xl border border-white/[0.08] shadow-[0_0_40px_rgba(0,0,0,0.3)] rounded-[2rem];
+    @apply bg-white/[0.01] backdrop-blur-3xl border border-white/[0.08] shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-[2rem];
   }
 
   /* Singole Card sulla Dashboard o dentro i Modali */
@@ -142,17 +169,89 @@
     @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] shadow-lg rounded-2xl transition-all duration-300;
   }
 
+  .liquid-glass-sheet {
+    @apply bg-white/[0.01] backdrop-blur-3xl border border-white/[0.08] shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-[2rem] rounded-b-none;
+  }
+
+  .liquid-glass-drag-handle {
+    @apply h-1.5 w-12 rounded-full bg-white/20;
+  }
+
+  .glass-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2.5 text-sm font-medium text-white/88 shadow-lg backdrop-blur-xl transition-all duration-200 ease-out hover:border-white/[0.14] hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/12 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .glass-icon-button {
+    @apply inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/80 shadow-lg backdrop-blur-xl transition-all duration-200 ease-out hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/12 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .ios-glass-switch {
+    @apply relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full border border-white/[0.08] bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#32D74B]/40 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .ios-glass-switch-on {
+    @apply border-[#32D74B]/55 bg-[#32D74B] shadow-[0_0_22px_rgba(50,215,75,0.38),inset_0_1px_0_rgba(255,255,255,0.32)];
+  }
+
+  .ios-glass-switch-blue-on {
+    @apply border-[#0A84FF]/55 bg-[#0A84FF] shadow-[0_0_22px_rgba(10,132,255,0.40),inset_0_1px_0_rgba(255,255,255,0.32)];
+  }
+
+  .ios-glass-switch-thumb {
+    @apply absolute left-[3px] h-[1.625rem] w-[1.625rem] rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-transform duration-200 ease-out;
+  }
+
   /* Glow per gli stati attivi (Usa queste classi aggiuntive quando un widget è ON) */
   .glow-active-orange {
-    @apply shadow-[0_0_20px_rgba(255,159,10,0.3)];
+    @apply shadow-[0_0_20px_rgba(255,159,10,0.35)];
   }
   .glow-active-blue {
-    @apply shadow-[0_0_20px_rgba(10,132,255,0.3)];
+    @apply shadow-[0_0_20px_rgba(10,132,255,0.35)];
+  }
+  .glow-active-green {
+    @apply shadow-[0_0_20px_rgba(50,215,75,0.35)];
   }
 
   /* Feedback touch nativo */
   .btn-premium {
-    @apply active:scale-95 transition-transform duration-300 ease-out select-none cursor-pointer;
+    @apply active:scale-95 transition-transform duration-200 ease-out select-none cursor-pointer;
+  }
+
+  .glass-scrollbar {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: auto;
+    scrollbar-width: none !important;
+    scrollbar-color: transparent transparent;
+    -ms-overflow-style: none !important;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb {
+    background: transparent !important;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: transparent !important;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }
 
@@ -978,8 +1077,6 @@ textarea,
 }
 
 * {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -987,9 +1084,38 @@ textarea,
   user-select: none;
 }
 
-*::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  transition:
+    scale 200ms ease-out,
+    transform 200ms ease-out,
+    background-color 200ms ease-out,
+    border-color 200ms ease-out,
+    box-shadow 200ms ease-out,
+    color 200ms ease-out;
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  scale: 0.95;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .glass-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0 !important;
+    height: 0 !important;
+  }
 }
 
 .react-grid-item.react-draggable-dragging {

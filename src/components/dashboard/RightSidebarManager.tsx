@@ -44,7 +44,7 @@ import type {
   WidgetKind,
   MicroWidget,
 } from '../../types/dashboardModels';
-import { ROOT_CANVAS_COLS } from '../../types/dashboardModels';
+import { FAVORITES_GRID_TITLE, ROOT_CANVAS_COLS } from '../../types/dashboardModels';
 import {
   SIDEBAR_PATH_ICON_KEYS,
   type SidebarQuickPath,
@@ -951,16 +951,10 @@ export function RightSidebarManager({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/60 disabled:cursor-not-allowed disabled:opacity-45 ${
-        checked
-          ? 'bg-lime-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]'
-          : isLightTheme
-            ? 'bg-slate-300'
-            : 'bg-white/18'
-      }`}
+      className={`ios-glass-switch ${checked ? 'ios-glass-switch-on' : isLightTheme ? 'bg-white/20' : ''}`}
     >
       <span
-        className={`absolute left-[3px] h-[1.625rem] w-[1.625rem] rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-transform duration-200 ${
+        className={`ios-glass-switch-thumb ${
           checked ? 'translate-x-[1.25rem]' : 'translate-x-0'
         }`}
       />
@@ -1034,7 +1028,7 @@ export function RightSidebarManager({
                   className="w-full"
                 >
                   <div
-                    className="device-context-surface pointer-events-auto flex w-full max-h-[92dvh] flex-col overflow-hidden rounded-t-[2rem] border-l border-white/[0.08] bg-white/[0.02] shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl"
+                    className="device-context-surface liquid-glass-sheet pointer-events-auto flex w-full max-h-[92dvh] flex-col overflow-hidden"
                     style={
                       contextSheetDragOffset > 0
                         ? { transform: `translateY(${contextSheetDragOffset}px)`, transitionDuration: '0ms' }
@@ -1048,7 +1042,7 @@ export function RightSidebarManager({
                       onPointerUp={finishContextSheetDrag}
                       onPointerCancel={finishContextSheetDrag}
                     >
-                      <span className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-4 mb-2" />
+                      <span className="liquid-glass-drag-handle mx-auto mt-4 mb-2" />
                     </div>
 
                     <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-3 md:px-5 md:pt-5 md:pb-4">
@@ -1059,33 +1053,19 @@ export function RightSidebarManager({
                       <button
                         type="button"
                         onClick={onCloseContextSidebar}
-                        className="btn-premium w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 active:scale-95 transition-all"
+                        className="glass-icon-button h-8 w-8"
                         aria-label="Chiudi popup dispositivo"
                       >
                         <X size={16} />
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)]">
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)]">
                       {contextSidebarPanel}
                     </div>
                   </div>
                 </motion.section>
               </div>
-
-              <style
-                dangerouslySetInnerHTML={{
-                  __html: `
-                    .device-context-surface button {
-                      transition-property: transform, background-color, color, border-color;
-                      transition-duration: 300ms;
-                    }
-                    .device-context-surface button:active {
-                      transform: scale(0.95);
-                    }
-                  `,
-                }}
-              />
             </React.Fragment>
           ) : null}
         </AnimatePresence>
@@ -1093,7 +1073,7 @@ export function RightSidebarManager({
     }
 
     return (
-      <div className={`${sidebarWidthClass} overflow-hidden rounded-[2rem] border-l border-white/[0.08] bg-white/[0.02] shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl`}>
+      <div className={`liquid-glass-panel ${sidebarWidthClass} overflow-hidden`}>
         <ContextSidebar
           activeDevice={activeDevice}
           isEditMode={isEditMode}
@@ -1205,6 +1185,7 @@ export function RightSidebarManager({
   const stackShowBorder = selectedSection?.stackShowBorder ?? true;
   const stackShowHeader = selectedSection?.stackShowHeader ?? true;
   const stackUseFavoritesGrid = selectedSection?.stackUseFavoritesGrid ?? false;
+  const isFavoritesGridTitleLocked = isStackGridSection && stackUseFavoritesGrid;
   const stackCanvasColumns =
     selectedSection?.kind === 'stack-vertical' || !selectedSection
       ? 1
@@ -1530,10 +1511,10 @@ export function RightSidebarManager({
   const isCompactEditOverlayMode = isEditMode && isCompactViewport;
   const compactEditPanelVisible = isCompactEditOverlayMode && hasEditSelection;
   const editSidebarContainerClass = isCompactEditOverlayMode
-    ? `fixed inset-x-0 bottom-0 z-[219] flex max-h-[92dvh] min-h-[16rem] w-full flex-col rounded-t-[2rem] border border-white/[0.08] bg-white/[0.02] p-3 py-2 shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl transition-all duration-250 ${
+    ? `liquid-glass-sheet fixed inset-x-0 bottom-0 z-[219] flex max-h-[92dvh] min-h-[16rem] w-full flex-col p-3 py-2 transition-all duration-250 ${
         compactEditPanelVisible ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
       }`
-    : `${sidebarWidthClass} flex flex-col rounded-[2rem] border-l border-white/[0.08] bg-white/[0.02] p-3 py-1 shadow-[0_0_40px_rgba(0,0,0,0.3)] backdrop-blur-3xl sm:p-4 sm:py-2 lg:p-5`;
+    : `liquid-glass-panel ${sidebarWidthClass} flex flex-col p-3 py-1 sm:p-4 sm:py-2 lg:p-5`;
   const editSidebarStyle =
     isCompactEditOverlayMode && contextSheetDragOffset > 0
       ? { transform: `translateY(${contextSheetDragOffset}px)`, transitionDuration: '0ms' }
@@ -1565,7 +1546,7 @@ export function RightSidebarManager({
           onPointerUp={finishContextSheetDrag}
           onPointerCancel={finishContextSheetDrag}
         >
-          <span className="h-1.5 w-12 rounded-full bg-white/20" />
+          <span className="liquid-glass-drag-handle" />
         </div>
       ) : null}
       <div className="flex items-start justify-between gap-3">
@@ -1595,7 +1576,7 @@ export function RightSidebarManager({
         </div>
       ) : selectedSidebarPath ? (
         <div className="flex-1 mt-5 flex flex-col min-h-0">
-          <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+          <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
             <label className="block">
               <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Nome Path</p>
               <input
@@ -1667,7 +1648,7 @@ export function RightSidebarManager({
         <div className="flex-1 mt-5 flex flex-col min-h-0">
           {selectedSection.kind === 'greeting' ? (
             <>
-              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
                 <label className="block">
                   <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Nome utente</p>
                   <input
@@ -1892,7 +1873,7 @@ export function RightSidebarManager({
             </>
           ) : selectedSection.kind === 'weather' ? (
             <>
-            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+            <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
               <label className="block">
                 <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Layout</p>
                 <GlassDropdown
@@ -2043,7 +2024,7 @@ export function RightSidebarManager({
             </>
           ) : selectedSection.kind === 'scenes' ? (
             <>
-              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
                 <label className="block">
                   <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Titolo</p>
                   <input
@@ -2316,19 +2297,27 @@ export function RightSidebarManager({
             selectedSection.kind === 'stack-horizontal' ||
             selectedSection.kind === 'stack-grid' ? (
             <>
-              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
                 <label className="block">
                   <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Titolo</p>
                   <input
-                    value={selectedSection.title ?? ''}
-                    onChange={(event) =>
+                    value={isFavoritesGridTitleLocked ? FAVORITES_GRID_TITLE : selectedSection.title ?? ''}
+                    onChange={(event) => {
+                      if (isFavoritesGridTitleLocked) {
+                        return;
+                      }
                       onUpdateSection(selectedSection.id, (section) => ({
                         ...section,
                         title: event.target.value,
-                      }))
-                    }
+                      }));
+                    }}
+                    disabled={isFavoritesGridTitleLocked}
                     placeholder="Stack"
-                    className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+                    className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-blue-300/60 ${
+                      isFavoritesGridTitleLocked
+                        ? 'cursor-not-allowed border-emerald-300/25 bg-emerald-500/10 text-emerald-100/80'
+                        : 'border-white/10 bg-white/5 text-white'
+                    }`}
                   />
                 </label>
                 {selectedSection.kind !== 'stack-vertical' ? (
@@ -2434,10 +2423,14 @@ export function RightSidebarManager({
                     <button
                       type="button"
                       onClick={() =>
-                        onUpdateSection(selectedSection.id, (section) => ({
-                          ...section,
-                          stackUseFavoritesGrid: !(section.stackUseFavoritesGrid ?? false),
-                        }))
+                        onUpdateSection(selectedSection.id, (section) => {
+                          const nextUseFavoritesGrid = !(section.stackUseFavoritesGrid ?? false);
+                          return {
+                            ...section,
+                            stackUseFavoritesGrid: nextUseFavoritesGrid,
+                            ...(nextUseFavoritesGrid ? { title: FAVORITES_GRID_TITLE } : {}),
+                          };
+                        })
                       }
                       className={`col-span-2 rounded-xl border px-3 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
                         stackUseFavoritesGrid
@@ -2507,7 +2500,7 @@ export function RightSidebarManager({
           </div>
 
           {widgetConfigTab === 'layout' ? (
-            <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-1">
+            <div className="flex-1 space-y-4 overflow-y-auto glass-scrollbar pr-1">
               <div className="liquid-glass-card p-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-white/55">Layout per tipo card</p>
                 <p className="mt-1 text-[11px] text-white/50">
@@ -2620,7 +2613,7 @@ export function RightSidebarManager({
             </div>
           ) : null}
           <div className={widgetConfigTab === 'settings' ? 'contents' : 'hidden'}>
-          <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+          <div className="space-y-4 overflow-y-auto glass-scrollbar pr-1">
             <label className="block">
               <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Titolo</p>
               <input
@@ -2891,7 +2884,7 @@ export function RightSidebarManager({
                           <label className="block">
                             <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Pagina destinazione</p>
                             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
-                              <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1">
+                              <div className="max-h-32 overflow-y-auto glass-scrollbar space-y-1">
                                 {microWidgetPageOptions.map((path) => {
                                   const pathLabel = microWidgetPathLabelByPath.get(path);
                                   const optionLabel = pathLabel && pathLabel.length > 0 ? `${pathLabel}  ${path}` : path;
@@ -3265,7 +3258,7 @@ export function RightSidebarManager({
               onClick={() => setIsMicroWidgetCatalogOpen(false)}
             >
               <div
-                className="h-full w-full max-h-none overflow-hidden rounded-none border-0 bg-white/[0.08] backdrop-blur-3xl p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:h-auto md:max-h-[88dvh] md:max-w-3xl md:rounded-[2rem] md:border md:border-white/10 md:p-6"
+                className="liquid-glass-panel h-full w-full max-h-none overflow-hidden rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:h-auto md:max-h-[88dvh] md:max-w-3xl md:rounded-[2rem] md:border md:p-6"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -3276,7 +3269,7 @@ export function RightSidebarManager({
                   <button
                     type="button"
                     onClick={() => setIsMicroWidgetCatalogOpen(false)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/75 transition-colors hover:bg-white/[0.16] hover:text-white"
+                    className="glass-icon-button h-10 w-10"
                     aria-label="Chiudi catalogo micro-widget"
                     title="Chiudi catalogo"
                   >
@@ -3284,7 +3277,7 @@ export function RightSidebarManager({
                   </button>
                 </div>
 
-                <div className="max-h-none overflow-y-auto custom-scrollbar pr-1 md:max-h-[calc(88dvh-7.5rem)]">
+                <div className="max-h-none overflow-y-auto glass-scrollbar pr-1 md:max-h-[calc(88dvh-7.5rem)]">
                   <label className="block">
                     <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Entita da associare</p>
                     <input
@@ -3327,7 +3320,7 @@ export function RightSidebarManager({
                       ))}
                     </div>
 
-                    <div className="mt-2 max-h-48 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                    <div className="mt-2 max-h-48 overflow-y-auto glass-scrollbar space-y-1 pr-1">
                       {filteredCatalogEntityOptions.length > 0 ? (
                         filteredCatalogEntityOptions.map((entityId) => {
                           const domain = extractEntityDomain(entityId);

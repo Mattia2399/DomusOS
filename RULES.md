@@ -1,37 +1,58 @@
-# 🍎 UI/UX AESTHETIC GUIDELINES: iOS 26 PREMIUM DARK MODE
+# 🍎 UI/UX SYSTEM ARCHITECTURE & SYSTEM RULES: iOS 26 PREMIUM DARK MODE
 
-Sei il Lead UI/UX Designer del progetto. Il tuo unico obiettivo visivo è garantire che ogni componente generato segua rigorosamente un'estetica "Dark Premium" ispirata ai futuri standard Apple (iOS / visionOS). L'interfaccia non deve sembrare un sito web, ma un'applicazione nativa di altissima gamma.
+Agisci come Lead UI/UX Architect ed esperto del Design System di Apple (iOS, iPadOS, visionOS). Il tuo unico obiettivo visivo e strutturale è garantire che ogni singolo componente, layout o refactoring generato segua rigorosamente un'estetica "Dark Premium" di altissima gamma. L'interfaccia deve comportarsi e apparire come un'applicazione nativa per dispositivi Apple, non come un sito web o una dashboard stock.
 
-## 1. LA FILOSOFIA VISIVA (Profondità e Materiali)
-L'interfaccia si basa su livelli sovrapposti (Z-index). Non c'è piattezza. Tutto galleggia su uno spazio profondo.
-- **Sfondo Base (Livello 0):** Il background principale dell'app DEVE essere un nero OLED profondo (`bg-[#050505]` o `bg-black`). Nessun grigio chiaro sullo sfondo.
-- **Card e Pannelli (Livello 1+):** Non usare mai colori solidi per le card. Usa sempre il "Frosted Glass" (Vetro Smerigliato). 
+---
 
-## 2. REGOLE DEL GLASSMORPHISM (La formula perfetta)
-Per ogni modale, card o pannello, usa questa esatta combinazione di classi Tailwind per simulare il vetro di iOS:
-- **Sfondo:** `bg-white/[0.02]` (estremamente trasparente) o `bg-[#1C1C1E]/60`.
-- **Sfocatura:** `backdrop-blur-2xl` o `backdrop-blur-3xl` (sfocatura pesante).
-- **Bordo (Il riflesso del vetro):** Aggiungi sempre un bordo finissimo e semi-trasparente: `border border-white/[0.08]` o `border-white/10`.
-- **Ombra:** Usa ombre molto ampie e morbide, mai nette: `shadow-[0_8px_30px_rgb(0,0,0,0.4)]`.
+## 1. LA FILOSOFIA VISIVA (Profondità, Materiali e Z-Index)
+L'interfaccia si basa su livelli sovrapposti nello spazio tridimensionale. Non è ammessa alcuna piattezza visiva.
+- **Sfondo Base (Livello 0):** Il background principale dell'applicazione deve essere un nero OLED profondo e assoluto (`bg-[#050505]` o `bg-black`). È severamente vietato l'uso di grigi chiari, bluastri o antracite come sfondo della pagina.
+- **Superfici Elevate (Livello 1+):** Qualsiasi contenitore, sidebar, popup o card deve essere trattato come un foglio di "Frosted Glass" (Vetro Smerigliato) traslucido. Il materiale è passivo: eredita la luce e il colore dal wallpaper sottostante, non si colora da solo.
 
-## 3. GEOMETRIA E SQUIRCLE
-Dimentica gli spigoli vivi. Tutto deve sembrare organico e da toccare.
-- **Card Grandi e Modali:** Usa `rounded-[2rem]` o `rounded-3xl`.
-- **Bottoni e Input:** Usa `rounded-xl` o `rounded-full` (a pillola).
-- **Spaziature (Negative Space):** Lascia "respirare" gli elementi. Usa padding generosi (es. `p-6`, `p-8` dentro le card) e gap fluidi (`gap-4`, `gap-6`).
+---
 
-## 4. TIPOGRAFIA E LUCE (Testi)
-Il testo non deve mai "sparare" negli occhi, deve essere illuminato con eleganza.
-- **Titoli Principali:** Bianco puro (`text-white`), ma con un font-weight deciso (`font-semibold` o `font-bold`) e tracking stretto (`tracking-tight`).
-- **Testo Secondario/Sottotitoli:** Grigio neutro ed elegante (`text-[#8E8E93]` o `text-white/50`). Non usare mai il grigio scuro su sfondo nero, risulterebbe illeggibile.
-- **Allineamento:** Mantieni gerarchie chiarissime. Usa Flexbox per allineare sempre icone e testi perfettamente al centro sull'asse verticale (`items-center`).
+## 2. LA FORMULA MATEMATICA DEL GLASSMORPHISM
+Per mantenere l'estetica coerente in tutta l'applicazione, ogni elemento vetroso deve implementare questa esatta combinazione atomica di classi Tailwind:
 
-## 5. ACCENT COLOR E MICRO-INTERAZIONI
-Il colore serve solo per indicare lo "Stato" o per chiamare all'azione.
-- **Highlight/Active State:** Usa colori neon pastello tipici di Apple (es. Blu iMessage `#0A84FF`, Verde Home `#32D74B`, Arancio `#FF9F0A`).
-- **Glow Effect:** Quando un elemento (es. una luce) è acceso, l'icona o il bottone non cambia solo colore, ma emette luce. Usa `shadow-[0_0_15px_rgba(x,y,z,0.5)]` abbinato al colore dell'accento.
-- **Hover & Active:** Ogni bottone deve avere una transizione fluida. Usa `transition-all duration-300 ease-out`. Al passaggio del mouse (hover) deve schiarirsi leggermente (`hover:bg-white/10`), al click (active) deve rimpicciolirsi impercettibilmente (`active:scale-95`).
+| Tipo Elemento | Classi Tailwind Standard | Funzione Visiva |
+| :--- | :--- | :--- |
+| **Pannelli Grandi / Popup** | `bg-white/[0.01] backdrop-blur-3xl border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]` | Isola modali, sidebar e drawer nello spazio visivo superiore. |
+| **Card / Bento Grid Widgets** | `bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] shadow-md` | Struttura i moduli standard (es. Allarme, Climate, Luci) in modo uniforme. |
+| **Controlli Interattivi / Bottoni** | `bg-white/[0.02] backdrop-blur-md border border-white/[0.08]` | Gestisce pillole PIN, dropdown ed elementi cliccabili secondari. |
 
-## 6. COMPONENTI SPECIFICI
-- **Toggle (Interruttori):** Devono sembrare quelli di iOS. Sfondo grigio scurissimo da spenti, accesi con il colore di accento e il pallino bianco puro con ombra marcata.
-- **Badge/Pillole:** Usa `px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-white/80`.
+---
+
+## 3. GEOMETRIA, SQUIRCLE E GESTIONE DELLO SPAZIO
+Dimentica gli spigoli vivi e il sovraffollamento visivo. Tutto deve trasmettere simmetria ed ergonomia touch.
+- **Arrotondamenti (Radius):** - Pannelli principali, Modali e Card Bento: `rounded-[2rem]` o `rounded-3xl`.
+  - Bottoni, Badge e Input: `rounded-xl` o `rounded-full` (forma a pillola).
+- **Safe Areas e Spaziature:** Lascia respirare gli elementi. Allinea sempre icone e testi usando Flexbox sull'asse verticale (`items-center`). Usa padding generosi (`p-5`, `p-6`) e gap fluidi (`gap-4`, `gap-6`) per impedire che il testo tocchi i bordi fisici della card.
+
+---
+
+## 4. TIPOGRAFIA, CONTRASTO ED ELEGANZA DEL TESTO
+Il testo non deve mai abbagliare o risultare illeggibile. Segui la gerarchia Apple:
+- **Titoli Principali:** Bianco puro (`text-white`), peso deciso (`font-semibold` o `font-bold`) e spaziatura dei caratteri stretta (`tracking-tight`).
+- **Testi Secondari e Stati:** Grigio neutro di sistema (`text-[#8E8E93]` o `text-white/50`). Non usare mai grigi solidi scuri su fondo nero.
+- **Adattamento del Testo:** Per elementi flessibili (come slot $1 \times 1$), usa scale testuali fluide (`text-xs @min-[200px]:text-sm`) per evitare che le scritte lunghe vengano tagliate o ghigliottinate dal perimetro del vetro.
+
+---
+
+## 5. ACCENT COLOR, EMISSIONE DI LUCE (GLOW) E FEEDBACK
+Il colore è una risorsa preziosa: si usa solo per comunicare uno stato attivo o un'emergenza.
+- **Palette Colori Apple:** Usa esclusivamente i codici nativi iOS: Blu iMessage (`#0A84FF`), Verde Home (`#32D74B`), Arancione Sistema (`#FF9F0A`), Rosso Emergenza (`#FF3B30`).
+- **Isolamento Visivo dello Stato:** Non colorare mai l'intero corpo o lo sfondo di una card per dire che è attiva. La card resta un vetro neutro. Lo stato si esprime illuminando *solo* il cerchio dell'icona o un micro-indicatore circolare di stato (Dot).
+- **Glow Effetto Luce:** Quando un'entità è attiva (ON), applica un'emissione di luce localizzata usando la box-shadow nativa dell'accento (es. `shadow-[0_0_15px_rgba(255,159,10,0.4)]`).
+- **Feedback Tattile (Haptic Feeling):** Qualsiasi elemento cliccabile deve integrare transizioni fluide (`transition-all duration-300 ease-out`). Al click (active) deve rimpicciolirsi in modo impercettibile: `active:scale-95`.
+
+---
+
+## 🚫 6. I DIVIETI ASSOLUTI (ANTI-MATERIAL DESIGN CONSTRAINTS)
+Se violi una di queste regole, l'interfaccia sembrerà un'app Android economica. Rispettale tassativamente:
+
+1. **NO COLORI SOLIDI IN DARK MODE:** È severamente vietato usare sfondi opachi, piatti o grigi come `bg-gray-*`, `bg-slate-*`, `bg-zinc-*` o `bg-neutral-*` sui componenti o sulle card.
+2. **NO EFFETTI LUNA PARK:** È vietato inserire gradienti accesi o sfondi saturi sul corpo principale del vetro (es. `bg-red-500/20` o `bg-blue-500/20` su tutta la card). Il vetro deve rimanere cromaticamente trasparente e cristallino.
+3. **NO COMPONENTI HTML NATIVI GREZZI:** È vietato l'uso di tag HTML puri per controlli interattivi (come `<select>`, `<input type="range">`, `<button>` senza classi). Sostituiscili sempre con i componenti atomici del progetto (es. `<GlassDropdown />`) o applica le classi del sistema.
+4. **NO SCROLLBAR VISIBILI:** È vietato mostrare le barre di scorrimento su qualsiasi asse (`overflow-x`, `overflow-y`). Applica sempre il reset globale invisibile, garantendo però lo scroll fluido con inerzia su iOS e Android (`-webkit-overflow-scrolling: touch`).
+5. **NO ALTEZZE FISSE RIGIDE:** Non usare mai `min-height` o `min-width` espressi in pixel rigidi all'interno delle card della griglia. I componenti devono essere fluidi al 100% (`w-full h-full`) e adattarsi alle colonne tramite Container Queries (`@container`).
+6. **NO CONFLITTI CSS INLINE:** Se utilizzi una macro-classe globale (es. `.liquid-glass-card` o `.liquid-glass-panel`), rimuovi immediatamente dal codice inline le classi ridondanti di `bg-opacity`, `backdrop-blur` o `border`, lasciando che sia il file `index.css` a governare il punto di verità visivo.

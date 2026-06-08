@@ -16,7 +16,6 @@ const OPEN_DRAG_RATIO_THRESHOLD = 0.08;
 const CLOSE_DRAG_RATIO_THRESHOLD = 0.62;
 const DRAG_TAP_TOLERANCE_PX = 8;
 const VOICE_SEND_DEBOUNCE_MS = 950;
-const AI_PANEL_BASE_BG = 'rgba(0,0,0,0.28)';
 const ASSISTANT_MIC_ENABLED_STORAGE_KEY = 'ha.dashboard.assistant.mic.enabled.v1';
 const ASSISTANT_CONVERSATION_ENTITY_STORAGE_KEY = 'ha.dashboard.assistant.conversation.entity.v1';
 
@@ -794,7 +793,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
           <button
             type="button"
             onClick={onOpen}
-            className="fixed right-4 bottom-24 inline-flex items-center gap-2 rounded-2xl border border-cyan-200/35 bg-black/65 px-3.5 py-2.5 text-xs uppercase tracking-[0.14em] text-cyan-100 shadow-[0_10px_35px_rgba(15,23,42,0.45)] backdrop-blur-xl active:scale-[0.98]"
+            className="glass-button fixed right-4 bottom-24 border-cyan-200/35 px-3.5 py-2.5 text-xs uppercase tracking-[0.14em] text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.24)]"
             style={{ zIndex: 59 }}
             aria-label="Apri assistente AI"
           >
@@ -831,8 +830,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
       >
         <div className="h-full min-h-0 p-5">
           <div
-            className="relative rounded-[2rem] backdrop-blur-xl border border-white/8 p-5 flex h-full min-h-0 flex-col overflow-hidden"
-            style={{ backgroundColor: AI_PANEL_BASE_BG }}
+            className="liquid-glass-panel relative flex h-full min-h-0 flex-col overflow-hidden p-5"
           >
             <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
               <button
@@ -841,7 +839,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
                 className={`inline-flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-xl transition-all active:scale-95 ${
                   isConversationEntityEditMode
                     ? 'border-cyan-300/35 bg-cyan-400/18 text-cyan-100'
-                    : 'border-white/15 bg-black/45 text-white/85 hover:bg-white/15 hover:text-white'
+                    : 'border-white/[0.08] bg-white/[0.04] text-white/85 hover:bg-white/[0.10] hover:text-white'
                 }`}
                 aria-label="Attiva modifica entita conversation"
                 title="Modifica entita conversation"
@@ -851,7 +849,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-xl transition-all hover:bg-white/15 hover:text-white active:scale-95"
+                className="glass-icon-button h-9 w-9"
                 aria-label="Chiudi pannello assistente"
                 title="Chiudi"
               >
@@ -865,7 +863,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
             </div>
 
             {isConversationEntityEditMode ? (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3">
+              <div className="liquid-glass-card mt-4 p-3">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-white/50">Entita conversation</p>
                 <input
                   list={conversationEntityDatalistId}
@@ -898,7 +896,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
               </div>
             ) : null}
 
-            <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="liquid-glass-card mt-5 rounded-3xl p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Microfono</p>
                 <div className="flex items-center gap-2">
@@ -964,7 +962,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
               </div>
               <div
                 ref={conversationViewportRef}
-                className="mt-3 flex-1 min-h-0 space-y-2 overflow-y-auto custom-scrollbar pr-1 text-sm text-white/80"
+                className="mt-3 flex-1 min-h-0 space-y-2 overflow-y-auto glass-scrollbar pr-1 text-sm text-white/80"
               >
                 {chatMessages.map((message) => {
                   const wrapperClassName =
@@ -975,7 +973,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
                         : 'flex justify-center';
                   const bubbleClassName =
                     message.role === 'assistant'
-                      ? 'max-w-[84%] rounded-2xl rounded-bl-md border border-white/12 bg-white/6 px-3 py-2 text-white/90'
+                      ? 'max-w-[84%] rounded-2xl rounded-bl-md border border-white/12 bg-white/[0.06] px-3 py-2 text-white/90'
                       : message.role === 'user'
                         ? 'max-w-[84%] rounded-2xl rounded-br-md border border-cyan-300/25 bg-cyan-500/16 px-3 py-2 text-cyan-50'
                         : 'max-w-[90%] rounded-full border border-amber-300/18 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.08em] text-amber-100/90';
@@ -987,7 +985,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
                 })}
                 {isSending ? (
                   <div className="flex justify-start">
-                    <p className="rounded-2xl rounded-bl-md border border-white/12 bg-white/6 px-3 py-2 text-xs uppercase tracking-[0.1em] text-white/70">
+                    <p className="rounded-2xl rounded-bl-md border border-white/12 bg-white/[0.06] px-3 py-2 text-xs uppercase tracking-[0.1em] text-white/70">
                       Elaborazione in corso...
                     </p>
                   </div>
@@ -996,7 +994,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
             </div>
 
             {isKeyboardInputVisible ? (
-              <form onSubmit={handleSubmit} className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-2 backdrop-blur-xl">
+              <form onSubmit={handleSubmit} className="liquid-glass-card mt-4 p-2">
                 <div className="flex items-center gap-2">
                   <input
                     value={command}

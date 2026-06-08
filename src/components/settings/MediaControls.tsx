@@ -616,7 +616,7 @@ export function MediaControlsPanel({
 
             <button
               type="button"
-              className="w-11 h-11 rounded-full bg-white text-slate-900 flex items-center justify-center hover:bg-white/90 transition-colors"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#0A84FF]/45 bg-[#0A84FF]/20 text-blue-50 shadow-[0_0_22px_rgba(10,132,255,0.35)] backdrop-blur-xl transition-colors hover:bg-[#0A84FF]/28"
               onClick={onTogglePlayback}
               aria-label={isPlaying ? 'Metti in pausa' : 'Riproduci'}
             >
@@ -831,7 +831,7 @@ export function MediaControlsPanel({
           }`}
         >
           <div
-            className="absolute inset-y-0 left-0 h-full bg-white/95 transition-[width] duration-200"
+            className="absolute inset-y-0 left-0 h-full bg-[#0A84FF]/70 shadow-[0_0_18px_rgba(10,132,255,0.32)] transition-[width] duration-200"
             style={{ width: `${safeVolumePercent}%` }}
           />
 

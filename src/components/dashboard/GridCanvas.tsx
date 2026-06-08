@@ -22,7 +22,13 @@ import type {
   SceneKey,
 } from '../../types/dashboardModels';
 import type { WidgetTypeLayoutOverrides } from '../../types/widgetTypeLayout';
-import { ROOT_CANVAS_COLS, ROOT_CANVAS_ROW_UNITS, SECTION_CATALOG, WIDGET_CATALOG } from '../../types/dashboardModels';
+import {
+  FAVORITES_GRID_TITLE,
+  ROOT_CANVAS_COLS,
+  ROOT_CANVAS_ROW_UNITS,
+  SECTION_CATALOG,
+  WIDGET_CATALOG,
+} from '../../types/dashboardModels';
 import {
   ALARM_WIDGET_SPAN_BY_BREAKPOINT,
   CAMERA_WIDGET_SPAN_BY_BREAKPOINT,
@@ -1556,11 +1562,15 @@ export function GridCanvas({
         return;
       }
       const section = sectionById.get(sectionId);
+      const sectionTitle =
+        section?.kind === 'stack-grid' && (section.stackUseFavoritesGrid ?? false)
+          ? FAVORITES_GRID_TITLE
+          : section?.title;
       const headerVisible =
         Boolean(section) &&
         section.stackShowHeader !== false &&
-        typeof section.title === 'string' &&
-        section.title.trim().length > 0;
+        typeof sectionTitle === 'string' &&
+        sectionTitle.trim().length > 0;
       // Stack header is rendered outside StackGrid (in GridCanvas), so
       // add one root row unit when visible to prevent bottom clipping.
       const safeRows = Math.max(1, Math.round(usedRows) + (headerVisible ? 1 : 0));
@@ -1627,6 +1637,10 @@ export function GridCanvas({
     ) => {
       const isTransparentSection = section.kind === 'greeting' || section.kind === 'weather';
       const isStack = isStackSection(section);
+      const sectionTitle =
+        section.kind === 'stack-grid' && (section.stackUseFavoritesGrid ?? false)
+          ? FAVORITES_GRID_TITLE
+          : section.title;
       const showBackground =
         section.kind === 'scenes'
           ? section.scenesShowBackground ?? true
@@ -1758,10 +1772,10 @@ export function GridCanvas({
             />
           ) : (
             <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
-              {section.stackShowHeader !== false && section.title ? (
+              {section.stackShowHeader !== false && sectionTitle ? (
                 <div className="mb-3 px-3 pt-3 sm:px-4 sm:pt-4 flex items-center justify-between">
                   <p className="text-base font-semibold text-white/70 tracking-tight">
-                    {section.title}
+                    {sectionTitle}
                   </p>
                   {isEditMode && selectedSectionId === section.id ? (
                     <span className="text-[10px] uppercase tracking-[0.2em] text-blue-200/80 border border-blue-300/30 bg-blue-500/15 px-2 py-1 rounded-full">
@@ -1862,7 +1876,7 @@ export function GridCanvas({
 
   return (
     <div className="relative flex-1 min-w-0 h-full min-h-0">
-      <div className="h-full overflow-y-scroll pb-[calc(env(safe-area-inset-bottom)+8.25rem)] sm:pb-10 [scroll-padding-bottom:calc(env(safe-area-inset-bottom)+8.25rem)] sm:[scroll-padding-bottom:2.5rem] custom-scrollbar">
+      <div className="h-full overflow-y-scroll pb-[calc(env(safe-area-inset-bottom)+8.25rem)] sm:pb-10 [scroll-padding-bottom:calc(env(safe-area-inset-bottom)+8.25rem)] sm:[scroll-padding-bottom:2.5rem] glass-scrollbar">
         <div
           ref={runtimeGridHostRef}
           className={`relative behance-canvas-shell rounded-[2rem] pt-2 pb-4 min-h-[48rem] ${
@@ -2161,7 +2175,9 @@ export function GridCanvas({
         <button
           type="button"
           onClick={onOpenCatalog}
-          className="absolute bottom-8 right-6 sm:right-8 z-20 w-16 h-16 rounded-full bg-white/15 border border-blue-300/35 backdrop-blur-2xl text-blue-200 shadow-[0_0_0_1px_rgba(147,197,253,0.3),0_16px_45px_rgba(56,189,248,0.35)] hover:scale-105 hover:bg-blue-500/20 transition-all"
+          className={`absolute right-6 sm:right-8 z-20 w-16 h-16 rounded-full bg-white/15 border border-blue-300/35 backdrop-blur-2xl text-blue-200 shadow-[0_0_0_1px_rgba(147,197,253,0.3),0_16px_45px_rgba(56,189,248,0.35)] hover:scale-105 hover:bg-blue-500/20 transition-all ${
+            isXsViewport ? 'bottom-[calc(env(safe-area-inset-bottom)+6rem)]' : 'bottom-8'
+          }`}
           aria-label="Apri catalogo componenti"
         >
           <Plus size={30} className="mx-auto" />
@@ -2174,7 +2190,7 @@ export function GridCanvas({
           onClick={onCloseCatalog}
         >
           <div
-            className="liquid-glass-panel h-full w-full max-h-none overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] custom-scrollbar md:h-auto md:max-w-3xl md:rounded-[2rem] md:border md:p-6"
+            className="liquid-glass-panel h-full w-full max-h-none overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] glass-scrollbar md:h-auto md:max-w-3xl md:rounded-[2rem] md:border md:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -2185,7 +2201,7 @@ export function GridCanvas({
               <button
                 type="button"
                 onClick={onCloseCatalog}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center"
+                className="glass-icon-button h-10 w-10"
               >
                 <X size={18} />
               </button>

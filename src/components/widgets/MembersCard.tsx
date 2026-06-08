@@ -122,7 +122,7 @@ export function MembersCard({
                     />
                   ) : (
                     <span
-                      className={`flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-slate-300 font-semibold text-slate-700`}
+                      className={`flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] font-semibold text-white shadow-lg backdrop-blur-xl`}
                     >
                       {initialsFromName(member.name)}
                     </span>
@@ -134,7 +134,7 @@ export function MembersCard({
               ))}
               {hiddenMembersCount > 0 ? (
                 <span
-                  className={`-ml-2 flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-white/70 font-semibold text-slate-700`}
+                  className={`-ml-2 flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] font-semibold text-white shadow-lg backdrop-blur-xl`}
                 >
                   +{hiddenMembersCount}
                 </span>

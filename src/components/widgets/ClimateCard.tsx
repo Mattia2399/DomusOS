@@ -271,61 +271,61 @@ function translateClimateStatus(status: string | undefined, fallback: string) {
 function modeToSurface(mode: string): ClimateSurface {
   if (mode === 'heat') {
     return {
-      gradient: 'from-[#ff8b45] via-[#f97332] to-[#ec5f22]',
-      border: 'border-[#ffbc9a]/70',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_12px_28px_rgba(226,104,41,0.24)]',
-      iconSurface: 'bg-white/24 border border-white/26',
-      controlSurface: 'bg-white/94 text-[#262626]',
-      fanAccent: '#f97332',
+      gradient: 'from-[#E97822] via-[#A9451E] to-[#44261E]',
+      border: 'border-[#FF9F0A]/50',
+      glow: 'shadow-[0_0_28px_rgba(255,159,10,0.42),inset_0_1px_0_rgba(255,255,255,0.24)]',
+      iconSurface: 'bg-[#FF9F0A]/16 border border-[#FF9F0A]/36',
+      controlSurface: 'border border-white/[0.10] bg-white/[0.08] text-white backdrop-blur-xl hover:bg-white/[0.13]',
+      fanAccent: '#FF9F0A',
     };
   }
   if (mode === 'cool') {
     return {
-      gradient: 'from-[#4f78ff] via-[#4569f6] to-[#3958e9]',
-      border: 'border-[#92abff]/70',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_12px_28px_rgba(47,89,240,0.24)]',
-      iconSurface: 'bg-white/20 border border-white/22',
-      controlSurface: 'bg-white/95 text-[#1f2937]',
-      fanAccent: '#4569f6',
+      gradient: 'from-[#0A84FF] via-[#145FC4] to-[#193253]',
+      border: 'border-[#0A84FF]/52',
+      glow: 'shadow-[0_0_28px_rgba(10,132,255,0.44),inset_0_1px_0_rgba(255,255,255,0.24)]',
+      iconSurface: 'bg-[#0A84FF]/16 border border-[#0A84FF]/38',
+      controlSurface: 'border border-white/[0.10] bg-white/[0.08] text-white backdrop-blur-xl hover:bg-white/[0.13]',
+      fanAccent: '#0A84FF',
     };
   }
   if (mode === 'heat_cool' || mode === 'auto') {
     return {
-      gradient: 'from-[#3cbad1] via-[#2f9ad0] to-[#277ec0]',
-      border: 'border-[#97d6e8]/65',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_12px_28px_rgba(34,128,190,0.22)]',
-      iconSurface: 'bg-white/20 border border-white/20',
-      controlSurface: 'bg-white/94 text-[#1f2937]',
-      fanAccent: '#2f9ad0',
+      gradient: 'from-[#2FD66C] via-[#1C8C52] to-[#1F3B2D]',
+      border: 'border-[#32D74B]/46',
+      glow: 'shadow-[0_0_28px_rgba(50,215,75,0.36),inset_0_1px_0_rgba(255,255,255,0.24)]',
+      iconSurface: 'bg-[#32D74B]/14 border border-[#32D74B]/34',
+      controlSurface: 'border border-white/[0.10] bg-white/[0.08] text-white backdrop-blur-xl hover:bg-white/[0.13]',
+      fanAccent: '#32D74B',
     };
   }
   if (mode === 'dry') {
     return {
-      gradient: 'from-[#8f7dfd] via-[#7a65ef] to-[#6953df]',
-      border: 'border-[#b9adff]/65',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_12px_28px_rgba(93,70,202,0.24)]',
-      iconSurface: 'bg-white/20 border border-white/22',
-      controlSurface: 'bg-white/94 text-[#262626]',
-      fanAccent: '#7a65ef',
+      gradient: 'from-[#64D2FF] via-[#297DA8] to-[#213B4D]',
+      border: 'border-[#64D2FF]/46',
+      glow: 'shadow-[0_0_28px_rgba(100,210,255,0.36),inset_0_1px_0_rgba(255,255,255,0.24)]',
+      iconSurface: 'bg-[#64D2FF]/14 border border-[#64D2FF]/34',
+      controlSurface: 'border border-white/[0.10] bg-white/[0.08] text-white backdrop-blur-xl hover:bg-white/[0.13]',
+      fanAccent: '#64D2FF',
     };
   }
   if (mode === 'fan_only') {
     return {
-      gradient: 'from-[#4a75f5] via-[#3a67ee] to-[#2f57dc]',
-      border: 'border-[#8aa8ff]/65',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_12px_28px_rgba(48,84,214,0.23)]',
-      iconSurface: 'bg-white/20 border border-white/22',
-      controlSurface: 'bg-white/94 text-[#262626]',
-      fanAccent: '#3a67ee',
+      gradient: 'from-[#8E8E93] via-[#575E6B] to-[#2A2E37]',
+      border: 'border-[#A1A1AA]/42',
+      glow: 'shadow-[0_0_24px_rgba(161,161,170,0.26),inset_0_1px_0_rgba(255,255,255,0.22)]',
+      iconSurface: 'bg-white/[0.12] border border-white/[0.20]',
+      controlSurface: 'border border-white/[0.10] bg-white/[0.08] text-white backdrop-blur-xl hover:bg-white/[0.13]',
+      fanAccent: '#C7C7CC',
     };
   }
   return {
-    gradient: 'from-[#394158] via-[#2f3650] to-[#252b3d]',
-    border: 'border-white/30',
-    glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(0,0,0,0.2)]',
-    iconSurface: 'bg-white/18 border border-white/20',
-    controlSurface: 'bg-white/90 text-[#262626]',
-    fanAccent: '#64748b',
+    gradient: 'from-[#4A4F5C] via-[#343842] to-[#242730]',
+    border: 'border-white/[0.14]',
+    glow: 'shadow-[0_0_22px_rgba(142,142,147,0.18),inset_0_1px_0_rgba(255,255,255,0.20)]',
+    iconSurface: 'bg-white/[0.06] border border-white/[0.10]',
+    controlSurface: 'border border-white/[0.08] bg-white/[0.06] text-white/82 backdrop-blur-xl hover:bg-white/[0.10] hover:text-white',
+    fanAccent: '#8E8E93',
   };
 }
 
@@ -518,22 +518,22 @@ export function ClimateCard({
       : 'h-12 w-12';
   const controlIconSize = isDenseCard ? 16 : isCompactClimateCard ? 17 : 20;
   const setPointClass = isDenseCard
-    ? `text-[1.95rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-slate-200' : 'text-white'}`
+    ? `text-[1.95rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`
     : isCompactClimateCard
-      ? `text-[2.05rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-slate-200' : 'text-white'}`
-      : `text-[2.2rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-slate-200' : 'text-white'}`;
+      ? `text-[2.05rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`
+      : `text-[2.2rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`;
   const unitClass = isDenseCard
-    ? `mt-0.5 text-[0.58rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-slate-300/85' : 'text-white/82'}`
+    ? `mt-0.5 text-[0.58rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-white/62' : 'text-white/82'}`
     : isCompactClimateCard
-      ? `mt-0.5 text-[0.62rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-slate-300/85' : 'text-white/82'}`
-      : `mt-1 text-[0.74rem] leading-none font-semibold tracking-[0.2em] ${targetPending ? 'text-slate-300/85' : 'text-white/82'}`;
+      ? `mt-0.5 text-[0.62rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-white/62' : 'text-white/82'}`
+      : `mt-1 text-[0.74rem] leading-none font-semibold tracking-[0.2em] ${targetPending ? 'text-white/62' : 'text-white/82'}`;
   const fanModeIconIndex = Math.max(0, fanModes.findIndex((mode) => mode === 'auto'));
   const fanModesAreCrowded = fanModes.length > (isDenseCard ? 4 : isCompactClimateCard ? 5 : 7);
   const fanTrackClass = isDenseCard
-    ? 'mx-auto mt-1.5 w-full rounded-[0.68rem] border p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]'
+    ? 'mx-auto mt-1.5 w-full rounded-[0.68rem] border p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl'
     : isCompactClimateCard
-      ? 'mx-auto mt-2 w-full rounded-[0.76rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]'
-      : 'mx-auto mt-3 w-full rounded-[0.82rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]';
+      ? 'mx-auto mt-2 w-full rounded-[0.76rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl'
+      : 'mx-auto mt-3 w-full rounded-[0.82rem] border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl';
   const fanStepClass = isDenseCard ? 'h-5' : isCompactClimateCard ? 'h-6' : 'h-7';
   const fanCrowdedWidthClass = isDenseCard ? 'w-[1.45rem]' : isCompactClimateCard ? 'w-[1.7rem]' : 'w-[1.95rem]';
   const fanItemsClass = fanModesAreCrowded ? 'flex items-center gap-1 overflow-x-auto pr-0.5' : 'flex items-center gap-1';
@@ -541,9 +541,9 @@ export function ClimateCard({
     ? { scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' as 'auto' | 'touch' }
     : undefined;
   const fanTrackStyle = {
-    backgroundColor: 'rgba(255, 255, 255, 0.76)',
+    backgroundColor: 'rgba(255, 255, 255, 0.055)',
     borderColor: toRgba(surface.fanAccent, 0.24),
-    boxShadow: `inset 0 0 0 999px ${toRgba(surface.fanAccent, 0.08)}, inset 0 1px 0 rgba(255,255,255,0.78)`,
+    boxShadow: `0 0 18px ${toRgba(surface.fanAccent, 0.14)}, inset 0 1px 0 rgba(255,255,255,0.16)`,
   };
   const titleLineClamp = isDenseCard ? 2 : isCompactClimateCard ? 3 : 3;
   const titleWrapStyle: React.CSSProperties = {
@@ -568,11 +568,11 @@ export function ClimateCard({
       }}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} border bg-gradient-to-br ${surface.gradient} ${surface.border} ${surface.glow} ${cardPaddingClass} flex flex-col ${
+        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} border bg-gradient-to-br ${surface.gradient} ${surface.border} ${surface.glow} ${cardPaddingClass} flex flex-col backdrop-blur-xl ${
           isEditMode ? 'pointer-events-none' : ''
         }`}
       >
-        <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_80%_at_15%_0%,rgba(255,255,255,0.22),transparent_64%)]`} />
+        <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_80%_at_15%_0%,rgba(255,255,255,0.10),transparent_64%)]`} />
 
         <div className={`relative flex items-start ${headerGapClass} min-w-0`}>
           <div
@@ -591,7 +591,7 @@ export function ClimateCard({
         <div className={`relative mt-auto flex items-center justify-between ${controlsGapClass} ${isEditMode ? 'pointer-events-none' : ''}`}>
           <button
             type="button"
-            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_12px_20px_rgba(0,0,0,0.2)] transition-transform active:scale-95`}
+            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
             onClick={(event) => {
               event.stopPropagation();
               if (localRange && onTargetRangeChange) {
@@ -625,7 +625,7 @@ export function ClimateCard({
 
           <button
             type="button"
-            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_12px_20px_rgba(0,0,0,0.2)] transition-transform active:scale-95`}
+            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
             onClick={(event) => {
               event.stopPropagation();
               if (localRange && onTargetRangeChange) {
@@ -659,12 +659,12 @@ export function ClimateCard({
                   const label = formatFanModeLabel(normalized);
                   const activeStyle = fanPending
                     ? {
-                        backgroundColor: toRgba(surface.fanAccent, 0.52),
-                        boxShadow: `0 4px 10px ${toRgba(surface.fanAccent, 0.24)}`,
+                        backgroundColor: toRgba(surface.fanAccent, 0.16),
+                        boxShadow: `0 0 14px ${toRgba(surface.fanAccent, 0.18)}`,
                       }
                     : {
-                        backgroundColor: toRgba(surface.fanAccent, 0.3),
-                        boxShadow: `0 3px 8px ${toRgba(surface.fanAccent, 0.14)}`,
+                        backgroundColor: toRgba(surface.fanAccent, 0.24),
+                        boxShadow: `0 0 16px ${toRgba(surface.fanAccent, 0.28)}`,
                       };
                   return (
                     <button
@@ -673,7 +673,7 @@ export function ClimateCard({
                       className={`${fanStepClass} ${fanModesAreCrowded ? `${fanCrowdedWidthClass} shrink-0` : 'flex-1 min-w-0'} rounded-[0.58rem] flex items-center justify-center transition-colors ${
                         active
                           ? ''
-                          : 'bg-transparent hover:bg-black/4'
+                          : 'bg-white/[0.03] hover:bg-white/[0.08]'
                       }`}
                       style={active ? activeStyle : undefined}
                       onClick={(event) => {

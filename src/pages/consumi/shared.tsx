@@ -109,7 +109,7 @@ export function PremiumTooltip({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-neutral-900/90 px-3 py-2 text-sm text-white backdrop-blur-md shadow-[0_16px_26px_rgba(0,0,0,0.42)]">
+    <div className="liquid-glass-card rounded-xl px-3 py-2 text-sm text-white">
       {label !== undefined ? <p className="mb-1 text-xs text-white/60">{label}</p> : null}
       <div className="space-y-1">
         {payload.map((item, index) => (

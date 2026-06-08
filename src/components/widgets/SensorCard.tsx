@@ -335,7 +335,7 @@ export function SensorCard({
       style={{ containerType: 'size' }}
     >
       <div
-        className={`pointer-events-none relative h-full w-full min-h-0 min-w-0 overflow-hidden border border-[#f6f7fb] bg-[#e6e7ee] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] ${cardRadiusClass} ${cardPaddingClass}`}
+        className={`liquid-glass-card pointer-events-none relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} ${cardPaddingClass}`}
       >
         {isMiniMode ? (
           <div className="relative flex h-full min-h-0 w-full flex-col justify-end">
@@ -344,16 +344,16 @@ export function SensorCard({
             </div>
             <div className="min-w-0 pr-4">
               <div className="flex max-w-full min-w-0 items-start justify-start text-left">
-                <p className="max-w-full truncate text-[clamp(1.16rem,39cqi,1.52rem)] leading-[0.88] font-semibold tracking-[-0.045em] text-[#090b1a]">
+                <p className="max-w-full truncate text-[clamp(1.16rem,39cqi,1.52rem)] leading-[0.88] font-semibold text-white">
                   {displayValue}
                 </p>
                 {unitLabel ? (
-                  <p className="ml-0.5 mt-0.5 max-w-[1.8rem] truncate text-[0.45rem] leading-none text-[#7b8097]">
+                  <p className="ml-0.5 mt-0.5 max-w-[1.8rem] truncate text-[0.45rem] leading-none text-white/58">
                     {unitLabel}
                   </p>
                 ) : null}
               </div>
-              <p className="mt-0.5 max-w-full truncate text-[0.48rem] font-medium leading-none text-[#74798e]">
+              <p className="mt-0.5 max-w-full truncate text-[0.48rem] font-medium leading-none text-white/58">
                 {widget.title}
               </p>
             </div>
@@ -367,13 +367,13 @@ export function SensorCard({
             {isCompactSingleRow ? (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="max-w-full truncate text-[0.72rem] font-medium leading-none text-[#73788e]">{widget.title}</p>
+                  <p className="max-w-full truncate text-[0.72rem] font-medium leading-none text-white/58">{widget.title}</p>
                   <div className="mt-0.5 flex min-w-0 items-start">
-                    <p className="max-w-full truncate text-[clamp(1.02rem,9cqi,1.36rem)] leading-[0.9] font-semibold tracking-[-0.04em] text-[#090b1a]">
+                    <p className="max-w-full truncate text-[clamp(1.02rem,9cqi,1.36rem)] leading-[0.9] font-semibold text-white">
                       {displayValue}
                     </p>
                     {unitLabel ? (
-                      <p className="ml-0.5 mt-0.5 max-w-[2.4rem] truncate text-[0.48rem] leading-none text-[#73788e]">{unitLabel}</p>
+                      <p className="ml-0.5 mt-0.5 max-w-[2.4rem] truncate text-[0.48rem] leading-none text-white/58">{unitLabel}</p>
                     ) : null}
                   </div>
                 </div>
@@ -384,19 +384,19 @@ export function SensorCard({
             ) : (
               <>
                 <div className="flex min-w-0 items-start justify-between gap-2">
-                  <p className="min-w-0 truncate text-[0.75rem] font-medium text-[#73788e]">{widget.title}</p>
+                  <p className="min-w-0 truncate text-[0.75rem] font-medium text-white/58">{widget.title}</p>
                   <div className="h-5 w-5 shrink-0">
                     <SensorLevelGlyph color={tone.base} />
                   </div>
                 </div>
                 <div className="mt-2 min-w-0">
                   <div className="flex min-w-0 items-end gap-1.5">
-                    <p className="text-[2rem] leading-none font-semibold tracking-[-0.035em] text-[#090b1a]">{displayValue}</p>
+                    <p className="text-[2rem] leading-none font-semibold text-white">{displayValue}</p>
                     {unitLabel ? (
-                      <p className="mb-1 min-w-0 truncate text-[0.62rem] font-medium leading-none text-[#73788e]">{unitLabel}</p>
+                      <p className="mb-1 min-w-0 truncate text-[0.62rem] font-medium leading-none text-white/58">{unitLabel}</p>
                     ) : null}
                   </div>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#c8cad3]">
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/[0.08]">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -413,13 +413,13 @@ export function SensorCard({
           <div className="relative flex h-full min-h-0 w-full flex-col">
             <div className={`flex min-w-0 items-start justify-between ${isShortCard ? 'gap-1.5' : 'gap-2'}`}>
               <div className="min-w-0">
-                <p className={`truncate font-medium text-[#70758b] ${titleClass}`}>{headingLabel}</p>
+                <p className={`truncate font-medium text-white/58 ${titleClass}`}>{headingLabel}</p>
                 <div className={`${isShortCard ? 'mt-[clamp(0.15rem,2cqb,0.35rem)] gap-1' : 'mt-1 gap-1.5'} flex items-start`}>
-                  <span className={`leading-none font-semibold tracking-[-0.035em] text-[#060814] ${valueClass}`}>
+                  <span className={`leading-none font-semibold text-white ${valueClass}`}>
                     {displayValue}
                   </span>
                   {unitLabel ? (
-                    <span className={`mt-[0.42em] leading-none text-[#6f748d] ${unitClass}`}>{unitLabel}</span>
+                    <span className={`mt-[0.42em] leading-none text-white/58 ${unitClass}`}>{unitLabel}</span>
                   ) : null}
                 </div>
               </div>
@@ -429,7 +429,7 @@ export function SensorCard({
             </div>
 
             <div className={`${isShortCard ? 'mt-[clamp(0.15rem,2.8cqb,0.4rem)]' : isCompactCard ? 'mt-2.5' : 'mt-3'} flex min-h-0 flex-1 flex-col justify-end`}>
-              <div className={`${isShortCard ? 'mb-[clamp(0.08rem,1.6cqb,0.25rem)]' : 'mb-1.5'} flex items-center justify-between font-medium text-[#81859a] ${rangeLabelClass}`}>
+              <div className={`${isShortCard ? 'mb-[clamp(0.08rem,1.6cqb,0.25rem)]' : 'mb-1.5'} flex items-center justify-between font-medium text-white/54 ${rangeLabelClass}`}>
                 <span>Min</span>
                 <span>Max</span>
               </div>
@@ -449,12 +449,12 @@ export function SensorCard({
                           'repeating-linear-gradient(110deg, rgba(255,255,255,0.26) 0px, rgba(255,255,255,0.26) 2px, rgba(255,255,255,0) 2px, rgba(255,255,255,0) 11px)',
                       }}
                     />
-                    <span className={`${isShortCard ? 'bottom-0.5 left-1.5' : 'bottom-1.5 left-2'} absolute leading-none font-semibold tracking-[-0.02em] text-white ${rangeValueClass}`}>
+                    <span className={`${isShortCard ? 'bottom-0.5 left-1.5' : 'bottom-1.5 left-2'} absolute leading-none font-semibold text-white ${rangeValueClass}`}>
                       {formatRangeValue(numericValue)}
                     </span>
                   </div>
-                  <div className={`${isShortCard ? 'rounded-[0.55rem]' : 'rounded-[1rem]'} relative overflow-hidden border border-white/40 bg-[#c8cad3] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]`}>
-                    <span className={`${isShortCard ? 'bottom-0.5 right-1.5' : 'bottom-1.5 right-2'} absolute leading-none font-medium tracking-[-0.01em] text-white/72 ${rangeValueClass}`}>
+                  <div className={`${isShortCard ? 'rounded-[0.55rem]' : 'rounded-[1rem]'} relative overflow-hidden border border-white/[0.08] bg-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl`}>
+                    <span className={`${isShortCard ? 'bottom-0.5 right-1.5' : 'bottom-1.5 right-2'} absolute leading-none font-medium text-white/72 ${rangeValueClass}`}>
                       {formatRangeValue(displayRange.max)}
                     </span>
                   </div>

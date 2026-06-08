@@ -53,7 +53,7 @@ export function GlassDropdown({
             <Listbox.Options
               anchor={{ to: 'bottom start', gap: 8, padding: 12 }}
               portal
-              className="liquid-glass-card z-50 max-h-64 w-[var(--button-width)] origin-top overflow-auto rounded-2xl bg-white/[0.04] p-1.5 text-sm text-white/88 outline-none backdrop-blur-xl ring-1 ring-black/5"
+              className="liquid-glass-card glass-scrollbar z-50 max-h-64 w-[var(--button-width)] origin-top overflow-auto rounded-2xl bg-white/[0.04] p-1.5 text-sm text-white/88 outline-none backdrop-blur-xl ring-1 ring-black/5"
             >
               {options.map((option) => (
                 <Listbox.Option

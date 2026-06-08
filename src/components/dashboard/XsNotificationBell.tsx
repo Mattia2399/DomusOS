@@ -169,7 +169,7 @@ export function XsNotificationBell({
                   Nessuna notifica al momento.
                 </p>
               ) : (
-                <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pr-1">
+                <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pr-1">
                   {notifications.map((notification) => {
                     const meta =
                       NOTIFICATION_TYPE_META[

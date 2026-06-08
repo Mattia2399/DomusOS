@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Droplets, Flame, Minus, Plus, Power, Snowflake, Sparkles, Sun, Thermometer, Wind } from 'lucide-react';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { GlassButton } from '../ui/GlassButton';
 
 interface ClimateControlsProps {
   climate: {
@@ -110,24 +111,43 @@ function modeSelectorIcon(mode: string, size = 16) {
 
 function modeAccentIconClass(mode: string) {
   if (mode === 'heat') {
-    return 'text-[#f97316]';
+    return 'text-[#FF9F0A]';
   }
   if (mode === 'cool') {
-    return 'text-[#3b82f6]';
+    return 'text-[#0A84FF]';
   }
   if (mode === 'auto' || mode === 'heat_cool') {
-    return 'text-[#14b8a6]';
+    return 'text-[#32D74B]';
   }
   if (mode === 'dry') {
-    return 'text-[#6366f1]';
+    return 'text-[#64D2FF]';
   }
   if (mode === 'fan_only') {
-    return 'text-[#64748b]';
+    return 'text-white';
   }
   if (mode === 'off') {
-    return 'text-[#6b7280]';
+    return 'text-white/65';
   }
-  return 'text-[#334155]';
+  return 'text-white';
+}
+
+function modeActiveButtonClass(mode: string) {
+  if (mode === 'heat') {
+    return 'border-[#FF9F0A]/45 bg-[#FF9F0A]/18 text-[#FF9F0A] shadow-[0_0_20px_rgba(255,159,10,0.35)]';
+  }
+  if (mode === 'cool') {
+    return 'border-[#0A84FF]/45 bg-[#0A84FF]/18 text-[#0A84FF] shadow-[0_0_20px_rgba(10,132,255,0.35)]';
+  }
+  if (mode === 'auto' || mode === 'heat_cool') {
+    return 'border-[#32D74B]/45 bg-[#32D74B]/18 text-[#32D74B] shadow-[0_0_20px_rgba(50,215,75,0.32)]';
+  }
+  if (mode === 'dry') {
+    return 'border-[#64D2FF]/45 bg-[#64D2FF]/18 text-[#64D2FF] shadow-[0_0_20px_rgba(100,210,255,0.32)]';
+  }
+  if (mode === 'fan_only') {
+    return 'border-white/[0.18] bg-white/[0.14] text-white shadow-[0_0_18px_rgba(255,255,255,0.16)]';
+  }
+  return 'border-white/[0.12] bg-white/[0.10] text-white/82 shadow-lg';
 }
 
 function modeSelectorLabel(mode: string) {
@@ -304,13 +324,13 @@ export function ClimateControlsPanel({
   const dialRadians = (dialAngle * Math.PI) / 180;
   const dialCursorX = 100 + 74 * Math.cos(dialRadians);
   const dialCursorY = 100 + 74 * Math.sin(dialRadians);
-  const dialAccentColor = mode === 'heat' ? '#fb923c' : mode === 'cool' ? '#3b82f6' : '#9ca3af';
+  const dialAccentColor = mode === 'heat' ? '#FF9F0A' : mode === 'cool' ? '#0A84FF' : '#32D74B';
   const dialGlowFilter =
     mode === 'heat'
-      ? 'drop-shadow(0 0 15px rgba(255,165,0,0.4))'
+      ? 'drop-shadow(0 0 15px rgba(255,159,10,0.4))'
       : mode === 'cool'
-        ? 'drop-shadow(0 0 15px rgba(59,130,246,0.35))'
-        : 'drop-shadow(0 0 10px rgba(148,163,184,0.32))';
+        ? 'drop-shadow(0 0 15px rgba(10,132,255,0.35))'
+        : 'drop-shadow(0 0 10px rgba(50,215,75,0.26))';
 
   const translatedStatus = translateClimateStatus(
     climate.status ?? climate.hvacAction ?? climate.mode,
@@ -325,9 +345,9 @@ export function ClimateControlsPanel({
 
   return (
     <div className={`${CONTEXT_PANEL_LAYOUT.shell} gap-3 sm:gap-4`}>
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
+      <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
         <div className="flex items-center gap-3 min-w-0">
-          <span className="h-[clamp(2.6rem,6.2vw,3.2rem)] w-[clamp(2.6rem,6.2vw,3.2rem)] rounded-full bg-white/10 border border-white/12 flex items-center justify-center text-white shrink-0">
+          <span className="flex h-[clamp(2.6rem,6.2vw,3.2rem)] w-[clamp(2.6rem,6.2vw,3.2rem)] shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.06] text-white shadow-lg backdrop-blur-xl">
             {modeIcon(mode, 19)}
           </span>
           <div className="min-w-0">
@@ -337,12 +357,12 @@ export function ClimateControlsPanel({
             >
               {climate.name}
             </h2>
-            <p className="mt-0.5 text-[clamp(0.72rem,1.9vw,0.86rem)] text-gray-400 line-clamp-2">{translatedStatus}</p>
+            <p className="mt-0.5 line-clamp-2 text-[clamp(0.72rem,1.9vw,0.86rem)] text-white/58">{translatedStatus}</p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
+      <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
         <div className="relative mx-auto aspect-square w-full max-w-[clamp(12.75rem,56vw,16rem)] flex items-center justify-center">
           <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 200 200" aria-hidden="true">
             <circle cx="100" cy="100" r="74" fill="none" stroke="rgba(148,163,184,0.22)" strokeWidth="18" />
@@ -371,29 +391,29 @@ export function ClimateControlsPanel({
 
           <div
             className={`flex h-[72%] w-[72%] flex-col items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] px-3 text-center backdrop-blur-xl ${
-              mode === 'heat' ? 'glow-active-orange' : 'shadow-lg'
+              mode === 'heat' ? 'glow-active-orange' : mode === 'cool' ? 'glow-active-blue' : mode === 'auto' || mode === 'heat_cool' ? 'glow-active-green' : 'shadow-lg'
             }`}
           >
             <div className="flex items-start">
-              <span className={`text-[clamp(1.95rem,7.6vw,3.15rem)] font-light leading-none tracking-tight ${targetPending ? 'text-slate-300' : 'text-white'}`}>
+              <span className={`text-[clamp(1.95rem,7.6vw,3.15rem)] font-light leading-none tracking-tight ${targetPending ? 'text-white/72' : 'text-white'}`}>
                 {localRange
                   ? `${Math.round(localRange.low)}-${Math.round(localRange.high)}`
                   : localTarget !== undefined
                     ? localTarget.toFixed(1)
                     : '--'}
               </span>
-              <span className={`text-[clamp(0.95rem,2.8vw,1.25rem)] mt-1.5 ${targetPending ? 'text-slate-300/90' : 'text-gray-300'}`}>{unit}</span>
+              <span className={`mt-1.5 text-[clamp(0.95rem,2.8vw,1.25rem)] ${targetPending ? 'text-white/68' : 'text-white/74'}`}>{unit}</span>
             </div>
-            <p className="mt-1.5 text-[clamp(0.72rem,1.9vw,0.86rem)] text-gray-400">
+            <p className="mt-1.5 text-[clamp(0.72rem,1.9vw,0.86rem)] text-white/56">
               {currentTemp !== undefined ? `Current: ${currentTemp.toFixed(1)}${unit}` : 'Current: --'}
             </p>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 shadow-lg backdrop-blur-xl">
-          <button
-            type="button"
-            className="btn-premium h-[clamp(2.5rem,6vw,2.95rem)] w-[clamp(2.5rem,6vw,2.95rem)] rounded-full bg-white/12 border border-white/16 text-white flex items-center justify-center hover:bg-white/16 transition-colors"
+        <div className="liquid-glass-card mt-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 p-1.5">
+          <GlassButton
+            size="icon"
+            className="h-[clamp(2.5rem,6vw,2.95rem)] w-[clamp(2.5rem,6vw,2.95rem)] rounded-full"
             onClick={() => {
               if (localRange && onSetTargetRange && minTemp !== undefined && maxTemp !== undefined) {
                 const nextLow = clamp(localRange.low - step, minTemp, maxTemp);
@@ -415,19 +435,18 @@ export function ClimateControlsPanel({
             aria-label="Diminuisci temperatura target"
           >
             <Minus size={18} />
-          </button>
+          </GlassButton>
 
-          <button
-            type="button"
-            className="btn-premium h-[clamp(2.5rem,6vw,2.95rem)] min-w-0 rounded-full border border-white/[0.06] bg-white/[0.04] text-[clamp(0.82rem,2.2vw,0.92rem)] font-medium text-gray-200 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/[0.08]"
+          <GlassButton
+            className="h-[clamp(2.5rem,6vw,2.95rem)] min-w-0 rounded-full px-3 text-[clamp(0.82rem,2.2vw,0.92rem)]"
             onClick={onAutoAdjust}
           >
             Align
-          </button>
+          </GlassButton>
 
-          <button
-            type="button"
-            className="btn-premium h-[clamp(2.5rem,6vw,2.95rem)] w-[clamp(2.5rem,6vw,2.95rem)] rounded-full bg-white/12 border border-white/16 text-white flex items-center justify-center hover:bg-white/16 transition-colors"
+          <GlassButton
+            size="icon"
+            className="h-[clamp(2.5rem,6vw,2.95rem)] w-[clamp(2.5rem,6vw,2.95rem)] rounded-full"
             onClick={() => {
               if (localRange && onSetTargetRange && minTemp !== undefined && maxTemp !== undefined) {
                 const nextLow = clamp(localRange.low + step, minTemp, maxTemp);
@@ -449,14 +468,14 @@ export function ClimateControlsPanel({
             aria-label="Aumenta temperatura target"
           >
             <Plus size={18} />
-          </button>
+          </GlassButton>
         </div>
       </div>
 
       {hvacModes.length > 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.14em] text-gray-400 mb-3">Mode</p>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] px-2.5 py-3 shadow-lg backdrop-blur-xl">
+        <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+          <p className="mb-3 text-xs uppercase tracking-[0.14em] text-white/48">Mode</p>
+          <div className="liquid-glass-card px-2.5 py-3">
             <div className={`${CONTEXT_PANEL_LAYOUT.rail} justify-center gap-2.5`}>
               {hvacModes.map((entry) => {
                 const active = entry === mode;
@@ -467,10 +486,8 @@ export function ClimateControlsPanel({
                       onClick={() => onSetMode?.(entry)}
                       className={`btn-premium relative h-10 w-10 sm:h-11 sm:w-11 rounded-full transition-all flex items-center justify-center ${
                         active
-                          ? entry === 'heat'
-                            ? 'glow-active-orange border border-apple-orange/50 bg-apple-orange/20 text-apple-orange backdrop-blur-xl'
-                            : 'border border-white/[0.12] bg-white/[0.14] text-white shadow-lg backdrop-blur-xl'
-                          : 'bg-white/[0.05] hover:bg-white/[0.1] active:scale-95 transition-all duration-300 border border-white/10 text-white/75 hover:text-white'
+                          ? modeActiveButtonClass(entry)
+                          : 'border border-white/[0.08] bg-white/[0.04] text-white/72 shadow-lg backdrop-blur-xl hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white'
                       }`}
                       title={modeSelectorLabel(entry)}
                       aria-label={`Imposta modalità ${modeSelectorLabel(entry)}`}
@@ -489,12 +506,12 @@ export function ClimateControlsPanel({
       ) : null}
 
       {fanModes.length > 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
+        <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Fan Mode</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-white/48">Fan Mode</p>
           </div>
           <div className="flex justify-center">
-            <div className={`${CONTEXT_PANEL_LAYOUT.rail} rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 shadow-lg backdrop-blur-xl`}>
+            <div className={`${CONTEXT_PANEL_LAYOUT.rail} liquid-glass-card p-1.5`}>
               {fanModes.map((entry) => {
                 const normalized = normalizeMode(entry);
                 const active = localFanMode === normalized;
@@ -506,9 +523,9 @@ export function ClimateControlsPanel({
                     className={`btn-premium relative h-10 min-w-[2.5rem] shrink-0 rounded-full px-3 text-[0.72rem] font-semibold uppercase tracking-[0.04em] transition-all ${
                       active
                         ? pendingActive
-                          ? 'border border-white/[0.12] bg-white/[0.12] text-slate-200 shadow-lg backdrop-blur-xl'
-                          : 'border border-white/[0.16] bg-white/[0.16] text-white shadow-lg backdrop-blur-xl'
-                        : 'bg-white/[0.05] hover:bg-white/[0.1] active:scale-95 transition-all duration-300 text-white/72 hover:text-white'
+                          ? 'border border-[#0A84FF]/24 bg-[#0A84FF]/12 text-white/72 shadow-[0_0_14px_rgba(10,132,255,0.18)] backdrop-blur-xl'
+                          : 'border border-[#0A84FF]/45 bg-[#0A84FF]/18 text-white shadow-[0_0_20px_rgba(10,132,255,0.35)] backdrop-blur-xl'
+                        : 'border border-transparent bg-white/[0.04] text-white/72 hover:border-white/[0.12] hover:bg-white/[0.08] hover:text-white'
                     }`}
                     onClick={() => {
                       setLocalFanMode(normalized);

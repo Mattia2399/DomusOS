@@ -350,7 +350,7 @@ export function ContextSidebar({
 }: ContextSidebarProps) {
   const activeDeviceLayoutClass = externalScrollContainer
     ? 'overflow-visible pb-3 pt-2'
-    : 'overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pb-4 lg:pb-6';
+    : 'overflow-y-auto overscroll-contain glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pb-4 lg:pb-6';
   const membersMapRef = React.useRef<MapRef | null>(null);
   const membersMapPoints = activeDevice?.membersMapPoints ?? [];
   const membersMapStyleUrl =
@@ -404,7 +404,7 @@ export function ContextSidebar({
         <button
           type="button"
           onClick={onClose}
-          className="absolute z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/85 backdrop-blur-xl transition-all hover:bg-white/15 hover:text-white active:scale-95 right-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.5rem)] top-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.4rem)]"
+          className="glass-icon-button absolute z-30 h-9 w-9 right-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.5rem)] top-[calc(clamp(0.75rem,2.8vw,1.5rem)+0.4rem)]"
           aria-label="Chiudi pannello contestuale"
           title="Chiudi"
         >
@@ -625,10 +625,10 @@ export function ContextSidebar({
                           <img
                             src={point.avatarUrl}
                             alt={`Profilo ${point.name}`}
-                            className="h-9 w-9 rounded-full border-2 border-white/95 bg-slate-200 object-cover shadow-[0_6px_16px_rgba(15,23,42,0.4)]"
+                            className="h-9 w-9 rounded-full border-2 border-white/95 bg-white/[0.08] object-cover shadow-[0_6px_16px_rgba(15,23,42,0.4)]"
                           />
                         ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/95 bg-slate-300 text-[11px] font-semibold text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.4)]">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] text-[11px] font-semibold text-white shadow-[0_6px_16px_rgba(15,23,42,0.4)] backdrop-blur-xl">
                             {(point.name.trim().charAt(0) || '?').toUpperCase()}
                           </span>
                         )}
@@ -653,7 +653,7 @@ export function ContextSidebar({
                 type="button"
                 onClick={centerMapOnCurrentMember}
                 disabled={!currentMemberMapPoint}
-                className="btn-premium absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white/90 backdrop-blur-xl transition-colors hover:bg-black/60 disabled:cursor-not-allowed disabled:opacity-45"
+                className="glass-icon-button absolute right-2 top-2 z-20 h-8 w-8 disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="Centra sulla mia posizione"
                 title={
                   currentMemberMapPoint
@@ -669,7 +669,7 @@ export function ContextSidebar({
           {membersMapPoints.length > 0 ? (
             <div className="liquid-glass-card p-[clamp(0.8rem,2.4vw,1.15rem)]">
               <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Membri</p>
-              <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 glass-scrollbar">
                 {membersMapPoints.map((point) => (
                   <div key={point.id} className="liquid-glass-card flex items-center justify-between gap-3 rounded-xl px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -681,7 +681,7 @@ export function ContextSidebar({
                             className="h-9 w-9 rounded-full border border-white/80 object-cover"
                           />
                         ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-slate-300 text-[11px] font-semibold text-slate-700">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/[0.08] text-[11px] font-semibold text-white backdrop-blur-xl">
                             {(point.name.trim().charAt(0) || '?').toUpperCase()}
                           </span>
                         )}

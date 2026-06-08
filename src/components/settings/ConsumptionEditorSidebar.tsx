@@ -150,7 +150,7 @@ export function ConsumptionEditorSidebar({
       </div>
 
       <div className="mt-5 flex h-[calc(100%-9.5rem)] flex-col min-h-0">
-        <div className="custom-scrollbar space-y-5 overflow-y-auto pr-1">
+        <div className="glass-scrollbar space-y-5 overflow-y-auto pr-1">
           <div className="liquid-glass-card space-y-4 p-4">
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Card</p>
             {cardMetaFields.map((item) => renderField(item, config[item.field], onUpdateConfigField, datalistId))}

@@ -149,7 +149,6 @@ export function AlarmControls({
   const unlockCode = alarm.unlockCode?.trim() ?? '';
   const unlockCodeActive = unlockCode.length > 0;
   const trimmedCode = authCode.trim();
-  const pendingCanUseBiometric = Boolean(pendingAction && alarm.requireAuthToDisarm);
   const pendingNeedsCode = Boolean(pendingAction && (codeRequired || unlockCodeActive));
   const codeMissing = pendingNeedsCode && trimmedCode.length === 0;
   const codeMismatch = pendingNeedsCode && unlockCodeActive && trimmedCode !== unlockCode;
@@ -289,6 +288,16 @@ export function AlarmControls({
         : null,
     [onTrigger, triggerSupported],
   );
+  const displayedModeActions = triggerAction ? [...modeActions, triggerAction] : modeActions;
+  const primaryShieldAction = normalizedState === 'disarmed'
+    ? modeActions.find((mode) => mode.id === 'away') ?? modeActions.find((mode) => mode.id !== 'disarm') ?? modeActions[0]
+    : modeActions.find((mode) => mode.id === 'disarm') ?? modeActions[0];
+  const shieldActionDisabled = !primaryShieldAction || normalizedState === primaryShieldAction.state;
+  const primaryShieldHint = primaryShieldAction
+    ? normalizedState === 'disarmed'
+      ? `Tocca per inserire ${primaryShieldAction.label.toLowerCase()}`
+      : 'Tocca per disinserire'
+    : 'Nessuna azione disponibile';
   const activityUnavailableMessage = useMemo(() => {
     const historyHours = Math.max(1, Math.round(Number(alarm.activityLogHours) || 24));
     if (alarm.activityTimelineStatus === 'loading') {
@@ -316,11 +325,6 @@ export function AlarmControls({
     ].slice(0, maxTimelineEntries));
   };
 
-  const openActionDialog = (action: PendingAlarmAction) => {
-    setPendingAction(action);
-    setAuthCode('');
-  };
-
   const closeActionDialog = () => {
     if (isAuthBusy) {
       return;
@@ -329,25 +333,41 @@ export function AlarmControls({
     setAuthCode('');
   };
 
-  const confirmPendingAction = async (useBiometric = false) => {
-    if (!pendingAction || isAuthBusy || (!useBiometric && actionLocked)) {
+  const runAlarmAction = async (action: PendingAlarmAction, code?: string) => {
+    if (isAuthBusy) {
       return;
     }
-    const code = !useBiometric && pendingNeedsCode && trimmedCode.length ? trimmedCode : undefined;
     setIsAuthBusy(true);
     try {
-      const didRun = await pendingAction.onPress(code);
+      const didRun = await action.onPress(code);
       if (didRun === false) {
         return;
       }
-      if (pendingAction.timelineText && shouldUseLocalTimeline) {
-        pushTimeline(pendingAction.timelineText);
+      if (action.timelineText && shouldUseLocalTimeline) {
+        pushTimeline(action.timelineText);
       }
       setPendingAction(null);
       setAuthCode('');
     } finally {
       setIsAuthBusy(false);
     }
+  };
+
+  const openActionDialog = (action: PendingAlarmAction) => {
+    if (!codeRequired && !unlockCodeActive) {
+      void runAlarmAction(action);
+      return;
+    }
+    setPendingAction(action);
+    setAuthCode('');
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction || isAuthBusy || actionLocked) {
+      return;
+    }
+    const code = pendingNeedsCode && trimmedCode.length ? trimmedCode : undefined;
+    await runAlarmAction(pendingAction, code);
   };
 
   const pushCodeDigit = (digit: string) => {
@@ -367,39 +387,70 @@ export function AlarmControls({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} bg-gradient-to-br ${headerAccent} mb-1`}>
-        <div className="flex items-center gap-4 min-w-0">
-          <span className="w-14 h-14 shrink-0 rounded-full bg-white/15 border border-white/20 flex items-center justify-center text-white">
-            <HeaderIcon size={22} />
-          </span>
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-[1.35rem] font-semibold tracking-tight text-white truncate">{alarm.name}</h2>
-            <p className="text-sm text-white/80 truncate">{translatedState}</p>
+            <p className="text-[11px] font-light uppercase tracking-[0.22em] text-white/55">Alarm Control</p>
+            <h2 className="mt-2 truncate text-[1.45rem] font-semibold leading-tight text-white">{alarm.name}</h2>
+            <p className="mt-1 truncate text-sm font-medium text-white/62">{translatedState}</p>
           </div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/78">
+            <Shield size={17} />
+          </span>
         </div>
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className={`mb-4 overflow-hidden rounded-[1.75rem] border bg-gradient-to-br ${headerAccent} px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_34px_rgba(0,0,0,0.18)]`}>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">Modalita attuale</p>
-            <span className="shrink-0 rounded-full border border-white/14 bg-white/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/80">
-              {activeBadgeLabel}
-            </span>
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/18 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${normalizedState === 'triggered' ? 'animate-pulse' : ''}`}>
-              <HeaderIcon size={18} />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold leading-tight text-white">{currentModeLabel}</p>
-              <p className="truncate text-xs font-medium text-white/62">{currentModeCaption}</p>
+        <div className="flex justify-center py-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (primaryShieldAction) {
+                openActionDialog(primaryShieldAction);
+              }
+            }}
+            disabled={shieldActionDisabled}
+            className={`relative flex h-[clamp(10.5rem,54vw,15rem)] w-[clamp(10.5rem,54vw,15rem)] min-h-[10.5rem] min-w-[10.5rem] items-center justify-center rounded-full border bg-gradient-to-br ${headerAccent} shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-200 ${
+              shieldActionDisabled ? 'cursor-default opacity-90' : 'active:scale-[0.985]'
+            }`}
+            aria-label={primaryShieldHint}
+            title={primaryShieldHint}
+          >
+            <span className="pointer-events-none absolute -inset-4 rounded-full border border-white/8 bg-white/[0.015]" />
+            <span
+              className={`pointer-events-none absolute -inset-1 rounded-full ${
+                normalizedState === 'triggered'
+                  ? 'animate-pulse border border-rose-200/35 shadow-[0_0_34px_rgba(255,59,48,0.32)]'
+                  : 'border border-white/10 shadow-[0_0_28px_rgba(255,255,255,0.08)]'
+              }`}
+            />
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <span className="inline-flex rounded-full border border-white/15 bg-white/[0.06] p-4 text-white">
+                <HeaderIcon className={isTransitioning ? 'animate-spin' : ''} size={44} />
+              </span>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/88">{currentModeLabel}</p>
+              <p className="mt-2 max-w-[11rem] text-xs leading-snug text-white/62">{currentModeCaption}</p>
+              <span className="mt-3 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/74">
+                {activeBadgeLabel}
+              </span>
             </div>
-          </div>
+          </button>
         </div>
-        <p className="text-xs uppercase tracking-[0.18em] text-white/50 mb-3">Modalita disponibili</p>
-        <div className="flex items-stretch gap-2">
-          {modeActions.map((mode) => {
+      </div>
+
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Modalita</p>
+            <p className="mt-1 text-xs text-white/45">Scegli lo stato operativo dell'allarme.</p>
+          </div>
+          <span className="shrink-0 rounded-full border border-white/12 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/62">
+            {displayedModeActions.length}
+          </span>
+        </div>
+
+        <div className="glass-scrollbar mt-4 flex snap-x items-stretch gap-2.5 overflow-x-auto overscroll-contain pr-1 [scrollbar-width:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch]">
+          {displayedModeActions.map((mode) => {
             const isActive = normalizedState === mode.state;
             return (
               <button
@@ -408,41 +459,37 @@ export function AlarmControls({
                 onClick={() => openActionDialog(mode)}
                 disabled={isActive}
                 title={mode.label}
-                className={`flex min-h-12 min-w-0 flex-1 items-center justify-center rounded-2xl border px-2.5 py-3 text-center transition-colors ${
+                className={`group flex min-h-[5rem] w-[5.35rem] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border px-2.5 py-3 text-center transition-colors min-[420px]:w-[6.25rem] ${
                   isActive
-                    ? 'cursor-default border-white/18 bg-white/12 text-white'
-                    : mode.variant === 'safe'
-                      ? 'border-emerald-300/35 bg-emerald-500/14 text-emerald-100 hover:bg-emerald-500/22'
-                    : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10'
+                    ? 'cursor-default border-white/24 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                    : mode.variant === 'danger'
+                      ? 'border-rose-300/30 bg-rose-500/12 text-rose-100 hover:bg-rose-500/20'
+                      : mode.variant === 'safe'
+                      ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/20'
+                    : 'border-white/10 bg-white/[0.045] text-white/82 hover:bg-white/[0.08]'
                 }`}
               >
-                <span className="inline-flex min-w-0 items-center justify-center gap-1.5 text-sm font-medium">
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                    isActive
+                      ? 'border-white/24 bg-white/16 text-white'
+                      : mode.variant === 'danger'
+                        ? 'border-rose-200/28 bg-rose-400/14 text-rose-100'
+                        : mode.variant === 'safe'
+                          ? 'border-emerald-200/28 bg-emerald-400/14 text-emerald-100'
+                          : 'border-white/12 bg-white/[0.06] text-white/78 group-hover:text-white'
+                  }`}
+                >
                   {mode.icon}
-                  <span className="hidden truncate min-[430px]:inline">{mode.label}</span>
                 </span>
+                <span className="max-w-full truncate text-xs font-semibold leading-tight">{mode.label}</span>
+                {isActive ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/75 shadow-[0_0_8px_rgba(255,255,255,0.45)]" />
+                ) : null}
               </button>
             );
           })}
         </div>
-
-        {triggerAction ? (
-          <div className="mt-4 grid grid-cols-1 gap-3">
-            <button
-              type="button"
-              onClick={() => openActionDialog(triggerAction)}
-              className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
-                normalizedState === 'triggered'
-                  ? 'border-rose-300/45 bg-rose-500/26 text-rose-100'
-                  : 'border-rose-300/30 bg-rose-500/12 text-rose-100 hover:bg-rose-500/20'
-              }`}
-            >
-              <span className="inline-flex items-center gap-2 text-sm font-medium">
-                <AlertTriangle size={15} />
-                Trigger allarme
-              </span>
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <SecurityAuthModal
@@ -451,8 +498,6 @@ export function AlarmControls({
         pendingStateRequiresCode={pendingNeedsCode}
         authError={authError}
         isAuthBusy={isAuthBusy}
-        supportsBiometric={pendingCanUseBiometric}
-        prefersBiometric={pendingCanUseBiometric}
         isAlarmCodeNumeric={numericCodeMode}
         alarmCodeTypeLabel={alarmCodeTypeLabel}
         authPinInput={authCode}
@@ -463,8 +508,7 @@ export function AlarmControls({
               : value.slice(0, codeLengthLimit),
           )
         }
-        onVerifyWithPin={() => confirmPendingAction(pendingCanUseBiometric && !pendingNeedsCode)}
-        onVerifyWithBiometric={() => confirmPendingAction(true)}
+        onVerifyWithPin={confirmPendingAction}
         onPushPinDigit={pushCodeDigit}
         onPopPinDigit={popCodeDigit}
         onClearPin={clearCode}
@@ -472,8 +516,11 @@ export function AlarmControls({
         usePortal
       />
 
-      <div className={CONTEXT_PANEL_LAYOUT.section}>
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-white/55">ATTIVITA RECENTE</p>
+      <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Log</p>
+          <span className="text-[11px] font-medium text-white/38">{timeline.length}/{maxTimelineEntries}</span>
+        </div>
         <div className="mt-3 space-y-2.5">
           {timeline.length > 0 ? (
             timeline.map((entry) => (

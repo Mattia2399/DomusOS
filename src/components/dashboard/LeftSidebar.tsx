@@ -288,7 +288,7 @@ export function LeftSidebar({
                   Nessuna notifica al momento.
                 </p>
               ) : (
-                <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto custom-scrollbar pr-1">
+                <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto glass-scrollbar pr-1">
                   {notifications.map((notification) => {
                     const meta =
                       NOTIFICATION_TYPE_META[

@@ -97,15 +97,12 @@ export function MicroToggle({ widget, state, onToggle }: MicroToggleProps) {
 
         <button
           type="button"
+          role="switch"
           onClick={handleToggle}
           disabled={isPending}
-          className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-all duration-200 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
-            visualActive
-              ? 'border-sky-300/55 bg-sky-400/45 shadow-[0_0_18px_rgba(56,189,248,0.28)]'
-              : 'border-white/22 bg-white/12'
-          } ${isPending ? 'cursor-wait opacity-75' : ''}`}
+          className={`ios-glass-switch h-7 w-12 ${visualActive ? 'ios-glass-switch-blue-on' : ''} ${isPending ? 'cursor-wait opacity-75' : ''}`}
           aria-label={`Toggle ${label}`}
-          aria-pressed={visualActive}
+          aria-checked={visualActive}
         >
           {isPending ? (
             <span className="absolute inset-0 flex items-center justify-center">

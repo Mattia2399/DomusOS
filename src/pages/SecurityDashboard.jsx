@@ -28,13 +28,12 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import GlassDropdown from '../components/ui/GlassDropdown';
 import SecurityAuthModal from '../components/security/SecurityAuthModal';
+import { useDeviceAuth } from '../hooks/useDeviceAuth';
 import { getAlarmStateLabel, normalizeAlarmState } from '../utils/alarmUtils';
 
 const STORAGE_KEYS = {
   alarmEntityId: 'ha.dashboard.security.alarmEntityId',
-  authMode: 'ha.dashboard.security.authMode',
   alarmPin: 'ha.dashboard.security.alarmPin',
-  biometricCredentialId: 'ha.dashboard.security.biometricCredentialId',
   visibleSensorEntityIds: 'ha.dashboard.security.visibleSensorEntityIds',
   visibleCameraEntityIds: 'ha.dashboard.security.visibleCameraEntityIds',
 };
@@ -100,12 +99,6 @@ const ALARM_OPTIONS = [
   { value: 'disarmed', label: 'Disinserisci', icon: ShieldOff },
   { value: 'armed_home', label: 'Casa', icon: House },
   { value: 'armed_away', label: 'Fuori', icon: Plane },
-];
-
-const AUTH_OPTIONS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'biometric', label: 'Biometria' },
-  { value: 'pin', label: 'PIN' },
 ];
 
 const ALARM_SERVICE_BY_STATE = {
@@ -191,28 +184,6 @@ function readStorageStringArray(key) {
   } catch {
     return null;
   }
-}
-
-function createRandomBuffer(length = 32) {
-  const bytes = new Uint8Array(length);
-  window.crypto.getRandomValues(bytes);
-  return bytes;
-}
-
-function toBase64Url(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function fromBase64Url(value) {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
-  const binary = window.atob(`${normalized}${padding}`);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
 }
 
 function toItalianClockTime(date) {
@@ -761,6 +732,7 @@ export function SecurityDashboard({
   haStates = {},
   alarmEntityOptions = [],
   sensorEntityOptions = [],
+  deviceAuthUser = null,
   onCallService,
 }) {
   const [alarmState, setAlarmState] = useState('disarmed');
@@ -768,12 +740,7 @@ export function SecurityDashboard({
   const [sensorSearchQuery, setSensorSearchQuery] = useState('');
   const [isSecurityPinVisible, setIsSecurityPinVisible] = useState(false);
   const [selectedAlarmEntityId, setSelectedAlarmEntityId] = useState(() => readStorageValue(STORAGE_KEYS.alarmEntityId));
-  const [authMode, setAuthMode] = useState(() => {
-    const raw = readStorageValue(STORAGE_KEYS.authMode);
-    return raw === 'pin' || raw === 'biometric' ? raw : 'auto';
-  });
   const [securityPin, setSecurityPin] = useState(() => readStorageValue(STORAGE_KEYS.alarmPin).trim() || DEFAULT_SECURITY_PIN);
-  const [biometricCredentialId, setBiometricCredentialId] = useState(() => readStorageValue(STORAGE_KEYS.biometricCredentialId));
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricStatus, setBiometricStatus] = useState('Verifica biometria in corso...');
   const [biometricMessage, setBiometricMessage] = useState('');
@@ -792,6 +759,11 @@ export function SecurityDashboard({
   const [visibleCameraEntityIds, setVisibleCameraEntityIds] = useState(() => readStorageStringArray(STORAGE_KEYS.visibleCameraEntityIds));
   const [isSensorSelectorOpen, setIsSensorSelectorOpen] = useState(false);
   const [isCameraSelectorOpen, setIsCameraSelectorOpen] = useState(false);
+  const deviceAuth = useDeviceAuth(deviceAuthUser ?? {
+    id: selectedAlarmEntityId || 'security_dashboard',
+    name: 'security_dashboard',
+    displayName: 'Security Dashboard',
+  });
 
   const availableAlarmEntities = useMemo(
     () => (alarmEntityOptions.length > 0 ? [...new Set(alarmEntityOptions)] : Object.keys(haStates).filter((id) => id.startsWith('alarm_control_panel.'))).sort((a, b) => a.localeCompare(b, 'it-IT')),
@@ -905,10 +877,8 @@ export function SecurityDashboard({
   const alarmStatusLabel = hasActiveArmingDelay ? 'Inserimento in corso' : haConnected && activeAlarmEntity ? getAlarmStateLabel(normalizedLiveAlarmState) : currentVisual.badge;
   const isAlarmTransitioning = (haConnected && activeAlarmEntity && isLiveAlarmTransitioning) || resolvedShieldState === 'pending' || hasActiveArmingDelay;
 
-  const supportsBiometric = biometricAvailable && biometricCredentialId.length > 0;
-  const prefersBiometric = authMode === 'biometric' || authMode === 'auto';
   const pendingStateRequiresCode = pendingAlarmState ? isAlarmCodeRequiredForState(pendingAlarmState, activeAlarmAttributes) : false;
-  const pendingAuthRequiresCode = pendingStateRequiresCode || authMode === 'pin' || !supportsBiometric;
+  const pendingAuthRequiresCode = pendingStateRequiresCode || !biometricAvailable || !deviceAuth.isEnrolled;
 
   const appendLog = (message, type = 'info') => {
     setLogs((curr) => [{ id: Date.now() + Math.round(Math.random() * 1000), time: toItalianClockTime(new Date()), message, type }, ...curr].slice(0, 10));
@@ -917,28 +887,18 @@ export function SecurityDashboard({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const run = async () => {
-      if (!window.isSecureContext || typeof window.PublicKeyCredential === 'undefined' || !navigator.credentials) {
-        setBiometricAvailable(false);
-        setBiometricStatus('Biometria non disponibile su questo browser/dispositivo.');
-        return;
-      }
-      try {
-        const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        setBiometricAvailable(Boolean(available));
-        setBiometricStatus(
-          available
-            ? biometricCredentialId
-              ? 'Face ID / impronta configurata.'
-              : 'Face ID / impronta disponibile: configura in modalita edit.'
-            : 'Biometria non disponibile su questo dispositivo.',
-        );
-      } catch {
-        setBiometricAvailable(false);
-        setBiometricStatus('Impossibile verificare la disponibilita biometrica.');
-      }
+      const available = await deviceAuth.isBiometricAvailable();
+      setBiometricAvailable(Boolean(available));
+      setBiometricStatus(
+        available
+          ? deviceAuth.isEnrolled
+            ? 'Passkey dispositivo configurata.'
+            : 'Face ID / impronta disponibile: crea una passkey in modalita edit.'
+          : 'Biometria non disponibile su questo browser/dispositivo.',
+      );
     };
     void run();
-  }, [biometricCredentialId]);
+  }, [deviceAuth]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || suppressBrowserNavigation) return undefined;
@@ -982,10 +942,6 @@ export function SecurityDashboard({
   }, [availableCameraEntities]);
 
   useEffect(() => {
-    if (!alarmHasCodeCapability && authMode === 'pin') setAuthMode('auto');
-  }, [alarmHasCodeCapability, authMode]);
-
-  useEffect(() => {
     if (!isEditMode) {
       setIsSensorSelectorOpen(false);
       setIsCameraSelectorOpen(false);
@@ -1005,10 +961,6 @@ export function SecurityDashboard({
   }, [selectedAlarmEntityId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEYS.authMode, authMode);
-  }, [authMode]);
-
-  useEffect(() => {
     if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEYS.alarmPin, securityPin);
   }, [securityPin]);
 
@@ -1023,13 +975,6 @@ export function SecurityDashboard({
       window.localStorage.setItem(STORAGE_KEYS.visibleCameraEntityIds, JSON.stringify(visibleCameraEntityIds));
     }
   }, [visibleCameraEntityIds]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (biometricCredentialId) window.localStorage.setItem(STORAGE_KEYS.biometricCredentialId, biometricCredentialId);
-      else window.localStorage.removeItem(STORAGE_KEYS.biometricCredentialId);
-    }
-  }, [biometricCredentialId]);
 
   useEffect(() => {
     if (!armingDelayEndAtMs || typeof window === 'undefined') return undefined;
@@ -1128,6 +1073,24 @@ export function SecurityDashboard({
     if (nextState === resolvedShieldState || isAuthBusy) return;
 
     const requiresCode = isAlarmCodeRequiredForState(nextState, activeAlarmAttributes);
+    const storedCode = sanitizeAlarmCode(securityPin, alarmCodeFormat);
+    if (biometricAvailable && deviceAuth.isEnrolled && (!requiresCode || storedCode.length > 0)) {
+      setIsAuthBusy(true);
+      void (async () => {
+        try {
+          const verified = await deviceAuth.authenticate(`Security Dashboard ${getAlarmStateLabel(nextState)}`);
+          if (!verified) {
+            appendLog('Autenticazione dispositivo annullata', 'warning');
+            return;
+          }
+          await applyAlarmState(nextState, requiresCode ? storedCode : undefined);
+        } finally {
+          setIsAuthBusy(false);
+        }
+      })();
+      return;
+    }
+
     if (!requiresCode && UI_FLAGS.directCallWhenCodeNotRequired) {
       setIsAuthBusy(true);
       void (async () => {
@@ -1177,43 +1140,6 @@ export function SecurityDashboard({
     }
   };
 
-  const verifyWithBiometric = async () => {
-    if (!pendingAlarmState) return;
-    if (!biometricCredentialId) {
-      setAuthError('Biometria non configurata. Usa il PIN o configura in modalita edit.');
-      return;
-    }
-    if (!biometricAvailable) {
-      setAuthError('Biometria non disponibile su questo dispositivo.');
-      return;
-    }
-    if (pendingStateRequiresCode && sanitizeAlarmCode(securityPin, alarmCodeFormat).length === 0) {
-      setAuthError(`Configura ${alarmCodeTypeLabel.toLowerCase()} in modalita edit prima di procedere.`);
-      return;
-    }
-
-    setIsAuthBusy(true);
-    try {
-      await navigator.credentials.get({
-        publicKey: {
-          challenge: createRandomBuffer(32),
-          allowCredentials: [{ id: fromBase64Url(biometricCredentialId), type: 'public-key' }],
-          timeout: 45000,
-          userVerification: 'required',
-        },
-      });
-      await applyAlarmState(
-        pendingAlarmState,
-        pendingStateRequiresCode ? sanitizeAlarmCode(securityPin, alarmCodeFormat) : undefined,
-      );
-    } catch {
-      setAuthError('Verifica biometrica non riuscita o annullata.');
-      appendLog('Verifica biometrica fallita', 'warning');
-    } finally {
-      setIsAuthBusy(false);
-    }
-  };
-
   const enrollBiometric = async () => {
     if (!isEditMode) return;
     if (!biometricAvailable) {
@@ -1224,28 +1150,13 @@ export function SecurityDashboard({
     setIsBiometricBusy(true);
     setBiometricMessage('');
     try {
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge: createRandomBuffer(32),
-          rp: { name: 'Smart Home Security Dashboard' },
-          user: { id: createRandomBuffer(16), name: 'security-dashboard', displayName: 'Security Dashboard' },
-          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-          authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            userVerification: 'required',
-            residentKey: 'preferred',
-          },
-          timeout: 60000,
-          attestation: 'none',
-        },
-      });
-
-      if (!credential || !('rawId' in credential)) throw new Error('Nessuna credenziale disponibile.');
-      setBiometricCredentialId(toBase64Url(credential.rawId));
-      setBiometricMessage('Face ID / impronta configurata con successo.');
-      appendLog('Biometria configurata', 'success');
+      const wasEnrolled = deviceAuth.isEnrolled;
+      const verified = await deviceAuth.verifyOrEnroll('Configurazione Security Dashboard');
+      if (!verified) throw new Error('Verifica dispositivo annullata.');
+      setBiometricMessage(wasEnrolled ? 'Autenticazione dispositivo verificata.' : 'Passkey dispositivo creata.');
+      appendLog(wasEnrolled ? 'Biometria dispositivo verificata' : 'Passkey dispositivo creata', 'success');
     } catch {
-      setBiometricMessage('Configurazione biometrica annullata o non riuscita.');
+      setBiometricMessage('Autenticazione dispositivo annullata o non riuscita.');
     } finally {
       setIsBiometricBusy(false);
     }
@@ -1372,20 +1283,6 @@ export function SecurityDashboard({
                     />
                   </label>
 
-                  <div>
-                    <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">Modalita auth</span>
-                    <div className="mt-2 grid grid-cols-3 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-                      {AUTH_OPTIONS.map((option) => {
-                        const disabled = option.value === 'pin' && !alarmHasCodeCapability;
-                        return (
-                          <button key={option.value} type="button" disabled={disabled} onClick={() => { if (!disabled) setAuthMode(option.value); }} className={cn('rounded-xl px-2 py-2 text-xs font-semibold', authMode === option.value ? 'bg-white/15 text-white' : 'text-white/65 hover:text-white', disabled ? 'cursor-not-allowed opacity-35' : '')}>
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   {alarmHasCodeCapability ? (
                     <label className="block">
                       <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">{alarmCodeTypeLabel} sicurezza</span>
@@ -1403,13 +1300,8 @@ export function SecurityDashboard({
                     <p className="mt-1 text-xs text-white/55">{biometricStatus}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={enrollBiometric} disabled={isBiometricBusy || !biometricAvailable} className={cn('rounded-xl border px-3 py-2 text-xs font-semibold', isBiometricBusy || !biometricAvailable ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40' : 'border-white/20 bg-white/[0.1] text-white hover:bg-white/[0.18]')}>
-                        {biometricCredentialId ? 'Rigenera biometria' : 'Configura biometria'}
+                        {isBiometricBusy ? (deviceAuth.isEnrolled ? 'Verifica...' : 'Creazione...') : deviceAuth.isEnrolled ? 'Verifica dispositivo' : 'Crea passkey'}
                       </button>
-                      {biometricCredentialId ? (
-                        <button type="button" onClick={() => { setBiometricCredentialId(''); setBiometricMessage('Biometria rimossa.'); }} className="rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/[0.14]">
-                          Rimuovi
-                        </button>
-                      ) : null}
                     </div>
                     {biometricMessage ? <p className="mt-2 inline-flex items-center gap-1 text-xs text-emerald-200/90"><Check className="h-3.5 w-3.5" />{biometricMessage}</p> : null}
                   </div>
@@ -1498,14 +1390,11 @@ export function SecurityDashboard({
         pendingStateRequiresCode={pendingAuthRequiresCode}
         authError={authError}
         isAuthBusy={isAuthBusy}
-        supportsBiometric={supportsBiometric}
-        prefersBiometric={prefersBiometric}
         isAlarmCodeNumeric={isAlarmCodeNumeric}
         alarmCodeTypeLabel={alarmCodeTypeLabel}
         authPinInput={authPinInput}
         onPinInputChange={(value) => setAuthPinInput(sanitizeAlarmCode(value, alarmCodeFormat))}
         onVerifyWithPin={verifyWithPin}
-        onVerifyWithBiometric={verifyWithBiometric}
         onPushPinDigit={pushPinDigit}
         onPopPinDigit={popPinDigit}
         onClearPin={clearPin}

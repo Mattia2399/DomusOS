@@ -221,7 +221,7 @@ export function BottomBarNav({
                 <p className="text-[11px] uppercase tracking-[0.2em] text-white/62">Menu rapido</p>
               </div>
 
-              <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-3 pb-3 pr-2">
+              <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] px-3 pb-3 pr-2">
                 <div className="liquid-glass-card px-3 py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-white/86">

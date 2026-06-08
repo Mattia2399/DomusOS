@@ -1665,7 +1665,7 @@ export function RoomsDashboard({
           {activeRoomTab?.name ?? 'Living Room'}
         </h1>
         <p className="mt-2 text-sm text-white/58 sm:text-base">
-          {ambientMoodLabel}, {Math.round(weatherTemperature)}°, {activeDeviceCount} devices on
+          {ambientMoodLabel}, {Math.round(weatherTemperature)}Â°, {activeDeviceCount} devices on
         </p>
       </section>
 
@@ -1773,11 +1773,11 @@ export function RoomsDashboard({
             onClick={() => setIsManageOpen(false)}
             aria-label="Close room manager"
           />
-          <section className="relative z-10 h-full w-full overflow-y-auto rounded-none border-0 bg-[rgba(22,27,39,0.92)] p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-3xl custom-scrollbar md:h-auto md:max-w-2xl md:rounded-[28px] md:border md:border-white/15 md:p-6 md:shadow-[0_30px_90px_rgba(2,6,23,0.55)] md:overflow-visible">
+          <section className="liquid-glass-panel relative z-10 h-full w-full overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] glass-scrollbar md:h-auto md:max-w-2xl md:rounded-[2rem] md:border md:p-6 md:overflow-visible">
             <button
               type="button"
               onClick={() => setIsManageOpen(false)}
-              className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/80 hover:text-white"
+              className="glass-icon-button absolute right-4 top-4 h-8 w-8"
               aria-label="Close"
             >
               <X size={16} />
@@ -1786,7 +1786,7 @@ export function RoomsDashboard({
             <p className="text-[11px] uppercase tracking-[0.2em] text-white/58">Manage rooms</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Room tabs</h2>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] p-3">
+            <div className="liquid-glass-card mt-4 p-3">
               <p className="text-xs text-white/60">Add custom room</p>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                 <input
@@ -1798,7 +1798,7 @@ export function RoomsDashboard({
                 <button
                   type="button"
                   onClick={addCustomRoom}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-300/36 bg-sky-400/16 px-4 text-sm font-semibold text-sky-100 hover:bg-sky-400/22"
+                  className="glass-button h-10 rounded-xl border-[#0A84FF]/36 bg-[#0A84FF]/16 px-4 text-sm font-semibold text-blue-100 hover:bg-[#0A84FF]/24"
                 >
                   <CirclePlus size={15} />
                   Add
@@ -1806,7 +1806,7 @@ export function RoomsDashboard({
               </div>
             </div>
 
-            <div className="mt-4 max-h-[23rem] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="mt-4 max-h-[23rem] space-y-2 overflow-y-auto pr-1 glass-scrollbar">
               {roomTabs.map((tab) => {
                 const isPersistedCustomRoom = persistedCustomRoomIds.has(tab.id);
                 const isDemoTab = tab.source === 'custom' && !isPersistedCustomRoom;
@@ -1815,7 +1815,7 @@ export function RoomsDashboard({
                 return (
                   <div
                     key={`manager-${tab.id}`}
-                    className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2.5"
+                    className="liquid-glass-card px-3 py-2.5"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="min-w-0 flex-1">
@@ -1847,7 +1847,7 @@ export function RoomsDashboard({
                           <button
                             type="button"
                             onClick={() => saveCustomRoomName(tab.id)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/[0.08] text-white/80 hover:text-white"
+                            className="glass-icon-button h-9 w-9 rounded-xl"
                             aria-label="Save room name"
                           >
                             <Save size={14} />

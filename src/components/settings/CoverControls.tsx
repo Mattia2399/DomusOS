@@ -215,7 +215,7 @@ export function CoverControls({
             <p className="mb-3 text-xs uppercase tracking-[0.16em] text-white/40">INCLINAZIONE LAMELLE</p>
             <div className="relative h-12 w-full rounded-3xl border border-white/5 bg-white/10 backdrop-blur-md overflow-hidden">
               <div
-                className="absolute inset-y-0 left-0 bg-white/95 rounded-r-xl"
+                className="absolute inset-y-0 left-0 rounded-r-xl bg-[#0A84FF]/70 shadow-[0_0_18px_rgba(10,132,255,0.32)]"
                 style={{ width: `${tiltPosition}%` }}
               />
               <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-xs font-semibold">

@@ -104,7 +104,7 @@ function VacuumRadar({ state, density = 'regular' }: { state: VacuumUiState; den
 
   return (
     <div className={`relative ${shellSizeClass}`}>
-      <div className="absolute inset-0 rounded-full border border-white/12 bg-black/30" />
+      <div className="absolute inset-0 rounded-full border border-white/[0.08] bg-white/[0.04] shadow-lg backdrop-blur-xl" />
       {isCleaning ? (
         <div className="absolute inset-0 rounded-full overflow-hidden">
           <div

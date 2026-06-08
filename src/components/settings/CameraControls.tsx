@@ -872,7 +872,7 @@ export function CameraControlsPanel({
           ) : null}
 
           <div className="absolute left-4 bottom-4">
-            <div className="bg-black/30 backdrop-blur-md rounded-full border border-white/10 px-2 py-1.5 flex items-center gap-1.5">
+            <div className="liquid-glass-card flex items-center gap-1.5 rounded-full px-2 py-1.5">
               <button
                 type="button"
                 className={`w-8 h-8 rounded-full border text-white flex items-center justify-center transition-colors ${
@@ -889,7 +889,7 @@ export function CameraControlsPanel({
               <button
                 type="button"
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                  clipEvents.length > 0 ? 'bg-white/90 text-slate-900 hover:bg-white' : 'bg-white/20 text-white/60'
+                  clipEvents.length > 0 ? 'border-[#0A84FF]/40 bg-[#0A84FF]/18 text-blue-50 shadow-[0_0_18px_rgba(10,132,255,0.28)] hover:bg-[#0A84FF]/26' : 'bg-white/20 text-white/60'
                 }`}
                 onClick={toggleClipPlayback}
                 aria-label={isClipMode && isPlaying ? 'Pausa clip' : 'Riproduci clip'}
@@ -914,7 +914,7 @@ export function CameraControlsPanel({
           </div>
 
           <div className="absolute right-4 bottom-4">
-            <div className="bg-black/30 backdrop-blur-md rounded-full border border-white/10 px-2 py-1.5 flex items-center gap-1.5">
+            <div className="liquid-glass-card flex items-center gap-1.5 rounded-full px-2 py-1.5">
               <button
                 type="button"
                 className="w-8 h-8 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center hover:bg-white/15 transition-colors"

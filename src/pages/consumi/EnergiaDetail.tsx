@@ -100,7 +100,7 @@ function NodeChip({
       transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut' }}
     >
       <div className={`absolute inset-0 rounded-full opacity-70 ${accentClassName}`} />
-      <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-white/10 bg-black/40">
+      <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] shadow-lg backdrop-blur-xl">
         <span className="text-white/85">{icon}</span>
         <p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-white/60">{label}</p>
         <p className="text-[11px] font-semibold text-white">{value}</p>
@@ -409,7 +409,7 @@ export function EnergiaDetail({
 
       {!hasAnyConfiguredFlow ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center px-6">
-          <div className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-center backdrop-blur-xl">
+          <div className="liquid-glass-card px-5 py-4 text-center">
             <p className="text-sm font-medium text-white">Configura almeno Casa + Solare, Casa + Rete o Casa + Batteria in modalita edit.</p>
           </div>
         </div>

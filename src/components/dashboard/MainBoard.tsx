@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveDevice, SensorConnectionState } from '../settings/types';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardState } from '../../hooks/useDashboardState';
@@ -8,6 +8,7 @@ import AppGallery from '../../pages/AppGallery';
 import RoomsDashboard from '../../pages/RoomsDashboard';
 import SecurityDashboard from '../../pages/SecurityDashboard';
 import { ConsumptionEditorSidebar } from '../settings/ConsumptionEditorSidebar';
+import SecurityAuthModal from '../security/SecurityAuthModal';
 import { LeftSidebar } from './LeftSidebar';
 import { BottomBarNav } from './BottomBarNav';
 import { XsNotificationBell } from './XsNotificationBell';
@@ -35,6 +36,7 @@ import {
 import { GuidedSetupOverlay, type GuidedSetupStep } from '../settings/GuidedSetupOverlay';
 import {
   ENTITY_OPTIONS,
+  FAVORITES_GRID_TITLE,
   GREETING_SECTION_ROWS,
   ROOT_CANVAS_COLS,
   ROOT_CANVAS_ROW_UNITS,
@@ -83,13 +85,7 @@ import {
   serializeDashboardBackup,
 } from '../../services/configBackup';
 import { isOnboardingCompleted, markOnboardingCompleted } from '../../services/onboardingStorage';
-import {
-  isPlatformBiometricAvailable,
-  readSecurityAuthMode,
-  readSecurityBiometricCredentialId,
-  SECURITY_SETTINGS_CHANGE_EVENT,
-  verifyStoredBiometricCredential,
-} from '../../services/securityBiometric';
+import { useDeviceAuth } from '../../hooks/useDeviceAuth';
 import {
   type AlarmServiceName,
   getAlarmStateLabel,
@@ -255,6 +251,7 @@ const LIGHT_TOGGLE_PENDING_TTL_MS = 5000;
 const LIGHT_BRIGHTNESS_PENDING_TTL_MS = 6000;
 const LIGHT_COLOR_PENDING_TTL_MS = 2500;
 const LOCK_PENDING_TTL_MS = 7000;
+const ALARM_PENDING_TTL_MS = 10000;
 const COVER_PENDING_TTL_MS = 7000;
 const SCENE_SCRIPT_START_GRACE_MS = 5000;
 const HA_ACTIVITY_REFRESH_MS = 30000;
@@ -273,6 +270,7 @@ const CLIMATE_PENDING_FAN_ATTRIBUTE_KEY = '__dashboard_pending_climate_fan';
 const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
 const LIGHT_BRIGHTNESS_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_brightness';
 const LOCK_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_lock';
+const ALARM_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_alarm_action';
 const COVER_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_cover';
 const COVER_PENDING_TILT_ATTRIBUTE_KEY = '__dashboard_pending_cover_tilt';
 const DEFAULT_ACTIVITY_ACTOR = 'Sistema';
@@ -561,6 +559,23 @@ type LockPendingState = {
   action: LockPendingAction;
   targetState: 'locked' | 'unlocked' | 'open';
   expiresAt: number;
+};
+
+type AlarmPendingState = {
+  service: AlarmServiceName;
+  visualState: string;
+  targetState: string;
+  expiresAt: number;
+};
+
+type AlarmQuickAuthAction = {
+  widget: Widget;
+  service: AlarmServiceName;
+  state: string;
+  requiresCode: boolean;
+  requiresBiometric: boolean;
+  unlockCode: string;
+  numericCodeMode: boolean;
 };
 
 type CoverPendingState = {
@@ -2683,6 +2698,26 @@ function resolveLockPendingTargetState(action: LockPendingAction) {
   return 'unlocked' as const;
 }
 
+function resolveAlarmPendingState(service: AlarmServiceName) {
+  const targetState = resolveAlarmNextState(service);
+  if (service === 'alarm_disarm') {
+    return {
+      visualState: 'disarming',
+      targetState,
+    };
+  }
+  if (service === 'alarm_trigger') {
+    return {
+      visualState: targetState,
+      targetState,
+    };
+  }
+  return {
+    visualState: 'arming',
+    targetState,
+  };
+}
+
 function resolveCameraPreviewUrls(
   entity: MockEntityState | undefined,
   fallbackEntityId: string | undefined,
@@ -2892,6 +2927,7 @@ export function MainBoard() {
   const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
   const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
   const [lockPendingByEntity, setLockPendingByEntity] = useState<Record<string, LockPendingState>>({});
+  const [alarmPendingByEntity, setAlarmPendingByEntity] = useState<Record<string, AlarmPendingState>>({});
   const [coverPendingByEntity, setCoverPendingByEntity] = useState<Record<string, CoverPendingState>>({});
   const [haUserNamesById, setHaUserNamesById] = useState<Record<string, string>>({});
   const [haUsersById, setHaUsersById] = useState<Record<string, HaAuthUser>>({});
@@ -3247,8 +3283,25 @@ export function MainBoard() {
       };
     });
 
+    Object.entries(alarmPendingByEntity).forEach(([entityId, pending]) => {
+      const entity = resolveBaseEntity(entityId);
+      if (!entity) {
+        return;
+      }
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      rawAttributes[ALARM_PENDING_ATTRIBUTE_KEY] = pending.service;
+
+      ensureNextStates()[entityId] = {
+        ...entity,
+        state: pending.visualState,
+        stateLabel: pending.visualState,
+        toggleOn: isAlarmArmedState(pending.targetState),
+        rawAttributes,
+      };
+    });
+
     return nextStates ?? haStates;
-  }, [climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity]);
+  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity]);
   const initialLayoutRef = useRef(loadDashboardLayout());
   const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
   const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
@@ -3283,10 +3336,27 @@ export function MainBoard() {
     haCallApi: callHaApi,
   });
   const [activeDevice, setActiveDevice] = useState<ActiveDevice | null>(null);
+  const [pendingQuickAlarmAction, setPendingQuickAlarmAction] = useState<AlarmQuickAuthAction | null>(null);
+  const [quickAlarmAuthCode, setQuickAlarmAuthCode] = useState('');
+  const [isQuickAlarmAuthBusy, setIsQuickAlarmAuthBusy] = useState(false);
   const [isLockAuthBusy, setIsLockAuthBusy] = useState(false);
-  const [isLockBiometricAvailable, setIsLockBiometricAvailable] = useState(false);
-  const [lockAuthMode, setLockAuthMode] = useState(() => readSecurityAuthMode());
-  const [lockBiometricCredentialId, setLockBiometricCredentialId] = useState(() => readSecurityBiometricCredentialId());
+  const deviceAuthUser = useMemo(
+    () => ({
+      id:
+        haCurrentUser?.id ??
+        haCurrentUser?.email ??
+        haCurrentUser?.username ??
+        'dashboard_user',
+      name:
+        haCurrentUser?.username ??
+        haCurrentUser?.email ??
+        haCurrentUser?.name ??
+        'current_user',
+      displayName: haCurrentUser?.name ?? haCurrentUser?.username ?? 'Utente Corrente',
+    }),
+    [haCurrentUser?.email, haCurrentUser?.id, haCurrentUser?.name, haCurrentUser?.username],
+  );
+  const deviceAuth = useDeviceAuth(deviceAuthUser);
   const [sensorHistoryByEntity, setSensorHistoryByEntity] = useState<Record<string, number[]>>({});
   const [isEditMode, setIsEditMode] = useState(false);
   const [isXsViewport, setIsXsViewport] = useState(isXsViewportNow);
@@ -3331,6 +3401,7 @@ export function MainBoard() {
   const lightBrightnessPendingTimeoutRef = useRef<Record<string, number>>({});
   const lightColorPendingTimeoutRef = useRef<Record<string, number>>({});
   const lockPendingTimeoutRef = useRef<Record<string, number>>({});
+  const alarmPendingTimeoutRef = useRef<Record<string, number>>({});
   const lockActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
   const alarmActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
   const coverPendingTimeoutRef = useRef<Record<string, number>>({});
@@ -3342,34 +3413,6 @@ export function MainBoard() {
   const reconnectInFlightRef = useRef(false);
   const hadSuccessfulConnectionRef = useRef(false);
   const sensorHistoryInFlightRef = useRef<Record<string, boolean>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    const checkBiometricAvailability = async () => {
-      const available = await isPlatformBiometricAvailable();
-      if (!cancelled) {
-        setIsLockBiometricAvailable(available);
-      }
-    };
-    void checkBiometricAvailability();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const syncSecuritySettings = () => {
-      setLockAuthMode(readSecurityAuthMode());
-      setLockBiometricCredentialId(readSecurityBiometricCredentialId());
-    };
-
-    window.addEventListener(SECURITY_SETTINGS_CHANGE_EVENT, syncSecuritySettings);
-    window.addEventListener('storage', syncSecuritySettings);
-    return () => {
-      window.removeEventListener(SECURITY_SETTINGS_CHANGE_EVENT, syncSecuritySettings);
-      window.removeEventListener('storage', syncSecuritySettings);
-    };
-  }, []);
 
   const clearTimeoutRegistry = (timeoutRef: React.MutableRefObject<Record<string, number>>) => {
     const timers = timeoutRef.current;
@@ -6302,6 +6345,7 @@ export function MainBoard() {
       clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
       clearTimeoutRegistry(lightColorPendingTimeoutRef);
       clearTimeoutRegistry(lockPendingTimeoutRef);
+      clearTimeoutRegistry(alarmPendingTimeoutRef);
       clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
       clearTimeoutArrayRegistry(alarmActivityRefreshTimeoutRef);
       clearTimeoutRegistry(coverPendingTimeoutRef);
@@ -6329,9 +6373,11 @@ export function MainBoard() {
     setLightColorPendingByEntity({});
 
     clearTimeoutRegistry(lockPendingTimeoutRef);
+    clearTimeoutRegistry(alarmPendingTimeoutRef);
     clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
     clearTimeoutArrayRegistry(alarmActivityRefreshTimeoutRef);
     setLockPendingByEntity({});
+    setAlarmPendingByEntity({});
     setLockActivityStatusByEntity({});
 
     clearTimeoutRegistry(coverPendingTimeoutRef);
@@ -6541,6 +6587,37 @@ export function MainBoard() {
     removePendingEntities(setLockPendingByEntity, resolvedEntityIds);
     resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lockPendingTimeoutRef, entityId));
   }, [haStates, isHaConnected, lockPendingByEntity]);
+
+  useEffect(() => {
+    if (!isHaConnected || Object.keys(alarmPendingByEntity).length === 0) {
+      return;
+    }
+
+    const resolvedEntityIds = Object.entries(alarmPendingByEntity)
+      .filter(([entityId, pending]) => {
+        const liveEntity = haStates[entityId];
+        if (!liveEntity) {
+          return false;
+        }
+
+        const liveState = normalizeAlarmState(
+          toTrimmedString(liveEntity.state) ??
+            toTrimmedString(liveEntity.stateLabel),
+        );
+        if (liveState === pending.targetState) {
+          return true;
+        }
+        return liveState === 'pending' || liveState === 'arming' || liveState === 'disarming';
+      })
+      .map(([entityId]) => entityId);
+
+    if (!resolvedEntityIds.length) {
+      return;
+    }
+
+    removePendingEntities(setAlarmPendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(alarmPendingTimeoutRef, entityId));
+  }, [alarmPendingByEntity, haStates, isHaConnected]);
 
   useEffect(() => {
     if (!isHaConnected || Object.keys(coverPendingByEntity).length === 0) {
@@ -7039,6 +7116,12 @@ export function MainBoard() {
             ? section.weatherLayout ?? 'auto'
             : 'auto';
         let nextSection = updater(section);
+        if (nextSection.kind === 'stack-grid' && (nextSection.stackUseFavoritesGrid ?? false)) {
+          nextSection = {
+            ...nextSection,
+            title: FAVORITES_GRID_TITLE,
+          };
+        }
 
         if (
           nextSection.kind === 'weather' ||
@@ -7489,6 +7572,18 @@ export function MainBoard() {
       LOCK_PENDING_TTL_MS,
       lockPendingTimeoutRef,
       setLockPendingByEntity,
+    );
+  };
+
+  const setAlarmPending = (entityId: string, service: AlarmServiceName) => {
+    const expiresAt = Date.now() + ALARM_PENDING_TTL_MS;
+    const pendingState = resolveAlarmPendingState(service);
+    setEntityPendingWithExpiry(
+      entityId,
+      { service, ...pendingState, expiresAt },
+      ALARM_PENDING_TTL_MS,
+      alarmPendingTimeoutRef,
+      setAlarmPendingByEntity,
     );
   };
 
@@ -7944,6 +8039,60 @@ export function MainBoard() {
     };
   };
 
+  const buildAlarmQuickAuthAction = (service: AlarmServiceName, widget: Widget): AlarmQuickAuthAction | null => {
+    if (widget.kind !== 'alarm') {
+      return null;
+    }
+    const liveEntity = widget.entityId && isHaConnected ? haStatesForUi[widget.entityId] : undefined;
+    const rawAttributes = liveEntity?.rawAttributes;
+    const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
+    const unlockCode = widget.alarmUnlockCode?.trim() ?? '';
+    const canAuthorizeStoredCodeWithBiometric = unlockCode.length > 0;
+    const codeFormat = typeof rawAttributes?.code_format === 'string'
+      ? rawAttributes.code_format.toLowerCase()
+      : undefined;
+
+    return {
+      widget,
+      service,
+      state: resolveAlarmNextState(service),
+      requiresCode: codeArmRequired || unlockCode.length > 0,
+      requiresBiometric:
+        canAuthorizeStoredCodeWithBiometric ||
+        (service === 'alarm_disarm' && (widget.alarmRequireAuthToDisarm ?? false)),
+      unlockCode,
+      numericCodeMode: codeFormat !== 'text',
+    };
+  };
+
+  const requestAlarmQuickAction = async (service: AlarmServiceName, widget: Widget) => {
+    const quickAction = buildAlarmQuickAuthAction(service, widget);
+    if (!quickAction) {
+      return false;
+    }
+    if (quickAction.requiresBiometric) {
+      const available = await deviceAuth.isBiometricAvailable();
+      if (available && deviceAuth.isEnrolled) {
+        const verified = await deviceAuth.authenticate(`Allarme ${getAlarmStateLabel(quickAction.state)}`);
+        if (!verified) {
+          return false;
+        }
+        const code = quickAction.requiresCode && quickAction.unlockCode ? quickAction.unlockCode : undefined;
+        return callProtectedAlarmAction(service, code, widget);
+      }
+    }
+    if (quickAction.requiresCode) {
+      setPendingQuickAlarmAction(quickAction);
+      setQuickAlarmAuthCode('');
+      return false;
+    }
+    if (quickAction.requiresBiometric) {
+      addNotification('warning', 'Autenticazione dispositivo non disponibile. Configura un codice per usare il fallback PIN.');
+      return false;
+    }
+    return callProtectedAlarmAction(service, undefined, widget);
+  };
+
   const callAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
     const { targetWidget, entityId, defaultCode } = resolveAlarmTargetContext(widget);
     const actionCode = code?.trim() || defaultCode;
@@ -7952,6 +8101,7 @@ export function MainBoard() {
       if (actionCode) {
         payload.code = actionCode;
       }
+      setAlarmPending(entityId, service);
       scheduleAlarmActivityRefresh(entityId);
       void callHaService('alarm_control_panel', service, payload);
       return true;
@@ -7978,24 +8128,20 @@ export function MainBoard() {
       return false;
     }
 
-    const shouldUseBiometric = lockAuthMode !== 'pin';
-    if (!shouldUseBiometric) {
-      return callAlarmAction(service, code, targetWidget);
-    }
-
-    const credentialId = lockBiometricCredentialId.trim();
-    if (!credentialId) {
-      addNotification('warning', 'Configura la biometria da Profilo > Sicurezza per modificare questo allarme.');
-      return false;
-    }
-    if (!isLockBiometricAvailable) {
-      addNotification('warning', 'Biometria non disponibile su questo browser o dispositivo.');
+    const available = await deviceAuth.isBiometricAvailable();
+    if (!available || !deviceAuth.isEnrolled) {
+      addNotification(
+        'warning',
+        available
+          ? 'Configura una passkey da Profilo > Sicurezza per modificare questo allarme.'
+          : 'Biometria non disponibile su questo browser o dispositivo.',
+      );
       return false;
     }
 
     setIsLockAuthBusy(true);
     try {
-      const verified = await verifyStoredBiometricCredential(credentialId);
+      const verified = await deviceAuth.authenticate('Allarme');
       if (!verified) {
         addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
         return false;
@@ -8008,10 +8154,55 @@ export function MainBoard() {
 
   const callProtectedAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
-    if (targetWidget?.alarmRequireAuthToDisarm && !code?.trim()) {
+    if (service === 'alarm_disarm' && targetWidget?.alarmRequireAuthToDisarm && !code?.trim()) {
       return requestAuthenticatedAlarmAction(service, targetWidget, code);
     }
     return callAlarmAction(service, code, widget);
+  };
+
+  const closeQuickAlarmAuth = () => {
+    if (isQuickAlarmAuthBusy) {
+      return;
+    }
+    setPendingQuickAlarmAction(null);
+    setQuickAlarmAuthCode('');
+  };
+
+  const confirmQuickAlarmAuth = async (useBiometric = false) => {
+    const quickAction = pendingQuickAlarmAction;
+    if (!quickAction || isQuickAlarmAuthBusy) {
+      return;
+    }
+
+    const trimmedCode = quickAlarmAuthCode.trim();
+    const needsManualCode = quickAction.requiresCode && (!useBiometric || !quickAction.unlockCode);
+    if (needsManualCode) {
+      if (!trimmedCode) {
+        return;
+      }
+      if (quickAction.unlockCode && trimmedCode !== quickAction.unlockCode) {
+        return;
+      }
+    }
+
+    setIsQuickAlarmAuthBusy(true);
+    try {
+      const code = needsManualCode ? trimmedCode : undefined;
+      const didRun = useBiometric
+        ? await requestAuthenticatedAlarmAction(quickAction.service, quickAction.widget, code)
+        : await callProtectedAlarmAction(
+            quickAction.service,
+            code,
+            quickAction.widget,
+          );
+      if (didRun === false) {
+        return;
+      }
+      setPendingQuickAlarmAction(null);
+      setQuickAlarmAuthCode('');
+    } finally {
+      setIsQuickAlarmAuthBusy(false);
+    }
   };
 
   const disarmAlarm = (code?: string, widget?: Widget) => {
@@ -8042,28 +8233,30 @@ export function MainBoard() {
     return callProtectedAlarmAction('alarm_trigger', code, widget);
   };
 
+  const resolveAlarmArmServiceByMode = (
+    mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass',
+  ): AlarmServiceName => {
+    if (mode === 'home') {
+      return 'alarm_arm_home';
+    }
+    if (mode === 'away') {
+      return 'alarm_arm_away';
+    }
+    if (mode === 'night') {
+      return 'alarm_arm_night';
+    }
+    if (mode === 'vacation') {
+      return 'alarm_arm_vacation';
+    }
+    return 'alarm_arm_custom_bypass';
+  };
+
   const armAlarmByMode = (
     mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass',
     code?: string,
     widget?: Widget,
   ) => {
-    if (mode === 'home') {
-      armAlarmHome(code, widget);
-      return;
-    }
-    if (mode === 'away') {
-      armAlarmAway(code, widget);
-      return;
-    }
-    if (mode === 'night') {
-      armAlarmNight(code, widget);
-      return;
-    }
-    if (mode === 'vacation') {
-      armAlarmVacation(code, widget);
-      return;
-    }
-    armAlarmCustomBypass(code, widget);
+    return callProtectedAlarmAction(resolveAlarmArmServiceByMode(mode), code, widget);
   };
 
   const resolveLockTargetContext = (widget?: Widget) => {
@@ -8144,25 +8337,20 @@ export function MainBoard() {
       return false;
     }
 
-    const shouldUseBiometric = lockAuthMode !== 'pin';
-    if (!shouldUseBiometric) {
-      unlockDoor(code, targetWidget);
-      return true;
-    }
-
-    const credentialId = lockBiometricCredentialId.trim();
-    if (!credentialId) {
-      addNotification('warning', 'Configura la biometria da Profilo > Sicurezza per sbloccare questa serratura.');
-      return false;
-    }
-    if (!isLockBiometricAvailable) {
-      addNotification('warning', 'Biometria non disponibile su questo browser o dispositivo.');
+    const available = await deviceAuth.isBiometricAvailable();
+    if (!available || !deviceAuth.isEnrolled) {
+      addNotification(
+        'warning',
+        available
+          ? 'Configura una passkey da Profilo > Sicurezza per usare questa serratura.'
+          : 'Biometria non disponibile su questo browser o dispositivo.',
+      );
       return false;
     }
 
     setIsLockAuthBusy(true);
     try {
-      const verified = await verifyStoredBiometricCredential(credentialId);
+      const verified = await deviceAuth.authenticate('Serratura');
       if (!verified) {
         addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
         return false;
@@ -10158,10 +10346,27 @@ export function MainBoard() {
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView;
   const shouldApplyXsShellBottomInset =
     !isSecurityImmersiveView && isXsViewport && !isDashboardCanvasView;
+  const shouldShowBottomBar = !isSecurityImmersiveView && isXsViewport && !isCatalogOpen;
   const openProfilePanel = (section: ProfileSectionId = 'theme') => {
     setProfileInitialSection(section);
     setIsProfileOpen(true);
   };
+  const quickAlarmRequiresCode = Boolean(pendingQuickAlarmAction?.requiresCode);
+  const quickAlarmCodeTypeLabel = pendingQuickAlarmAction?.numericCodeMode === false ? 'Codice' : 'PIN';
+  const trimmedQuickAlarmAuthCode = quickAlarmAuthCode.trim();
+  const quickAlarmCodeMissing =
+    quickAlarmRequiresCode &&
+    trimmedQuickAlarmAuthCode.length === 0;
+  const quickAlarmCodeMismatch =
+    quickAlarmRequiresCode &&
+    Boolean(pendingQuickAlarmAction?.unlockCode) &&
+    trimmedQuickAlarmAuthCode.length > 0 &&
+    trimmedQuickAlarmAuthCode !== pendingQuickAlarmAction?.unlockCode;
+  const quickAlarmAuthError = quickAlarmCodeMissing
+    ? `Inserisci ${quickAlarmCodeTypeLabel.toLowerCase()} per confermare.`
+    : quickAlarmCodeMismatch
+      ? `${quickAlarmCodeTypeLabel} non valido.`
+      : '';
 
   return (
     <div
@@ -10275,6 +10480,7 @@ export function MainBoard() {
               haStates={haStatesForUi}
               alarmEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('alarm_control_panel.'))}
               sensorEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('binary_sensor.'))}
+              deviceAuthUser={deviceAuthUser}
               onCallService={callHaService}
             />
           </div>
@@ -10356,13 +10562,13 @@ export function MainBoard() {
                 if (widget.kind !== 'alarm') {
                   return;
                 }
-                disarmAlarm(undefined, widget);
+                void requestAlarmQuickAction('alarm_disarm', widget);
               }}
               onWidgetAlarmArm={(widget, mode) => {
                 if (widget.kind !== 'alarm') {
                   return;
                 }
-                armAlarmByMode(mode, undefined, widget);
+                void requestAlarmQuickAction(resolveAlarmArmServiceByMode(mode), widget);
               }}
               onWidgetVacuumStartPause={(widget) => {
                 if (widget.kind !== 'vacuum') {
@@ -10520,7 +10726,7 @@ export function MainBoard() {
         />
       ) : null}
 
-      {!isSecurityImmersiveView && isXsViewport ? (
+      {shouldShowBottomBar ? (
         <BottomBarNav
           isEditMode={isEditMode}
           canToggleEditMode={canToggleEditMode}
@@ -10542,6 +10748,7 @@ export function MainBoard() {
         userAvatarUrl={currentUserAvatarUrl}
         userAvatarAlt={stateWithConnectedUser.userName}
         userEmail={profileUserEmail}
+        dashboardCurrentUserId={deviceAuthUser.id}
         userRoleLabel={profileUserRoleLabel}
         houseMembers={profileHouseMembers}
         userOwnedDeviceCount={profileUserOwnedDeviceCount}
@@ -10586,6 +10793,30 @@ export function MainBoard() {
         />
       ) : null}
 
+      <SecurityAuthModal
+        isOpen={Boolean(pendingQuickAlarmAction)}
+        pendingAlarmState={pendingQuickAlarmAction?.state ?? null}
+        pendingStateRequiresCode={quickAlarmRequiresCode}
+        authError={quickAlarmAuthError}
+        isAuthBusy={isQuickAlarmAuthBusy || isLockAuthBusy}
+        isAlarmCodeNumeric={pendingQuickAlarmAction?.numericCodeMode ?? true}
+        alarmCodeTypeLabel={quickAlarmCodeTypeLabel}
+        authPinInput={quickAlarmAuthCode}
+        onPinInputChange={(value) =>
+          setQuickAlarmAuthCode(
+            pendingQuickAlarmAction?.numericCodeMode === false
+              ? value.slice(0, 12)
+              : value.replace(/[^\d]/g, '').slice(0, 12),
+          )
+        }
+        onVerifyWithPin={() => confirmQuickAlarmAuth(false)}
+        onPushPinDigit={(digit) => setQuickAlarmAuthCode((current) => `${current}${digit}`.slice(0, 12))}
+        onPopPinDigit={() => setQuickAlarmAuthCode((current) => current.slice(0, -1))}
+        onClearPin={() => setQuickAlarmAuthCode('')}
+        onClose={closeQuickAlarmAuth}
+        usePortal
+      />
+
       {editConfirm ? (
         <div className="fixed inset-0 z-[230] flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-8">
           <button
@@ -10595,7 +10826,7 @@ export function MainBoard() {
             aria-label="Chiudi conferma"
           />
           <div
-            className="relative h-full w-full overflow-y-auto rounded-none border-0 bg-white/[0.08] backdrop-blur-3xl p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] custom-scrollbar md:h-auto md:max-w-md md:rounded-[2rem] md:border md:border-white/10 md:p-6 md:overflow-visible"
+            className="liquid-glass-panel relative h-full w-full overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] glass-scrollbar md:h-auto md:max-w-md md:rounded-[2rem] md:border md:p-6 md:overflow-visible"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-xs uppercase tracking-[0.2em] text-white/55">
@@ -10623,14 +10854,14 @@ export function MainBoard() {
               <button
                 type="button"
                 onClick={() => setEditConfirm(null)}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+                className="glass-button rounded-xl px-4 py-2 text-sm text-white/70"
               >
                 Annulla
               </button>
               <button
                 type="button"
                 onClick={confirmEditAction}
-                className={`rounded-xl border px-4 py-2 text-sm font-semibold ${
+                className={`glass-button rounded-xl px-4 py-2 text-sm font-semibold ${
                   editConfirm === 'enter'
                     ? 'border-blue-300/45 bg-blue-500/16 text-blue-100 hover:bg-blue-500/26'
                     : 'border-rose-300/45 bg-rose-500/16 text-rose-100 hover:bg-rose-500/26'
@@ -10642,24 +10873,6 @@ export function MainBoard() {
           </div>
         </div>
       ) : null}
-
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            .hide-scrollbar::-webkit-scrollbar { display: none; }
-            .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            .custom-scrollbar { scrollbar-gutter: stable both-edges; }
-            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-            .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-            .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-            @media (hover: none) and (pointer: coarse) {
-              .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-              .custom-scrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none; }
-            }
-          `,
-        }}
-      />
     </div>
   );
 }

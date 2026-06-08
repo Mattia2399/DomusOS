@@ -1,8 +1,7 @@
 import React, { useMemo } from 'react';
-import { House, Moon, Plane, Shield, ShieldAlert, ShieldCheck, ShieldOff, ShieldPlus } from 'lucide-react';
+import { House, Lock, LockOpen, Moon, Plane, Shield, ShieldAlert, ShieldPlus } from 'lucide-react';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
-import { useCardSize } from './useCardSize';
 import {
   ALARM_FEATURE_ARM_AWAY,
   ALARM_FEATURE_ARM_CUSTOM_BYPASS,
@@ -28,102 +27,81 @@ type AlarmCardProps = {
   liveEntity?: MockEntityState;
 };
 
-type AlarmSurface = {
-  background: string;
-  border: string;
-  glow: string;
-  iconSurface: string;
-  chipSurface: string;
-};
-
 type ArmChoice = {
   mode: AlarmQuickArmMode;
   label: string;
   icon: React.ReactNode;
 };
 
-function resolveAlarmSurface(state: string): AlarmSurface {
-  if (state === 'disarmed') {
+const ALARM_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_alarm_action';
+const TRANSITIONING_ALARM_STATES = new Set(['pending', 'arming', 'disarming']);
+
+type AlarmSurfaceTone = {
+  background: string;
+  border: string;
+  sheen: string;
+};
+
+function resolveAlarmSurfaceTone(state: string): AlarmSurfaceTone {
+  if (state === 'triggered') {
     return {
-      background: 'bg-white/5',
-      border: 'border-white/10',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(0,0,0,0.25)]',
-      iconSurface: 'bg-blue-500/20 border border-blue-300/35',
-      chipSurface: 'bg-white/8 border border-white/12',
+      background: 'bg-[#FF3B30]/16',
+      border: 'border-[#FF3B30]/28',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(255,59,48,0.16),rgba(255,255,255,0.06)_42%,transparent_72%)]',
     };
   }
   if (state === 'armed_home') {
     return {
-      background: 'bg-emerald-500/16',
-      border: 'border-emerald-300/35',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(16,136,91,0.25)]',
-      iconSurface: 'bg-white/20 border border-white/25',
-      chipSurface: 'bg-white/10 border border-white/16',
+      background: 'bg-[#FF9F0A]/13',
+      border: 'border-[#FF9F0A]/24',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(255,159,10,0.15),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
   if (state === 'armed_away') {
     return {
-      background: 'bg-blue-500/16',
-      border: 'border-blue-300/35',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(37,99,235,0.26)]',
-      iconSurface: 'bg-white/20 border border-white/25',
-      chipSurface: 'bg-white/10 border border-white/16',
+      background: 'bg-[#0A84FF]/12',
+      border: 'border-[#0A84FF]/24',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(10,132,255,0.15),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
   if (state === 'armed_night') {
     return {
-      background: 'bg-indigo-500/16',
-      border: 'border-indigo-300/35',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(79,70,229,0.26)]',
-      iconSurface: 'bg-white/20 border border-white/25',
-      chipSurface: 'bg-white/10 border border-white/16',
+      background: 'bg-[#5E5CE6]/12',
+      border: 'border-[#A5A6FF]/22',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(94,92,230,0.15),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
   if (state === 'armed_vacation') {
     return {
-      background: 'bg-amber-500/16',
-      border: 'border-amber-300/35',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(217,119,6,0.25)]',
-      iconSurface: 'bg-white/22 border border-white/24',
-      chipSurface: 'bg-white/10 border border-white/16',
+      background: 'bg-[#FFD60A]/10',
+      border: 'border-[#FFD60A]/22',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(255,214,10,0.13),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
   if (state === 'armed_custom_bypass') {
     return {
-      background: 'bg-cyan-500/16',
-      border: 'border-cyan-300/35',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(8,145,178,0.25)]',
-      iconSurface: 'bg-white/18 border border-white/24',
-      chipSurface: 'bg-white/10 border border-white/16',
+      background: 'bg-[#64D2FF]/11',
+      border: 'border-[#64D2FF]/22',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(100,210,255,0.13),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
-  if (state === 'triggered') {
+  if (state === 'disarmed') {
     return {
-      background: 'bg-rose-500/20',
-      border: 'border-rose-300/45',
-      glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(225,29,72,0.28)]',
-      iconSurface: 'bg-white/24 border border-white/28',
-      chipSurface: 'bg-white/12 border border-white/18',
+      background: 'bg-[#32D74B]/9',
+      border: 'border-[#32D74B]/18',
+      sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(50,215,75,0.11),rgba(255,255,255,0.055)_44%,transparent_72%)]',
     };
   }
   return {
-    background: 'bg-orange-500/16',
-    border: 'border-orange-300/35',
-    glow: 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_22px_rgba(234,88,12,0.25)]',
-    iconSurface: 'bg-white/20 border border-white/24',
-    chipSurface: 'bg-white/10 border border-white/16',
+    background: 'bg-white/5',
+    border: 'border-white/5',
+    sheen: 'bg-[radial-gradient(95%_76%_at_0%_0%,rgba(255,255,255,0.08),transparent_72%)]',
   };
 }
 
 function resolveAlarmIcon(state: string) {
-  if (state === 'disarmed') {
-    return ShieldOff;
-  }
   if (state === 'triggered') {
     return ShieldAlert;
-  }
-  if (state.startsWith('armed_')) {
-    return ShieldCheck;
   }
   return Shield;
 }
@@ -163,12 +141,6 @@ export function AlarmCard({
   onQuickArm,
   liveEntity,
 }: AlarmCardProps) {
-  const { ref: cardRef, density: cardDensity, hasSize: hasCardSize } = useCardSize({
-    tinyWidth: 245,
-    tinyHeight: 145,
-    compactWidth: 330,
-    compactHeight: 210,
-  });
   const rawAttributes = liveEntity?.rawAttributes;
   const resolvedState = normalizeAlarmState(
     toTrimmedString(liveEntity?.state) ??
@@ -176,66 +148,51 @@ export function AlarmCard({
       widget.status,
   );
   const stateLabel = getAlarmStateLabel(resolvedState);
+  const isTriggered = resolvedState === 'triggered';
+  const displayState = isTriggered ? 'Allarme' : stateLabel;
+  const pendingService = toTrimmedString(rawAttributes?.[ALARM_PENDING_ATTRIBUTE_KEY]);
+  const isTransitioning = Boolean(pendingService) || TRANSITIONING_ALARM_STATES.has(resolvedState);
   const supportedFeatures = resolveAlarmSupportedFeatures(liveEntity);
   const armChoices = useMemo(() => resolveArmChoices(supportedFeatures), [supportedFeatures]);
   const primaryArmChoice = armChoices[0];
-  const surface = resolveAlarmSurface(resolvedState);
   const StateIcon = resolveAlarmIcon(resolvedState);
+  const surfaceTone = resolveAlarmSurfaceTone(resolvedState);
   const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
   const localUnlockEnabled = (widget.alarmUnlockCode ?? '').trim().length > 0;
-  const quickActionsLocked = codeArmRequired || localUnlockEnabled;
-  const isLayoutCompact = widget.layout.h <= 1 || widget.layout.w <= 1;
-  const isTinyCard = hasCardSize && cardDensity === 'tiny';
-  const isCompact = isLayoutCompact || (hasCardSize && cardDensity !== 'regular');
-  const cardRadiusClass = isCompact ? 'rounded-[1.55rem]' : 'rounded-3xl';
-  const cardPaddingClass = isTinyCard ? 'px-2.5 py-2' : isCompact ? 'px-3 py-2' : 'px-3 py-2.5';
-  const iconShellClass = isTinyCard ? 'h-7 w-7' : isCompact ? 'h-8 w-8' : 'h-9 w-9';
-  const iconSize = isTinyCard ? 13 : isCompact ? 14 : 16;
-  const compactButtonClass = isTinyCard
-    ? 'h-7 rounded-[0.9rem] px-2 text-[10px]'
-    : 'h-8 rounded-[1rem] px-2.5 text-[11px]';
-  const regularButtonClass = isCompact ? 'h-8 rounded-2xl px-3 text-[11px]' : 'h-9 rounded-2xl px-3.5 text-xs';
-  const compactTitleClass = isTinyCard
-    ? 'truncate text-[0.88rem] leading-tight font-normal tracking-tight text-white'
-    : 'truncate text-[0.97rem] leading-tight font-normal tracking-tight text-white';
-  const compactSubtitleClass = isTinyCard
-    ? 'mt-0.5 truncate text-[0.68rem] leading-none text-white/76'
-    : 'mt-0.5 truncate text-[0.74rem] leading-none text-white/76';
-  const regularTitleClass = isCompact
-    ? 'truncate text-[0.98rem] leading-[1.05] font-normal tracking-tight text-white'
-    : 'truncate text-[1.05rem] leading-[1.05] font-normal tracking-tight text-white';
-  const regularSubtitleClass = isCompact
-    ? 'mt-0.5 truncate text-[0.74rem] leading-none text-white/78'
-    : 'mt-0.5 truncate text-[0.82rem] leading-none text-white/78';
-  const disarmLabel = isTinyCard ? 'Disins.' : 'Disinserisci';
-  const armLabel = isTinyCard ? 'Inser.' : 'Inserisci';
+  const armActionLocked = codeArmRequired || localUnlockEnabled;
+  const disarmActionLocked =
+    codeArmRequired || localUnlockEnabled || (widget.alarmRequireAuthToDisarm ?? false);
 
   const handleQuickDisarm = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (quickActionsLocked) {
+    if (isTransitioning) {
+      return;
+    }
+    if (!onQuickDisarm) {
       onClick();
       return;
     }
-    onQuickDisarm?.();
+    onQuickDisarm();
   };
 
-  const handleQuickArm = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleQuickArm = (mode: AlarmQuickArmMode | undefined) => (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (quickActionsLocked) {
+    if (isTransitioning) {
+      return;
+    }
+    if (!mode || !onQuickArm) {
       onClick();
       return;
     }
-    if (primaryArmChoice) {
-      onQuickArm?.(primaryArmChoice.mode);
-    }
+    onQuickArm(mode);
   };
 
   return (
     <div
-      ref={cardRef}
-      className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden ${cardRadiusClass} ${
+      className={`@container relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[2rem] ${
         isSelected ? 'selection-corners' : ''
       }`}
+      style={{ containerType: 'size' }}
       onClick={(event) => {
         if (isEditMode) {
           return;
@@ -243,90 +200,88 @@ export function AlarmCard({
         event.stopPropagation();
         onClick();
       }}
+      aria-label={`${widget.title}, ${displayState}`}
+      aria-busy={isTransitioning || undefined}
     >
       <div
-        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${cardRadiusClass} border ${surface.background} ${surface.border} ${surface.glow} ${cardPaddingClass} flex ${
-          isCompact ? 'items-center' : 'flex-col'
-        } ${
+        className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[2rem] border ${surfaceTone.border} ${surfaceTone.background} backdrop-blur-3xl ${
           isEditMode ? 'pointer-events-none' : ''
         }`}
       >
-        <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_78%_at_0%_0%,rgba(255,255,255,0.16),transparent_64%)]`} />
+        <div className={`pointer-events-none absolute inset-0 rounded-[2rem] ${surfaceTone.sheen}`} />
+        <div className="pointer-events-none absolute inset-x-[clamp(1rem,12cqw,2rem)] top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+        {isTransitioning ? (
+          <div className="pointer-events-none absolute inset-x-[clamp(1rem,12cqw,2rem)] bottom-0 h-px animate-pulse bg-gradient-to-r from-transparent via-white/65 to-transparent" />
+        ) : null}
 
-        {isCompact ? (
-          <div className={`relative flex w-full items-center min-w-0 ${isTinyCard ? 'gap-1.5' : 'gap-2'}`}>
-            <div className={`${iconShellClass} shrink-0 rounded-full ${surface.iconSurface} flex items-center justify-center text-white`}>
-              <StateIcon size={iconSize} />
+        <div className="relative z-10 flex h-full w-full min-h-0 min-w-0 items-center justify-between gap-[clamp(0.35rem,4cqw,1rem)] p-[clamp(0.125rem,8cqh,1rem)] [@container_(min-height:_160px)]:hidden">
+          <div className="flex min-w-0 flex-col gap-[clamp(0.0625rem,1.8cqh,0.375rem)]">
+            <h2 className="truncate text-[clamp(0.62rem,18cqh,1.5rem)] font-semibold leading-none text-white">
+              {widget.title}
+            </h2>
+            <p className={`truncate text-[clamp(0.52rem,11cqh,1rem)] font-medium leading-none ${isTriggered ? 'text-[#ff716c]' : 'text-white/70'}`}>
+              {displayState}
+            </p>
+          </div>
+
+          <div className={`relative z-10 flex aspect-square h-[clamp(1.25rem,min(42cqh,30cqw),3.5rem)] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 backdrop-blur-md ${isTransitioning ? 'animate-pulse' : ''}`}>
+            <div className="absolute inset-0 bg-[#85adff]/10 blur-xl" />
+            <StateIcon className="relative z-10 h-[clamp(0.72rem,min(18cqh,13cqw),1.5rem)] w-[clamp(0.72rem,min(18cqh,13cqw),1.5rem)] text-white/70" />
+          </div>
+        </div>
+
+        <div className="relative z-10 hidden h-full w-full min-h-0 min-w-0 flex-col justify-between p-[clamp(0.875rem,8cqh,1.65rem)] [@container_(min-height:_160px)]:flex [@container_(min-width:_240px)]:p-[clamp(1rem,9cqh,2rem)]">
+          <div className="flex min-w-0 items-start justify-between gap-[clamp(0.6rem,5cqw,1.75rem)]">
+            <div className={`relative flex h-[clamp(2.35rem,20cqh,3.5rem)] w-[clamp(2.35rem,20cqh,3.5rem)] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md ${isTransitioning ? 'animate-pulse' : ''}`}>
+              <div className="absolute inset-0 rounded-full bg-[#85adff]/10 blur-xl" />
+              <StateIcon className="relative z-10 h-[clamp(1.15rem,9cqh,1.5rem)] w-[clamp(1.15rem,9cqh,1.5rem)] text-white/70" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className={compactTitleClass}>{widget.title}</p>
-              <p className={compactSubtitleClass}>{stateLabel}</p>
-            </div>
-            <div className={`shrink-0 flex items-center ${isTinyCard ? 'gap-0.5' : 'gap-1'}`}>
-              <button
-                type="button"
-                onClick={handleQuickDisarm}
-                className={`${compactButtonClass} ${surface.chipSurface} flex items-center justify-center whitespace-nowrap font-medium text-white/85 transition-colors ${
-                  quickActionsLocked ? 'opacity-60 cursor-pointer' : 'hover:bg-white/15 active:scale-[0.98]'
-                }`}
-                title={quickActionsLocked ? 'Inserisci il codice nel pannello contestuale' : 'Disinserisci'}
-                aria-label="Disinserisci allarme"
-              >
-                {disarmLabel}
-              </button>
-              <button
-                type="button"
-                onClick={handleQuickArm}
-                className={`${compactButtonClass} ${surface.chipSurface} flex items-center justify-center whitespace-nowrap font-medium text-white/85 transition-colors ${
-                  quickActionsLocked ? 'opacity-60 cursor-pointer' : 'hover:bg-white/15 active:scale-[0.98]'
-                }`}
-                title={quickActionsLocked ? 'Inserisci il codice nel pannello contestuale' : `Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
-                aria-label={`Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
-              >
-                {armLabel}
-              </button>
+
+            <div className="min-w-0 text-right">
+              <h2 className="truncate text-[clamp(0.9rem,6.4cqh,1.25rem)] font-semibold leading-none text-white">
+                {widget.title}
+              </h2>
+              <p className={`mt-[clamp(0.2rem,1.8cqh,0.375rem)] truncate text-[clamp(0.68rem,4.4cqh,0.875rem)] font-medium leading-none ${isTriggered ? 'text-[#ff716c]' : 'text-white/70'}`}>
+                {displayState}
+              </p>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="relative flex items-center min-w-0 gap-2">
-              <div className={`${iconShellClass} shrink-0 rounded-full ${surface.iconSurface} flex items-center justify-center text-white`}>
-                <StateIcon size={iconSize} />
-              </div>
-              <div className="min-w-0">
-                <p className={regularTitleClass}>{widget.title}</p>
-                <p className={regularSubtitleClass}>{stateLabel}</p>
-              </div>
-            </div>
 
-            <div className="relative mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleQuickDisarm}
-                className={`${regularButtonClass} ${surface.chipSurface} flex items-center justify-center whitespace-nowrap font-medium text-white/85 transition-colors ${
-                  quickActionsLocked ? 'opacity-60 cursor-pointer' : 'hover:bg-white/15 active:scale-[0.98]'
-                }`}
-                title={quickActionsLocked ? 'Inserisci il codice nel pannello contestuale' : 'Disinserisci'}
-                aria-label="Disinserisci allarme"
-              >
-                <ShieldOff size={13} className="mr-1" />
-                {disarmLabel}
-              </button>
-              <button
-                type="button"
-                onClick={handleQuickArm}
-                className={`${regularButtonClass} ${surface.chipSurface} flex items-center justify-center whitespace-nowrap font-medium text-white/85 transition-colors ${
-                  quickActionsLocked ? 'opacity-60 cursor-pointer' : 'hover:bg-white/15 active:scale-[0.98]'
-                }`}
-                title={quickActionsLocked ? 'Inserisci il codice nel pannello contestuale' : `Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
-                aria-label={`Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
-              >
-                {primaryArmChoice?.icon ?? <Shield size={13} />}
-                <span className="ml-1">{armLabel}</span>
-              </button>
-            </div>
-          </>
-        )}
+          <div className="z-10 mt-auto grid w-full min-w-0 grid-cols-2 gap-[clamp(0.4rem,3.5cqw,1rem)]">
+            <button
+              type="button"
+              onClick={handleQuickDisarm}
+              disabled={isTransitioning}
+              className={`btn-premium group flex min-w-0 items-center justify-center gap-[clamp(0.2rem,1.8cqw,0.5rem)] rounded-full border border-white/5 bg-white/5 px-[clamp(0.45rem,3cqw,1rem)] py-[clamp(0.48rem,3.4cqh,1rem)] text-[clamp(0.62rem,3.7cqh,0.875rem)] font-semibold text-white/70 shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)] transition-all duration-300 disabled:active:scale-100 [@container_(min-height:_172px)]:aspect-square [@container_(min-height:_172px)]:flex-col [@container_(min-height:_172px)]:rounded-[0.90rem] [@container_(min-height:_172px)]:px-2 [@container_(min-height:_172px)]:py-2 ${
+                isTransitioning ? 'cursor-wait opacity-65' : 'hover:bg-white/10 hover:text-white'
+              }`}
+              title={isTransitioning ? 'Comando in corso' : disarmActionLocked ? 'Autorizza disinserimento' : 'Disinserisci'}
+              aria-label={isTransitioning ? 'Comando allarme in corso' : disarmActionLocked ? 'Autorizza disinserimento allarme' : 'Disinserisci allarme'}
+            >
+              <LockOpen className={`hidden h-[clamp(0.75rem,3.7cqh,1.0625rem)] w-[clamp(0.75rem,3.7cqh,1.0625rem)] shrink-0 transition-colors [@container_(min-width:_190px)]:block ${isTransitioning ? '' : 'group-hover:text-white'}`} />
+              <span className="min-w-0 truncate">
+                <span className="[@container_(min-width:_240px)]:hidden">Disin.</span>
+                <span className="hidden [@container_(min-width:_240px)]:inline">Disarma</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickArm(primaryArmChoice?.mode)}
+              disabled={isTransitioning}
+              className={`btn-premium group flex min-w-0 items-center justify-center gap-[clamp(0.2rem,1.8cqw,0.5rem)] rounded-full border border-white/5 bg-white/5 px-[clamp(0.45rem,3cqw,1rem)] py-[clamp(0.48rem,3.4cqh,1rem)] text-[clamp(0.62rem,3.7cqh,0.875rem)] font-semibold text-white/70 shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)] transition-all duration-300 disabled:active:scale-100 [@container_(min-height:_172px)]:aspect-square [@container_(min-height:_172px)]:flex-col [@container_(min-height:_172px)]:rounded-[0.90rem] [@container_(min-height:_172px)]:px-2 [@container_(min-height:_172px)]:py-2 ${
+                isTransitioning ? 'cursor-wait opacity-65' : 'hover:bg-white/10 hover:text-white'
+              }`}
+              title={isTransitioning ? 'Comando in corso' : armActionLocked ? `Autorizza inserimento ${primaryArmChoice?.label ?? 'allarme'}` : `Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
+              aria-label={isTransitioning ? 'Comando allarme in corso' : armActionLocked ? `Autorizza inserimento ${primaryArmChoice?.label ?? 'allarme'}` : `Inserisci ${primaryArmChoice?.label ?? 'allarme'}`}
+            >
+              <Lock className={`hidden h-[clamp(0.75rem,3.7cqh,1.0625rem)] w-[clamp(0.75rem,3.7cqh,1.0625rem)] shrink-0 transition-colors [@container_(min-width:_190px)]:block ${isTransitioning ? '' : 'group-hover:text-white'}`} />
+              <span className="min-w-0 truncate">
+                <span className="[@container_(min-width:_240px)]:hidden">Inser.</span>
+                <span className="hidden [@container_(min-width:_240px)]:inline">Inserisci</span>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {isEditMode ? (
@@ -344,7 +299,7 @@ export function AlarmCard({
               onClick();
             }
           }}
-          className={`absolute inset-0 ${cardRadiusClass} widget-card-handle cursor-grab`}
+          className="widget-card-handle absolute inset-0 rounded-[2rem] cursor-grab"
           aria-label={`Apri ${widget.title}`}
         />
       ) : null}

@@ -2,9 +2,13 @@ const DASHBOARD_STORAGE_PREFIX = 'ha.dashboard.';
 const EXCLUDED_SYNC_KEYS = new Set([
   // Device-specific toggle, should not leak across phones/tablets.
   'ha.dashboard.assistant.mic.enabled.v1',
-  // WebAuthn credential ids are device-bound.
+  // Legacy WebAuthn credential id, device-bound.
   'ha.dashboard.security.biometricCredentialId',
 ]);
+const EXCLUDED_SYNC_KEY_PREFIXES = [
+  // WebAuthn credential ids are origin/device-bound.
+  'ha.dashboard.deviceAuth.credentialId.',
+];
 
 export const HA_DASHBOARD_USER_DATA_KEY = 'ha-dashboard-builder';
 const DASHBOARD_USER_DATA_SCHEMA = 'ha-dashboard-builder-user-data';
@@ -22,7 +26,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isSyncableStorageKey(key: string) {
-  return key.startsWith(DASHBOARD_STORAGE_PREFIX) && !EXCLUDED_SYNC_KEYS.has(key);
+  return (
+    key.startsWith(DASHBOARD_STORAGE_PREFIX) &&
+    !EXCLUDED_SYNC_KEYS.has(key) &&
+    !EXCLUDED_SYNC_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
 }
 
 function listSyncableStorageKeys(storage: Storage) {
