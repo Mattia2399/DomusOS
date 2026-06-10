@@ -1,7 +1,15 @@
+import {
+  DASHBOARD_LAYOUT_STORAGE_KEY,
+  isBackupExcludedStorageKey,
+  sanitizeDashboardLayoutValue,
+} from './configBackup';
+
 const DASHBOARD_STORAGE_PREFIX = 'ha.dashboard.';
 const EXCLUDED_SYNC_KEYS = new Set([
   // Device-specific toggle, should not leak across phones/tablets.
   'ha.dashboard.assistant.mic.enabled.v1',
+  // Local dashboard fallback PIN, device/browser-bound.
+  'ha.dashboard.security.alarmPin',
   // Legacy WebAuthn credential id, device-bound.
   'ha.dashboard.security.biometricCredentialId',
 ]);
@@ -29,8 +37,13 @@ function isSyncableStorageKey(key: string) {
   return (
     key.startsWith(DASHBOARD_STORAGE_PREFIX) &&
     !EXCLUDED_SYNC_KEYS.has(key) &&
-    !EXCLUDED_SYNC_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+    !EXCLUDED_SYNC_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) &&
+    !isBackupExcludedStorageKey(key)
   );
+}
+
+function sanitizeSyncableStorageValue(key: string, value: string) {
+  return key === DASHBOARD_LAYOUT_STORAGE_KEY ? sanitizeDashboardLayoutValue(value) : value;
 }
 
 function listSyncableStorageKeys(storage: Storage) {
@@ -55,7 +68,7 @@ function normalizePayloadEntries(value: unknown) {
     if (!isSyncableStorageKey(key) || typeof entryValue !== 'string') {
       return;
     }
-    entries[key] = entryValue;
+    entries[key] = sanitizeSyncableStorageValue(key, entryValue);
   });
   return entries;
 }
@@ -78,7 +91,7 @@ export function buildDashboardUserDataPayload(storage: Storage): DashboardUserDa
     if (value === null) {
       return;
     }
-    entries[key] = value;
+    entries[key] = sanitizeSyncableStorageValue(key, value);
   });
 
   return {
@@ -142,10 +155,11 @@ export function applyDashboardUserDataPayload(
     if (!isSyncableStorageKey(key)) {
       return;
     }
-    if (storage.getItem(key) === value) {
+    const sanitizedValue = sanitizeSyncableStorageValue(key, value);
+    if (storage.getItem(key) === sanitizedValue) {
       return;
     }
-    storage.setItem(key, value);
+    storage.setItem(key, sanitizedValue);
     updatedCount += 1;
   });
 

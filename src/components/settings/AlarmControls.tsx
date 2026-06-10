@@ -12,6 +12,14 @@ import {
   getAlarmStateLabel,
   normalizeAlarmState,
 } from '../../utils/alarmUtils';
+import {
+  INITIAL_AUTH_ATTEMPT_STATE,
+  appendSecurityAuditEvent,
+  formatAuthRateLimitMessage,
+  getAuthRateLimitStatus,
+  recordAuthFailure,
+  recordAuthSuccess,
+} from '../../services/securityAuth';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 
 type AlarmActionResult = boolean | void | Promise<boolean | void>;
@@ -128,6 +136,7 @@ export function AlarmControls({
 }: AlarmControlsProps) {
   const [pendingAction, setPendingAction] = useState<PendingAlarmAction | null>(null);
   const [authCode, setAuthCode] = useState('');
+  const [authAttemptState, setAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const maxTimelineEntries = useMemo(() => {
     const parsed = Number(alarm.activityLogLimit);
@@ -152,12 +161,14 @@ export function AlarmControls({
   const pendingNeedsCode = Boolean(pendingAction && (codeRequired || unlockCodeActive));
   const codeMissing = pendingNeedsCode && trimmedCode.length === 0;
   const codeMismatch = pendingNeedsCode && unlockCodeActive && trimmedCode !== unlockCode;
-  const actionLocked = codeMissing || codeMismatch;
-  const authError = codeMissing
-    ? `Inserisci ${alarmCodeTypeLabel.toLowerCase()} per confermare.`
-    : codeMismatch
-      ? `${alarmCodeTypeLabel} non valido.`
-      : '';
+  const rateLimitStatus = getAuthRateLimitStatus(authAttemptState);
+  const rateLimitMessage = formatAuthRateLimitMessage(rateLimitStatus);
+  const authError = rateLimitMessage
+    || (codeMissing
+      ? `Inserisci ${alarmCodeTypeLabel.toLowerCase()} locale per confermare.`
+      : codeMismatch
+        ? `${alarmCodeTypeLabel} locale non valido.`
+        : '');
   const HeaderIcon = resolveHeaderIcon(normalizedState);
   const headerAccent = resolveHeaderAccent(normalizedState);
   const codeLengthLimit = 12;
@@ -363,10 +374,38 @@ export function AlarmControls({
   };
 
   const confirmPendingAction = async () => {
-    if (!pendingAction || isAuthBusy || actionLocked) {
+    if (!pendingAction || isAuthBusy) {
+      return;
+    }
+    if (rateLimitStatus.isLocked) {
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Fallback codice locale allarme bloccato temporaneamente.',
+        context: alarm.name || 'Allarme',
+      });
+      return;
+    }
+    if (codeMissing) {
+      return;
+    }
+    if (codeMismatch) {
+      setAuthAttemptState(recordAuthFailure(authAttemptState));
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Tentativo codice locale allarme non valido.',
+        context: alarm.name || 'Allarme',
+      });
       return;
     }
     const code = pendingNeedsCode && trimmedCode.length ? trimmedCode : undefined;
+    if (unlockCodeActive) {
+      setAuthAttemptState(recordAuthSuccess());
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: 'Fallback codice locale allarme verificato.',
+        context: alarm.name || 'Allarme',
+      });
+    }
     await runAlarmAction(pendingAction, code);
   };
 
@@ -496,6 +535,11 @@ export function AlarmControls({
         isOpen={Boolean(pendingAction)}
         pendingAlarmState={pendingAction?.state ?? null}
         pendingStateRequiresCode={pendingNeedsCode}
+        description={
+          unlockCodeActive
+            ? `${alarmCodeTypeLabel} locale dashboard richiesto per autorizzare l'azione.`
+            : `${alarmCodeTypeLabel} richiesto dall'entita Home Assistant e inviato al servizio.`
+        }
         authError={authError}
         isAuthBusy={isAuthBusy}
         isAlarmCodeNumeric={numericCodeMode}

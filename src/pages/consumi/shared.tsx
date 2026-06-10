@@ -29,7 +29,7 @@ export function DetailScaffold({
       </div>
 
       <div className="grid min-h-0 grid-cols-1 gap-4 lg:gap-6 xl:grid-cols-12 xl:gap-8">
-        <div className="relative flex min-h-[24rem] items-center justify-center overflow-hidden rounded-[1.65rem] border border-white/5 bg-white/5 p-3 backdrop-blur-2xl sm:min-h-[32rem] sm:rounded-[2rem] sm:p-6 lg:p-8 xl:col-span-7 xl:min-h-0">
+        <div className="liquid-glass-card relative flex min-h-[24rem] items-center justify-center overflow-hidden p-3 sm:min-h-[32rem] sm:p-6 lg:p-8 xl:col-span-7 xl:min-h-0">
           {left}
         </div>
 
@@ -51,12 +51,12 @@ export function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[1.65rem] border border-white/5 bg-white/5 p-4 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_34px_rgba(0,0,0,0.26)] sm:rounded-[2rem] sm:p-5">
+    <div className="liquid-glass-card p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium uppercase tracking-[0.14em] text-white/55">{title}</p>
         {controls}
       </div>
-      <div className="h-48 sm:h-56">{children}</div>
+      <div className="h-48 min-h-48 min-w-0 sm:h-56">{children}</div>
     </div>
   );
 }
@@ -70,14 +70,16 @@ export function IntervalPills({
 }) {
   const options: IntervalKey[] = ['24H', '7G', '30G'];
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/6 p-1 backdrop-blur-xl">
+    <div className="flex rounded-full border border-white/[0.06] bg-white/[0.02] p-0.5">
       {options.map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => onChange(option)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium tracking-[0.08em] transition-colors ${
-            value === option ? 'bg-white/20 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'
+          className={`rounded-full px-3 py-1 text-xs transition-all ${
+            value === option
+              ? 'bg-white/10 font-medium text-white shadow-sm backdrop-blur-md'
+              : 'text-white/40 hover:text-white/70'
           }`}
         >
           {option}

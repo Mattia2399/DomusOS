@@ -871,31 +871,29 @@ export function AutomationsBuilder({
   ]);
 
   return (
-    <div className="relative h-full w-full overflow-y-auto p-5 text-white lg:p-8">
-      <div className="relative mx-auto flex w-full max-w-[1700px] flex-col gap-6">
-        <header className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 backdrop-blur-2xl lg:p-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white lg:text-4xl">
-                Costruttore Automazioni
-              </h1>
-              <p className="mt-2 max-w-3xl text-base text-white/60">
-                Progetta regole causa-effetto in linguaggio naturale, con salvataggio diretto su Home Assistant.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                resetBuilder();
-                if (typeof window !== 'undefined') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              }}
-              className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              Nuova Automazione
-            </button>
+    <div className="dashboard-page-scroll">
+      <div className="dashboard-page-content dashboard-page-content-wide gap-6">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="dashboard-page-title">
+              Costruttore Automazioni
+            </h1>
+            <p className="dashboard-page-subtitle">
+              Progetta regole causa-effetto in linguaggio naturale, con salvataggio diretto su Home Assistant.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              resetBuilder();
+              if (typeof window !== 'undefined') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
+            className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            Nuova Automazione
+          </button>
         </header>
 
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.24fr)_minmax(420px,0.76fr)]">

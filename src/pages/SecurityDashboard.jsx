@@ -29,6 +29,14 @@ import { twMerge } from 'tailwind-merge';
 import GlassDropdown from '../components/ui/GlassDropdown';
 import SecurityAuthModal from '../components/security/SecurityAuthModal';
 import { useDeviceAuth } from '../hooks/useDeviceAuth';
+import {
+  INITIAL_AUTH_ATTEMPT_STATE,
+  appendSecurityAuditEvent,
+  formatAuthRateLimitMessage,
+  getAuthRateLimitStatus,
+  recordAuthFailure,
+  recordAuthSuccess,
+} from '../services/securityAuth';
 import { getAlarmStateLabel, normalizeAlarmState } from '../utils/alarmUtils';
 
 const STORAGE_KEYS = {
@@ -44,7 +52,7 @@ const UI_FLAGS = Object.freeze({
   showEventFeed: true,
 });
 
-const DEFAULT_SECURITY_PIN = '2580';
+const DEFAULT_SECURITY_PIN = '';
 const DEFAULT_ARMING_DELAY_SECONDS = 30;
 const SECURITY_OVERVIEW_PATH = '/security';
 const SECURITY_CAMERAS_PATH = '/security/cameras';
@@ -750,6 +758,7 @@ export function SecurityDashboard({
   const [authPinInput, setAuthPinInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [authAttemptState, setAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [armingDelayTotalMs, setArmingDelayTotalMs] = useState(0);
   const [armingDelayEndAtMs, setArmingDelayEndAtMs] = useState(null);
   const [armingDelayNowMs, setArmingDelayNowMs] = useState(() => Date.now());
@@ -879,6 +888,8 @@ export function SecurityDashboard({
 
   const pendingStateRequiresCode = pendingAlarmState ? isAlarmCodeRequiredForState(pendingAlarmState, activeAlarmAttributes) : false;
   const pendingAuthRequiresCode = pendingStateRequiresCode || !biometricAvailable || !deviceAuth.isEnrolled;
+  const authRateLimitStatus = getAuthRateLimitStatus(authAttemptState);
+  const authRateLimitMessage = formatAuthRateLimitMessage(authRateLimitStatus);
 
   const appendLog = (message, type = 'info') => {
     setLogs((curr) => [{ id: Date.now() + Math.round(Math.random() * 1000), time: toItalianClockTime(new Date()), message, type }, ...curr].slice(0, 10));
@@ -1027,7 +1038,7 @@ export function SecurityDashboard({
     const requiresCode = isAlarmCodeRequiredForState(nextState, activeAlarmAttributes);
     const cleanedCode = sanitizeAlarmCode(authCode, alarmCodeFormat);
     if (requiresCode && !cleanedCode) {
-      setAuthError(`${alarmCodeTypeLabel} richiesto dall'entita selezionata.`);
+      setAuthError(`${alarmCodeTypeLabel} richiesto dall'entita Home Assistant selezionata.`);
       return false;
     }
 
@@ -1038,6 +1049,11 @@ export function SecurityDashboard({
       if (!ok) {
         setAuthError('Comando rifiutato da Home Assistant. Verifica entita e codice.');
         appendLog('Cambio stato allarme non riuscito', 'warning');
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: `Comando allarme rifiutato: ${getAlarmStateLabel(nextState)}.`,
+          context: selectedAlarmEntityId || 'Security Dashboard',
+        });
         return false;
       }
     }
@@ -1061,6 +1077,11 @@ export function SecurityDashboard({
       appendLog(`${nextState === 'armed_home' ? 'Inserimento Casa' : 'Inserimento Fuori'} avviato (${delaySeconds}s)`, 'info');
     }
 
+    appendSecurityAuditEvent({
+      tone: 'success',
+      message: `Comando allarme autorizzato: ${getAlarmStateLabel(nextState)}.`,
+      context: selectedAlarmEntityId || 'Security Dashboard',
+    });
     closeAuthModal();
     return true;
   };
@@ -1081,6 +1102,11 @@ export function SecurityDashboard({
           const verified = await deviceAuth.authenticate(`Security Dashboard ${getAlarmStateLabel(nextState)}`);
           if (!verified) {
             appendLog('Autenticazione dispositivo annullata', 'warning');
+            appendSecurityAuditEvent({
+              tone: 'warning',
+              message: `Verifica biometrica allarme non riuscita: ${getAlarmStateLabel(nextState)}.`,
+              context: selectedAlarmEntityId || 'Security Dashboard',
+            });
             return;
           }
           await applyAlarmState(nextState, requiresCode ? storedCode : undefined);
@@ -1113,16 +1139,53 @@ export function SecurityDashboard({
     if (!pendingAlarmState) return;
 
     if (pendingAuthRequiresCode) {
+      const rateLimitStatus = getAuthRateLimitStatus(authAttemptState);
+      if (rateLimitStatus.isLocked) {
+        setAuthError(formatAuthRateLimitMessage(rateLimitStatus));
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Fallback PIN locale bloccato temporaneamente.',
+          context: selectedAlarmEntityId || 'Security Dashboard',
+        });
+        return;
+      }
       const cleanedInput = sanitizeAlarmCode(authPinInput, alarmCodeFormat);
       if (cleanedInput.length === 0) {
         setAuthError(`Inserisci ${alarmCodeTypeLabel.toLowerCase()} di sicurezza.`);
         return;
       }
-      if (cleanedInput !== securityPin) {
-        setAuthError(`${alarmCodeTypeLabel} non corretto.`);
-        appendLog('Tentativo codice non valido', 'warning');
+      if (!securityPin.trim()) {
+        setAuthError(`Configura prima un ${alarmCodeTypeLabel.toLowerCase()} locale dashboard in modalita edit.`);
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Fallback PIN/codice locale non configurato.',
+          context: selectedAlarmEntityId || 'Security Dashboard',
+        });
         return;
       }
+      if (cleanedInput !== securityPin) {
+        const nextAttemptState = recordAuthFailure(authAttemptState);
+        const nextRateLimitStatus = getAuthRateLimitStatus(nextAttemptState);
+        setAuthAttemptState(nextAttemptState);
+        setAuthError(
+          nextRateLimitStatus.isLocked
+            ? formatAuthRateLimitMessage(nextRateLimitStatus)
+            : `${alarmCodeTypeLabel} locale non corretto.`,
+        );
+        appendLog('Tentativo codice non valido', 'warning');
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Tentativo PIN/codice locale non valido.',
+          context: selectedAlarmEntityId || 'Security Dashboard',
+        });
+        return;
+      }
+      setAuthAttemptState(recordAuthSuccess());
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: 'Fallback PIN/codice locale verificato.',
+        context: selectedAlarmEntityId || 'Security Dashboard',
+      });
       setIsAuthBusy(true);
       try {
         await applyAlarmState(pendingAlarmState, pendingStateRequiresCode ? cleanedInput : undefined);
@@ -1155,8 +1218,18 @@ export function SecurityDashboard({
       if (!verified) throw new Error('Verifica dispositivo annullata.');
       setBiometricMessage(wasEnrolled ? 'Autenticazione dispositivo verificata.' : 'Passkey dispositivo creata.');
       appendLog(wasEnrolled ? 'Biometria dispositivo verificata' : 'Passkey dispositivo creata', 'success');
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: wasEnrolled ? 'Passkey dispositivo verificata dalla Security Dashboard.' : 'Passkey dispositivo creata dalla Security Dashboard.',
+        context: selectedAlarmEntityId || 'Security Dashboard',
+      });
     } catch {
       setBiometricMessage('Autenticazione dispositivo annullata o non riuscita.');
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Configurazione passkey dispositivo non riuscita o annullata.',
+        context: selectedAlarmEntityId || 'Security Dashboard',
+      });
     } finally {
       setIsBiometricBusy(false);
     }
@@ -1219,13 +1292,13 @@ export function SecurityDashboard({
   const openSecurityOverviewPage = () => navigateSecurityPage(SECURITY_OVERVIEW_PATH);
 
   return (
-    <div className={cn('h-full w-full overflow-y-auto', isCameraDirectoryView ? 'p-0' : 'px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-6 lg:p-8')} style={{ fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}>
+    <div className={isCameraDirectoryView ? 'h-full w-full overflow-y-auto p-0' : 'dashboard-page-scroll'}>
       {!isCameraDirectoryView ? (
-        <header className="liquid-glass-panel rounded-[26px] p-4 sm:rounded-[32px] sm:p-6">
+        <header className="dashboard-page-content-wide">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.15rem]">Sicurezza</h1>
-              <p className="mt-2 text-sm font-light text-white/60">Controllo perimetrale e videosorveglianza</p>
+              <h1 className="dashboard-page-title">Sicurezza</h1>
+              <p className="dashboard-page-subtitle">Controllo perimetrale e videosorveglianza</p>
             </div>
           </div>
         </header>
@@ -1244,7 +1317,7 @@ export function SecurityDashboard({
           />
         </div>
       ) : (
-        <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+        <div className="dashboard-page-content-wide mt-6 space-y-4 sm:space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-2">
             {!isEditMode ? (
               <SecurityMainShield
@@ -1285,13 +1358,16 @@ export function SecurityDashboard({
 
                   {alarmHasCodeCapability ? (
                     <label className="block">
-                      <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">{alarmCodeTypeLabel} sicurezza</span>
+                      <span className="text-xs font-light uppercase tracking-[0.16em] text-white/60">{alarmCodeTypeLabel} locale dashboard</span>
                       <div className="relative mt-2">
-                        <input type={isSecurityPinVisible ? 'text' : 'password'} value={securityPin} onChange={(event) => setSecurityPin(sanitizeAlarmCode(event.target.value, alarmCodeFormat))} className="liquid-glass-card w-full px-3 py-2.5 pr-11 text-sm text-white outline-none focus:border-white/35" placeholder={isAlarmCodeNumeric ? 'Inserisci PIN allarme' : 'Inserisci codice allarme'} />
+                        <input type={isSecurityPinVisible ? 'text' : 'password'} value={securityPin} onChange={(event) => setSecurityPin(sanitizeAlarmCode(event.target.value, alarmCodeFormat))} className="liquid-glass-card w-full px-3 py-2.5 pr-11 text-sm text-white outline-none focus:border-white/35" placeholder={isAlarmCodeNumeric ? 'PIN locale dashboard' : 'Codice locale dashboard'} />
                         <button type="button" onClick={() => setIsSecurityPinVisible((curr) => !curr)} className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center text-white/60 hover:text-white" aria-label={isSecurityPinVisible ? 'Nascondi codice' : 'Mostra codice'}>
                           {isSecurityPinVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
+                      <p className="mt-2 text-[11px] leading-snug text-white/45">
+                        Salvato solo in questo browser come fallback locale; non viene esportato nei backup e non sostituisce i permessi Home Assistant.
+                      </p>
                     </label>
                   ) : <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">L'entita selezionata non espone codice allarme.</p>}
 
@@ -1388,7 +1464,12 @@ export function SecurityDashboard({
         isOpen={isAuthModalOpen}
         pendingAlarmState={pendingAlarmState}
         pendingStateRequiresCode={pendingAuthRequiresCode}
-        authError={authError}
+        description={
+          pendingAuthRequiresCode
+            ? `${alarmCodeTypeLabel} locale dashboard richiesto per il fallback; se l'entita Home Assistant richiede codice, verra inviato al servizio.`
+            : 'Autenticazione dispositivo non disponibile per questa azione.'
+        }
+        authError={authError || authRateLimitMessage}
         isAuthBusy={isAuthBusy}
         isAlarmCodeNumeric={isAlarmCodeNumeric}
         alarmCodeTypeLabel={alarmCodeTypeLabel}

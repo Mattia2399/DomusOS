@@ -84,6 +84,14 @@ import {
   restoreDashboardBackup,
   serializeDashboardBackup,
 } from '../../services/configBackup';
+import {
+  INITIAL_AUTH_ATTEMPT_STATE,
+  appendSecurityAuditEvent,
+  formatAuthRateLimitMessage,
+  getAuthRateLimitStatus,
+  recordAuthFailure,
+  recordAuthSuccess,
+} from '../../services/securityAuth';
 import { isOnboardingCompleted, markOnboardingCompleted } from '../../services/onboardingStorage';
 import { useDeviceAuth } from '../../hooks/useDeviceAuth';
 import {
@@ -863,12 +871,50 @@ function isConsumptionNavigationTarget(path: string) {
   }
 }
 
+function isConsumptionDetailNavigationTarget(path: string) {
+  const target = path.trim();
+  if (!target) {
+    return false;
+  }
+
+  const detailSegments = new Set(['energia', 'elettricita', 'electricity', 'acqua', 'water', 'gas', 'metano', 'report', 'trend']);
+
+  try {
+    const parsed = new URL(target, 'http://dashboard.local');
+    const pathname = parsed.pathname.toLowerCase();
+    const hash = parsed.hash.toLowerCase();
+    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
+    const pathSegments = pathname.split('/').filter(Boolean);
+    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
+    const hashSegments = hashNormalized.split('/').filter(Boolean);
+    const pathIndex = pathSegments.indexOf('consumi');
+    const hashIndex = hashSegments.indexOf('consumi');
+
+    return (
+      (pathIndex >= 0 && detailSegments.has(pathSegments[pathIndex + 1] ?? '')) ||
+      (hashIndex >= 0 && detailSegments.has(hashSegments[hashIndex + 1] ?? '')) ||
+      view.startsWith('consumi-') ||
+      view.startsWith('consumption-')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function resolveConsumptionFromLocation() {
   if (typeof window === 'undefined') {
     return false;
   }
   return isConsumptionNavigationTarget(window.location.href);
 }
+
+function resolveConsumptionDetailFromLocation() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return isConsumptionDetailNavigationTarget(window.location.href);
+}
+
 
 function isHomeNavigationTarget(path: string) {
   const target = path.trim();
@@ -3338,6 +3384,7 @@ export function MainBoard() {
   const [activeDevice, setActiveDevice] = useState<ActiveDevice | null>(null);
   const [pendingQuickAlarmAction, setPendingQuickAlarmAction] = useState<AlarmQuickAuthAction | null>(null);
   const [quickAlarmAuthCode, setQuickAlarmAuthCode] = useState('');
+  const [quickAlarmAuthAttemptState, setQuickAlarmAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [isQuickAlarmAuthBusy, setIsQuickAlarmAuthBusy] = useState(false);
   const [isLockAuthBusy, setIsLockAuthBusy] = useState(false);
   const deviceAuthUser = useMemo(
@@ -3372,6 +3419,7 @@ export function MainBoard() {
   const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('theme');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
+  const [isConsumptionDetailView, setIsConsumptionDetailView] = useState(resolveConsumptionDetailFromLocation);
   const [isAutomationView, setIsAutomationView] = useState(resolveAutomationFromLocation);
   const [isAppGalleryView, setIsAppGalleryView] = useState(resolveAppGalleryFromLocation);
   const [isRoomsView, setIsRoomsView] = useState(resolveRoomsFromLocation);
@@ -6798,6 +6846,7 @@ export function MainBoard() {
       ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
       : internalNavigationRoute;
     const nextIsConsumption = isConsumptionNavigationTarget(currentRoute);
+    const nextIsConsumptionDetail = nextIsConsumption && isConsumptionDetailNavigationTarget(currentRoute);
     const nextIsAutomation = isAutomationNavigationTarget(currentRoute);
     const nextIsAppGallery = isAppGalleryNavigationTarget(currentRoute);
     const nextIsRooms = isRoomsNavigationTarget(currentRoute);
@@ -6817,6 +6866,7 @@ export function MainBoard() {
       nextIsSecurity ||
       (!canUseBrowserRouteNavigation && !nextIsKnownRoute);
     setIsConsumptionView(nextIsConsumption);
+    setIsConsumptionDetailView(nextIsConsumptionDetail);
     setIsAutomationView(nextIsAutomation);
     setIsAppGalleryView(nextIsAppGallery);
     setIsRoomsView(nextIsRooms);
@@ -6858,10 +6908,19 @@ export function MainBoard() {
       setSelectedConsumptionCardId(null);
       return;
     }
+    if (isEditMode && isCompactViewport) {
+      return;
+    }
     if (!selectedConsumptionCardId) {
       setSelectedConsumptionCardId('electricity');
     }
-  }, [isConsumptionView, selectedConsumptionCardId]);
+  }, [isCompactViewport, isConsumptionView, isEditMode, selectedConsumptionCardId]);
+
+  useEffect(() => {
+    if (isConsumptionView && isEditMode && isCompactViewport) {
+      setSelectedConsumptionCardId(null);
+    }
+  }, [isCompactViewport, isConsumptionView, isEditMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -8075,10 +8134,34 @@ export function MainBoard() {
       if (available && deviceAuth.isEnrolled) {
         const verified = await deviceAuth.authenticate(`Allarme ${getAlarmStateLabel(quickAction.state)}`);
         if (!verified) {
+          appendSecurityAuditEvent({
+            tone: 'warning',
+            message: `Verifica biometrica allarme non riuscita: ${getAlarmStateLabel(quickAction.state)}.`,
+            context: quickAction.widget.entityId || quickAction.widget.title,
+          });
           return false;
         }
         const code = quickAction.requiresCode && quickAction.unlockCode ? quickAction.unlockCode : undefined;
+        appendSecurityAuditEvent({
+          tone: 'success',
+          message: `Comando allarme autorizzato con biometria: ${getAlarmStateLabel(quickAction.state)}.`,
+          context: quickAction.widget.entityId || quickAction.widget.title,
+        });
         return callProtectedAlarmAction(service, code, widget);
+      }
+      if (!(quickAction.requiresCode && quickAction.unlockCode)) {
+        addNotification(
+          'warning',
+          available
+            ? 'Configura una passkey da Profilo > Sicurezza oppure un codice locale dashboard per usare il fallback.'
+            : 'Biometria non disponibile su questo browser o dispositivo. Azione bloccata per sicurezza.',
+        );
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: `Comando allarme bloccato: biometria richiesta non disponibile per ${getAlarmStateLabel(quickAction.state)}.`,
+          context: quickAction.widget.entityId || quickAction.widget.title,
+        });
+        return false;
       }
     }
     if (quickAction.requiresCode) {
@@ -8136,6 +8219,11 @@ export function MainBoard() {
           ? 'Configura una passkey da Profilo > Sicurezza per modificare questo allarme.'
           : 'Biometria non disponibile su questo browser o dispositivo.',
       );
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Comando allarme bloccato: passkey dispositivo richiesta non disponibile.',
+        context: targetWidget.entityId || targetWidget.title,
+      });
       return false;
     }
 
@@ -8144,8 +8232,18 @@ export function MainBoard() {
       const verified = await deviceAuth.authenticate('Allarme');
       if (!verified) {
         addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Verifica biometrica allarme annullata o non riuscita.',
+          context: targetWidget.entityId || targetWidget.title,
+        });
         return false;
       }
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: 'Comando allarme autorizzato con biometria.',
+        context: targetWidget.entityId || targetWidget.title,
+      });
       return callAlarmAction(service, code, targetWidget);
     } finally {
       setIsLockAuthBusy(false);
@@ -8154,7 +8252,17 @@ export function MainBoard() {
 
   const callProtectedAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
-    if (service === 'alarm_disarm' && targetWidget?.alarmRequireAuthToDisarm && !code?.trim()) {
+    if (service === 'alarm_disarm' && targetWidget?.alarmRequireAuthToDisarm) {
+      const fallbackCode = targetWidget.alarmUnlockCode?.trim();
+      const providedCode = code?.trim();
+      if (fallbackCode && providedCode === fallbackCode) {
+        appendSecurityAuditEvent({
+          tone: 'success',
+          message: 'Fallback codice locale allarme verificato.',
+          context: targetWidget.entityId || targetWidget.title,
+        });
+        return callAlarmAction(service, code, widget);
+      }
       return requestAuthenticatedAlarmAction(service, targetWidget, code);
     }
     return callAlarmAction(service, code, widget);
@@ -8174,6 +8282,16 @@ export function MainBoard() {
       return;
     }
 
+    const rateLimitStatus = getAuthRateLimitStatus(quickAlarmAuthAttemptState);
+    if (!useBiometric && rateLimitStatus.isLocked) {
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Fallback codice locale allarme bloccato temporaneamente.',
+        context: quickAction.widget.entityId || quickAction.widget.title,
+      });
+      return;
+    }
+
     const trimmedCode = quickAlarmAuthCode.trim();
     const needsManualCode = quickAction.requiresCode && (!useBiometric || !quickAction.unlockCode);
     if (needsManualCode) {
@@ -8181,6 +8299,12 @@ export function MainBoard() {
         return;
       }
       if (quickAction.unlockCode && trimmedCode !== quickAction.unlockCode) {
+        setQuickAlarmAuthAttemptState(recordAuthFailure(quickAlarmAuthAttemptState));
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Tentativo codice locale allarme non valido.',
+          context: quickAction.widget.entityId || quickAction.widget.title,
+        });
         return;
       }
     }
@@ -8197,6 +8321,14 @@ export function MainBoard() {
           );
       if (didRun === false) {
         return;
+      }
+      setQuickAlarmAuthAttemptState(recordAuthSuccess());
+      if (needsManualCode) {
+        appendSecurityAuditEvent({
+          tone: 'success',
+          message: 'Fallback codice locale allarme verificato.',
+          context: quickAction.widget.entityId || quickAction.widget.title,
+        });
       }
       setPendingQuickAlarmAction(null);
       setQuickAlarmAuthCode('');
@@ -8345,6 +8477,11 @@ export function MainBoard() {
           ? 'Configura una passkey da Profilo > Sicurezza per usare questa serratura.'
           : 'Biometria non disponibile su questo browser o dispositivo.',
       );
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Sblocco serratura bloccato: passkey dispositivo richiesta non disponibile.',
+        context: targetWidget.entityId || targetWidget.title,
+      });
       return false;
     }
 
@@ -8353,8 +8490,18 @@ export function MainBoard() {
       const verified = await deviceAuth.authenticate('Serratura');
       if (!verified) {
         addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Verifica biometrica serratura annullata o non riuscita.',
+          context: targetWidget.entityId || targetWidget.title,
+        });
         return false;
       }
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: 'Sblocco serratura autorizzato con biometria.',
+        context: targetWidget.entityId || targetWidget.title,
+      });
       unlockDoor(code, targetWidget);
       return true;
     } finally {
@@ -10277,6 +10424,7 @@ export function MainBoard() {
       }
 
       const nextIsConsumption = isConsumptionNavigationTarget(normalizedRouteForNavigate);
+      const nextIsConsumptionDetail = nextIsConsumption && isConsumptionDetailNavigationTarget(normalizedRouteForNavigate);
       const nextIsAutomation = isAutomationNavigationTarget(normalizedRouteForNavigate);
       const nextIsAppGallery = isAppGalleryNavigationTarget(normalizedRouteForNavigate);
       const nextIsRooms = isRoomsNavigationTarget(normalizedRouteForNavigate);
@@ -10296,6 +10444,7 @@ export function MainBoard() {
         nextIsSecurity ||
         (!canUseBrowserRouteNavigation && !nextIsKnownRoute);
       setIsConsumptionView(nextIsConsumption);
+      setIsConsumptionDetailView(nextIsConsumptionDetail);
       setIsAutomationView(nextIsAutomation);
       setIsAppGalleryView(nextIsAppGallery);
       setIsRoomsView(nextIsRooms);
@@ -10342,11 +10491,13 @@ export function MainBoard() {
   const profileUserRoleLabel = haCurrentUser?.isOwner ? 'Creatore' : haCurrentUser?.isAdmin ? 'Admin' : 'Utente';
   const profileUserOwnedDeviceCount = profileMovementSource.trackerDeviceCount;
   const isSecurityImmersiveView = isSecurityView && isSecurityCamerasView;
+  const isConsumptionImmersiveView = isConsumptionView && isConsumptionDetailView;
+  const isImmersiveView = isSecurityImmersiveView || isConsumptionImmersiveView;
   const isDashboardCanvasView =
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView;
   const shouldApplyXsShellBottomInset =
-    !isSecurityImmersiveView && isXsViewport && !isDashboardCanvasView;
-  const shouldShowBottomBar = !isSecurityImmersiveView && isXsViewport && !isCatalogOpen;
+    !isImmersiveView && isXsViewport && !isDashboardCanvasView;
+  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isCatalogOpen;
   const openProfilePanel = (section: ProfileSectionId = 'theme') => {
     setProfileInitialSection(section);
     setIsProfileOpen(true);
@@ -10354,6 +10505,8 @@ export function MainBoard() {
   const quickAlarmRequiresCode = Boolean(pendingQuickAlarmAction?.requiresCode);
   const quickAlarmCodeTypeLabel = pendingQuickAlarmAction?.numericCodeMode === false ? 'Codice' : 'PIN';
   const trimmedQuickAlarmAuthCode = quickAlarmAuthCode.trim();
+  const quickAlarmRateLimitStatus = getAuthRateLimitStatus(quickAlarmAuthAttemptState);
+  const quickAlarmRateLimitMessage = formatAuthRateLimitMessage(quickAlarmRateLimitStatus);
   const quickAlarmCodeMissing =
     quickAlarmRequiresCode &&
     trimmedQuickAlarmAuthCode.length === 0;
@@ -10362,16 +10515,17 @@ export function MainBoard() {
     Boolean(pendingQuickAlarmAction?.unlockCode) &&
     trimmedQuickAlarmAuthCode.length > 0 &&
     trimmedQuickAlarmAuthCode !== pendingQuickAlarmAction?.unlockCode;
-  const quickAlarmAuthError = quickAlarmCodeMissing
-    ? `Inserisci ${quickAlarmCodeTypeLabel.toLowerCase()} per confermare.`
-    : quickAlarmCodeMismatch
-      ? `${quickAlarmCodeTypeLabel} non valido.`
-      : '';
+  const quickAlarmAuthError = quickAlarmRateLimitMessage
+    || (quickAlarmCodeMissing
+      ? `Inserisci ${quickAlarmCodeTypeLabel.toLowerCase()} locale per confermare.`
+      : quickAlarmCodeMismatch
+        ? `${quickAlarmCodeTypeLabel} locale non valido.`
+        : '');
 
   return (
     <div
       className={`apple-bg-main relative h-[100dvh] min-h-screen font-sans overflow-hidden flex ${
-        isSecurityImmersiveView
+        isImmersiveView
           ? 'p-0 gap-0'
           : 'py-1.5 px-0.5 sm:p-2 md:p-2.5 lg:p-4 xl:p-5 gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6'
       } ${
@@ -10385,7 +10539,7 @@ export function MainBoard() {
       } dashboard-shell ${dashboardWallpaperClass}`}
     >
       <div aria-hidden className="dashboard-wallpaper-layer" />
-      {!isSecurityImmersiveView && !isXsViewport ? (
+      {!isImmersiveView && !isXsViewport ? (
         <LeftSidebar
           isEditMode={isEditMode}
           canToggleEditMode={canToggleEditMode}
@@ -10400,7 +10554,7 @@ export function MainBoard() {
         />
       ) : null}
 
-      <main className={isSecurityImmersiveView ? 'h-full min-h-0 flex-1 min-w-0 flex overflow-hidden' : 'h-full min-h-0 flex-1 min-w-0 flex gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6 overflow-hidden'}>
+      <main className={isImmersiveView ? 'h-full min-h-0 flex-1 min-w-0 flex overflow-hidden' : 'h-full min-h-0 flex-1 min-w-0 flex gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6 overflow-hidden'}>
         {isConsumptionView ? (
           <>
             <div className="h-full min-h-0 flex-1 overflow-hidden">
@@ -10409,9 +10563,11 @@ export function MainBoard() {
                 suppressBrowserNavigation={!canUseBrowserRouteNavigation}
                 navigationRoute={internalNavigationRoute}
                 isEditMode={isEditMode}
+                compactEditMode={isEditMode && isCompactViewport}
                 selectedCardId={selectedConsumptionCardId}
                 data={consumptionData}
                 config={consumptionConfig}
+                onDetailViewChange={setIsConsumptionDetailView}
                 onSelectCard={(cardId) => {
                   if (!isEditMode) {
                     return;
@@ -10420,7 +10576,7 @@ export function MainBoard() {
                 }}
               />
             </div>
-            {isEditMode ? (
+            {isEditMode && !isCompactViewport && !isConsumptionDetailView ? (
               <ConsumptionEditorSidebar
                 selectedCardId={selectedConsumptionCardId}
                 onSelectCard={setSelectedConsumptionCardId}
@@ -10716,6 +10872,33 @@ export function MainBoard() {
 
       </main>
 
+      {isConsumptionView && !isConsumptionDetailView && isEditMode && isCompactViewport && selectedConsumptionCardId ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setSelectedConsumptionCardId(null)}
+            className="fixed inset-0 z-[218] bg-black/60 backdrop-blur-sm"
+            aria-label="Chiudi configurazione consumi"
+          />
+          <div className="liquid-glass-sheet fixed inset-x-0 bottom-0 z-[219] flex max-h-[92dvh] min-h-[18rem] w-full flex-col p-3 py-2 transition-all duration-250">
+            <div className="mb-2 flex justify-center">
+              <span className="liquid-glass-drag-handle" />
+            </div>
+            <ConsumptionEditorSidebar
+              selectedCardId={selectedConsumptionCardId}
+              onSelectCard={setSelectedConsumptionCardId}
+              config={consumptionConfig}
+              haEntityIds={haEntityIds}
+              haConnected={isHaConnected}
+              onUpdateConfigField={updateConsumptionConfigField}
+              onResetConfig={resetConsumptionConfig}
+              variant="sheet"
+              onClose={() => setSelectedConsumptionCardId(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {!isEditMode && !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView ? (
         <FavoritesDrawer
           isOpen={isFavoritesOpen}
@@ -10797,6 +10980,11 @@ export function MainBoard() {
         isOpen={Boolean(pendingQuickAlarmAction)}
         pendingAlarmState={pendingQuickAlarmAction?.state ?? null}
         pendingStateRequiresCode={quickAlarmRequiresCode}
+        description={
+          quickAlarmRequiresCode
+            ? `${quickAlarmCodeTypeLabel} locale dashboard richiesto per autorizzare l'azione. I codici salvati non vengono esportati nei backup.`
+            : 'Autenticazione dispositivo non disponibile per questa azione.'
+        }
         authError={quickAlarmAuthError}
         isAuthBusy={isQuickAlarmAuthBusy || isLockAuthBusy}
         isAlarmCodeNumeric={pendingQuickAlarmAction?.numericCodeMode ?? true}

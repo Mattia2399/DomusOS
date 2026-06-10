@@ -25,6 +25,14 @@ import {
   X,
 } from 'lucide-react';
 
+const svgDataUri = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg.replace(/\s+/g, ' ').trim())}`;
+
+const buildPortalBackdropStyle = (svg, tint) => ({
+  backgroundImage: `${tint}, url("${svgDataUri(svg)}")`,
+  backgroundPosition: 'center',
+  backgroundSize: 'cover',
+});
+
 const SYSTEM_PORTALS = [
   {
     id: 'technical-room',
@@ -35,6 +43,28 @@ const SYSTEM_PORTALS = [
     iconWrapClass: 'bg-sky-400/20 text-sky-200',
     glowClass: 'from-sky-400/30 via-blue-400/10 to-transparent',
     borderHoverClass: 'group-hover:border-sky-300/35',
+    backdropStyle: buildPortalBackdropStyle(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+        <defs>
+          <linearGradient id="techPanel" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#7dd3fc" stop-opacity=".24"/>
+            <stop offset=".58" stop-color="#38bdf8" stop-opacity=".1"/>
+            <stop offset="1" stop-color="#0f172a" stop-opacity=".04"/>
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke="#bae6fd" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M94 470h270l58-72h165l52 72h438" stroke-opacity=".2" stroke-width="8"/>
+          <path d="M142 146h318v178H142z" fill="url(#techPanel)" stroke-opacity=".24" stroke-width="3"/>
+          <path d="M180 188h242M180 230h242M180 272h242M224 146v178M304 146v178M384 146v178" stroke-opacity=".15" stroke-width="3"/>
+          <path d="M566 126h284v214H566zM616 176h84M616 224h184M616 272h142" stroke-opacity=".22" stroke-width="5"/>
+          <circle cx="952" cy="210" r="78" stroke-opacity=".22" stroke-width="6"/>
+          <path d="M952 210l42-42M912 250l-48 62H764M952 288v78M1010 270l76 52" stroke-opacity=".18" stroke-width="6"/>
+          <path d="M688 438h284M734 392v92M810 392v92M886 392v92M962 392v92" stroke-opacity=".16" stroke-width="5"/>
+          <path d="M104 544c154-48 304-48 450 0s302 48 468-2" stroke-opacity=".12" stroke-width="10"/>
+        </g>
+      </svg>`,
+      'radial-gradient(90% 80% at 70% 20%, rgba(125,211,252,0.18), transparent 60%), linear-gradient(135deg, rgba(14,165,233,0.14), rgba(2,6,23,0.04) 68%)',
+    ),
   },
   {
     id: 'smart-irrigation',
@@ -45,6 +75,22 @@ const SYSTEM_PORTALS = [
     iconWrapClass: 'bg-emerald-400/20 text-emerald-200',
     glowClass: 'from-emerald-400/30 via-cyan-400/10 to-transparent',
     borderHoverClass: 'group-hover:border-emerald-300/35',
+    backdropStyle: buildPortalBackdropStyle(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M58 514c168-92 342-116 522-70s366 20 562-78" stroke="#bbf7d0" stroke-opacity=".2" stroke-width="9"/>
+          <path d="M74 586c162-88 326-108 494-58s346 30 568-86" stroke="#67e8f9" stroke-opacity=".13" stroke-width="8"/>
+          <path d="M194 454c54-136 148-204 282-204 98 0 174 34 228 102" stroke="#86efac" stroke-opacity=".18" stroke-width="6"/>
+          <path d="M370 380c-46-70-116-114-210-132 10 96 70 158 180 186" fill="#22c55e" fill-opacity=".1" stroke="#bbf7d0" stroke-opacity=".22" stroke-width="5"/>
+          <path d="M474 372c26-98 96-174 210-228 20 118-28 202-144 254" fill="#34d399" fill-opacity=".1" stroke="#a7f3d0" stroke-opacity=".23" stroke-width="5"/>
+          <path d="M724 476V326h232v150" stroke="#a7f3d0" stroke-opacity=".18" stroke-width="6"/>
+          <path d="M770 360h140M770 402h140M770 444h140M816 326v150M864 326v150" stroke="#bbf7d0" stroke-opacity=".13" stroke-width="4"/>
+          <path d="M972 252c0 48-34 78-76 78s-76-30-76-78c0-38 48-92 76-130 28 38 76 92 76 130Z" fill="#22d3ee" fill-opacity=".08" stroke="#67e8f9" stroke-opacity=".2" stroke-width="5"/>
+          <path d="M1040 392c58 20 92 58 104 112M1078 390c-4 54-36 94-94 120" stroke="#bbf7d0" stroke-opacity=".16" stroke-width="6"/>
+        </g>
+      </svg>`,
+      'radial-gradient(85% 90% at 25% 20%, rgba(74,222,128,0.18), transparent 58%), linear-gradient(135deg, rgba(16,185,129,0.14), rgba(8,145,178,0.06) 58%, rgba(2,6,23,0.05))',
+    ),
   },
   {
     id: 'pool-spa',
@@ -55,6 +101,28 @@ const SYSTEM_PORTALS = [
     iconWrapClass: 'bg-cyan-400/20 text-cyan-200',
     glowClass: 'from-cyan-400/30 via-sky-400/10 to-transparent',
     borderHoverClass: 'group-hover:border-cyan-300/35',
+    backdropStyle: buildPortalBackdropStyle(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675">
+        <defs>
+          <radialGradient id="spaGlow" cx=".7" cy=".35" r=".55">
+            <stop offset="0" stop-color="#67e8f9" stop-opacity=".22"/>
+            <stop offset=".62" stop-color="#38bdf8" stop-opacity=".07"/>
+            <stop offset="1" stop-color="#020617" stop-opacity=".02"/>
+          </radialGradient>
+        </defs>
+        <rect x="608" y="120" width="368" height="368" rx="184" fill="url(#spaGlow)" stroke="#a5f3fc" stroke-opacity=".16" stroke-width="6"/>
+        <g fill="none" stroke="#a5f3fc" stroke-linecap="round">
+          <path d="M92 210c94 46 188 46 282 0s188-46 282 0 188 46 282 0 188-46 282 0" stroke-opacity=".22" stroke-width="8"/>
+          <path d="M60 304c96 42 194 42 292 0s196-42 294 0 196 42 294 0 196-42 294 0" stroke-opacity=".18" stroke-width="7"/>
+          <path d="M92 398c94 46 188 46 282 0s188-46 282 0 188 46 282 0 188-46 282 0" stroke-opacity=".16" stroke-width="8"/>
+          <path d="M128 520h912M168 570h820M218 476v128M316 476v128M414 476v128M512 476v128M610 476v128M708 476v128M806 476v128M904 476v128" stroke-opacity=".1" stroke-width="4"/>
+          <circle cx="792" cy="304" r="92" stroke-opacity=".18" stroke-width="7"/>
+          <circle cx="792" cy="304" r="48" stroke-opacity=".14" stroke-width="5"/>
+          <path d="M1012 154c32 34 32 76 0 126M1060 138c48 54 48 122 0 204" stroke-opacity=".16" stroke-width="6"/>
+        </g>
+      </svg>`,
+      'radial-gradient(88% 88% at 72% 24%, rgba(103,232,249,0.18), transparent 58%), linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.06) 58%, rgba(2,6,23,0.05))',
+    ),
   },
 ];
 
@@ -873,7 +941,16 @@ function PortalCard({ portal, onNavigate = navigateTo }) {
     >
       <div
         aria-hidden
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-35 saturate-125 transition-all duration-500 group-hover:scale-[1.035] group-hover:opacity-50"
+        style={portal.backdropStyle}
+      />
+      <div
+        aria-hidden
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-80 transition-opacity duration-300 group-hover:opacity-100 ${portal.glowClass}`}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.06),rgba(2,6,23,0.34)_78%)]"
       />
       <div
         aria-hidden
@@ -1076,16 +1153,16 @@ function ZoneConfigModal({
 
 function LauncherView({ onNavigate = navigateTo }) {
   return (
-    <div className="mx-auto w-full max-w-[1720px] space-y-10 pb-8">
+    <div className="dashboard-page-content dashboard-page-content-wide gap-10 pb-8">
       <motion.header
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
         className="space-y-2"
       >
-        <p className="text-xs uppercase tracking-[0.28em] text-white/45">App Launcher</p>
-        <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">App Library</h1>
-        <p className="max-w-3xl text-sm text-white/55">
+        <p className="dashboard-page-eyebrow">App Launcher</p>
+        <h1 className="dashboard-page-title">App Library</h1>
+        <p className="dashboard-page-subtitle">
           Accedi alle plance immersive dedicate alla tua Smart Home premium.
         </p>
       </motion.header>
@@ -1991,7 +2068,7 @@ function IrrigationDashboardView({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1720px] space-y-8 pb-10">
+    <div className="dashboard-page-content dashboard-page-content-wide gap-8 pb-10">
       <motion.header
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -2006,7 +2083,7 @@ function IrrigationDashboardView({
           <ArrowLeft className="h-4 w-4" />
           <span>Torna alla Libreria</span>
         </button>
-        <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">Irrigazione Smart</h1>
+        <h1 className="dashboard-page-title">Irrigazione Smart</h1>
       </motion.header>
 
       <motion.div
@@ -2681,7 +2758,7 @@ function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
   const title = titleByView[view] ?? 'Plancia';
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[1720px] flex-col items-center justify-center gap-6 pb-8 text-center">
+    <div className="dashboard-page-content dashboard-page-content-wide items-center justify-center gap-6 pb-8 text-center">
       <button
         type="button"
         onClick={() => onNavigate('/appgallery')}
@@ -2768,10 +2845,7 @@ export function AppGallery({
   }, [navigationRoute, suppressBrowserNavigation]);
 
   return (
-    <div
-      className="relative h-full w-full overflow-y-auto bg-transparent px-6 py-8 text-white sm:px-8 lg:px-12 custom-scrollbar"
-      style={{ fontFamily: 'SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}
-    >
+    <div className="dashboard-page-scroll relative bg-transparent custom-scrollbar">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.28),rgba(0,0,0,0.1)_36%,rgba(0,0,0,0.22)_100%)] backdrop-blur-[2px]"

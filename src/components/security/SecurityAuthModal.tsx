@@ -9,6 +9,7 @@ type SecurityAuthModalProps = {
   isOpen: boolean;
   pendingAlarmState?: string | null;
   pendingStateRequiresCode: boolean;
+  description?: string;
   authError?: string;
   isAuthBusy?: boolean;
   isAlarmCodeNumeric: boolean;
@@ -31,6 +32,7 @@ export function SecurityAuthModal({
   isOpen,
   pendingAlarmState,
   pendingStateRequiresCode,
+  description,
   authError,
   isAuthBusy = false,
   isAlarmCodeNumeric,
@@ -77,7 +79,9 @@ export function SecurityAuthModal({
             <button type="button" onClick={onClose} className="glass-icon-button absolute right-4 top-4 h-8 w-8" aria-label="Chiudi"><X className="h-4 w-4" /></button>
             <p className="text-[11px] font-light uppercase tracking-[0.24em] text-white/60">Security Gate</p>
             <h3 className="mt-2 pr-10 text-xl font-semibold text-white">Autorizza: {pendingAlarmState ? getAlarmStateLabel(pendingAlarmState) : ''}</h3>
-            <p className="mt-2 text-sm text-white/60">{pendingStateRequiresCode ? `${alarmCodeTypeLabel} richiesto dall'entita selezionata.` : 'Autenticazione dispositivo non disponibile per questa azione.'}</p>
+            <p className="mt-2 text-sm text-white/60">
+              {description ?? (pendingStateRequiresCode ? `${alarmCodeTypeLabel} richiesto per autorizzare l'azione.` : 'Autenticazione dispositivo non disponibile per questa azione.')}
+            </p>
             {pendingStateRequiresCode ? (
               <div className="liquid-glass-card mt-4 rounded-[24px] p-4">
                 <div className="flex items-center gap-2"><span className="inline-flex rounded-full border border-white/10 bg-white/10 p-1.5"><KeyRound className="h-3.5 w-3.5 text-white/85" /></span><p className="text-xs font-light uppercase tracking-[0.18em] text-white/60">{isAlarmCodeNumeric ? 'Tastierino Numerico' : 'Codice Allarme'}</p></div>

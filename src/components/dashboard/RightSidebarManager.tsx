@@ -3115,7 +3115,7 @@ export function RightSidebarManager({
             {selectedWidget.kind === 'alarm' ? (
               <div className="space-y-3">
                 <label className="block">
-                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Sicurezza Locale</p>
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice locale dashboard</p>
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -3130,14 +3130,14 @@ export function RightSidebarManager({
                     className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
                   />
                   <p className="mt-2 text-[11px] text-white/45">
-                    I pulsanti allarme in dashboard saranno attivi solo quando il codice inserito nel pannello contestuale combacia.
+                    Fallback salvato solo in questo browser: non viene esportato nei backup e puo autorizzare l'azione quando la biometria non e disponibile.
                   </p>
                 </label>
                 <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
                   <span className="min-w-0">
                     <span className="block text-xs uppercase tracking-[0.16em] text-white/50">Biometria cambio stato</span>
                     <span className="mt-1 block text-[11px] leading-snug text-white/45">
-                      Richiede Face ID / impronta nativa prima di modificare lo stato dell&apos;allarme.
+                      Richiede Face ID / impronta prima del disarmo; senza passkey l&apos;azione si blocca salvo fallback locale configurato.
                     </span>
                   </span>
                   {renderAppleSwitch({
@@ -3155,7 +3155,7 @@ export function RightSidebarManager({
             {selectedWidget.kind === 'lock' ? (
               <div className="space-y-3">
                 <label className="block">
-                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Serratura Locale</p>
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">Codice Home Assistant serratura</p>
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -3170,14 +3170,14 @@ export function RightSidebarManager({
                     className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
                   />
                   <p className="mt-2 text-[11px] text-white/45">
-                    Usato come codice predefinito per lock/unlock/open quando l&apos;entita lo richiede.
+                    Viene inviato al servizio Home Assistant lock/unlock/open quando l&apos;entita lo richiede; non viene esportato nei backup.
                   </p>
                 </label>
                 <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
                   <span className="min-w-0">
                     <span className="block text-xs uppercase tracking-[0.16em] text-white/50">Biometria sblocco</span>
                     <span className="mt-1 block text-[11px] leading-snug text-white/45">
-                      Richiede Face ID / impronta nativa prima di inviare lo sblocco.
+                      Richiede Face ID / impronta prima di inviare lo sblocco; senza passkey l&apos;azione viene bloccata.
                     </span>
                   </span>
                   {renderAppleSwitch({

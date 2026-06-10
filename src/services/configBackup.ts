@@ -2,9 +2,19 @@ const BACKUP_SCHEMA = 'ha-dashboard-builder-backup';
 const BACKUP_VERSION = 1;
 const HA_LIVE_STORAGE_KEY = 'ha-external-dashboard:ha-live:v1';
 const HA_OAUTH_TOKENS_STORAGE_KEY = 'hass_auth_tokens';
+export const DASHBOARD_LAYOUT_STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
+const SECURITY_ALARM_PIN_STORAGE_KEY = 'ha.dashboard.security.alarmPin';
+const LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY = 'ha.dashboard.security.biometricCredentialId';
+const DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX = 'ha.dashboard.deviceAuth.credentialId.';
 
 const MANAGED_STORAGE_PREFIXES = ['ha.dashboard.'];
 const MANAGED_STORAGE_KEYS = [HA_LIVE_STORAGE_KEY, HA_OAUTH_TOKENS_STORAGE_KEY];
+const BACKUP_EXCLUDED_STORAGE_KEYS = new Set([
+  SECURITY_ALARM_PIN_STORAGE_KEY,
+  LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY,
+]);
+const BACKUP_EXCLUDED_STORAGE_PREFIXES = [DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX];
+const SENSITIVE_WIDGET_FIELDS = ['alarmUnlockCode', 'lockCode'] as const;
 
 export type DashboardBackupPayload = {
   schema: typeof BACKUP_SCHEMA;
@@ -24,7 +34,7 @@ function normalizeBackupEntries(rawEntries: unknown) {
 
   const entries: Record<string, string> = {};
   Object.entries(rawEntries).forEach(([key, value]) => {
-    if (!isManagedStorageKey(key)) {
+    if (!isBackupStorageKey(key)) {
       return;
     }
     if (typeof value === 'string') {
@@ -44,7 +54,38 @@ function normalizeBackupEntries(rawEntries: unknown) {
   return entries;
 }
 
+function sanitizeWidgetSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeWidgetSecrets);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  Object.entries(value).forEach(([key, entryValue]) => {
+    if ((SENSITIVE_WIDGET_FIELDS as readonly string[]).includes(key)) {
+      return;
+    }
+    sanitized[key] = sanitizeWidgetSecrets(entryValue);
+  });
+  return sanitized;
+}
+
+export function sanitizeDashboardLayoutValue(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return JSON.stringify(sanitizeWidgetSecrets(parsed));
+  } catch {
+    return value;
+  }
+}
+
 function sanitizeSensitiveStorageValue(key: string, value: string) {
+  if (isBackupExcludedStorageKey(key)) {
+    return '';
+  }
+
   if (key === HA_OAUTH_TOKENS_STORAGE_KEY) {
     return JSON.stringify({
       hassUrl: '',
@@ -54,6 +95,10 @@ function sanitizeSensitiveStorageValue(key: string, value: string) {
       access_token: '',
       expires_in: 0,
     });
+  }
+
+  if (key === DASHBOARD_LAYOUT_STORAGE_KEY) {
+    return sanitizeDashboardLayoutValue(value);
   }
 
   if (key !== HA_LIVE_STORAGE_KEY) {
@@ -90,6 +135,17 @@ export function isManagedStorageKey(key: string) {
   return MANAGED_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
+export function isBackupExcludedStorageKey(key: string) {
+  return (
+    BACKUP_EXCLUDED_STORAGE_KEYS.has(key) ||
+    BACKUP_EXCLUDED_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
+}
+
+export function isBackupStorageKey(key: string) {
+  return isManagedStorageKey(key) && !isBackupExcludedStorageKey(key);
+}
+
 export function listManagedStorageKeys(storage: Storage) {
   const keys: string[] = [];
   for (let index = 0; index < storage.length; index += 1) {
@@ -103,8 +159,12 @@ export function listManagedStorageKeys(storage: Storage) {
   return keys;
 }
 
+export function listBackupStorageKeys(storage: Storage) {
+  return listManagedStorageKeys(storage).filter(isBackupStorageKey);
+}
+
 export function createDashboardBackupPayload(storage: Storage): DashboardBackupPayload {
-  const keys = listManagedStorageKeys(storage);
+  const keys = listBackupStorageKeys(storage);
   const entries: Record<string, string> = {};
 
   keys.forEach((key) => {
@@ -187,7 +247,7 @@ export function clearManagedDashboardStorage(storage: Storage) {
 
 export function restoreDashboardBackup(payload: DashboardBackupPayload, storage: Storage) {
   const managedEntries = Object.entries(payload.entries).filter(
-    ([key, value]) => isManagedStorageKey(key) && typeof value === 'string',
+    ([key, value]) => isBackupStorageKey(key) && typeof value === 'string',
   );
   if (!managedEntries.length) {
     return 0;
@@ -196,7 +256,7 @@ export function restoreDashboardBackup(payload: DashboardBackupPayload, storage:
   clearManagedDashboardStorage(storage);
   let restoredCount = 0;
   managedEntries.forEach(([key, value]) => {
-    storage.setItem(key, value);
+    storage.setItem(key, sanitizeSensitiveStorageValue(key, value));
     restoredCount += 1;
   });
 

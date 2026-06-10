@@ -433,6 +433,14 @@ function isEntityOn(entityId: string, entity?: MockEntityState) {
   return ['on', 'open', 'unlocked', 'playing', 'heat', 'cool'].includes(state);
 }
 
+function countActiveEntities(entityIds: string[], states: MockEntityStateMap) {
+  return entityIds.reduce((total, entityId) => total + (isEntityOn(entityId, states[entityId]) ? 1 : 0), 0);
+}
+
+function formatItalianCount(value: number, singular: string, plural: string) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 function formatWeatherCondition(state?: MockEntityState) {
   const fromSecondary = typeof state?.secondary === 'string' ? state.secondary.trim() : '';
   if (fromSecondary) {
@@ -540,10 +548,10 @@ function RoomsTopTab({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative inline-flex items-center rounded-full px-5 py-2.5 text-base font-semibold tracking-tight transition-colors sm:text-[1.15rem]',
+        'group relative inline-block rounded-lg px-3 pb-1 text-sm font-semibold leading-none tracking-normal transition-colors sm:px-4 sm:text-base',
         isActive
           ? 'text-white'
-          : 'text-[#a4acb9] hover:text-[#c0c7d3]',
+          : 'text-white/55 hover:text-white/80',
       )}
     >
       <span className="truncate">{tab.name}</span>
@@ -1044,13 +1052,6 @@ export function RoomsDashboard({
       : activeRoomTab?.id.startsWith('demo-')
         ? 'Demo room'
         : 'Custom local room';
-  const ambientMoodLabel = React.useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return 'Soft morning';
-    if (hour >= 12 && hour < 18) return 'Soft daylight';
-    if (hour >= 18 && hour < 22) return 'Soft evening';
-    return 'Soft night';
-  }, []);
   const trackedEntityIds = React.useMemo(
     () =>
       Array.from(
@@ -1086,6 +1087,97 @@ export function RoomsDashboard({
     }
     return isDemoSeedRoom ? 6 : 0;
   }, [haStates, isDemoSeedRoom, quickTiles, trackedEntityIds]);
+  const roomSubtitle = React.useMemo(() => {
+    const parts: string[] = [];
+    const hasLiveOrDemoData = hasRoomEntities || isDemoSeedRoom;
+
+    if (!hasLiveOrDemoData) {
+      return activeRoomTab?.source === 'ha'
+        ? 'Nessuna entita associata a questa area.'
+        : `${roomSourceLabel} senza entita associate.`;
+    }
+
+    if (climateEntityId || isDemoSeedRoom) {
+      parts.push(`Clima ${Math.round(climateCurrentTemp)}\u00b0, target ${Math.round(climateTargetTemp)}\u00b0`);
+    } else if (weatherEntityId) {
+      parts.push(`Meteo ${Math.round(weatherTemperature)}\u00b0`);
+    }
+
+    const lightCount = activeBuckets.lights.length || quickTiles.filter((tile) => tile.domain === 'light').length;
+    const activeLightCount =
+      activeBuckets.lights.length > 0
+        ? countActiveEntities(activeBuckets.lights, haStates)
+        : quickTiles.filter((tile) => tile.domain === 'light' && tile.isOn).length;
+    if (lightCount > 0) {
+      parts.push(
+        activeLightCount > 0
+          ? formatItalianCount(activeLightCount, 'luce accesa', 'luci accese')
+          : 'luci spente',
+      );
+    }
+
+    const switchCount = activeBuckets.switches.length || quickTiles.filter((tile) => tile.domain !== 'light' && tile.domain !== 'media_player').length;
+    const activeSwitchCount =
+      activeBuckets.switches.length > 0
+        ? countActiveEntities(activeBuckets.switches, haStates)
+        : quickTiles.filter((tile) => tile.domain !== 'light' && tile.domain !== 'media_player' && tile.isOn).length;
+    if (switchCount > 0) {
+      parts.push(
+        activeSwitchCount > 0
+          ? formatItalianCount(activeSwitchCount, 'switch attivo', 'switch attivi')
+          : 'switch spenti',
+      );
+    }
+
+    if (activeBuckets.medias.length > 0 || mediaEntityId || isDemoSeedRoom) {
+      parts.push(mediaIsPlaying ? 'media in riproduzione' : 'media standby');
+    }
+
+    const accessCount = doorTiles.length + activeBuckets.covers.length;
+    const openAccessCount =
+      doorTiles.filter((tile) => !tile.isClosed).length + countActiveEntities(activeBuckets.covers, haStates);
+    if (accessCount > 0) {
+      parts.push(openAccessCount > 0 ? formatItalianCount(openAccessCount, 'apertura attiva', 'aperture attive') : 'accessi chiusi');
+    }
+
+    if (activeBuckets.cameras.length > 0) {
+      parts.push(formatItalianCount(activeBuckets.cameras.length, 'camera', 'camere'));
+    }
+
+    if (activeBuckets.sensors.length > 0) {
+      parts.push(formatItalianCount(activeBuckets.sensors.length, 'sensore', 'sensori'));
+    }
+
+    const trackedCount = trackedEntityIds.length || quickTiles.length;
+    if (trackedCount > 0) {
+      parts.push(`${activeDeviceCount} attivi su ${trackedCount}`);
+    }
+
+    return parts.slice(0, 5).join(' · ');
+  }, [
+    activeBuckets.cameras,
+    activeBuckets.covers,
+    activeBuckets.lights,
+    activeBuckets.medias.length,
+    activeBuckets.sensors.length,
+    activeBuckets.switches,
+    activeDeviceCount,
+    activeRoomTab?.source,
+    climateCurrentTemp,
+    climateEntityId,
+    climateTargetTemp,
+    doorTiles,
+    haStates,
+    hasRoomEntities,
+    isDemoSeedRoom,
+    mediaEntityId,
+    mediaIsPlaying,
+    quickTiles,
+    roomSourceLabel,
+    trackedEntityIds.length,
+    weatherEntityId,
+    weatherTemperature,
+  ]);
   const lightRows = React.useMemo<RoomLightRow[]>(() => {
     const liveIds = [...activeBuckets.lights, ...activeBuckets.switches].slice(0, 4);
     if (liveIds.length > 0) {
@@ -1635,48 +1727,49 @@ export function RoomsDashboard({
       </section>
     );
   };
-
   return (
-    <div className="rooms-dashboard relative h-full w-full overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-5 lg:px-7 lg:py-6">
-      <header className="relative z-10 flex min-h-16 w-full flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <nav className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex min-w-max items-center gap-6 md:gap-8">
-            {roomTabs.map((tab) => (
-              <RoomsTopTab
-                key={tab.id}
-                tab={tab}
-                isActive={tab.id === activeRoomTab?.id}
-                onClick={() => setActiveRoomId(tab.id)}
-              />
-            ))}
+    <div className="rooms-dashboard dashboard-page-scroll">
+      <div className="dashboard-page-content dashboard-page-content-wide">
+        <header className="relative z-10 w-full">
+          <div className="flex min-w-0 items-baseline gap-3">
+            <div className="flex min-w-0 flex-1 touch-pan-x items-baseline overflow-x-auto overscroll-x-contain scroll-smooth pb-1 pr-4 hide-scrollbar">
+              <h1 className="shrink-0 text-[2rem] font-bold leading-none tracking-normal text-white sm:text-[2.65rem] lg:text-[3rem]">
+                {activeRoomTab?.name ?? 'Living Room'}
+              </h1>
+              <nav className="ml-3 flex min-w-max items-baseline gap-1 sm:gap-2">
+                {roomTabs
+                  .filter((tab) => tab.id !== activeRoomTab?.id)
+                  .map((tab) => (
+                    <RoomsTopTab
+                      key={tab.id}
+                      tab={tab}
+                      isActive={false}
+                      onClick={() => setActiveRoomId(tab.id)}
+                    />
+                  ))}
+              </nav>
+            </div>
+            <RoomIconButton
+              onClick={() => setIsManageOpen(true)}
+              label="Manage rooms"
+              className="shrink-0 border border-white/12 bg-white/[0.03]"
+            >
+              <Plus size={20} />
+            </RoomIconButton>
           </div>
-        </nav>
-        <RoomIconButton
-          onClick={() => setIsManageOpen(true)}
-          label="Manage rooms"
-          className="border border-white/12 bg-transparent"
+          <p className="dashboard-page-subtitle mt-0.5">
+            {roomSubtitle}
+          </p>
+        </header>
+
+        <main
+          className={cn(
+            'relative z-10 mt-6 grid grid-cols-1 gap-4 xl:gap-5',
+            climateControlModel
+              ? 'xl:grid-cols-[minmax(300px,0.95fr)_minmax(320px,1fr)_minmax(320px,1fr)]'
+              : 'xl:grid-cols-2',
+          )}
         >
-          <Plus size={20} />
-        </RoomIconButton>
-      </header>
-
-      <section className="relative z-10 mt-4">
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-[2.2rem]">
-          {activeRoomTab?.name ?? 'Living Room'}
-        </h1>
-        <p className="mt-2 text-sm text-white/58 sm:text-base">
-          {ambientMoodLabel}, {Math.round(weatherTemperature)}°, {activeDeviceCount} devices on
-        </p>
-      </section>
-
-      <main
-        className={cn(
-          'relative z-10 mt-5 grid grid-cols-1 gap-4 xl:gap-5',
-          climateControlModel
-            ? 'xl:grid-cols-[minmax(300px,0.95fr)_minmax(320px,1fr)_minmax(320px,1fr)]'
-            : 'xl:grid-cols-2',
-        )}
-      >
         {climateControlModel ? (
           <section className="rooms-surface min-h-[540px] min-w-0 overflow-hidden p-0 sm:min-h-[600px]">
             <ClimateControls
@@ -1765,6 +1858,7 @@ export function RoomsDashboard({
           </section>
         ) : null}
       </main>
+      </div>
       {isManageOpen ? (
         <div className="fixed inset-0 z-[280] flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-8">
           <button

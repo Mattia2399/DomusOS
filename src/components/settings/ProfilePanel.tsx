@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   SunMedium,
   Plus,
+  Trash2,
   Upload,
   Users,
   X,
@@ -38,6 +39,7 @@ import {
   buildDashboardUserDataPayload,
   parseDashboardUserDataPayload,
 } from '../../services/haUserConfigSync';
+import { appendSecurityAuditEvent } from '../../services/securityAuth';
 import type { DashboardConfig } from '../../types/dashboard';
 
 type ProfilePanelProps = {
@@ -452,6 +454,10 @@ export function ProfilePanel({
     name: userEmail ?? dashboardCurrentUserId ?? 'current_user',
     displayName: userAvatarAlt ?? userEmail ?? 'Utente Corrente',
   });
+  const securityOriginLabel =
+    typeof window === 'undefined' ? 'Origine non disponibile' : window.location.origin;
+  const isSecureBrowserContext = typeof window !== 'undefined' && window.isSecureContext;
+  const securityContextStatusLabel = isSecureBrowserContext ? 'Contesto sicuro' : 'Contesto non sicuro';
 
   useEffect(() => {
     if (!isOpen) {
@@ -1258,17 +1264,95 @@ export function ProfilePanel({
     try {
       const verified = await deviceAuth.verifyOrEnroll('Profilo sicurezza');
       if (!verified) {
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Verifica biometrica profilo non riuscita o annullata.',
+          context: 'Profilo sicurezza',
+        });
         setSecurityActionFeedback({
           tone: 'error',
           text: 'Autenticazione biometrica annullata o non riuscita.',
         });
         return;
       }
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: wasEnrolled ? 'Passkey dispositivo verificata.' : 'Passkey dispositivo creata.',
+        context: 'Profilo sicurezza',
+      });
       setSecurityActionFeedback({
         tone: 'success',
         text: wasEnrolled
           ? 'Autenticazione dispositivo verificata. Sara usata automaticamente per le azioni sensibili.'
           : 'Passkey dispositivo creata. Da ora verra usata automaticamente per le azioni sensibili.',
+      });
+    } finally {
+      setIsSecurityBiometricBusy(false);
+    }
+  };
+
+  const handleRemoveSecurityBiometric = () => {
+    if (!deviceAuth.isEnrolled) {
+      return;
+    }
+    const shouldRemove = window.confirm(
+      'Rimuovere la passkey locale da questo browser? Le azioni sensibili richiederanno una nuova configurazione.',
+    );
+    if (!shouldRemove) {
+      return;
+    }
+    deviceAuth.clearCredential();
+    appendSecurityAuditEvent({
+      tone: 'warning',
+      message: 'Passkey dispositivo rimossa.',
+      context: 'Profilo sicurezza',
+    });
+    setSecurityActionFeedback({
+      tone: 'success',
+      text: 'Passkey locale rimossa da questo browser.',
+    });
+  };
+
+  const handleRecreateSecurityBiometric = async () => {
+    if (!isSecurityBiometricAvailable) {
+      setSecurityActionFeedback({
+        tone: 'error',
+        text: 'Biometria non disponibile su questo browser o dispositivo.',
+      });
+      return;
+    }
+    const shouldRecreate = window.confirm(
+      'Rimuovere la passkey locale e crearne una nuova per questo browser?',
+    );
+    if (!shouldRecreate) {
+      return;
+    }
+
+    setIsSecurityBiometricBusy(true);
+    setSecurityActionFeedback({ tone: 'idle', text: '' });
+    try {
+      deviceAuth.clearCredential();
+      const verified = await deviceAuth.enroll('Ricrea passkey profilo sicurezza');
+      if (!verified) {
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Ricreazione passkey dispositivo non riuscita o annullata.',
+          context: 'Profilo sicurezza',
+        });
+        setSecurityActionFeedback({
+          tone: 'error',
+          text: 'Creazione nuova passkey annullata o non riuscita.',
+        });
+        return;
+      }
+      appendSecurityAuditEvent({
+        tone: 'success',
+        message: 'Passkey dispositivo ricreata.',
+        context: 'Profilo sicurezza',
+      });
+      setSecurityActionFeedback({
+        tone: 'success',
+        text: 'Nuova passkey locale creata per questo browser.',
       });
     } finally {
       setIsSecurityBiometricBusy(false);
@@ -2296,6 +2380,27 @@ export function ProfilePanel({
                       {deviceAuth.isEnrolled ? 'Configurata' : 'Da creare'}
                     </span>
                   </div>
+                  <div className={settingsDividerClass} />
+                  <div className={settingsRowClass}>
+                    {renderSettingsIcon(Link2)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Origine browser</p>
+                      <p className={settingsSubtitleClass}>{securityOriginLabel}</p>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold ${
+                        isSecureBrowserContext
+                          ? isLightTheme
+                            ? 'text-emerald-700'
+                            : 'text-emerald-200'
+                          : isLightTheme
+                            ? 'text-rose-700'
+                            : 'text-rose-200'
+                      }`}
+                    >
+                      {securityContextStatusLabel}
+                    </span>
+                  </div>
                 </div>
 
                 <div className={`mt-4 ${settingsGroupClass}`}>
@@ -2313,6 +2418,34 @@ export function ProfilePanel({
                           : deviceAuth.isEnrolled ? 'Verifica autenticazione dispositivo' : 'Crea passkey dispositivo'}
                       </p>
                       <p className={settingsSubtitleClass}>Avvia Face ID, impronta o PIN di sistema.</p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
+                  </button>
+                  <div className={settingsDividerClass} />
+                  <button
+                    type="button"
+                    onClick={() => void handleRecreateSecurityBiometric()}
+                    disabled={isSecurityBiometricBusy || !isSecurityBiometricAvailable}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                  >
+                    {renderSettingsIcon(RotateCcw)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Ricrea passkey dispositivo</p>
+                      <p className={settingsSubtitleClass}>Rimuove quella locale e avvia una nuova registrazione.</p>
+                    </div>
+                    <ChevronRight size={16} className={subtleTextClass} />
+                  </button>
+                  <div className={settingsDividerClass} />
+                  <button
+                    type="button"
+                    onClick={handleRemoveSecurityBiometric}
+                    disabled={isSecurityBiometricBusy || !deviceAuth.isEnrolled}
+                    className={`${settingsRowClass} disabled:cursor-not-allowed disabled:opacity-60 ${buttonMotionClass}`}
+                  >
+                    {renderSettingsIcon(Trash2)}
+                    <div className="min-w-0 flex-1">
+                      <p className={settingsTitleClass}>Rimuovi passkey locale</p>
+                      <p className={settingsSubtitleClass}>Cancella solo il riferimento WebAuthn salvato in questo browser.</p>
                     </div>
                     <ChevronRight size={16} className={subtleTextClass} />
                   </button>
@@ -2461,8 +2594,13 @@ export function ProfilePanel({
                   )}
                 </div>
                 <p className={`mt-3 text-xs ${subtleTextClass}`}>
-                  Stato HA: {haStatus}. OAuth e il metodo consigliato per evitare token long-lived copiati manualmente.
+                  Stato HA: {haStatus}. OAuth e il metodo consigliato; il token manuale resta un fallback meno sicuro perche vive nel browser.
                 </p>
+                {!isManagedByParent && haToken.trim().length > 0 ? (
+                  <div className={`mt-3 ${infoCardClass}`}>
+                    I backup rimuovono i segreti Home Assistant, ma un token manuale salvato nel browser va trattato come sensibile.
+                  </div>
+                ) : null}
                 {haErrorMessage ? <p className={`mt-2 ${errorTextClass}`}>{haErrorMessage}</p> : null}
               </section>
             ) : null}
@@ -2472,7 +2610,8 @@ export function ProfilePanel({
                 <h3 className="text-lg font-semibold">Backup e dati</h3>
                 <p className={`mt-3 text-xs ${subduedTextClass}`}>
                   Esporta la configurazione corrente in JSON, ripristinala da file o azzera tutto. Dopo
-                  ripristino/reset la pagina viene ricaricata.
+                  ripristino/reset la pagina viene ricaricata. Backup e restore scartano token, passkey,
+                  PIN locali e codici salvati nei widget.
                 </p>
                 {enterpriseControlsEnabled ? (
                   <>
