@@ -30,7 +30,11 @@ export type HaArea = {
   area_id: string;
   name: string;
   aliases?: string[];
+  floor_id?: string | null;
+  humidity_entity_id?: string | null;
+  icon?: string | null;
   picture?: string;
+  temperature_entity_id?: string | null;
 };
 
 function parseAreaRegistryPayload(payload: unknown): HaArea[] {
@@ -45,7 +49,17 @@ function parseAreaRegistryPayload(payload: unknown): HaArea[] {
       const aliases = Array.isArray(entry.aliases)
         ? entry.aliases.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         : undefined;
+      const floorId = typeof entry.floor_id === 'string' && entry.floor_id.trim().length > 0 ? entry.floor_id : null;
+      const humidityEntityId =
+        typeof entry.humidity_entity_id === 'string' && entry.humidity_entity_id.trim().length > 0
+          ? entry.humidity_entity_id
+          : null;
+      const icon = typeof entry.icon === 'string' && entry.icon.trim().length > 0 ? entry.icon : null;
       const picture = typeof entry.picture === 'string' && entry.picture.trim().length > 0 ? entry.picture : undefined;
+      const temperatureEntityId =
+        typeof entry.temperature_entity_id === 'string' && entry.temperature_entity_id.trim().length > 0
+          ? entry.temperature_entity_id
+          : null;
       if (!areaId || !name) {
         return null;
       }
@@ -56,9 +70,13 @@ function parseAreaRegistryPayload(payload: unknown): HaArea[] {
       if (aliases && aliases.length > 0) {
         area.aliases = aliases;
       }
+      area.floor_id = floorId;
+      area.humidity_entity_id = humidityEntityId;
+      area.icon = icon;
       if (picture) {
         area.picture = picture;
       }
+      area.temperature_entity_id = temperatureEntityId;
       return area;
     })
     .filter((entry): entry is HaArea => entry !== null);

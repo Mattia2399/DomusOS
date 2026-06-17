@@ -14,17 +14,12 @@ import { BottomBarNav } from './BottomBarNav';
 import { XsNotificationBell } from './XsNotificationBell';
 import { RightSidebarManager } from './RightSidebarManager';
 import { GridCanvas } from './GridCanvas';
-import { FavoritesDrawer } from './FavoritesDrawer';
 import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
 import {
   normalizeWidgetTypeLayoutOverrides,
   setActiveWidgetTypeLayoutOverrides,
 } from './dashboardBreakpointConfig';
 import type { CameraPtzDirection } from '../settings/CameraControls';
-import {
-  createDemoAgentClient,
-  createHomeAssistantAssistAgentClient,
-} from '../../services/assistant/agentClients';
 import { useNotifications } from '../../context/NotificationProvider';
 import {
   ProfilePanel,
@@ -2957,17 +2952,6 @@ export function MainBoard() {
   } = activeHaConnection;
   const { addNotification, removeNotification } = useNotifications();
   const isHaConnected = haStatus === 'connected';
-  const assistantAgentClient = useMemo(
-    () =>
-      isHaConnected
-        ? createHomeAssistantAssistAgentClient({
-            callApi: callHaApi,
-            isConnected: isHaConnected,
-            language: 'it',
-          })
-        : createDemoAgentClient(),
-    [callHaApi, isHaConnected],
-  );
   const [climatePendingByEntity, setClimatePendingByEntity] = useState<Record<string, ClimatePendingState>>({});
   const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
   const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
@@ -3414,7 +3398,6 @@ export function MainBoard() {
   const [selectedSidebarPathId, setSelectedSidebarPathId] = useState<string | null>(null);
   const [runningSceneBySectionId, setRunningSceneBySectionId] = useState<Partial<Record<string, SceneRunState>>>({});
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-  const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('theme');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
@@ -6882,12 +6865,6 @@ export function MainBoard() {
   ]);
 
   useEffect(() => {
-    if (isEditMode) {
-      setIsFavoritesOpen(false);
-    }
-  }, [isEditMode]);
-
-  useEffect(() => {
     if (isEditAvailableForRoute) {
       return;
     }
@@ -6898,10 +6875,7 @@ export function MainBoard() {
     if (isCatalogOpen) {
       setIsCatalogOpen(false);
     }
-    if (isFavoritesOpen) {
-      setIsFavoritesOpen(false);
-    }
-  }, [isCatalogOpen, isEditAvailableForRoute, isEditMode, isFavoritesOpen]);
+  }, [isCatalogOpen, isEditAvailableForRoute, isEditMode]);
 
   useEffect(() => {
     if (!isConsumptionView) {
@@ -10455,7 +10429,6 @@ export function MainBoard() {
       setSelectedWidgetId(null);
       setSelectedSectionId(null);
       setSelectedSidebarPathId(null);
-      setIsFavoritesOpen(false);
 
       if (!nextEditAvailability) {
         setIsEditMode(false);
@@ -10539,6 +10512,7 @@ export function MainBoard() {
       } dashboard-shell ${dashboardWallpaperClass}`}
     >
       <div aria-hidden className="dashboard-wallpaper-layer" />
+
       {!isImmersiveView && !isXsViewport ? (
         <LeftSidebar
           isEditMode={isEditMode}
@@ -10897,16 +10871,6 @@ export function MainBoard() {
             />
           </div>
         </>
-      ) : null}
-
-      {!isEditMode && !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView ? (
-        <FavoritesDrawer
-          isOpen={isFavoritesOpen}
-          onOpen={() => setIsFavoritesOpen(true)}
-          onClose={() => setIsFavoritesOpen(false)}
-          agentClient={assistantAgentClient}
-          haEntityIds={haEntityIds}
-        />
       ) : null}
 
       {shouldShowBottomBar ? (
