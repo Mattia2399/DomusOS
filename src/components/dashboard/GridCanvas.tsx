@@ -136,11 +136,11 @@ const GRID_ENGINE_ROW_UNIT = GRID_ENGINE_ROW_UNIT_PX;
 const GRID_ENGINE_BREAKPOINT_ORDER: GridBreakpoint[] = ['2xl', 'xl', 'lg', 'md', 'sm', 'xs'];
 const RUNTIME_GRID_WIDTH_JITTER_PX = 2;
 const GRID_ENGINE_CONTAINER_PADDING: Record<GridBreakpoint, [number, number]> = {
-  '2xl': [24, 14],
-  xl: [24, 14],
-  lg: [20, 12],
-  md: [14, 10],
-  sm: [10, 8],
+  '2xl': [0, 14],
+  xl: [0, 14],
+  lg: [0, 12],
+  md: [0, 10],
+  sm: [0, 8],
   xs: [2, 8],
 };
 const XS_CONTEXT_OPEN_LONG_PRESS_MS = 420;
@@ -1665,7 +1665,9 @@ export function GridCanvas({
         section.kind === 'greeting' || section.kind === 'weather' || section.kind === 'scenes' || isStack;
       const sectionPaddingClass = isStack
         ? 'p-0'
-        : isGreetingSection || isCompactWeatherSection
+        : isGreetingSection
+          ? 'px-0 py-2 sm:py-2.5'
+        : isCompactWeatherSection
           ? isTabletCanvas
             ? 'px-3 py-2 sm:px-4 sm:py-2.5'
             : 'px-4 py-2 sm:px-5 sm:py-2.5'

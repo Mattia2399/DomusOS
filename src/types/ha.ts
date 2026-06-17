@@ -183,6 +183,8 @@ export interface MockEntityState {
   mediaPosition?: number;
   mediaDuration?: number;
   mediaPositionUpdatedAt?: number;
+  shuffleEnabled?: boolean;
+  repeatMode?: 'off' | 'all' | 'one' | string;
   forecast?: MockWeatherForecastEntry[];
   precipitation?: number;
   windSpeed?: number;

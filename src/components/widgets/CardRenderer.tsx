@@ -45,6 +45,9 @@ type WidgetCardRendererProps = {
   onMediaPrevious?: (widget: Widget) => void;
   onMediaNext?: (widget: Widget) => void;
   onMediaSeek?: (widget: Widget, position: number) => void;
+  onMediaShuffle?: (widget: Widget) => void;
+  onMediaRepeat?: (widget: Widget) => void;
+  mediaHideHeader?: boolean;
   onAlarmDisarm?: (widget: Widget) => void;
   onAlarmArm?: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onVacuumStartPause?: (widget: Widget) => void;
@@ -75,6 +78,9 @@ function WidgetCardRendererComponent({
   onMediaPrevious,
   onMediaNext,
   onMediaSeek,
+  onMediaShuffle,
+  onMediaRepeat,
+  mediaHideHeader = false,
   onAlarmDisarm,
   onAlarmArm,
   onVacuumStartPause,
@@ -142,6 +148,9 @@ function WidgetCardRendererComponent({
         onPreviousTrack={() => onMediaPrevious?.(widget)}
         onNextTrack={() => onMediaNext?.(widget)}
         onSeek={(position) => onMediaSeek?.(widget, position)}
+        onShuffle={() => onMediaShuffle?.(widget)}
+        onRepeat={() => onMediaRepeat?.(widget)}
+        hideHeader={mediaHideHeader}
         liveEntity={liveEntity}
       />
     );

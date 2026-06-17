@@ -819,9 +819,9 @@ export function RoomClimateCard({
     onSelect: ((value: string) => void) | undefined,
   ) =>
     actions.length > 0 ? (
-      <div className="flex w-full min-w-0 items-center justify-between gap-3">
+      <div className="flex w-full min-w-0 flex-col gap-2 [@container_(min-width:_19rem)]:flex-row [@container_(min-width:_19rem)]:items-center [@container_(min-width:_19rem)]:justify-between">
         <p className="shrink-0 text-xs font-semibold tracking-tight text-white/50">{label}</p>
-        <div className="scrollbar-none inline-flex min-w-0 max-w-[70%] items-center gap-1 overflow-x-auto overscroll-x-contain rounded-full border border-white/[0.055] bg-white/[0.045] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl [touch-action:pan-x]">
+        <div className="scrollbar-none inline-flex w-full min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain rounded-full border border-white/[0.055] bg-white/[0.045] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl [touch-action:pan-x] [@container_(min-width:_19rem)]:max-w-[70%]">
           {actions.map((action) => {
             const isFanRail = label === 'Ventilazione';
             const shouldShowFanLabel = isFanRail && /^[0-9]+$/.test(action.label);
@@ -851,17 +851,17 @@ export function RoomClimateCard({
     ) : null;
 
   return (
-    <div className="flex h-full min-h-[32rem] max-h-[calc(100dvh-14rem)] flex-col justify-between overflow-hidden rounded-[inherit] px-5 py-5 md:min-h-[33rem] xl:min-h-[34rem]">
+    <div className="@container flex h-full min-h-0 flex-col overflow-hidden rounded-[inherit] px-[clamp(0.85rem,5cqw,1.25rem)] pb-[clamp(0.85rem,3.4cqh,1.25rem)] pt-[clamp(1rem,3.8cqh,1.35rem)]">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="truncate text-[1.05rem] font-semibold leading-tight tracking-tight text-white">
+          <h2 className="line-clamp-2 text-[clamp(0.92rem,4.8cqw,1.05rem)] font-semibold leading-[1.12] tracking-tight text-white">
             {climate.name || 'Termostato'}
           </h2>
           <p className="mt-1 truncate text-xs font-medium text-white/46">{translatedStatus}</p>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-0 py-5">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0 py-[clamp(0.35rem,1.4cqh,0.75rem)]">
         <CircularTemperatureSlider
           value={targetForProgress}
           min={minTemp}
@@ -872,45 +872,45 @@ export function RoomClimateCard({
           glowFilter={dialGlowFilter}
           pending={isTargetPending}
           disabled={!canUseCircularSlider}
-          className="mx-auto w-full max-w-[14.75rem] xl:max-w-[15.75rem]"
+          className="mx-auto w-full max-w-[min(17rem,92cqw,52cqh)]"
           onChange={(value) => applyTargetValue(value, false)}
           onCommit={(value) => applyTargetValue(value, true)}
         >
-          <div className="flex h-[63%] w-[63%] flex-col items-center justify-center rounded-full bg-white/[0.025] text-center backdrop-blur-md">
+          <div className="flex h-[63%] w-[63%] flex-col items-center justify-center rounded-full bg-white/[0.025] px-2 text-center backdrop-blur-md">
             <div className="flex items-start">
-              <span className={`text-[3.15rem] font-light leading-none tracking-tight transition-colors duration-200 ${isTargetPending ? 'text-white/58' : 'text-white'}`}>
+              <span className={`text-[clamp(2.2rem,15cqw,3.08rem)] font-light leading-none tracking-tight transition-colors duration-200 ${isTargetPending ? 'text-white/58' : 'text-white'}`}>
                 {targetValue}
               </span>
-              <span className={`mt-1.5 text-xl transition-colors duration-200 ${isTargetPending ? 'text-white/46' : 'text-white/72'}`}>{displayUnit}</span>
+              <span className={`mt-[0.3em] text-[clamp(0.88rem,5.2cqw,1.25rem)] transition-colors duration-200 ${isTargetPending ? 'text-white/46' : 'text-white/72'}`}>{displayUnit}</span>
             </div>
-            <p className="mt-1.5 text-xs font-semibold tracking-tight text-white/45">
+            <p className="mt-1 max-w-full truncate text-[clamp(0.62rem,3.4cqw,0.75rem)] font-semibold tracking-tight text-white/45">
               {currentTemp !== undefined ? `Attuale ${currentTemp.toFixed(1)}${unit}` : 'Attuale non disponibile'}
             </p>
           </div>
         </CircularTemperatureSlider>
 
-        <div className="-mt-8 flex items-center justify-center gap-3">
+        <div className="-mt-[clamp(0.6rem,2.1cqh,1.05rem)] flex items-center justify-center gap-3">
           <GlassButton
             size="icon"
-            className="h-9 w-9 rounded-full border-white/[0.08] bg-white/[0.07] text-white/80 hover:bg-white/[0.11] hover:text-white"
+            className="h-10 w-10 rounded-full border-white/[0.08] bg-white/[0.07] text-white/80 hover:bg-white/[0.11] hover:text-white"
             onClick={() => updateTargetByStep(-1)}
             aria-label="Diminuisci temperatura target"
           >
-            <Minus size={17} />
+            <Minus size={18} />
           </GlassButton>
           <GlassButton
             size="icon"
-            className="h-9 w-9 rounded-full border-white/[0.08] bg-white/[0.07] text-white/80 hover:bg-white/[0.11] hover:text-white"
+            className="h-10 w-10 rounded-full border-white/[0.08] bg-white/[0.07] text-white/80 hover:bg-white/[0.11] hover:text-white"
             onClick={() => updateTargetByStep(1)}
             aria-label="Aumenta temperatura target"
           >
-            <Plus size={17} />
+            <Plus size={18} />
           </GlassButton>
         </div>
       </div>
 
       {hvacActions.length > 0 || fanActions.length > 0 ? (
-        <div className="shrink-0 rounded-[1.35rem] border border-white/[0.06] bg-white/[0.035] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_18px_42px_rgba(0,0,0,0.14)] backdrop-blur-2xl">
+        <div className="mt-[clamp(0.1rem,0.55cqh,0.35rem)] shrink-0 rounded-[1.35rem] border border-white/[0.06] bg-white/[0.035] p-[clamp(0.65rem,3.2cqw,0.85rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_18px_42px_rgba(0,0,0,0.14)] backdrop-blur-2xl">
           {renderActionRail('Modalità', hvacActions, onSetMode)}
           {hvacActions.length > 0 && fanActions.length > 0 ? <div className="my-2 h-px w-full bg-white/[0.055]" /> : null}
           {renderActionRail('Ventilazione', fanActions, onSetFanMode)}

@@ -54,7 +54,7 @@ import {
   STACK_GRID_COLS_BY_BREAKPOINT,
   type GridEngineBreakpoint,
 } from '../components/dashboard/dashboardBreakpointConfig';
-import { ClimateControls, RoomClimateCard } from '../components/settings/ClimateControls';
+import { RoomClimateCard } from '../components/settings/ClimateControls';
 import { SectionCardRenderer, WidgetCardRenderer } from '../components/widgets/CardRenderer';
 import { useDashboardState } from '../hooks/useDashboardState';
 import type { HaArea } from '../hooks/useHaLiveConnection';
@@ -82,6 +82,7 @@ const FLOOR_CARD_CLASS =
 const FLOOR_ADD_CARD_CLASS =
   'snap-center flex-shrink-0 w-64 h-80 rounded-[2rem] border border-dashed border-white/10 border-t border-t-white/14 bg-white/[0.01] hover:bg-white/[0.03] p-6 flex flex-col items-center justify-center gap-3 group transition-all duration-200 active:scale-[0.98]';
 const FLOOR_CAROUSEL_DRAG_THRESHOLD_PX = 6;
+const ROOM_TITLE_DRAG_THRESHOLD_PX = 3;
 const ROOM_SECTION_PREVIEW_LIMIT = 4;
 const ROOM_ACCESSORY_PREVIEW_LIMIT = 8;
 const EMPTY_FLOOR_DRAFT: FloorDraft = {
@@ -441,7 +442,12 @@ function isFloorCarouselInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('button, input, textarea, select, a, [data-no-floor-drag="true"]'));
 }
 
-function getRoomsGridStructure(isMobile: boolean, isMediaActive: boolean, isSecurityAlert: boolean): React.CSSProperties {
+function getRoomsGridStructure(
+  isMobile: boolean,
+  isMediaActive: boolean,
+  isSecurityAlert: boolean,
+  hideMediaArea = false,
+): React.CSSProperties {
   if (!isMobile) {
     return {
       display: 'grid',
@@ -463,6 +469,10 @@ function getRoomsGridStructure(isMobile: boolean, isMediaActive: boolean, isSecu
     mobileAreas = ['header', 'security_cams', 'clima', 'lights_switches', 'sensors', 'media'];
   } else if (isMediaActive) {
     mobileAreas = ['header', 'media', 'clima', 'lights_switches', 'sensors', 'security_cams'];
+  }
+
+  if (hideMediaArea) {
+    mobileAreas = mobileAreas.filter((area) => area !== 'media');
   }
 
   return {
@@ -768,6 +778,12 @@ function isEntityOn(entityId: string, entity?: MockEntityState) {
   return ['on', 'open', 'unlocked', 'playing', 'heat', 'cool'].includes(state);
 }
 
+function isMediaEntityPlaying(entity?: MockEntityState) {
+  const state = `${entity?.state ?? ''}`.trim().toLowerCase();
+  const stateLabel = `${entity?.stateLabel ?? ''}`.trim().toLowerCase();
+  return state === 'playing' || state === 'on' || stateLabel.includes('playing') || stateLabel.includes('riprodu');
+}
+
 function getEntityNumericValue(entity?: MockEntityState) {
   return (
     toNumber(entity?.numericValue) ??
@@ -1064,6 +1080,12 @@ export function RoomsDashboard({
   const floorCarouselRef = React.useRef<HTMLDivElement | null>(null);
   const floorCarouselDragRef = React.useRef<FloorCarouselDragState | null>(null);
   const floorCarouselSuppressClickRef = React.useRef(false);
+  const mobileClimateSwiperRef = React.useRef<HTMLDivElement | null>(null);
+  const climateSwiperDragRef = React.useRef<FloorCarouselDragState | null>(null);
+  const climateSwiperSuppressClickRef = React.useRef(false);
+  const mediaSwiperRef = React.useRef<HTMLDivElement | null>(null);
+  const mediaSwiperDragRef = React.useRef<FloorCarouselDragState | null>(null);
+  const mediaSwiperSuppressClickRef = React.useRef(false);
   const [customRooms, setCustomRooms] = React.useState<CustomRoomRecord[]>(readStoredCustomRooms);
   const [createdHaAreas, setCreatedHaAreas] = React.useState<HaArea[]>([]);
   const [deletedHaAreaIds, setDeletedHaAreaIds] = React.useState<string[]>([]);
@@ -2003,8 +2025,22 @@ export function RoomsDashboard({
   ]);
 
   const mediaEntityIds = React.useMemo(
-    () => (activeBuckets.medias.length > 0 ? activeBuckets.medias : isDemoSeedRoom ? ['media_player.living_room_tv'] : []),
-    [activeBuckets.medias, isDemoSeedRoom],
+    () => {
+      const ids = activeBuckets.medias.length > 0 ? activeBuckets.medias : isDemoSeedRoom ? ['media_player.living_room_tv'] : [];
+      return [...ids].sort((left, right) => {
+        const leftPlaying = isMediaEntityPlaying(haStates[left]);
+        const rightPlaying = isMediaEntityPlaying(haStates[right]);
+        if (leftPlaying === rightPlaying) {
+          return 0;
+        }
+        return leftPlaying ? -1 : 1;
+      });
+    },
+    [activeBuckets.medias, haStates, isDemoSeedRoom],
+  );
+  const primaryPlayingMediaEntityId = React.useMemo(
+    () => mediaEntityIds.find((entityId) => isMediaEntityPlaying(haStates[entityId])) ?? '',
+    [haStates, mediaEntityIds],
   );
 
   React.useEffect(() => {
@@ -2012,8 +2048,13 @@ export function RoomsDashboard({
       setSelectedMediaEntityId('');
       return;
     }
-    setSelectedMediaEntityId((current) => (current && mediaEntityIds.includes(current) ? current : mediaEntityIds[0]));
-  }, [mediaEntityIds]);
+    setSelectedMediaEntityId((current) => {
+      if (primaryPlayingMediaEntityId && !isMediaEntityPlaying(haStates[current])) {
+        return primaryPlayingMediaEntityId;
+      }
+      return current && mediaEntityIds.includes(current) ? current : mediaEntityIds[0];
+    });
+  }, [haStates, mediaEntityIds, primaryPlayingMediaEntityId]);
 
   const mediaEntityId = selectedMediaEntityId || mediaEntityIds[0] || null;
   const mediaEntity = mediaEntityId ? haStates[mediaEntityId] : undefined;
@@ -2026,10 +2067,7 @@ export function RoomsDashboard({
   const isAnyMediaActive = React.useMemo(
     () =>
       isDemoSeedRoom ||
-      mediaEntityIds.some((entityId) => {
-        const state = `${haStates[entityId]?.state ?? ''}`.trim().toLowerCase();
-        return state === 'playing' || state === 'on';
-      }),
+      mediaEntityIds.some((entityId) => isMediaEntityPlaying(haStates[entityId])),
     [haStates, isDemoSeedRoom, mediaEntityIds],
   );
 
@@ -2305,52 +2343,64 @@ export function RoomsDashboard({
   );
   const isMobileRoomsGrid =
     roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm' || roomsGridBreakpoint === 'md';
+  const useMediaBottomBar = roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm';
+  const showMediaBottomBar = useMediaBottomBar && mediaEntityIds.length > 0 && isAnyMediaActive;
   const isCompactClimateControls = roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm';
   const roomsGridStyle = React.useMemo(
-    () => getRoomsGridStructure(isMobileRoomsGrid, isAnyMediaActive, isSecurityAlert),
-    [isAnyMediaActive, isMobileRoomsGrid, isSecurityAlert],
+    () => getRoomsGridStructure(isMobileRoomsGrid, isAnyMediaActive, isSecurityAlert, showMediaBottomBar),
+    [isAnyMediaActive, isMobileRoomsGrid, isSecurityAlert, showMediaBottomBar],
   );
 
-  const climateControlModel = React.useMemo(() => {
-    if (!climateEntityId && !isDemoSeedRoom) {
+  const buildClimateControlModel = React.useCallback((entityId: string | null) => {
+    if (!entityId && !isDemoSeedRoom) {
       return null;
     }
-    const rawAttributes = climateEntity?.rawAttributes ?? {};
-    const mode = `${climateEntity?.hvacMode ?? rawAttributes.hvac_mode ?? climateEntity?.state ?? 'auto'}`
+    const resolvedEntityId = entityId ?? 'climate.air_conditioner';
+    const entity = haStates[resolvedEntityId];
+    const rawAttributes = entity?.rawAttributes ?? {};
+    const currentTemp =
+      toNumber(entity?.currentValue) ??
+      toNumber(rawAttributes.current_temperature) ??
+      24;
+    const targetTemp =
+      toNumber(entity?.targetValue) ??
+      toNumber(rawAttributes.temperature) ??
+      22;
+    const mode = `${entity?.hvacMode ?? rawAttributes.hvac_mode ?? entity?.state ?? 'auto'}`
       .trim()
       .toLowerCase();
-    const hvacModesFromEntity = toStringArray(climateEntity?.hvacModes);
+    const hvacModesFromEntity = toStringArray(entity?.hvacModes);
     const hvacModesFromAttributes = toStringArray(rawAttributes.hvac_modes);
-    const fanModesFromEntity = toStringArray(climateEntity?.fanModes);
+    const fanModesFromEntity = toStringArray(entity?.fanModes);
     const fanModesFromAttributes = toStringArray(rawAttributes.fan_modes);
     const presetModeFromEntity =
-      typeof (climateEntity as { presetMode?: unknown } | undefined)?.presetMode === 'string'
-        ? (climateEntity as { presetMode?: string }).presetMode
+      typeof (entity as { presetMode?: unknown } | undefined)?.presetMode === 'string'
+        ? (entity as { presetMode?: string }).presetMode
         : undefined;
-    const presetModesFromEntity = toStringArray((climateEntity as { presetModes?: unknown } | undefined)?.presetModes);
+    const presetModesFromEntity = toStringArray((entity as { presetModes?: unknown } | undefined)?.presetModes);
     const presetModesFromAttributes = toStringArray(rawAttributes.preset_modes);
     const temperatureUnit =
       typeof rawAttributes.temperature_unit === 'string'
         ? rawAttributes.temperature_unit
-        : climateEntity?.unit;
+        : entity?.unit;
 
     return {
-      name: climateEntityId ? getEntityFriendlyName(climateEntityId, climateEntity) : 'Clima stanza',
+      name: resolvedEntityId ? getEntityFriendlyName(resolvedEntityId, entity) : 'Clima stanza',
       mode,
       isOn: !['off', 'unavailable', 'unknown'].includes(mode),
       status:
-        typeof climateEntity?.stateLabel === 'string'
-          ? climateEntity.stateLabel
+        typeof entity?.stateLabel === 'string'
+          ? entity.stateLabel
           : mode === 'off'
             ? 'Spento'
             : 'Clima attivo',
-      currentTemp: climateCurrentTemp,
-      targetTemp: climateTargetTemp,
-      minTemp: toNumber(climateEntity?.minTemp) ?? toNumber(rawAttributes.min_temp) ?? 16,
-      maxTemp: toNumber(climateEntity?.maxTemp) ?? toNumber(rawAttributes.max_temp) ?? 30,
-      targetTempLow: toNumber(climateEntity?.targetTempLow) ?? toNumber(rawAttributes.target_temp_low),
-      targetTempHigh: toNumber(climateEntity?.targetTempHigh) ?? toNumber(rawAttributes.target_temp_high),
-      targetTempStep: toNumber(climateEntity?.targetTempStep) ?? toNumber(rawAttributes.target_temp_step) ?? 0.5,
+      currentTemp,
+      targetTemp,
+      minTemp: toNumber(entity?.minTemp) ?? toNumber(rawAttributes.min_temp) ?? 16,
+      maxTemp: toNumber(entity?.maxTemp) ?? toNumber(rawAttributes.max_temp) ?? 30,
+      targetTempLow: toNumber(entity?.targetTempLow) ?? toNumber(rawAttributes.target_temp_low),
+      targetTempHigh: toNumber(entity?.targetTempHigh) ?? toNumber(rawAttributes.target_temp_high),
+      targetTempStep: toNumber(entity?.targetTempStep) ?? toNumber(rawAttributes.target_temp_step) ?? 0.5,
       hvacModes:
         hvacModesFromEntity.length > 0
           ? hvacModesFromEntity
@@ -2360,14 +2410,14 @@ export function RoomsDashboard({
               ? ['heat', 'cool', 'auto', 'off']
               : undefined,
       hvacAction:
-        typeof climateEntity?.hvacAction === 'string'
-          ? climateEntity.hvacAction
+        typeof entity?.hvacAction === 'string'
+          ? entity.hvacAction
           : typeof rawAttributes.hvac_action === 'string'
             ? rawAttributes.hvac_action
             : undefined,
       fanMode:
-        typeof climateEntity?.fanMode === 'string'
-          ? climateEntity.fanMode
+        typeof entity?.fanMode === 'string'
+          ? entity.fanMode
           : typeof rawAttributes.fan_mode === 'string'
             ? rawAttributes.fan_mode
             : undefined,
@@ -2388,14 +2438,91 @@ export function RoomsDashboard({
       temperatureUnit,
       rawAttributes,
     };
-  }, [
-    climateCurrentTemp,
-    climateEntity,
-    climateEntityId,
-    climateTargetTemp,
-    isDemoSeedRoom,
-  ]);
+  }, [haStates, isDemoSeedRoom]);
+  const climateControlModel = React.useMemo(
+    () => buildClimateControlModel(climateEntityId),
+    [buildClimateControlModel, climateEntityId],
+  );
+  const climatePanelModels = React.useMemo(
+    () =>
+      (climateEntityIds.length > 0 ? climateEntityIds : isDemoSeedRoom ? ['climate.air_conditioner'] : [])
+        .map((entityId) => {
+          const model = buildClimateControlModel(entityId);
+          return model ? { entityId, model } : null;
+        })
+        .filter((entry): entry is { entityId: string; model: NonNullable<ReturnType<typeof buildClimateControlModel>> } => Boolean(entry)),
+    [buildClimateControlModel, climateEntityIds, isDemoSeedRoom],
+  );
+  const mobileClimateWidgets = React.useMemo<Widget[]>(() => {
+    if (!climateControlModel) {
+      return [];
+    }
+    const entityIds = climateEntityIds.length > 0 ? climateEntityIds : [climateEntityId ?? 'climate.air_conditioner'];
+    return entityIds.map((entityId) => {
+      const entity = haStates[entityId];
+      const widget = buildRoomWidget(entityId, 'climate', entity, {
+        i: `rooms-mobile-climate-${entityId}`,
+        x: 0,
+        y: 0,
+        w: 2,
+        h: 3,
+      });
+      const isSelectedClimate = entityId === climateEntityId;
+      return {
+        ...widget,
+        title: isSelectedClimate ? climateControlModel.name : getEntityFriendlyName(entityId, entity),
+        status: isSelectedClimate ? (climateControlModel.status ?? widget.status) : widget.status,
+        isOn: isSelectedClimate ? climateControlModel.isOn : widget.isOn,
+        value: isSelectedClimate ? climateControlModel.targetTemp : widget.value,
+        unit: isSelectedClimate ? (climateControlModel.temperatureUnit ?? widget.unit) : widget.unit,
+      };
+    });
+  }, [climateControlModel, climateEntityId, climateEntityIds, haStates]);
+  const climateSwiperEntityIds = React.useMemo(
+    () =>
+      isCompactClimateControls
+        ? mobileClimateWidgets.map((widget) => widget.entityId)
+        : climatePanelModels.map((entry) => entry.entityId),
+    [climatePanelModels, isCompactClimateControls, mobileClimateWidgets],
+  );
+  const selectedMobileClimateIndex = Math.max(
+    0,
+    climateSwiperEntityIds.findIndex((entityId) => entityId === climateEntityId),
+  );
+  const scrollToMobileClimateSlide = React.useCallback(
+    (index: number) => {
+      const scroller = mobileClimateSwiperRef.current;
+      if (!scroller) {
+        return;
+      }
+      scroller.scrollTo({
+        left: index * scroller.clientWidth,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
+    },
+    [prefersReducedMotion],
+  );
+  const handleMobileClimateScroll = React.useCallback(() => {
+    const scroller = mobileClimateSwiperRef.current;
+    if (!scroller || scroller.clientWidth <= 0 || climateSwiperEntityIds.length <= 1) {
+      return;
+    }
+    const index = Math.max(
+      0,
+      Math.min(climateSwiperEntityIds.length - 1, Math.round(scroller.scrollLeft / scroller.clientWidth)),
+    );
+    const nextEntityId = climateSwiperEntityIds[index];
+    if (nextEntityId && nextEntityId !== climateEntityId) {
+      setSelectedClimateEntityId(nextEntityId);
+    }
+  }, [climateEntityId, climateSwiperEntityIds]);
 
+  React.useEffect(() => {
+    if (climateSwiperEntityIds.length <= 1) {
+      return;
+    }
+    scrollToMobileClimateSlide(selectedMobileClimateIndex);
+  }, [climateSwiperEntityIds.length, scrollToMobileClimateSlide, selectedMobileClimateIndex]);
   const roomStatusChips = React.useMemo<RoomStatusChip[]>(() => {
     const chips: RoomStatusChip[] = [];
 
@@ -2431,23 +2558,6 @@ export function RoomsDashboard({
 
     return chips;
   }, [activeLightCount, climateControlModel?.currentTemp, climateControlModel?.isOn, isAnyMediaActive]);
-
-  const callClimateService = React.useCallback(
-    (service: string, serviceData: Record<string, unknown> = {}) => {
-      if (!climateEntityId || !onCallService) {
-        return;
-      }
-      void onCallService('climate', service, { entity_id: climateEntityId, ...serviceData });
-    },
-    [climateEntityId, onCallService],
-  );
-
-  const setClimateTargetTemp = React.useCallback(
-    (value: number) => {
-      callClimateService('set_temperature', { temperature: value });
-    },
-    [callClimateService],
-  );
 
   const buildWidgetsForEntities = React.useCallback(
     (entityIds: string[], layout: Widget['layout']): Widget[] =>
@@ -2586,6 +2696,58 @@ export function RoomsDashboard({
       : demoWidgets.media;
     return widgets[0] ?? null;
   }, [buildWidgetsForEntities, demoWidgets.media, mediaEntityId]);
+  const mediaRoomWidgets = React.useMemo<Widget[]>(() => {
+    const entityIds = mediaEntityIds.length > 0 ? mediaEntityIds : mediaEntityId ? [mediaEntityId] : [];
+    const widgets = entityIds.length > 0
+      ? buildWidgetsForEntities(entityIds, { i: 'media', x: 0, y: 0, w: 4, h: 3 })
+      : demoWidgets.media;
+    return widgets.map((widget) => ({
+      ...widget,
+      layout: {
+        ...widget.layout,
+        w: 4,
+        h: 3,
+      },
+    }));
+  }, [buildWidgetsForEntities, demoWidgets.media, mediaEntityId, mediaEntityIds]);
+  const selectedMediaSlideIndex = Math.max(
+    0,
+    mediaRoomWidgets.findIndex((widget) => widget.entityId === mediaEntityId),
+  );
+  const scrollToMediaSlide = React.useCallback(
+    (index: number) => {
+      const scroller = mediaSwiperRef.current;
+      if (!scroller) {
+        return;
+      }
+      scroller.scrollTo({
+        left: index * scroller.clientWidth,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
+    },
+    [prefersReducedMotion],
+  );
+  const handleMediaSwiperScroll = React.useCallback(() => {
+    const scroller = mediaSwiperRef.current;
+    if (!scroller || scroller.clientWidth <= 0 || mediaRoomWidgets.length <= 1) {
+      return;
+    }
+    const index = Math.max(
+      0,
+      Math.min(mediaRoomWidgets.length - 1, Math.round(scroller.scrollLeft / scroller.clientWidth)),
+    );
+    const nextEntityId = mediaRoomWidgets[index]?.entityId;
+    if (nextEntityId && nextEntityId !== mediaEntityId) {
+      setSelectedMediaEntityId(nextEntityId);
+    }
+  }, [mediaEntityId, mediaRoomWidgets]);
+
+  React.useEffect(() => {
+    if (mediaRoomWidgets.length <= 1 || showMediaBottomBar) {
+      return;
+    }
+    scrollToMediaSlide(selectedMediaSlideIndex);
+  }, [mediaRoomWidgets.length, scrollToMediaSlide, selectedMediaSlideIndex, showMediaBottomBar]);
 
   const sceneKeys = React.useMemo<SceneKey[]>(() => ['music', 'movie', 'night', 'morning'], []);
   const roomSceneEntityByKey = React.useMemo(() => {
@@ -2695,6 +2857,39 @@ export function RoomsDashboard({
           seek_position: position,
         });
       }}
+      onMediaShuffle={(nextWidget) => {
+        const currentEntity = haStates[nextWidget.entityId];
+        const currentShuffle =
+          currentEntity?.shuffleEnabled ??
+          (typeof currentEntity?.rawAttributes?.shuffle === 'boolean'
+            ? currentEntity.rawAttributes.shuffle
+            : typeof currentEntity?.rawAttributes?.shuffle_enabled === 'boolean'
+              ? currentEntity.rawAttributes.shuffle_enabled
+              : false);
+        void onCallService?.('media_player', 'shuffle_set', {
+          entity_id: nextWidget.entityId,
+          shuffle: !currentShuffle,
+        });
+      }}
+      onMediaRepeat={(nextWidget) => {
+        const currentEntity = haStates[nextWidget.entityId];
+        const currentRepeat = `${
+          currentEntity?.repeatMode ??
+          currentEntity?.rawAttributes?.repeat ??
+          currentEntity?.rawAttributes?.repeat_mode ??
+          'off'
+        }`.trim().toLowerCase();
+        const nextRepeat = currentRepeat === 'off' || currentRepeat === 'none' || currentRepeat === ''
+          ? 'all'
+          : currentRepeat === 'all'
+            ? 'one'
+            : 'off';
+        void onCallService?.('media_player', 'repeat_set', {
+          entity_id: nextWidget.entityId,
+          repeat: nextRepeat,
+        });
+      }}
+      mediaHideHeader={widget.kind === 'media'}
       onLockToggle={(nextWidget) => {
         void onCallService?.('lock', nextWidget.isOn ? 'lock' : 'unlock', { entity_id: nextWidget.entityId });
       }}
@@ -2939,32 +3134,280 @@ export function RoomsDashboard({
     );
   };
 
+  const mediaShuffleEnabled =
+    mediaEntity?.shuffleEnabled ??
+    (typeof mediaEntity?.rawAttributes?.shuffle === 'boolean'
+      ? mediaEntity.rawAttributes.shuffle
+      : typeof mediaEntity?.rawAttributes?.shuffle_enabled === 'boolean'
+        ? mediaEntity.rawAttributes.shuffle_enabled
+        : false);
+  const mediaRepeatMode = `${
+    mediaEntity?.repeatMode ??
+    mediaEntity?.rawAttributes?.repeat ??
+    mediaEntity?.rawAttributes?.repeat_mode ??
+    'off'
+  }`.trim().toLowerCase();
+  const mediaRepeatActive = mediaRepeatMode !== '' && mediaRepeatMode !== 'off' && mediaRepeatMode !== 'none';
+  const mediaCoverUrl = mediaEntity?.imageUrl;
+  const toggleSelectedMediaPlayback = () => {
+    if (!mediaEntityId) return;
+    void onCallService?.('media_player', 'media_play_pause', { entity_id: mediaEntityId });
+  };
+  const skipSelectedMediaPrevious = () => {
+    if (!mediaEntityId) return;
+    void onCallService?.('media_player', 'media_previous_track', { entity_id: mediaEntityId });
+  };
+  const skipSelectedMediaNext = () => {
+    if (!mediaEntityId) return;
+    void onCallService?.('media_player', 'media_next_track', { entity_id: mediaEntityId });
+  };
+  const toggleSelectedMediaShuffle = () => {
+    if (!mediaEntityId) return;
+    void onCallService?.('media_player', 'shuffle_set', {
+      entity_id: mediaEntityId,
+      shuffle: !mediaShuffleEnabled,
+    });
+  };
+  const toggleSelectedMediaRepeat = () => {
+    if (!mediaEntityId) return;
+    const nextRepeat = mediaRepeatMode === 'off' || mediaRepeatMode === 'none' || mediaRepeatMode === ''
+      ? 'all'
+      : mediaRepeatMode === 'all'
+        ? 'one'
+        : 'off';
+    void onCallService?.('media_player', 'repeat_set', {
+      entity_id: mediaEntityId,
+      repeat: nextRepeat,
+    });
+  };
+
   const renderMediaPlayerArea = () => {
-    if (!mediaRoomWidget) {
+    if (showMediaBottomBar) {
+      return null;
+    }
+    if (!mediaRoomWidget || mediaRoomWidgets.length === 0) {
       return renderEmptyRoomArea(
         'media',
         'Nessun media configurato per questa stanza',
         'TV, speaker e player multimediali associati alla stanza verranno mostrati qui.',
       );
     }
+    if (useMediaBottomBar) {
+      return (
+        <section
+          className="flex min-w-0 flex-col gap-3 overflow-visible p-0"
+          style={{ gridArea: 'media' }}
+        >
+          <div className="-mx-1.5">
+            <div
+              ref={mediaSwiperRef}
+              className="flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+              onScroll={handleMediaSwiperScroll}
+              {...mediaSwiperPointerHandlers}
+            >
+              {mediaRoomWidgets.map((widget) => {
+                const entity = haStates[widget.entityId];
+                const coverUrl = entity?.imageUrl;
+                const playerLabel = getEntityFriendlyName(widget.entityId, entity);
+                return (
+                  <div key={widget.id} className="min-w-0 basis-full snap-center shrink-0 px-1.5">
+                    <div className="flex min-w-0 items-center gap-3 rounded-[1.25rem] border border-white/[0.08] bg-white/[0.045] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                        {coverUrl ? (
+                          <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-white/70">
+                            <Music2 size={19} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold leading-tight text-white">{playerLabel}</p>
+                        <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-white/52">
+                          Nessuna riproduzione
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMediaEntityId(widget.entityId);
+                          void onCallService?.('media_player', 'media_play_pause', { entity_id: widget.entityId });
+                        }}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_20px_rgba(255,255,255,0.18)] transition-transform active:scale-95"
+                        aria-label={`Avvia ${playerLabel}`}
+                      >
+                        <Play size={17} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {mediaRoomWidgets.length > 1 ? (
+              <div className="mt-3 flex items-center justify-center gap-1.5">
+                {mediaRoomWidgets.map((widget, index) => {
+                  const active = widget.entityId === mediaEntityId;
+                  return (
+                    <button
+                      key={widget.entityId}
+                      type="button"
+                      className={cn(
+                        'h-1.5 rounded-full transition-all duration-200 active:scale-95',
+                        active ? 'w-5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.28)]' : 'w-1.5 bg-white/28 hover:bg-white/48',
+                      )}
+                      onClick={() => {
+                        setSelectedMediaEntityId(widget.entityId);
+                        scrollToMediaSlide(index);
+                      }}
+                      aria-label={`Mostra ${widget.title}`}
+                    />
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      );
+    }
     return (
       <section
-        className="rooms-surface flex min-h-[16rem] min-w-0 flex-col overflow-hidden p-0"
+        className="flex min-h-[16rem] min-w-0 flex-col overflow-visible p-0"
         style={{ gridArea: 'media' }}
       >
-        {mediaEntityIds.length > 1 ? (
-          <div className="shrink-0 p-3 pb-0 sm:p-4 sm:pb-0">
-            {renderEntitySegmentControl(mediaEntityIds, mediaEntityId, setSelectedMediaEntityId, {
-              fillOnDesktop: true,
-            })}
-          </div>
-        ) : null}
-        <div className={cn('min-h-0 flex-1', mediaEntityIds.length > 1 ? 'p-3 pt-3 sm:p-4 sm:pt-3' : 'p-0')}>
-          <div className="h-full min-h-[16rem] min-w-0 overflow-hidden">
-            {renderRoomWidget(mediaRoomWidget)}
+        <div className="min-h-0 flex-1">
+          <div className="-mx-1.5 h-full min-h-[16rem]">
+            <div
+              ref={mediaSwiperRef}
+              className="flex h-full cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+              onScroll={handleMediaSwiperScroll}
+              {...mediaSwiperPointerHandlers}
+            >
+              {mediaRoomWidgets.map((widget) => (
+                <div key={widget.id} className="min-w-0 basis-full snap-center shrink-0 px-1.5">
+                  <div className="h-full min-h-[16rem] min-w-0 overflow-hidden">
+                    {renderRoomWidget(widget)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {mediaRoomWidgets.length > 1 ? (
+              <div className="mt-3 flex items-center justify-center gap-1.5">
+                {mediaRoomWidgets.map((widget, index) => {
+                  const active = widget.entityId === mediaEntityId;
+                  return (
+                    <button
+                      key={widget.entityId}
+                      type="button"
+                      className={cn(
+                        'h-1.5 rounded-full transition-all duration-200 active:scale-95',
+                        active ? 'w-5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.28)]' : 'w-1.5 bg-white/28 hover:bg-white/48',
+                      )}
+                      onClick={() => {
+                        setSelectedMediaEntityId(widget.entityId);
+                        scrollToMediaSlide(index);
+                      }}
+                      aria-label={`Mostra ${widget.title}`}
+                    />
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
+    );
+  };
+
+  const renderMediaBottomBar = () => {
+    if (!showMediaBottomBar || !mediaRoomWidget || !mediaEntityId) {
+      return null;
+    }
+    return (
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.9rem)] z-[160] px-2 md:hidden">
+        <div className="relative mx-auto max-w-xl overflow-hidden rounded-[1.35rem] border border-white/12 bg-[#16171d]/88 shadow-[0_18px_48px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
+          {mediaCoverUrl ? (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 scale-110 bg-cover bg-center opacity-70 blur-2xl"
+              style={{ backgroundImage: `url("${mediaCoverUrl}")` }}
+            />
+          ) : null}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[linear-gradient(90deg,rgba(6,8,12,0.82),rgba(6,8,12,0.68)_46%,rgba(6,8,12,0.78)),linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.02)_40%,rgba(0,0,0,0.18))]"
+          />
+          <div
+            className="relative h-0.5 bg-white/22"
+            aria-hidden="true"
+          >
+            <div className="h-full bg-white" style={{ width: `${Math.round(mediaProgress * 100)}%` }} />
+          </div>
+          <div className="relative flex min-w-0 items-center gap-2.5 px-2.5 py-2.5">
+            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-white/10">
+              {mediaCoverUrl ? (
+                <img src={mediaCoverUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-white/70">
+                  <Music2 size={18} />
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={toggleSelectedMediaPlayback}
+              className="min-w-0 flex-1 text-left"
+              aria-label="Riproduci o metti in pausa"
+            >
+              <p className="truncate text-sm font-semibold leading-tight text-white">{mediaTitle}</p>
+              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-white/58">{mediaArtist}</p>
+            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleSelectedMediaShuffle}
+                className={cn('inline-flex h-8 w-8 items-center justify-center rounded-full text-white/72 transition-colors active:scale-95', mediaShuffleEnabled && 'bg-white text-zinc-950')}
+                aria-label="Shuffle"
+                aria-pressed={mediaShuffleEnabled}
+              >
+                <Shuffle size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={skipSelectedMediaPrevious}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white/72 transition-colors active:scale-95"
+                aria-label="Brano precedente"
+              >
+                <SkipBack size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleSelectedMediaPlayback}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_20px_rgba(255,255,255,0.18)] transition-transform active:scale-95"
+                aria-label={mediaIsPlaying ? 'Pausa' : 'Riproduci'}
+              >
+                {mediaIsPlaying ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+              <button
+                type="button"
+                onClick={skipSelectedMediaNext}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white/72 transition-colors active:scale-95"
+                aria-label="Brano successivo"
+              >
+                <SkipForward size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleSelectedMediaRepeat}
+                className={cn('inline-flex h-8 w-8 items-center justify-center rounded-full text-white/72 transition-colors active:scale-95', mediaRepeatActive && 'bg-white text-zinc-950')}
+                aria-label="Repeat"
+                aria-pressed={mediaRepeatActive}
+              >
+                <Repeat2 size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -3046,8 +3489,10 @@ export function RoomsDashboard({
 
   const handleRoomTitlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const scroller = roomTitleScrollerRef.current;
+    const target = event.target as Element | null;
     if (
       !scroller ||
+      target?.closest('button, a, input, textarea, select, [role="button"]') ||
       (event.pointerType === 'mouse' && event.button !== 0) ||
       scroller.scrollWidth <= scroller.clientWidth + 1
     ) {
@@ -3072,7 +3517,7 @@ export function RoomsDashboard({
       return;
     }
     const dragOffset = event.clientX - dragState.startX;
-    if (!dragState.didMove && Math.abs(dragOffset) < FLOOR_CAROUSEL_DRAG_THRESHOLD_PX) {
+    if (!dragState.didMove && Math.abs(dragOffset) < ROOM_TITLE_DRAG_THRESHOLD_PX) {
       return;
     }
     dragState.didMove = true;
@@ -3106,6 +3551,110 @@ export function RoomsDashboard({
     event.stopPropagation();
     roomTitleSuppressClickRef.current = false;
   };
+
+  const createRoomSwiperPointerHandlers = (
+    scrollerRef: React.RefObject<HTMLDivElement | null>,
+    dragRef: React.MutableRefObject<FloorCarouselDragState | null>,
+    suppressClickRef: React.MutableRefObject<boolean>,
+  ) => {
+    const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      const target = event.target as Element | null;
+      if (
+        !scroller ||
+        target?.closest('button, a, input, textarea, select, [role="button"]') ||
+        (event.pointerType === 'mouse' && event.button !== 0) ||
+        scroller.scrollWidth <= scroller.clientWidth + 1
+      ) {
+        return;
+      }
+      dragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        scrollLeft: scroller.scrollLeft,
+        didMove: false,
+      };
+      suppressClickRef.current = false;
+      if (!scroller.hasPointerCapture(event.pointerId)) {
+        scroller.setPointerCapture(event.pointerId);
+      }
+    };
+
+    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      const dragState = dragRef.current;
+      if (!scroller || !dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const dragOffset = event.clientX - dragState.startX;
+      if (!dragState.didMove && Math.abs(dragOffset) < FLOOR_CAROUSEL_DRAG_THRESHOLD_PX) {
+        return;
+      }
+      if (!dragState.didMove) {
+        dragState.didMove = true;
+        scroller.classList.remove('snap-x', 'snap-mandatory');
+        scroller.classList.add('snap-none');
+      }
+      event.preventDefault();
+      scroller.scrollLeft = dragState.scrollLeft - dragOffset;
+    };
+
+    const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      const dragState = dragRef.current;
+      if (!scroller || !dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      dragRef.current = null;
+      suppressClickRef.current = dragState.didMove;
+      if (scroller.hasPointerCapture(event.pointerId)) {
+        scroller.releasePointerCapture(event.pointerId);
+      }
+      if (dragState.didMove) {
+        const slideIndex = Math.max(0, Math.round(scroller.scrollLeft / Math.max(1, scroller.clientWidth)));
+        scroller.classList.remove('snap-none');
+        scroller.classList.add('snap-x', 'snap-mandatory');
+        scroller.scrollTo({
+          left: slideIndex * scroller.clientWidth,
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        });
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      } else {
+        scroller.classList.remove('snap-none');
+        scroller.classList.add('snap-x', 'snap-mandatory');
+      }
+    };
+
+    const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!suppressClickRef.current) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClickRef.current = false;
+    };
+
+    return {
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerEnd,
+      onPointerCancel: handlePointerEnd,
+      onClickCapture: handleClickCapture,
+    };
+  };
+
+  const climateSwiperPointerHandlers = createRoomSwiperPointerHandlers(
+    mobileClimateSwiperRef,
+    climateSwiperDragRef,
+    climateSwiperSuppressClickRef,
+  );
+  const mediaSwiperPointerHandlers = createRoomSwiperPointerHandlers(
+    mediaSwiperRef,
+    mediaSwiperDragRef,
+    mediaSwiperSuppressClickRef,
+  );
 
   const handleFloorCarouselPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const carousel = floorCarouselRef.current;
@@ -3368,7 +3917,7 @@ export function RoomsDashboard({
                 onPointerUp={handleRoomTitlePointerEnd}
                 onPointerCancel={handleRoomTitlePointerEnd}
                 onClickCapture={handleRoomTitleClickCapture}
-                className="flex min-w-0 flex-1 cursor-grab touch-pan-y select-none items-baseline overflow-x-auto overscroll-x-contain scroll-smooth pb-1 pl-1 pr-5 active:cursor-grabbing hide-scrollbar sm:pl-0 sm:pr-4"
+                className="flex min-w-0 flex-1 cursor-grab touch-pan-y select-none items-baseline overflow-x-auto overscroll-x-contain pb-1 pl-1 pr-5 active:cursor-grabbing hide-scrollbar sm:pl-0 sm:pr-4"
               >
                 <h1 className="shrink-0 text-[2rem] font-bold leading-none tracking-normal text-white sm:text-[2.65rem] lg:text-[3rem]">
                   <AnimatePresence initial={false} mode="wait">
@@ -3435,113 +3984,159 @@ export function RoomsDashboard({
 
           {climateControlModel ? (
             <section
-              className="rooms-surface min-h-0 min-w-0 max-w-full overflow-hidden p-0 lg:min-h-[540px] xl:min-h-[600px]"
+              className={cn(
+                'min-h-0 min-w-0 max-w-full p-0',
+                isCompactClimateControls
+                  ? 'overflow-visible'
+                  : 'rooms-surface overflow-hidden lg:min-h-[min(540px,calc(100dvh-13rem))] xl:min-h-[min(600px,calc(100dvh-12rem))]',
+              )}
               style={{ gridArea: 'clima' }}
             >
-              <div className="flex h-full min-w-0 max-w-full flex-col overflow-hidden">
-                {climateEntityIds.length > 1 ? (
-                  <div className="shrink-0 p-3 pb-0 sm:p-4 sm:pb-0">
-                    {renderEntitySegmentControl(climateEntityIds, climateEntityId, setSelectedClimateEntityId, {
-                      fillOnDesktop: true,
-                    })}
+              {isCompactClimateControls ? (
+                <div className="-mx-1.5">
+                  <div
+                    ref={mobileClimateSwiperRef}
+                    className="flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+                    onScroll={handleMobileClimateScroll}
+                    {...climateSwiperPointerHandlers}
+                  >
+                    {mobileClimateWidgets.map((widget) => (
+                      <div key={widget.id} className="min-w-0 basis-full snap-center shrink-0 px-1.5">
+                        <div className="h-[min(15rem,42dvh)] min-h-[13rem] min-w-0">
+                          {renderRoomWidget(widget)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : null}
-                <div className="min-h-0 min-w-0 max-w-full flex-1">
-                  {isCompactClimateControls ? (
-                    <ClimateControls
-                      hideHeader
-                      density="compact"
-                      climate={climateControlModel}
-                      onTogglePower={() => {
-                        const nextMode =
-                          climateControlModel.isOn
-                            ? 'off'
-                            : climateControlModel.hvacModes?.find((mode) => mode !== 'off') ?? 'heat';
-                        callClimateService('set_hvac_mode', { hvac_mode: nextMode });
-                      }}
-                      onDecreaseTarget={() => {
-                        setClimateTargetTemp(
-                          Math.max(
-                            climateControlModel.minTemp,
-                            climateControlModel.targetTemp - (climateControlModel.targetTempStep ?? 0.5),
-                          ),
+                  {mobileClimateWidgets.length > 1 ? (
+                    <div className="mt-3 flex items-center justify-center gap-1.5">
+                      {mobileClimateWidgets.map((widget, index) => {
+                        const active = widget.entityId === climateEntityId;
+                        return (
+                          <button
+                            key={widget.entityId}
+                            type="button"
+                            className={cn(
+                              'h-1.5 rounded-full transition-all duration-200 active:scale-95',
+                              active ? 'w-5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.28)]' : 'w-1.5 bg-white/28 hover:bg-white/48',
+                            )}
+                            onClick={() => {
+                              setSelectedClimateEntityId(widget.entityId);
+                              scrollToMobileClimateSlide(index);
+                            }}
+                            aria-label={`Mostra ${widget.title}`}
+                          />
                         );
-                      }}
-                      onIncreaseTarget={() => {
-                        setClimateTargetTemp(
-                          Math.min(
-                            climateControlModel.maxTemp,
-                            climateControlModel.targetTemp + (climateControlModel.targetTempStep ?? 0.5),
-                          ),
-                        );
-                      }}
-                      onAutoAdjust={() => setClimateTargetTemp(Math.round(climateControlModel.currentTemp))}
-                      onRefreshCurrent={() => undefined}
-                      onSetTargetTemp={setClimateTargetTemp}
-                      onSetTargetRange={(low, high) => {
-                        callClimateService('set_temperature', {
-                          target_temp_low: low,
-                          target_temp_high: high,
-                        });
-                      }}
-                      onSetMode={(mode) => {
-                        callClimateService('set_hvac_mode', { hvac_mode: mode });
-                      }}
-                      onSetFanMode={(mode) => {
-                        callClimateService('set_fan_mode', { fan_mode: mode });
-                      }}
-                      onSetPresetMode={(mode) => {
-                        callClimateService('set_preset_mode', { preset_mode: mode });
-                      }}
-                    />
-                  ) : (
-                    <RoomClimateCard
-                      climate={climateControlModel}
-                      onTogglePower={() => {
-                        const nextMode =
-                          climateControlModel.isOn
-                            ? 'off'
-                            : climateControlModel.hvacModes?.find((mode) => mode !== 'off') ?? 'heat';
-                        callClimateService('set_hvac_mode', { hvac_mode: nextMode });
-                      }}
-                      onDecreaseTarget={() => {
-                        setClimateTargetTemp(
-                          Math.max(
-                            climateControlModel.minTemp,
-                            climateControlModel.targetTemp - (climateControlModel.targetTempStep ?? 0.5),
-                          ),
-                        );
-                      }}
-                      onIncreaseTarget={() => {
-                        setClimateTargetTemp(
-                          Math.min(
-                            climateControlModel.maxTemp,
-                            climateControlModel.targetTemp + (climateControlModel.targetTempStep ?? 0.5),
-                          ),
-                        );
-                      }}
-                      onAutoAdjust={() => setClimateTargetTemp(Math.round(climateControlModel.currentTemp))}
-                      onRefreshCurrent={() => undefined}
-                      onSetTargetTemp={setClimateTargetTemp}
-                      onSetTargetRange={(low, high) => {
-                        callClimateService('set_temperature', {
-                          target_temp_low: low,
-                          target_temp_high: high,
-                        });
-                      }}
-                      onSetMode={(mode) => {
-                        callClimateService('set_hvac_mode', { hvac_mode: mode });
-                      }}
-                      onSetFanMode={(mode) => {
-                        callClimateService('set_fan_mode', { fan_mode: mode });
-                      }}
-                      onSetPresetMode={(mode) => {
-                        callClimateService('set_preset_mode', { preset_mode: mode });
-                      }}
-                    />
-                  )}
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
+              ) : (
+                <div className="h-full min-h-[min(540px,calc(100dvh-13rem))] min-w-0 overflow-hidden xl:min-h-[min(600px,calc(100dvh-12rem))]">
+                  <div
+                    ref={mobileClimateSwiperRef}
+                    className="flex h-full cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+                    onScroll={handleMobileClimateScroll}
+                    {...climateSwiperPointerHandlers}
+                  >
+                    {climatePanelModels.map(({ entityId, model }) => (
+                      <div key={entityId} className="min-w-0 basis-full snap-center shrink-0 px-1.5">
+                        <RoomClimateCard
+                          climate={model}
+                          onTogglePower={() => {
+                            const nextMode =
+                              model.isOn
+                                ? 'off'
+                                : model.hvacModes?.find((mode) => mode !== 'off') ?? 'heat';
+                            void onCallService?.('climate', 'set_hvac_mode', {
+                              entity_id: entityId,
+                              hvac_mode: nextMode,
+                            });
+                          }}
+                          onDecreaseTarget={() => {
+                            void onCallService?.('climate', 'set_temperature', {
+                              entity_id: entityId,
+                              temperature: Math.max(
+                                model.minTemp,
+                                model.targetTemp - (model.targetTempStep ?? 0.5),
+                              ),
+                            });
+                          }}
+                          onIncreaseTarget={() => {
+                            void onCallService?.('climate', 'set_temperature', {
+                              entity_id: entityId,
+                              temperature: Math.min(
+                                model.maxTemp,
+                                model.targetTemp + (model.targetTempStep ?? 0.5),
+                              ),
+                            });
+                          }}
+                          onAutoAdjust={() => {
+                            void onCallService?.('climate', 'set_temperature', {
+                              entity_id: entityId,
+                              temperature: Math.round(model.currentTemp),
+                            });
+                          }}
+                          onRefreshCurrent={() => undefined}
+                          onSetTargetTemp={(value) => {
+                            void onCallService?.('climate', 'set_temperature', {
+                              entity_id: entityId,
+                              temperature: value,
+                            });
+                          }}
+                          onSetTargetRange={(low, high) => {
+                            void onCallService?.('climate', 'set_temperature', {
+                              entity_id: entityId,
+                              target_temp_low: low,
+                              target_temp_high: high,
+                            });
+                          }}
+                          onSetMode={(mode) => {
+                            void onCallService?.('climate', 'set_hvac_mode', {
+                              entity_id: entityId,
+                              hvac_mode: mode,
+                            });
+                          }}
+                          onSetFanMode={(mode) => {
+                            void onCallService?.('climate', 'set_fan_mode', {
+                              entity_id: entityId,
+                              fan_mode: mode,
+                            });
+                          }}
+                          onSetPresetMode={(mode) => {
+                            void onCallService?.('climate', 'set_preset_mode', {
+                              entity_id: entityId,
+                              preset_mode: mode,
+                            });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {climatePanelModels.length > 1 ? (
+                    <div className="mt-3 flex items-center justify-center gap-1.5">
+                      {climatePanelModels.map(({ entityId, model }, index) => {
+                        const active = entityId === climateEntityId;
+                        return (
+                          <button
+                            key={entityId}
+                            type="button"
+                            className={cn(
+                              'h-1.5 rounded-full transition-all duration-200 active:scale-95',
+                              active ? 'w-5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.28)]' : 'w-1.5 bg-white/28 hover:bg-white/48',
+                            )}
+                            onClick={() => {
+                              setSelectedClimateEntityId(entityId);
+                              scrollToMobileClimateSlide(index);
+                            }}
+                            aria-label={`Mostra ${model.name}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </section>
           ) : (
             renderEmptyRoomArea(
@@ -3594,6 +4189,7 @@ export function RoomsDashboard({
         </main>
       </div>
       {renderExpandedRoomSection()}
+      {renderMediaBottomBar()}
       {isFloorLayerOpen ? (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/20 p-6 backdrop-blur-md">
           <button

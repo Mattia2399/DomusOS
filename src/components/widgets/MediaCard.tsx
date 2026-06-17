@@ -12,6 +12,9 @@ type MediaCardProps = {
   onPreviousTrack?: () => void;
   onNextTrack?: () => void;
   onSeek?: (position: number) => void;
+  onShuffle?: () => void;
+  onRepeat?: () => void;
+  hideHeader?: boolean;
   liveEntity?: MockEntityState;
 };
 
@@ -69,6 +72,9 @@ export function MediaCard({
   onPreviousTrack,
   onNextTrack,
   onSeek,
+  onShuffle,
+  onRepeat,
+  hideHeader = false,
   liveEntity,
 }: MediaCardProps) {
   const mediaState = resolveMediaCardState(liveEntity?.stateLabel ?? liveEntity?.state ?? widget.status, widget.isOn);
@@ -97,6 +103,21 @@ export function MediaCard({
     nowMs,
   );
   const coverUrl = liveEntity?.imageUrl;
+  const rawAttributes = liveEntity?.rawAttributes;
+  const shuffleEnabled =
+    liveEntity?.shuffleEnabled ??
+    (typeof rawAttributes?.shuffle === 'boolean'
+      ? rawAttributes.shuffle
+      : typeof rawAttributes?.shuffle_enabled === 'boolean'
+        ? rawAttributes.shuffle_enabled
+        : false);
+  const repeatMode =
+    liveEntity?.repeatMode ??
+    (typeof rawAttributes?.repeat === 'string'
+      ? rawAttributes.repeat
+      : typeof rawAttributes?.repeat_mode === 'string'
+        ? rawAttributes.repeat_mode
+        : 'off');
 
   useEffect(() => {
     if (mediaState !== 'playing' || mediaDuration <= 0) {
@@ -138,11 +159,16 @@ export function MediaCard({
             entity_picture: coverUrl,
             media_duration: mediaDuration,
             media_position: mediaPosition,
+            shuffle: shuffleEnabled,
+            repeat: repeatMode,
           }}
           onTogglePlay={!isEditMode ? onTogglePlayback : undefined}
           onPreviousTrack={!isEditMode ? onPreviousTrack : undefined}
           onNextTrack={!isEditMode ? onNextTrack : undefined}
           onSeek={!isEditMode ? onSeek : undefined}
+          onShuffle={!isEditMode ? onShuffle : undefined}
+          onRepeat={!isEditMode ? onRepeat : undefined}
+          hideHeader={hideHeader}
         />
       </div>
 

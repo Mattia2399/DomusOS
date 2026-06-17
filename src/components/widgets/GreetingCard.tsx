@@ -203,13 +203,13 @@ export function GreetingCard({
   const isClampTitleTight = clampTitle && (isTightCard || (hasCardSize && cardWidth <= 500));
   const titleClass = clampTitle
     ? isClampTitleTight
-      ? 'text-[clamp(1.5rem,3.9vw,2.2rem)] leading-[1.04]'
-      : 'text-[clamp(1.18rem,3.5vw,2.35rem)] leading-[1.06]'
+      ? 'text-[clamp(2rem,8cqw,3rem)] leading-none'
+      : 'text-[clamp(2rem,7cqw,3rem)] leading-none'
     : isTightCard
-      ? 'text-[1.7rem] leading-[1.1]'
+      ? 'text-[2rem] leading-none'
       : isMediumCard
-        ? 'text-[2.06rem] leading-[1.08]'
-        : 'text-[2.48rem] leading-[1.07]';
+        ? 'text-[2.65rem] leading-none'
+        : 'text-[3rem] leading-none';
   const subtitleClass = isTightCard
     ? 'text-[0.76rem] leading-[1.2] text-white/72'
     : isMediumCard
@@ -243,11 +243,11 @@ export function GreetingCard({
   return (
     <div
       ref={cardRef}
-      className={`h-full w-full min-h-0 min-w-0 overflow-hidden flex flex-col justify-center ${rowGapClass}`}
+      className={`@container h-full w-full min-h-0 min-w-0 overflow-hidden flex flex-col justify-center ${rowGapClass}`}
     >
       {resolvedTitle.trim().length ? (
         <h1
-          className={`${titleClass} font-normal tracking-tight whitespace-normal break-words [overflow-wrap:anywhere] ${
+          className={`${titleClass} font-bold tracking-normal whitespace-normal break-words [overflow-wrap:anywhere] ${
             clampTitle ? 'overflow-hidden' : 'overflow-visible pb-[0.08em]'
           }`}
           style={titleWrapStyle}

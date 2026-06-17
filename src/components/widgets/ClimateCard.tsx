@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Flame, Minus, Plus, Snowflake, Wind } from 'lucide-react';
+import { Droplets, Flame, Minus, Plus, Power, Snowflake, Sparkles, Wind } from 'lucide-react';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { ROOT_CANVAS_ROW_UNITS, type Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
@@ -163,6 +163,16 @@ function toCanonicalClimateMode(value: string | undefined) {
   return normalized;
 }
 
+function isEquivalentMode(currentMode: string, candidateMode: string) {
+  if (currentMode === candidateMode) {
+    return true;
+  }
+  return (
+    (currentMode === 'auto' && candidateMode === 'heat_cool') ||
+    (currentMode === 'heat_cool' && candidateMode === 'auto')
+  );
+}
+
 function resolveActiveMode(entity: MockEntityState | undefined, widget: Widget, state: DashboardStateShape) {
   const fallbackFromState =
     widget.id === 'climate.air_conditioner'
@@ -230,6 +240,47 @@ function modeToLabel(mode: string) {
     return 'Spento';
   }
   return 'Inattivo';
+}
+
+function modeChipLabel(mode: string) {
+  if (mode === 'heat') {
+    return 'Caldo';
+  }
+  if (mode === 'cool') {
+    return 'Freddo';
+  }
+  if (mode === 'heat_cool' || mode === 'auto') {
+    return 'Auto';
+  }
+  if (mode === 'dry') {
+    return 'Dry';
+  }
+  if (mode === 'fan_only') {
+    return 'Fan';
+  }
+  if (mode === 'off') {
+    return 'Off';
+  }
+  return mode.length ? mode.replace(/[_-]+/g, ' ') : 'Mode';
+}
+
+function modeControlIcon(mode: string, size: number) {
+  if (mode === 'heat') {
+    return <Flame size={size} />;
+  }
+  if (mode === 'cool') {
+    return <Snowflake size={size} />;
+  }
+  if (mode === 'heat_cool' || mode === 'auto') {
+    return <Sparkles size={size} />;
+  }
+  if (mode === 'dry') {
+    return <Droplets size={size} />;
+  }
+  if (mode === 'off') {
+    return <Power size={size} />;
+  }
+  return <Wind size={size} />;
 }
 
 function translateClimateStatus(status: string | undefined, fallback: string) {
@@ -364,6 +415,7 @@ export function ClimateCard({
   liveEntity,
   onTemperatureChange,
   onTargetRangeChange,
+  onModeChange,
   onFanModeChange,
 }: ClimateCardProps) {
   const { ref: cardRef, width: cardWidth, height: cardHeight, density: cardDensity, hasSize: hasCardSize } = useCardSize({
@@ -416,6 +468,22 @@ export function ClimateCard({
     (isDemoClimate ? toFiniteNumber(state.climate.targetTempStep) : undefined) ??
     0.5;
   const hasRangeTarget = targetTempLow !== undefined && targetTempHigh !== undefined;
+  const hvacModesFromAttributes = toStringArray(rawAttributes?.hvac_modes);
+  const hvacModesSource =
+    Array.isArray(liveEntity?.hvacModes) && liveEntity.hvacModes.length > 0
+      ? liveEntity.hvacModes
+      : hvacModesFromAttributes.length > 0
+        ? hvacModesFromAttributes
+        : isDemoClimate
+          ? (state.climate.hvacModes ?? [])
+          : [];
+  const hvacModes = normalizeModes(hvacModesSource).filter((mode) => mode !== 'unavailable' && mode !== 'unknown');
+  const selectedHvacMode =
+    toCanonicalClimateMode(toTrimmedString(liveEntity?.hvacMode)) ||
+    toCanonicalClimateMode(toTrimmedString(rawAttributes?.hvac_mode)) ||
+    toCanonicalClimateMode(toTrimmedString(liveEntity?.state)) ||
+    (isDemoClimate ? toCanonicalClimateMode(toTrimmedString(state.climate.mode)) : '') ||
+    activeMode;
   const fanModesFromAttributes = toStringArray(rawAttributes?.fan_modes);
   const fanModesSource =
     Array.isArray(liveEntity?.fanModes) && liveEntity.fanModes.length > 0
@@ -438,6 +506,7 @@ export function ClimateCard({
     hasRangeTarget ? { low: targetTempLow, high: targetTempHigh } : null,
   );
   const [localFanMode, setLocalFanMode] = useState(activeFanMode);
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 
   useEffect(() => {
     setLocalTarget(targetTemp);
@@ -473,7 +542,6 @@ export function ClimateCard({
   const currentTempLabel =
     currentTemp !== undefined ? `${currentTemp.toFixed(1)}${temperatureUnit}` : `--${temperatureUnit}`;
   const subtitleLine = `${statusLine} \u2022 ${currentTempLabel}`;
-  const ModeIcon = activeMode === 'heat' ? Flame : activeMode === 'cool' ? Snowflake : Wind;
   const isLayoutDense = widget.layout.w <= 1 || widget.layout.h <= ROOT_CANVAS_ROW_UNITS;
   const isLayoutCompact = widget.layout.w <= 2 || widget.layout.h <= ROOT_CANVAS_ROW_UNITS + 1;
   const isDenseCard = cardDensity === 'tiny' || isLayoutDense;
@@ -486,15 +554,11 @@ export function ClimateCard({
     widget.layout.h >= fanModeMinHeight &&
     (!hasCardSize || (cardWidth >= 200 && cardHeight >= 148));
   const showFanModeControl = fanModes.length > 0 && hasFanModeControlSpace && Boolean(onFanModeChange);
+  const showHvacModeControl = hvacModes.length > 1 && Boolean(onModeChange);
   const cardRadiusClass = isDenseCard ? 'rounded-[1.55rem]' : 'rounded-[1.9rem]';
   const cardPaddingClass = isDenseCard ? 'px-3 py-2.5' : isCompactClimateCard ? 'px-3.5 py-3' : 'px-4 py-4';
   const headerGapClass = isDenseCard ? 'gap-2.5' : isCompactClimateCard ? 'gap-2.5' : 'gap-3';
   const controlsGapClass = isDenseCard ? 'gap-2' : 'gap-2.5';
-  const iconShellClass = isDenseCard
-    ? 'h-8 w-8'
-    : isCompactClimateCard
-      ? 'h-9 w-9'
-      : 'h-10 w-10';
   const titleClass = isDenseCard
     ? `leading-[1.08] font-normal text-white whitespace-normal break-words [overflow-wrap:anywhere] ${
         isLongTitle ? 'text-[clamp(0.78rem,1.5vw,0.9rem)]' : 'text-[clamp(0.84rem,1.7vw,0.98rem)]'
@@ -574,18 +638,61 @@ export function ClimateCard({
       >
         <div className={`pointer-events-none absolute inset-0 ${cardRadiusClass} bg-[radial-gradient(95%_80%_at_15%_0%,rgba(255,255,255,0.10),transparent_64%)]`} />
 
-        <div className={`relative flex items-start ${headerGapClass} min-w-0`}>
-          <div
-            className={`${iconShellClass} flex-shrink-0 rounded-full ${surface.iconSurface} flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]`}
-          >
-            <ModeIcon size={isDenseCard ? 16 : 18} className="text-white" />
-          </div>
+        <div className={`relative z-20 flex items-start ${headerGapClass} min-w-0`}>
           <div className="min-w-0 flex-1">
             <p className={titleClass} style={titleWrapStyle}>
               {normalizedTitle}
             </p>
             <p className={subtitleClass}>{subtitleLine}</p>
           </div>
+          {showHvacModeControl ? (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                className={`inline-flex max-w-[7.75rem] items-center justify-center gap-1.5 rounded-full border border-white/[0.14] bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl transition-all hover:bg-white/[0.17] active:scale-95 ${
+                  isDenseCard ? 'h-8 px-2.5 text-[0.68rem]' : 'h-9 px-3 text-[0.72rem]'
+                }`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsModeMenuOpen((current) => !current);
+                }}
+                aria-label={`Modalita clima: ${modeToLabel(selectedHvacMode)}`}
+                title={`Modalita clima: ${modeToLabel(selectedHvacMode)}`}
+              >
+                {modeControlIcon(selectedHvacMode, isDenseCard ? 14 : 15)}
+                <span className="min-w-0 truncate font-semibold leading-none">{modeChipLabel(selectedHvacMode)}</span>
+              </button>
+              {isModeMenuOpen ? (
+                <div
+                  className="absolute right-0 top-[calc(100%+0.45rem)] z-30 min-w-[8.75rem] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#1C1C1E]/82 p-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {hvacModes.map((mode) => {
+                    const active = isEquivalentMode(selectedHvacMode, mode);
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs font-semibold transition-colors ${
+                          active ? 'bg-white text-zinc-950' : 'text-white/78 hover:bg-white/[0.08] hover:text-white'
+                        }`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsModeMenuOpen(false);
+                          onModeChange?.(mode);
+                        }}
+                      >
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                          {modeControlIcon(mode, 13)}
+                        </span>
+                        <span className="min-w-0 truncate">{modeChipLabel(mode)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className={`relative mt-auto flex items-center justify-between ${controlsGapClass} ${isEditMode ? 'pointer-events-none' : ''}`}>
