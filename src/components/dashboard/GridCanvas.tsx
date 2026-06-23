@@ -1727,6 +1727,7 @@ export function GridCanvas({
               ? 'p-3'
               : 'p-4';
       const sectionOverflowClass = isStack ? 'overflow-visible' : 'overflow-hidden';
+      const sectionRadiusClass = isGreetingSection ? 'rounded-none' : 'rounded-[2rem]';
       const stackWidgets = widgets.filter((widget) => widget.parentSectionId === section.id);
       const sectionCompactPreview =
         sectionSpanH <= ROOT_CANVAS_ROW_UNITS ||
@@ -1736,7 +1737,7 @@ export function GridCanvas({
 
       return (
         <div
-          className={`h-full w-full min-h-0 min-w-0 rounded-[2rem] ${sectionPaddingClass} ${sectionOverflowClass} transition-colors ${backgroundClass} ${borderClass} ${
+          className={`h-full w-full min-h-0 min-w-0 ${sectionRadiusClass} ${sectionPaddingClass} ${sectionOverflowClass} transition-colors ${backgroundClass} ${borderClass} ${
             isEditMode && selectedSectionId === section.id ? 'selection-corners' : ''
           } ${isWeatherClickable ? 'cursor-pointer hover:opacity-90' : ''}`}
           onPointerDown={(event) => {

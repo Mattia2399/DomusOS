@@ -1,7 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowDownToLine,
   Building2,
   Car,
   Check,
@@ -19,6 +18,7 @@ import {
   MapPinHouse,
   Minus,
   MinusCircle,
+  Move,
   Music2,
   Pause,
   Pencil,
@@ -48,13 +48,7 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { GRID_ENGINE_BREAKPOINTS, GRID_ENGINE_GAP_PX, GRID_ENGINE_ROW_UNIT_PX } from '../components/dashboard/DashboardGrid';
 import {
-  CAMERA_WIDGET_SPAN_BY_BREAKPOINT,
-  COVER_WIDGET_SPAN_BY_BREAKPOINT,
-  LIGHT_WIDGET_SPAN_BY_BREAKPOINT,
-  LOCK_WIDGET_SPAN_BY_BREAKPOINT,
-  MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
-  SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
-  SWITCH_WIDGET_SPAN_BY_BREAKPOINT,
+  resolveWidgetTypeLayoutSpan,
   STACK_GRID_COLS_BY_BREAKPOINT,
   type GridEngineBreakpoint,
 } from '../components/dashboard/dashboardBreakpointConfig';
@@ -638,6 +632,7 @@ function getRoomsGridStructure(
   isMediaActive: boolean,
   isSecurityAlert: boolean,
   hideMediaArea = false,
+  visibleMobileAreas?: string[],
 ): React.CSSProperties {
   if (!isMobile) {
     return {
@@ -664,6 +659,10 @@ function getRoomsGridStructure(
 
   if (hideMediaArea) {
     mobileAreas = mobileAreas.filter((area) => area !== 'media');
+  }
+  if (visibleMobileAreas?.length) {
+    const visibleAreaSet = new Set(['header', ...visibleMobileAreas]);
+    mobileAreas = mobileAreas.filter((area) => visibleAreaSet.has(area));
   }
 
   return {
@@ -977,27 +976,27 @@ function buildRoomWidget(entityId: string, kind: WidgetKind, state: MockEntitySt
 
 function resolveRoomWidgetSpan(widget: Widget, breakpoint: GridEngineBreakpoint) {
   if (widget.kind === 'light') {
-    const span = LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
-    const configuredHeight = Math.max(1, Math.round(widget.isOn ? span.hOn : span.hOff));
+    const span = resolveWidgetTypeLayoutSpan('light', breakpoint, {});
+    const configuredHeight = Math.max(1, Math.round(widget.isOn ? span.hOn ?? span.h : span.hOff ?? span.h));
     return { w: span.w, h: widget.isOn ? Math.max(2, configuredHeight) : configuredHeight };
   }
   if (widget.kind === 'sensor') {
-    return SENSOR_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('sensor', breakpoint, {});
   }
   if (widget.kind === 'switch') {
-    return SWITCH_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('switch', breakpoint, {});
   }
   if (widget.kind === 'lock') {
-    return LOCK_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('lock', breakpoint, {});
   }
   if (widget.kind === 'camera') {
-    return CAMERA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('camera', breakpoint, {});
   }
   if (widget.kind === 'media') {
-    return MEDIA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('media', breakpoint, {});
   }
   if (widget.kind === 'cover') {
-    return COVER_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+    return resolveWidgetTypeLayoutSpan('cover', breakpoint, {});
   }
   return {
     w: Math.max(1, Math.round(widget.layout.w)),
@@ -1005,10 +1004,61 @@ function resolveRoomWidgetSpan(widget: Widget, breakpoint: GridEngineBreakpoint)
   };
 }
 
+type RoomWidgetGridSpan = { w: number; h: number };
+type RoomWidgetGridOptions = {
+  widgetWidth?: number;
+  resolveSpan?: (widget: Widget, span: RoomWidgetGridSpan, breakpoint: GridEngineBreakpoint) => RoomWidgetGridSpan;
+};
+
+function resolveRoomSectionGridCols(sectionId: string | undefined, breakpoint: GridEngineBreakpoint, fallbackCols: number) {
+  if (sectionId === 'lights' || sectionId === 'switches') {
+    if (breakpoint === 'xs' || breakpoint === 'sm') {
+      return 2;
+    }
+    if (breakpoint === 'md' || breakpoint === 'lg') {
+      return 4;
+    }
+    return 6;
+  }
+
+  if (sectionId === 'security') {
+    return breakpoint === 'xs' || breakpoint === 'sm' ? 2 : 4;
+  }
+
+  return fallbackCols;
+}
+
+function resolveRoomSectionGridOptions(sectionId: string | undefined, breakpoint: GridEngineBreakpoint): RoomWidgetGridOptions | undefined {
+  if (sectionId === 'switches' && (breakpoint === 'xs' || breakpoint === 'sm')) {
+    return {
+      resolveSpan: (widget, span) => (widget.kind === 'switch' ? { ...span, w: 1 } : span),
+    };
+  }
+
+  if (sectionId === 'security' && (breakpoint === 'xs' || breakpoint === 'sm')) {
+    return {
+      resolveSpan: (widget, span) => (widget.kind === 'camera' ? { ...span, w: 2 } : span),
+    };
+  }
+
+  return undefined;
+}
+
+function resolveRoomWidgetGridSpan(
+  widget: Widget,
+  breakpoint: GridEngineBreakpoint,
+  options?: RoomWidgetGridOptions,
+) {
+  const resolvedSpan = resolveRoomWidgetSpan(widget, breakpoint);
+  const widthAdjustedSpan = options?.widgetWidth ? { ...resolvedSpan, w: options.widgetWidth } : resolvedSpan;
+  return options?.resolveSpan?.(widget, widthAdjustedSpan, breakpoint) ?? widthAdjustedSpan;
+}
+
 function resolveRoomWidgetGridRowCount(
   widgets: Widget[],
   breakpoint: GridEngineBreakpoint,
   gridCols: number,
+  options?: RoomWidgetGridOptions,
 ) {
   const safeCols = Math.max(1, Math.round(gridCols));
   const occupiedRows: boolean[][] = [];
@@ -1019,7 +1069,7 @@ function resolveRoomWidgetGridRowCount(
   };
 
   widgets.forEach((widget) => {
-    const span = resolveRoomWidgetSpan(widget, breakpoint);
+    const span = resolveRoomWidgetGridSpan(widget, breakpoint, options);
     const safeW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
     const safeH = Math.max(1, Math.round(span.h));
     let placed = false;
@@ -1743,6 +1793,7 @@ export function RoomsDashboard({
   const [editingRoomSection, setEditingRoomSection] = React.useState<RoomSectionEditTarget | null>(null);
   const [isSectionTargetSelectionMode, setIsSectionTargetSelectionMode] = React.useState(false);
   const [selectedSectionTargetIds, setSelectedSectionTargetIds] = React.useState<Record<string, boolean>>({});
+  const [selectedSectionAddTargetIds, setSelectedSectionAddTargetIds] = React.useState<Record<string, boolean>>({});
   const [sectionDeviceSheetMode, setSectionDeviceSheetMode] = React.useState<SectionDeviceSheetMode>(null);
   const [sectionDeviceSearch, setSectionDeviceSearch] = React.useState('');
   const [sectionMoveTargetAreaId, setSectionMoveTargetAreaId] = React.useState('');
@@ -2010,6 +2061,7 @@ export function RoomsDashboard({
   React.useEffect(() => {
     setEditingRoomSection(null);
     setSelectedSectionTargetIds({});
+    setSelectedSectionAddTargetIds({});
     setSectionDeviceSheetMode(null);
     setSectionDeviceSearch('');
     setSectionMoveTargetAreaId('');
@@ -3121,10 +3173,6 @@ export function RoomsDashboard({
   const useMediaBottomBar = roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm';
   const showMediaBottomBar = useMediaBottomBar && mediaEntityIds.length > 0 && isAnyMediaActive;
   const isCompactClimateControls = roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm';
-  const roomsGridStyle = React.useMemo(
-    () => getRoomsGridStructure(isMobileRoomsGrid, isAnyMediaActive, isSecurityAlert, showMediaBottomBar),
-    [isAnyMediaActive, isMobileRoomsGrid, isSecurityAlert, showMediaBottomBar],
-  );
 
   const buildClimateControlModel = React.useCallback((entityId: string | null) => {
     if (!entityId && !isDemoSeedRoom) {
@@ -3590,8 +3638,6 @@ export function RoomsDashboard({
     [],
   );
   const hasWeatherCard = Boolean(weatherEntityId) || isDemoSeedRoom;
-  const roomHasRenderedCards =
-    Boolean(climateControlModel) || roomWidgetClusters.length > 0 || Boolean(mediaRoomWidget);
 
   const buildSectionDeviceTargets = React.useCallback(
     (entityIds: string[]): RoomSectionDeviceTarget[] => {
@@ -3688,6 +3734,7 @@ export function RoomsDashboard({
         entityIds: uniqueStrings(target.entityIds),
       });
       setSelectedSectionTargetIds({});
+      setSelectedSectionAddTargetIds({});
       setIsSectionTargetSelectionMode(false);
       setSectionDeviceSheetMode(null);
       setSectionDeviceSearch('');
@@ -3748,6 +3795,10 @@ export function RoomsDashboard({
       return haystack.includes(query);
     });
   }, [areaById, sectionAddCandidates, sectionDeviceSearch]);
+  const selectedSectionAddTargets = React.useMemo(
+    () => sectionAddCandidates.filter((target) => selectedSectionAddTargetIds[target.id]),
+    [sectionAddCandidates, selectedSectionAddTargetIds],
+  );
 
   const applyRegistrySnapshotState = React.useCallback((snapshot: RegistrySnapshot) => {
     setEntityAreaByEntityId(snapshot.entityAreaByEntityId);
@@ -3881,6 +3932,7 @@ export function RoomsDashboard({
           return { ...current, entityIds: nextEntityIds };
         });
         setSelectedSectionTargetIds({});
+        setSelectedSectionAddTargetIds({});
         setIsSectionTargetSelectionMode(false);
         void refreshRegistrySnapshot().catch(() => undefined);
         return true;
@@ -3956,6 +4008,19 @@ export function RoomsDashboard({
 
   const toggleSectionTargetSelection = React.useCallback((targetId: string) => {
     setSelectedSectionTargetIds((current) => {
+      const next = { ...current };
+      if (next[targetId]) {
+        delete next[targetId];
+      } else {
+        next[targetId] = true;
+      }
+      return next;
+    });
+    setSectionActionError(null);
+  }, []);
+
+  const toggleSectionAddTargetSelection = React.useCallback((targetId: string) => {
+    setSelectedSectionAddTargetIds((current) => {
       const next = { ...current };
       if (next[targetId]) {
         delete next[targetId];
@@ -4186,8 +4251,9 @@ export function RoomsDashboard({
     widgets: Widget[],
     gridCols = roomWidgetGridCols,
     resolvedRowCount?: number,
+    options?: RoomWidgetGridOptions,
   ) => {
-    const rowCount = resolvedRowCount ?? resolveRoomWidgetGridRowCount(widgets, roomsGridBreakpoint, gridCols);
+    const rowCount = resolvedRowCount ?? resolveRoomWidgetGridRowCount(widgets, roomsGridBreakpoint, gridCols, options);
     const gridMinHeight = resolveRoomWidgetGridHeightPx(rowCount);
     return (
       <div
@@ -4202,7 +4268,7 @@ export function RoomsDashboard({
         }}
       >
         {widgets.map((widget) => {
-          const span = resolveRoomWidgetSpan(widget, roomsGridBreakpoint);
+          const span = resolveRoomWidgetGridSpan(widget, roomsGridBreakpoint, options);
           const safeW = Math.min(gridCols, Math.max(1, Math.round(span.w)));
           const safeH = Math.max(1, Math.round(span.h));
           const sizedWidget: Widget = {
@@ -4340,20 +4406,39 @@ export function RoomsDashboard({
     );
   };
 
+  const openSectionDeviceAddSheet = (target: RoomSectionEditTarget) => {
+    if (!canOpenActiveHaRoomSection) {
+      return;
+    }
+    startEditRoomSection(target);
+    setSectionDeviceSheetMode('add');
+    setSectionDeviceSearch('');
+    setSelectedSectionAddTargetIds({});
+    setSectionActionError(null);
+  };
+
   const renderEmptyRoomArea = (
     gridArea: string,
     title: string,
     description = 'Aggiungi entita a questa stanza da Home Assistant per popolare automaticamente il riquadro.',
     className?: string,
     editTarget?: RoomSectionEditTarget,
+    options?: { mobileOutsideGrid?: boolean },
   ) => {
-    if (isMobileRoomsGrid) {
+    const isMobileOutsideGrid = Boolean(isMobileRoomsGrid && options?.mobileOutsideGrid);
+    if (isMobileRoomsGrid && !isMobileOutsideGrid) {
       return null;
     }
+    const canOpenEmptySection = Boolean(editTarget && canOpenActiveHaRoomSection);
     return (
       <section
-        className={cn('rooms-surface flex min-h-[10rem] min-w-0 flex-col justify-between p-4', className)}
-        style={{ gridArea }}
+        key={gridArea}
+        className={cn(
+          'rooms-surface flex min-h-[10rem] min-w-0 flex-col justify-between p-4',
+          isMobileOutsideGrid && 'gap-4',
+          className,
+        )}
+        style={isMobileOutsideGrid ? undefined : { gridArea }}
       >
         <div>
           {editTarget ? (
@@ -4368,7 +4453,19 @@ export function RoomsDashboard({
           <h2 className="text-sm font-semibold leading-snug text-white/82">{title}</h2>
           <p className="mt-2 text-xs leading-relaxed text-white/42">{description}</p>
         </div>
-        <div className="mt-6 h-1.5 w-14 rounded-full bg-white/[0.06]" />
+        {editTarget ? (
+          <button
+            type="button"
+            onClick={() => openSectionDeviceAddSheet(editTarget)}
+            disabled={!canOpenEmptySection}
+            className="mt-5 inline-flex w-fit items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.06] px-3.5 py-2 text-xs font-semibold text-white/72 shadow-sm transition-all hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+            title="Aggiungi dispositivi"
+          >
+            Aggiungi dispositivi
+          </button>
+        ) : (
+          <div className="mt-6 h-1.5 w-14 rounded-full bg-white/[0.06]" />
+        )}
       </section>
     );
   };
@@ -4465,9 +4562,22 @@ export function RoomsDashboard({
       emptyDescription?: string;
       emptyClassName?: string;
       previewLimit?: number;
+      gridCols?: number;
+      widgetWidth?: number;
+      gridOptions?: RoomWidgetGridOptions;
+      suppressMobileEmpty?: boolean;
     },
   ) => {
     if (!cluster) {
+      if (isMobileRoomsGrid && !options?.suppressMobileEmpty && options?.label && options.sectionId) {
+        return renderEmptyRoomArea(
+          options.gridArea ?? options.sectionId,
+          options.emptyTitle ?? `Nessun dispositivo configurato in ${options.label}`,
+          options.emptyDescription,
+          options.emptyClassName,
+          { kind: 'widgets', id: options.sectionId, label: options.label, entityIds: uniqueStrings(options.allEntityIds ?? []) },
+        );
+      }
       if (options?.gridArea && options.emptyTitle) {
         const emptyEditTarget =
           options.sectionId && options.label
@@ -4509,7 +4619,12 @@ export function RoomsDashboard({
     const clusterDeviceCount = buildSectionDeviceTargets(clusterEntityIds).length;
     const previewLimit = options?.previewLimit ?? ROOM_SECTION_PREVIEW_LIMIT;
     const visibleWidgets = cluster.widgets.slice(0, previewLimit);
-    const gridRowCount = resolveRoomWidgetGridRowCount(visibleWidgets, roomsGridBreakpoint, roomWidgetGridCols);
+    const sectionGridCols = resolveRoomSectionGridCols(options?.sectionId ?? cluster.id, roomsGridBreakpoint, roomWidgetGridCols);
+    const clusterGridCols = Math.max(1, Math.round(options?.gridCols ?? sectionGridCols));
+    const responsiveGridOptions = resolveRoomSectionGridOptions(options?.sectionId ?? cluster.id, roomsGridBreakpoint);
+    const widgetGridOptions =
+      options?.gridOptions ?? (options?.widgetWidth ? { ...responsiveGridOptions, widgetWidth: options.widgetWidth } : responsiveGridOptions);
+    const gridRowCount = resolveRoomWidgetGridRowCount(visibleWidgets, roomsGridBreakpoint, clusterGridCols, widgetGridOptions);
     const clusterMinHeight = resolveRoomWidgetClusterMinHeightPx(
       gridRowCount,
       roomsGridBreakpoint,
@@ -4539,7 +4654,7 @@ export function RoomsDashboard({
           },
         )}
         {options?.controls ? <div>{options.controls}</div> : null}
-        {renderWidgetGrid(visibleWidgets, roomWidgetGridCols, gridRowCount)}
+        {renderWidgetGrid(visibleWidgets, clusterGridCols, gridRowCount, widgetGridOptions)}
       </section>
     );
   };
@@ -4736,6 +4851,126 @@ export function RoomsDashboard({
         </div>
       </section>
     );
+  };
+
+  const renderMobileBottomEmptySections = () => {
+    if (!isMobileRoomsGrid) {
+      return null;
+    }
+
+    const emptySections = [
+      !climateControlModel
+        ? renderEmptyRoomArea(
+            'clima-empty',
+            'Nessun clima configurato per questa stanza',
+            'Associa un termostato, una stufa o un climatizzatore alla stanza per controllarlo da qui.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'clima',
+              label: 'Clima',
+              entityIds: getRoomSectionEntityIds('clima', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      !lightsCluster
+        ? renderEmptyRoomArea(
+            'lights-empty',
+            'Nessuna luce configurata per questa stanza',
+            'Aggiungi una o piu luci per mostrarle di nuovo in questa sezione.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'lights',
+              label: 'Luci',
+              entityIds: getRoomSectionEntityIds('lights', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      !switchesCluster
+        ? renderEmptyRoomArea(
+            'switches-empty',
+            'Nessun interruttore configurato per questa stanza',
+            'Aggiungi switch, prese o input boolean per mostrarli di nuovo in questa sezione.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'switches',
+              label: 'Interruttori',
+              entityIds: getRoomSectionEntityIds('switches', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      !sensorsCluster
+        ? renderEmptyRoomArea(
+            'sensors-empty',
+            'Nessun sensore configurato per questa stanza',
+            'Temperatura, umidita e altri sensori ambientali appariranno in questa area.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'sensors',
+              label: 'Sensori',
+              entityIds: getRoomSectionEntityIds('sensors', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      !securityCluster
+        ? renderEmptyRoomArea(
+            'security-empty',
+            'Nessuna sicurezza configurata per questa stanza',
+            'Serrature, camere e dispositivi di sicurezza collegati alla stanza saranno raccolti qui.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'security',
+              label: 'Sicurezza',
+              entityIds: getRoomSectionEntityIds('security', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      !mediaRoomWidget || mediaRoomWidgets.length === 0
+        ? renderEmptyRoomArea(
+            'media-empty',
+            'Nessun media configurato per questa stanza',
+            'TV, speaker e player multimediali associati alla stanza verranno mostrati qui.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'media',
+              label: 'Media',
+              entityIds: getRoomSectionEntityIds('media', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+      accessoryCards.length === 0
+        ? renderEmptyRoomArea(
+            'accessories-empty',
+            'Nessun accessorio configurato per questa stanza',
+            'Qui compariranno cover, scene, meteo e accessori secondari non inclusi nelle sezioni principali.',
+            undefined,
+            {
+              kind: 'accessories',
+              id: 'accessories',
+              label: 'Accessori',
+              entityIds: getRoomSectionEntityIds('accessories', activeBuckets),
+            },
+            { mobileOutsideGrid: true },
+          )
+        : null,
+    ].filter(Boolean);
+
+    if (emptySections.length === 0) {
+      return null;
+    }
+
+    return <div className="relative z-10 mt-4 grid min-w-0 gap-4">{emptySections}</div>;
   };
 
   const renderMediaBottomBar = () => {
@@ -5060,6 +5295,7 @@ export function RoomsDashboard({
       ? ((sliderValue - slider.min) / Math.max(1, slider.max - slider.min)) * 100
       : 0;
     const showToggle = canQuickToggleEntity(entity) || isSectionTargetSelectionMode;
+    const isSwitchQuickCard = entity.domain === 'switch' || entity.domain === 'input_boolean';
     const secondaryLabel = target.kind === 'device' && hasDistinctDeviceName(target) ? target.name : formatDomainLabel(entity.domain);
     const iconSize = options?.compact ? 24 : 30;
     const toggleSizeClass = options?.compact ? 'h-9 w-9' : 'h-11 w-11';
@@ -5072,9 +5308,13 @@ export function RoomsDashboard({
           options?.compact ? 'p-2.5' : 'p-3.5',
           isHidden
             ? 'border-white/[0.055] bg-black/12 text-white/42'
-            : isOn
-              ? 'border-[#facc15]/18 bg-[rgb(72_59_24_/_0.74)] text-white'
-              : 'border-white/[0.07] bg-white/[0.045] text-white',
+            : isSwitchQuickCard
+              ? isOn
+                ? 'border-emerald-300/24 bg-emerald-500/34 text-white'
+                : 'border-white/[0.07] bg-white/[0.045] text-white'
+              : isOn
+                ? 'border-[#facc15]/18 bg-[rgb(72_59_24_/_0.74)] text-white'
+                : 'border-white/[0.07] bg-white/[0.045] text-white',
         )}
       >
         {slider ? (
@@ -5101,7 +5341,13 @@ export function RoomsDashboard({
         ) : null}
         <div className="pointer-events-none relative z-20 flex h-full flex-col">
           <div className="flex items-start justify-between gap-2">
-            <span className={cn('text-white/72', isOn && 'text-[#facc15]', isHidden && 'text-white/32')}>
+            <span
+              className={cn(
+                'text-white/72',
+                isOn && (isSwitchQuickCard ? 'text-emerald-200' : 'text-[#facc15]'),
+                isHidden && 'text-white/32',
+              )}
+            >
               {renderQuickEntityIcon(entity.domain, iconSize)}
             </span>
             {showToggle ? (
@@ -5138,7 +5384,13 @@ export function RoomsDashboard({
                   aria-hidden="true"
                   className={cn(
                     'absolute inset-[2px] rounded-full backdrop-blur-md transition-colors',
-                    isOn && !isSectionTargetSelectionMode ? 'bg-[rgb(72_59_24_/_0.92)]' : isHidden ? 'bg-white/14' : 'bg-white/28',
+                    isOn && !isSectionTargetSelectionMode
+                      ? isSwitchQuickCard
+                        ? 'bg-emerald-500/68'
+                        : 'bg-[rgb(72_59_24_/_0.92)]'
+                      : isHidden
+                        ? 'bg-white/14'
+                        : 'bg-white/28',
                   )}
                 />
                 <span
@@ -5160,7 +5412,13 @@ export function RoomsDashboard({
             <p className={cn('line-clamp-2 font-bold leading-tight', options?.compact ? 'text-[13px]' : 'text-[15px]', isHidden ? 'text-white/44' : 'text-white/90')}>
               {entity.name}
             </p>
-            <p className={cn('mt-1 truncate font-semibold leading-tight', options?.compact ? 'text-[11px]' : 'text-[12px]', isOn ? 'text-[#fde68a]' : isHidden ? 'text-white/34' : 'text-white/62')}>
+            <p
+              className={cn(
+                'mt-1 truncate font-semibold leading-tight',
+                options?.compact ? 'text-[11px]' : 'text-[12px]',
+                isOn ? (isSwitchQuickCard ? 'text-emerald-100' : 'text-[#fde68a]') : isHidden ? 'text-white/34' : 'text-white/62',
+              )}
+            >
               {entity.status}
             </p>
             <p className={cn('mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.08em]', isHidden ? 'text-white/24' : 'text-white/30')}>
@@ -5177,111 +5435,172 @@ export function RoomsDashboard({
       return null;
     }
     const selectedCount = selectedSectionTargets.length;
-    const canMove = selectedCount > 0 && sectionMoveTargetAreaId && sectionMoveTargetAreaId !== activeRoomTab?.id;
+    const selectedAddCount = selectedSectionAddTargets.length;
+    const canMove = selectedCount > 0 && Boolean(sectionMoveTargetAreaId) && sectionMoveTargetAreaId !== activeRoomTab?.id;
+    const canAddSelectedTargets = activeRoomTab?.source === 'ha' && selectedAddCount > 0;
     const moveLabel = selectedCount === 1 ? 'Sposta il dispositivo' : 'Sposta i dispositivi';
+    const addLabel =
+      selectedAddCount === 0
+        ? 'Seleziona dispositivi'
+        : selectedAddCount === 1
+          ? 'Aggiungi 1 dispositivo'
+          : `Aggiungi ${selectedAddCount} dispositivi`;
 
     return (
-      <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/46 p-0 backdrop-blur-md sm:p-6">
+      <div className="absolute inset-0 z-30 flex items-end justify-center bg-[color:var(--profile-sheet-overlay)] p-0 backdrop-blur-md sm:p-6">
         <button
           type="button"
           className="absolute inset-0"
           onClick={() => {
             if (!sectionActionBusy) {
               setSectionDeviceSheetMode(null);
+              setSelectedSectionAddTargetIds({});
             }
           }}
           aria-label="Chiudi pannello dispositivi"
         />
-        <div className="relative z-10 w-full max-w-md rounded-t-[2rem] border border-white/[0.08] bg-[#f3f4f6]/92 p-4 text-zinc-950 shadow-[0_-24px_80px_rgba(0,0,0,0.38)] backdrop-blur-3xl sm:rounded-[2rem]">
-          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-zinc-400/55" />
+        <div className="relative z-10 w-full max-w-md rounded-t-[2rem] border border-[color:var(--profile-sheet-border)] bg-[var(--profile-sheet-bg)] p-4 text-[color:var(--profile-sheet-text)] shadow-[0_-24px_80px_var(--profile-sheet-shadow)] backdrop-blur-3xl sm:rounded-[2rem]">
+          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[color:var(--profile-sheet-border-strong)]" />
           {sectionDeviceSheetMode === 'add' ? (
             <>
               <div className="text-center">
-                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_22px_rgba(15,23,42,0.12)]">
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-title)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]">
                   <Plus size={22} />
                 </span>
-                <h3 className="mt-3 text-lg font-bold tracking-normal">Aggiungi dispositivo</h3>
-                <p className="mt-0.5 text-sm font-medium text-zinc-500">{editingRoomSection.label}</p>
+                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--profile-sheet-title)]">Aggiungi dispositivo</h3>
+                <p className="mt-0.5 text-sm font-medium text-[color:var(--profile-sheet-muted)]">{editingRoomSection.label}</p>
               </div>
-              <label className="mt-5 flex items-center gap-2 rounded-full border border-zinc-300/75 bg-white/80 px-3.5 py-2 text-sm shadow-sm">
-                <Search size={15} className="text-zinc-400" />
+              <label className="mt-5 flex items-center gap-2 rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-3.5 py-2 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+                <Search size={15} className="text-[color:var(--profile-sheet-muted)]" />
                 <input
                   value={sectionDeviceSearch}
                   onChange={(event) => setSectionDeviceSearch(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[color:var(--profile-sheet-title)] outline-none placeholder:text-[color:var(--profile-sheet-muted)]"
                   placeholder="Cerca dispositivo"
                 />
               </label>
+              {selectedAddCount > 0 ? (
+                <div className="mt-3 flex items-center justify-between gap-3 px-1">
+                  <p className="truncate text-xs font-semibold text-[color:rgb(var(--profile-sheet-accent-rgb)/0.96)]">
+                    {formatSelectedDeviceCount(selectedAddCount)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSectionAddTargetIds({});
+                      setSectionActionError(null);
+                    }}
+                    disabled={sectionActionBusy}
+                    className="shrink-0 text-xs font-semibold text-[color:var(--profile-sheet-muted)] transition-colors hover:text-[color:var(--profile-sheet-title)] disabled:cursor-wait disabled:opacity-55"
+                  >
+                    Cancella
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-4 max-h-[42dvh] overflow-y-auto pr-1 glass-scrollbar">
                 {visibleSectionAddCandidates.length > 0 ? (
                   <div className="grid gap-2">
                     {visibleSectionAddCandidates.map((target) => {
                       const areaLabel = target.areaId ? areaById.get(target.areaId)?.name ?? 'Altra stanza' : 'Nessuna stanza';
+                      const isSelected = Boolean(selectedSectionAddTargetIds[target.id]);
                       return (
                         <button
                           key={target.id}
                           type="button"
-                          onClick={async () => {
-                            if (activeRoomTab?.source !== 'ha') {
-                              return;
-                            }
-                            const success = await assignSectionTargetsToArea([target], activeRoomTab.id);
-                            if (success) {
-                              setSectionDeviceSheetMode(null);
-                            }
-                          }}
+                          onClick={() => toggleSectionAddTargetSelection(target.id)}
                           disabled={sectionActionBusy}
-                          className="flex min-w-0 items-center gap-3 rounded-2xl border border-zinc-200 bg-white/84 p-3 text-left shadow-sm transition-all hover:bg-white active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left shadow-sm transition-all active:scale-[0.99] disabled:cursor-wait disabled:opacity-60',
+                            isSelected
+                              ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.6)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.22)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.14)_100%)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]'
+                              : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] hover:bg-[color:var(--profile-sheet-surface-strong)]',
+                          )}
                         >
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700">
+                          <span
+                            className={cn(
+                              'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors',
+                              isSelected
+                                ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.54)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.2)] text-[color:rgb(var(--profile-sheet-accent-rgb)/0.98)]'
+                                : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]',
+                            )}
+                          >
                             {renderSectionDeviceIcon(target)}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold text-zinc-950">{target.name}</span>
+                            <span className="block truncate text-sm font-bold text-[color:var(--profile-sheet-title)]">{target.name}</span>
                             {hasDistinctDeviceName(target) ? (
-                              <span className="mt-0.5 block truncate text-xs font-semibold text-zinc-600">{target.deviceName}</span>
+                              <span className="mt-0.5 block truncate text-xs font-semibold text-[color:var(--profile-sheet-text)]">{target.deviceName}</span>
                             ) : null}
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-zinc-400">
+                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-[color:var(--profile-sheet-muted)]">
                               {areaLabel} - {target.subtitle}
                             </span>
                           </span>
-                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e9ecff] text-[#3d5afe]">
-                            <Plus size={16} />
+                          <span
+                            className={cn(
+                              'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors',
+                              isSelected
+                                ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.9)] text-slate-950'
+                                : 'bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]',
+                            )}
+                          >
+                            {isSelected ? <Check size={14} strokeWidth={3} /> : <Plus size={16} />}
                           </span>
                         </button>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-zinc-200 bg-white/72 p-5 text-center">
-                    <p className="text-sm font-bold text-zinc-800">Nessun dispositivo disponibile</p>
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-sm font-bold text-[color:var(--profile-sheet-title)]">Nessun dispositivo disponibile</p>
+                    <p className="mt-1 text-xs font-semibold text-[color:var(--profile-sheet-muted)]">
+                      Prova con un'altra ricerca o verifica le entita disponibili.
+                    </p>
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!canAddSelectedTargets || !activeRoomTab) {
+                    return;
+                  }
+                  const success = await assignSectionTargetsToArea(selectedSectionAddTargets, activeRoomTab.id);
+                  if (success) {
+                    setSelectedSectionAddTargetIds({});
+                    setSectionDeviceSheetMode(null);
+                  }
+                }}
+                disabled={!canAddSelectedTargets || sectionActionBusy}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--profile-sheet-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.88)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--profile-sheet-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--profile-sheet-border)] disabled:bg-[color:var(--profile-sheet-surface)] disabled:text-[color:var(--profile-sheet-muted)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
+              >
+                <Plus size={16} />
+                {sectionActionBusy ? 'Aggiungo...' : addLabel}
+              </button>
             </>
           ) : (
             <>
               <div className="text-center">
-                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_22px_rgba(15,23,42,0.12)]">
-                  <ArrowDownToLine size={22} />
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-title)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]">
+                  <Move size={22} />
                 </span>
-                <h3 className="mt-3 text-lg font-bold tracking-normal">Sposta</h3>
-                <p className="mt-0.5 text-sm font-medium text-zinc-500">{formatSelectedDeviceCount(selectedCount)}</p>
+                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--profile-sheet-title)]">Sposta</h3>
+                <p className="mt-0.5 text-sm font-medium text-[color:var(--profile-sheet-muted)]">{formatSelectedDeviceCount(selectedCount)}</p>
               </div>
               {selectedSectionTargets.length > 0 ? (
                 <div className="mt-5 flex justify-center gap-2 overflow-hidden">
                   {selectedSectionTargets.slice(0, 3).map((target) => (
                     <div
                       key={target.id}
-                      className="flex w-20 flex-col items-center gap-2 rounded-2xl bg-white/82 p-3 text-center shadow-sm"
+                      className="flex w-20 flex-col items-center gap-2 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] p-3 text-center shadow-sm"
                       title={hasDistinctDeviceName(target) ? `${target.name} - ${target.deviceName}` : target.name}
                     >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]">
                         {renderSectionDeviceIcon(target)}
                       </span>
-                      <span className="max-w-full truncate text-[11px] font-bold text-zinc-900">{target.name}</span>
+                      <span className="max-w-full truncate text-[11px] font-bold text-[color:var(--profile-sheet-title)]">{target.name}</span>
                       {hasDistinctDeviceName(target) ? (
-                        <span className="max-w-full truncate text-[10px] font-semibold text-zinc-500">{target.deviceName}</span>
+                        <span className="max-w-full truncate text-[10px] font-semibold text-[color:var(--profile-sheet-muted)]">{target.deviceName}</span>
                       ) : null}
                     </div>
                   ))}
@@ -5305,8 +5624,8 @@ export function RoomsDashboard({
                       className={cn(
                         'rounded-full border px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.99] disabled:cursor-not-allowed',
                         isSelectedArea
-                          ? 'border-transparent bg-[#e4e7ff] text-[#3d5afe]'
-                          : 'border-zinc-300/80 bg-white/50 text-zinc-500 hover:bg-white hover:text-zinc-900',
+                          ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.24)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.16)_100%)] text-[color:var(--profile-sheet-title)]'
+                          : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-muted)] hover:bg-[color:var(--profile-sheet-surface-strong)] hover:text-[color:var(--profile-sheet-title)]',
                         isCurrentRoom && 'opacity-45',
                       )}
                     >
@@ -5329,13 +5648,14 @@ export function RoomsDashboard({
                   }
                 }}
                 disabled={!canMove || sectionActionBusy}
-                className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-bold text-zinc-950 shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition-all hover:bg-zinc-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--profile-sheet-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.88)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--profile-sheet-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--profile-sheet-border)] disabled:bg-[color:var(--profile-sheet-surface)] disabled:text-[color:var(--profile-sheet-muted)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
               >
+                <Move size={16} />
                 {sectionActionBusy ? 'Sposto...' : moveLabel}
               </button>
             </>
           )}
-          {sectionActionError ? <p className="mt-3 text-center text-xs font-semibold text-red-600">{sectionActionError}</p> : null}
+          {sectionActionError ? <p className="mt-3 text-center text-xs font-semibold text-rose-400">{sectionActionError}</p> : null}
         </div>
       </div>
     );
@@ -5346,9 +5666,106 @@ export function RoomsDashboard({
       return null;
     }
     const selectedCount = selectedSectionTargets.length;
+    const hasSelectedSectionTargets = selectedCount > 0;
     const sectionDeviceCount = sectionEditTargets.length;
     const defaultMoveAreaId =
       effectiveHaAreas.find((area) => area.area_id !== activeRoomTab?.id)?.area_id ?? '';
+    const groupedSectionTargets = sectionEditTargets.filter((target) => target.entities.length > 1);
+    const singleSectionTargets = sectionEditTargets.filter((target) => target.entities.length === 1);
+    const hasGroupedAndSingleTargets = groupedSectionTargets.length > 0 && singleSectionTargets.length > 0;
+
+    const renderSectionTargetEntry = (target: RoomSectionDeviceTarget) => {
+      const isSelected = Boolean(selectedSectionTargetIds[target.id]);
+      const isActionSelected = isSectionTargetSelectionMode && isSelected;
+      const singleEntity = target.entities.length === 1 ? target.entities[0] : null;
+      const targetVisibleCount = target.entities.filter((entity) => entity.isVisible).length;
+
+      const sharedTargetHandlers = {
+        role: 'button',
+        tabIndex: 0,
+        'aria-pressed': isSectionTargetSelectionMode ? isSelected : undefined,
+        onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => beginSectionTargetLongPress(target.id, event),
+        onPointerMove: updateSectionTargetLongPress,
+        onPointerUp: clearSectionTargetLongPress,
+        onPointerCancel: clearSectionTargetLongPress,
+        onPointerLeave: clearSectionTargetLongPress,
+        onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => {
+          event.preventDefault();
+          clearSectionTargetLongPress();
+          startSectionTargetSelection(target.id);
+        },
+        onClick: () => {
+          if (suppressNextSectionTargetClickRef.current === target.id) {
+            suppressNextSectionTargetClickRef.current = null;
+            return;
+          }
+          if (isSectionTargetSelectionMode) {
+            toggleSectionTargetSelection(target.id);
+          }
+        },
+        onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (isSectionTargetSelectionMode) {
+              toggleSectionTargetSelection(target.id);
+            } else {
+              startSectionTargetSelection(target.id);
+            }
+          }
+        },
+      };
+
+      if (singleEntity) {
+        return (
+          <div
+            key={target.id}
+            {...sharedTargetHandlers}
+            className={cn(
+              'relative min-w-0 cursor-pointer overflow-hidden rounded-[1.35rem] text-left transition-all active:scale-[0.99]',
+              isActionSelected && 'ring-2 ring-[#85adff]/70 ring-offset-2 ring-offset-[#05070d]',
+            )}
+          >
+            {renderQuickEntityCard(singleEntity, target)}
+          </div>
+        );
+      }
+
+      return (
+        <div
+          key={target.id}
+          {...sharedTargetHandlers}
+          className={cn(
+            'relative flex h-full min-w-0 cursor-pointer flex-col rounded-[1.5rem] border border-white/[0.075] bg-white/[0.025] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_42px_rgba(0,0,0,0.14)] transition-all active:scale-[0.99]',
+            isActionSelected && 'ring-2 ring-[#85adff]/70 ring-offset-2 ring-offset-[#05070d]',
+          )}
+        >
+          <div className="min-w-0 pr-8">
+            <p className={cn('truncate text-base font-bold leading-tight text-white', isActionSelected && 'text-[#dfe6ff]')}>
+              {formatGroupTitle(target.name)}
+            </p>
+            <p className="mt-1 truncate text-[11px] font-semibold leading-tight text-white/38">
+              {hasDistinctDeviceName(target) ? `${target.deviceName} - ` : ''}
+              {targetVisibleCount}/{target.entities.length} visibili - {target.domains.map(formatDomainLabel).join(' / ')}
+            </p>
+          </div>
+          <div className="mt-3 min-w-0 border-t border-white/[0.08] pt-3">
+            <div className="grid min-w-0 grid-cols-2 gap-2">
+              {target.entities.map((entity) => renderQuickEntityCard(entity, target, { compact: true }))}
+            </div>
+          </div>
+          {isSectionTargetSelectionMode && isSelected ? (
+            <span
+              className={cn(
+                'absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-all',
+                'border-white bg-white text-[#3d5afe]',
+              )}
+            >
+              <Check size={13} strokeWidth={3} />
+            </span>
+          ) : null}
+        </div>
+      );
+    };
 
     return (
       <div className="fixed inset-0 z-[260] overflow-hidden bg-[#05070d]/86 text-white backdrop-blur-3xl">
@@ -5371,6 +5788,7 @@ export function RoomsDashboard({
               onClick={() => {
                 clearSectionTargetLongPress();
                 setSelectedSectionTargetIds({});
+                setSelectedSectionAddTargetIds({});
                 setIsSectionTargetSelectionMode(false);
                 setEditingRoomSection(null);
               }}
@@ -5382,27 +5800,53 @@ export function RoomsDashboard({
           </header>
 
           {isSectionTargetSelectionMode ? (
-            <div className="mt-8 flex shrink-0 items-center justify-center gap-3">
+            <div className="mt-8 flex shrink-0 items-start justify-center gap-3 sm:gap-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => {
+                    setSectionDeviceSheetMode('add');
+                    setSectionDeviceSearch('');
+                    setSelectedSectionAddTargetIds({});
+                    setSectionActionError(null);
+                  }}
+                  disabled={sectionActionBusy}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/78 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                  aria-label="Aggiungi dispositivo"
+                  title="Aggiungi dispositivo"
+                >
+                  <Plus size={20} />
+                </button>
+                <span className="text-[10px] font-semibold leading-none text-white/48">Aggiungi</span>
+              </div>
+              <span aria-hidden="true" className="mt-1 h-12 w-px bg-white/[0.08]" />
+              <div className="flex flex-col items-center gap-1.5">
                 <button
                   type="button"
                   onClick={async () => {
-                    if (selectedSectionTargets.length === 0) {
+                    if (!hasSelectedSectionTargets) {
                       setSectionActionError('Seleziona almeno un dispositivo.');
                       return;
                     }
                     await assignSectionTargetsToArea(selectedSectionTargets, null);
                   }}
-                  disabled={selectedSectionTargets.length === 0 || sectionActionBusy}
+                  disabled={!hasSelectedSectionTargets || sectionActionBusy}
                   className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-red-400/10 bg-red-500/12 text-red-200 transition-all hover:bg-red-500/18 hover:text-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label="Rimuovi dalla stanza"
                   title="Rimuovi dalla stanza"
                 >
                   <Trash2 size={18} />
                 </button>
+                <span className={cn('text-[10px] font-semibold leading-none', hasSelectedSectionTargets ? 'text-red-100/58' : 'text-white/24')}>
+                  Rimuovi
+                </span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
-                    if (selectedSectionTargets.length === 0) {
+                    if (!hasSelectedSectionTargets) {
                       setSectionActionError('Seleziona almeno un dispositivo.');
                       return;
                     }
@@ -5410,135 +5854,66 @@ export function RoomsDashboard({
                     setSectionMoveTargetAreaId((current) => current || defaultMoveAreaId);
                     setSectionActionError(null);
                   }}
-                  disabled={selectedSectionTargets.length === 0 || sectionActionBusy || effectiveHaAreas.length <= 1}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  disabled={!hasSelectedSectionTargets || sectionActionBusy || effectiveHaAreas.length <= 1}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/78 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label="Sposta dispositivo"
                   title="Sposta dispositivo"
                 >
-                  <ArrowDownToLine size={18} />
+                  <Move size={18} />
                 </button>
+                <span className={cn('text-[10px] font-semibold leading-none', hasSelectedSectionTargets ? 'text-white/48' : 'text-white/24')}>
+                  Sposta
+                </span>
+              </div>
+              <span aria-hidden="true" className="mt-1 h-12 w-px bg-white/[0.08]" />
+              <div className="flex flex-col items-center gap-1.5">
                 <button
                   type="button"
                   onClick={cancelSectionTargetSelection}
                   disabled={sectionActionBusy}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/78 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
                   aria-label="Annulla selezione"
                   title="Annulla selezione"
                 >
                   <X size={18} />
                 </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSectionDeviceSheetMode('add');
-                  setSectionDeviceSearch('');
-                  setSectionActionError(null);
-                }}
-                disabled={sectionActionBusy}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
-                aria-label="Aggiungi dispositivo"
-                title="Aggiungi dispositivo"
-              >
-                <Plus size={20} />
-              </button>
+                <span className="text-[10px] font-semibold leading-none text-white/48">Annulla</span>
+              </div>
             </div>
           ) : null}
           {sectionActionError && !sectionDeviceSheetMode ? (
             <p className="mt-3 text-center text-xs font-semibold text-rose-200/82">{sectionActionError}</p>
           ) : null}
 
-          <section className="mt-8 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 glass-scrollbar">
+          <section
+            className={cn(
+              'mt-8 min-h-0 flex-1 overflow-y-auto overscroll-contain glass-scrollbar',
+              isSectionTargetSelectionMode ? 'px-2 pb-2 sm:px-3' : 'pr-1',
+            )}
+          >
             <div className="mb-4 min-w-0">
               <p className="truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-white/36">
                 {isSectionTargetSelectionMode ? `${activeRoomTitle} - ${editingRoomSection.label}` : activeRoomTitle}
               </p>
             </div>
             {sectionEditTargets.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
-                {sectionEditTargets.map((target) => {
-                  const isSelected = Boolean(selectedSectionTargetIds[target.id]);
-                  const isActionSelected = isSectionTargetSelectionMode && isSelected;
-                  const isGroupedDevice = target.entities.length > 1;
-                  const singleEntity = target.entities.length === 1 ? target.entities[0] : null;
-                  const targetVisibleCount = target.entities.filter((entity) => entity.isVisible).length;
-                  return (
-                    <div
-                      key={target.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={isSectionTargetSelectionMode ? isSelected : undefined}
-                      onPointerDown={(event) => beginSectionTargetLongPress(target.id, event)}
-                      onPointerMove={updateSectionTargetLongPress}
-                      onPointerUp={clearSectionTargetLongPress}
-                      onPointerCancel={clearSectionTargetLongPress}
-                      onPointerLeave={clearSectionTargetLongPress}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        clearSectionTargetLongPress();
-                        startSectionTargetSelection(target.id);
-                      }}
-                      onClick={() => {
-                        if (suppressNextSectionTargetClickRef.current === target.id) {
-                          suppressNextSectionTargetClickRef.current = null;
-                          return;
-                        }
-                        if (isSectionTargetSelectionMode) {
-                          toggleSectionTargetSelection(target.id);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          if (isSectionTargetSelectionMode) {
-                            toggleSectionTargetSelection(target.id);
-                          } else {
-                            startSectionTargetSelection(target.id);
-                          }
-                        }
-                      }}
-                      className={cn(
-                        'relative min-w-0 cursor-pointer text-left transition-all active:scale-[0.99]',
-                        !isGroupedDevice && 'overflow-hidden rounded-[1.35rem]',
-                        isGroupedDevice && 'col-span-2 sm:col-span-1',
-                        target.entities.length > 2 && 'sm:col-span-2',
-                        isActionSelected && !isGroupedDevice && 'ring-2 ring-[#85adff]/70 ring-offset-2 ring-offset-[#05070d]',
-                      )}
-                    >
-                      {singleEntity ? (
-                        renderQuickEntityCard(singleEntity, target)
-                      ) : (
-                        <div className="min-w-0">
-                          <div className="mb-3 min-w-0 pr-8">
-                            <p className={cn('truncate text-base font-bold leading-tight text-white', isActionSelected && 'text-[#dfe6ff]')}>
-                              {formatGroupTitle(target.name)}
-                            </p>
-                            <p className="mt-1 truncate text-[11px] font-semibold leading-tight text-white/38">
-                              {hasDistinctDeviceName(target) ? `${target.deviceName} - ` : ''}
-                              {targetVisibleCount}/{target.entities.length} visibili - {target.domains.map(formatDomainLabel).join(' / ')}
-                            </p>
-                          </div>
-                          <div className="grid min-w-0 grid-cols-2 gap-2">
-                            {target.entities.map((entity) => renderQuickEntityCard(entity, target, { compact: true }))}
-                          </div>
-                        </div>
-                      )}
-                      {isSectionTargetSelectionMode && !singleEntity && isSelected ? (
-                        <span
-                          className={cn(
-                            'absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-all',
-                            'border-white bg-white text-[#3d5afe]',
-                          )}
-                        >
-                          <Check size={13} strokeWidth={3} />
-                        </span>
-                      ) : null}
+              <div className="space-y-4">
+                {groupedSectionTargets.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(24rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(27rem,1fr))]">
+                    {groupedSectionTargets.map(renderSectionTargetEntry)}
+                  </div>
+                ) : null}
+                {singleSectionTargets.length > 0 ? (
+                  <div className={cn(hasGroupedAndSingleTargets && 'border-t border-white/[0.08] pt-4')}>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
+                      {singleSectionTargets.map(renderSectionTargetEntry)}
                     </div>
-                  );
-                })}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div
-                className="rounded-[1.5rem] border border-white/[0.08] bg-white/[0.05] p-6 text-center backdrop-blur-xl"
+                className="flex min-h-[12rem] flex-col items-center justify-center px-4 py-8 text-center"
                 onPointerDown={beginSectionActionLongPress}
                 onPointerMove={updateSectionTargetLongPress}
                 onPointerUp={clearSectionTargetLongPress}
@@ -5546,6 +5921,24 @@ export function RoomsDashboard({
                 onPointerLeave={clearSectionTargetLongPress}
               >
                 <p className="text-sm font-semibold text-white/72">Nessun dispositivo in questa sezione</p>
+                <p className="mt-2 max-w-sm text-xs leading-relaxed text-white/38">
+                  Aggiungi dispositivi compatibili per popolare questa sezione della stanza.
+                </p>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => {
+                    setSectionDeviceSheetMode('add');
+                    setSectionDeviceSearch('');
+                    setSelectedSectionAddTargetIds({});
+                    setSectionActionError(null);
+                  }}
+                  disabled={sectionActionBusy}
+                  className="mt-5 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-2 text-xs font-semibold text-white/78 shadow-sm transition-all hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                >
+                  <Plus size={15} />
+                  Aggiungi dispositivo
+                </button>
               </div>
             )}
           </section>
@@ -5858,6 +6251,40 @@ export function RoomsDashboard({
       }, 0);
     }
   };
+
+  const mobileVisibleGridAreas = React.useMemo(() => {
+    const areas: string[] = [];
+    if (climateControlModel) {
+      areas.push('clima');
+    }
+    if (lightsCluster || switchesCluster) {
+      areas.push('lights_switches');
+    }
+    if (sensorsCluster) {
+      areas.push('sensors');
+    }
+    if (mediaRoomWidget && mediaRoomWidgets.length > 0 && !showMediaBottomBar) {
+      areas.push('media');
+    }
+    if (securityCluster) {
+      areas.push('security_cams');
+    }
+    return areas;
+  }, [
+    climateControlModel,
+    lightsCluster,
+    mediaRoomWidget,
+    mediaRoomWidgets.length,
+    securityCluster,
+    sensorsCluster,
+    showMediaBottomBar,
+    switchesCluster,
+  ]);
+
+  const roomsGridStyle = React.useMemo(
+    () => getRoomsGridStructure(isMobileRoomsGrid, isAnyMediaActive, isSecurityAlert, showMediaBottomBar, mobileVisibleGridAreas),
+    [isAnyMediaActive, isMobileRoomsGrid, isSecurityAlert, mobileVisibleGridAreas, showMediaBottomBar],
+  );
 
   const renderFloorCard = (floor: HaFloorEntry) => {
     const isSelected = selectedFloorId === floor.floor_id;
@@ -6343,14 +6770,16 @@ export function RoomsDashboard({
               sectionId: 'lights',
               label: 'Luci',
               allEntityIds: getRoomSectionEntityIds('lights', activeBuckets),
+              suppressMobileEmpty: true,
             })}
             {renderWidgetCluster(switchesCluster, {
               sectionId: 'switches',
               label: 'Interruttori',
               allEntityIds: getRoomSectionEntityIds('switches', activeBuckets),
+              suppressMobileEmpty: true,
             })}
           </section>
-        ) : (
+        ) : !isMobileRoomsGrid ? (
           renderEmptyRoomArea(
             'lights_switches',
             'Nessuna luce o interruttore configurato per questa stanza',
@@ -6363,23 +6792,11 @@ export function RoomsDashboard({
               entityIds: getRoomSectionEntityIds('lights_switches', activeBuckets),
             },
           )
-        )}
+        ) : null}
 
         {renderMediaPlayerArea()}
-
-        {!roomHasRenderedCards && isMobileRoomsGrid ? (
-          <section
-            className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-xl"
-            style={{ gridArea: 'lights_switches' }}
-          >
-            <p className="text-[11px] uppercase tracking-[0.2em] text-white/42">Configurazione stanza</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Nessuna entita associata a questa stanza</h2>
-            <p className="mt-2 max-w-2xl text-sm text-white/56">
-              Associa entita a questa area Home Assistant per costruire automaticamente la stanza.
-            </p>
-          </section>
-        ) : null}
         </main>
+        {renderMobileBottomEmptySections()}
       </div>
       {renderSectionEditOverlay()}
       {renderMediaBottomBar()}

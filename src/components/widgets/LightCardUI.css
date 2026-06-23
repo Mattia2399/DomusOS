@@ -481,6 +481,68 @@
   }
 }
 
+@container light-card (min-height: 93px) and (max-height: 128px) {
+  .light-card-ui {
+    --light-card-radius: 20px;
+    --light-card-inner-radius: 18px;
+  }
+
+  .light-card-ui__surface {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .light-card-ui__surface::after {
+    inset: 1px;
+  }
+
+  .light-card-ui__header {
+    gap: 9px;
+  }
+
+  .light-card-ui__icon-shell {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .light-card-ui__icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .light-card-ui__name {
+    font-size: clamp(0.88rem, 4.4cqi, 1rem);
+    line-height: 1.05;
+  }
+
+  .light-card-ui__status {
+    margin-top: 1px;
+    font-size: 0.7rem;
+    line-height: 1;
+  }
+
+  .light-card-ui__slider-wrap {
+    padding-top: 2px;
+  }
+
+  .light-card-ui__slider {
+    --light-slider-track-height: 26px;
+    --light-slider-thumb-size: 22px;
+  }
+
+  .light-card-ui__timer-badge {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
+  .light-card-ui__timer-icon {
+    width: 12px;
+    height: 12px;
+  }
+}
+
 @container light-card (max-width: 300px) {
   .light-card-ui {
     --light-card-radius: 20px;

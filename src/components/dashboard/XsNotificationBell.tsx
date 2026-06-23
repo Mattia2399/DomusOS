@@ -1,17 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Bell, Info, OctagonAlert, Trash2 } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationProvider';
-import type { HaConnectionStatus } from '../../hooks/useHaLiveConnection';
-
-type XsNotificationBellProps = {
-  userAvatarUrl?: string;
-  userAvatarAlt?: string;
-  haStatus: HaConnectionStatus;
-  onOpenProfile: () => void;
-};
-
-const DEFAULT_PROFILE_AVATAR_URL =
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop';
 
 const NOTIFICATION_TYPE_META = {
   info: {
@@ -41,14 +30,8 @@ function formatNotificationTime(value: number | undefined) {
   }).format(value);
 }
 
-export function XsNotificationBell({
-  userAvatarUrl,
-  userAvatarAlt,
-  haStatus,
-  onOpenProfile,
-}: XsNotificationBellProps) {
+export function XsNotificationBell() {
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
-  const [profileAvatarSrc, setProfileAvatarSrc] = React.useState(DEFAULT_PROFILE_AVATAR_URL);
   const notificationPopupRef = React.useRef<HTMLDivElement | null>(null);
   const notificationButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const {
@@ -59,10 +42,6 @@ export function XsNotificationBell({
     markNotificationAsRead,
     markAllAsRead,
   } = useNotifications();
-
-  React.useEffect(() => {
-    setProfileAvatarSrc(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
-  }, [userAvatarUrl]);
 
   React.useEffect(() => {
     if (!isNotificationsOpen) {
@@ -105,14 +84,6 @@ export function XsNotificationBell({
   }, [isNotificationsOpen]);
 
   const badgeValue = unreadCount > 99 ? '99+' : `${unreadCount}`;
-  const statusDotClass =
-    haStatus === 'connected'
-      ? 'bg-emerald-400 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]'
-      : haStatus === 'connecting'
-        ? 'bg-amber-300 animate-pulse shadow-[0_0_0_2px_rgba(245,158,11,0.2)]'
-        : haStatus === 'error'
-          ? 'bg-rose-400 shadow-[0_0_0_2px_rgba(244,63,94,0.22)]'
-          : 'bg-white/45 shadow-[0_0_0_2px_rgba(255,255,255,0.14)]';
 
   return (
     <>
@@ -131,7 +102,7 @@ export function XsNotificationBell({
             ref={notificationButtonRef}
             type="button"
             onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className="relative inline-flex h-10 w-10 items-center justify-center text-white transition-opacity hover:opacity-90"
+            className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
             aria-label="Apri notifiche"
           >
             <Bell size={18} />
@@ -145,18 +116,18 @@ export function XsNotificationBell({
           {isNotificationsOpen ? (
             <div
               ref={notificationPopupRef}
-              className="absolute right-0 top-[3.15rem] z-[191] flex max-h-[72dvh] w-[21rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[2.1rem] border border-white/10 bg-white/[0.08] p-3 backdrop-blur-3xl shadow-[0_32px_90px_rgba(15,23,42,0.42)]"
+              className="absolute right-0 top-[3.15rem] z-[191] flex max-h-[72dvh] w-[21rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[2.1rem] border border-[color:var(--profile-sheet-border)] bg-[var(--profile-sheet-bg)] p-3 text-[color:var(--profile-sheet-text)] shadow-[0_32px_90px_var(--profile-sheet-shadow)] backdrop-blur-3xl"
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Centro notifiche</p>
-                  <h4 className="mt-1 text-sm font-semibold text-white">Notifiche recenti</h4>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--profile-sheet-muted)]">Centro notifiche</p>
+                  <h4 className="mt-1 text-sm font-semibold text-[color:var(--profile-sheet-title)]">Notifiche recenti</h4>
                 </div>
                 {notifications.length > 0 ? (
                   <button
                     type="button"
                     onClick={clearNotifications}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/65 transition-colors hover:bg-white/15 hover:text-white"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-muted)] transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)] hover:text-[color:var(--profile-sheet-title)]"
                     aria-label="Cancella notifiche"
                   >
                     <Trash2 size={14} />
@@ -165,7 +136,7 @@ export function XsNotificationBell({
               </div>
 
               {notifications.length === 0 ? (
-                <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white/60">
+                <p className="mt-4 rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-3 py-3 text-sm text-[color:var(--profile-sheet-muted)]">
                   Nessuna notifica al momento.
                 </p>
               ) : (
@@ -209,25 +180,6 @@ export function XsNotificationBell({
             </div>
           ) : null}
         </div>
-
-        <button
-          type="button"
-          onClick={onOpenProfile}
-          className="relative h-9 w-9 overflow-visible rounded-full border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
-          aria-label="Apri profilo"
-          title={`Home Assistant: ${haStatus}`}
-        >
-          <img
-            src={profileAvatarSrc}
-            alt={userAvatarAlt ? `Profilo ${userAvatarAlt}` : 'Profilo utente'}
-            onError={() => setProfileAvatarSrc(DEFAULT_PROFILE_AVATAR_URL)}
-            className="h-full w-full rounded-full object-cover"
-          />
-          <span
-            className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border border-[#0b0d12] ${statusDotClass}`}
-            aria-hidden="true"
-          />
-        </button>
       </div>
     </>
   );

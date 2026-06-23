@@ -12,9 +12,11 @@ import SecurityAuthModal from '../security/SecurityAuthModal';
 import { LeftSidebar } from './LeftSidebar';
 import { BottomBarNav } from './BottomBarNav';
 import { XsNotificationBell } from './XsNotificationBell';
+import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 import { RightSidebarManager } from './RightSidebarManager';
 import { GridCanvas } from './GridCanvas';
 import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
+import { Menu } from 'lucide-react';
 import {
   normalizeWidgetTypeLayoutOverrides,
   setActiveWidgetTypeLayoutOverrides,
@@ -3425,6 +3427,7 @@ export function MainBoard() {
   const [runningSceneBySectionId, setRunningSceneBySectionId] = useState<Partial<Record<string, SceneRunState>>>({});
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('theme');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
@@ -10590,9 +10593,18 @@ export function MainBoard() {
   const isImmersiveView = isSecurityImmersiveView || isConsumptionImmersiveView;
   const isDashboardCanvasView =
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView;
+  const shouldShowMobileSidebarShell =
+    !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView;
   const shouldApplyXsShellBottomInset =
     !isImmersiveView && isXsViewport && !isDashboardCanvasView;
   const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isCatalogOpen;
+
+  useEffect(() => {
+    if (!shouldShowMobileSidebarShell) {
+      setIsMobileSidebarOpen(false);
+    }
+  }, [shouldShowMobileSidebarShell]);
+
   const openProfilePanel = (section: ProfileSectionId = 'theme') => {
     setProfileInitialSection(section);
     setIsProfileOpen(true);
@@ -10628,6 +10640,10 @@ export function MainBoard() {
           ? 'pb-[calc(env(safe-area-inset-bottom)+5.9rem)]'
           : ''
       } ${
+        shouldShowMobileSidebarShell
+          ? '!pt-[calc(env(safe-area-inset-top)+4rem)]'
+          : ''
+      } ${
         theme === 'light'
           ? 'dashboard-theme-light text-[var(--dashboard-text)]'
           : 'dashboard-theme-dark text-[var(--dashboard-text)]'
@@ -10635,7 +10651,36 @@ export function MainBoard() {
     >
       <div aria-hidden className="dashboard-wallpaper-layer" />
 
-      {!isImmersiveView && !isXsViewport ? (
+      {shouldShowMobileSidebarShell ? (
+        <>
+          <div className="fixed inset-x-0 top-0 z-[174] flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.65rem)] md:hidden">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+              aria-label="Apri menu laterale"
+              aria-expanded={isMobileSidebarOpen}
+            >
+              <Menu size={20} />
+            </button>
+            <XsNotificationBell />
+          </div>
+          <MobileSidebarDrawer
+            isOpen={isMobileSidebarOpen}
+            isEditMode={isEditMode}
+            quickPaths={visibleSidebarPaths}
+            selectedPathId={selectedSidebarPathId}
+            userAvatarUrl={currentUserAvatarUrl}
+            userAvatarAlt={stateWithConnectedUser.userName}
+            userEmail={profileUserEmail}
+            onPathClick={handleSidebarPathClick}
+            onDisconnectHomeAssistant={disconnectHa}
+            onClose={() => setIsMobileSidebarOpen(false)}
+          />
+        </>
+      ) : null}
+
+      {!isImmersiveView && !isCompactViewport ? (
         <LeftSidebar
           isEditMode={isEditMode}
           canToggleEditMode={canToggleEditMode}
@@ -10744,16 +10789,6 @@ export function MainBoard() {
               developerMode={developerMode}
               isXsViewport={isXsViewport}
               onActiveBreakpointChange={setActiveGridBreakpoint}
-              topRightOverlay={
-                !isSecurityImmersiveView && isXsViewport ? (
-                  <XsNotificationBell
-                    userAvatarUrl={currentUserAvatarUrl}
-                    userAvatarAlt={stateWithConnectedUser.userName}
-                    haStatus={haStatus}
-                    onOpenProfile={() => openProfilePanel('theme')}
-                  />
-                ) : undefined
-              }
               state={stateWithConnectedUser}
               houseMembers={profileHouseMembers}
               sections={sections}
@@ -11011,12 +11046,10 @@ export function MainBoard() {
       {shouldShowBottomBar ? (
         <BottomBarNav
           isEditMode={isEditMode}
-          canToggleEditMode={canToggleEditMode}
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
           onPathClick={handleSidebarPathClick}
-          onToggleEditMode={requestToggleEditMode}
-          onOpenProfile={() => openProfilePanel('theme')}
+          onOpenSettings={() => openProfilePanel('theme')}
         />
       ) : null}
 
