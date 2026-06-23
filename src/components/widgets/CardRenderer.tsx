@@ -1,6 +1,7 @@
 import React from 'react';
 import { ClimateCard } from './ClimateCard';
 import { LightCard } from './LightCard';
+import { SwitchCard } from './SwitchCard';
 import { CameraCard } from './CameraCard';
 import { SensorCard } from './SensorCard';
 import { MediaCard } from './MediaCard';
@@ -37,6 +38,7 @@ type WidgetCardRendererProps = {
   sensorBatteryEntity?: MockEntityState;
   onClick: () => void;
   onLightBrightnessChange?: (widget: Widget, value: number) => void;
+  onSwitchToggle?: (widget: Widget) => void;
   onClimateTargetTempChange?: (widget: Widget, value: number) => void;
   onClimateTargetRangeChange?: (widget: Widget, low: number, high: number) => void;
   onClimateModeChange?: (widget: Widget, mode: string) => void;
@@ -47,6 +49,7 @@ type WidgetCardRendererProps = {
   onMediaSeek?: (widget: Widget, position: number) => void;
   onMediaShuffle?: (widget: Widget) => void;
   onMediaRepeat?: (widget: Widget) => void;
+  onMediaSelectSource?: (widget: Widget, source: string) => void;
   mediaHideHeader?: boolean;
   onAlarmDisarm?: (widget: Widget) => void;
   onAlarmArm?: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -70,6 +73,7 @@ function WidgetCardRendererComponent({
   sensorBatteryEntity,
   onClick,
   onLightBrightnessChange,
+  onSwitchToggle,
   onClimateTargetTempChange,
   onClimateTargetRangeChange,
   onClimateModeChange,
@@ -80,6 +84,7 @@ function WidgetCardRendererComponent({
   onMediaSeek,
   onMediaShuffle,
   onMediaRepeat,
+  onMediaSelectSource,
   mediaHideHeader = false,
   onAlarmDisarm,
   onAlarmArm,
@@ -125,6 +130,19 @@ function WidgetCardRendererComponent({
     );
   }
 
+  if (widget.kind === 'switch') {
+    return (
+      <SwitchCard
+        widget={widget}
+        isSelected={isSelected}
+        isEditMode={isEditMode}
+        onClick={onClick}
+        onToggleSwitch={onSwitchToggle ? () => onSwitchToggle(widget) : undefined}
+        liveEntity={liveEntity}
+      />
+    );
+  }
+
   if (widget.kind === 'camera') {
     return (
       <CameraCard
@@ -150,6 +168,7 @@ function WidgetCardRendererComponent({
         onSeek={(position) => onMediaSeek?.(widget, position)}
         onShuffle={() => onMediaShuffle?.(widget)}
         onRepeat={() => onMediaRepeat?.(widget)}
+        onSelectSource={(source) => onMediaSelectSource?.(widget, source)}
         hideHeader={mediaHideHeader}
         liveEntity={liveEntity}
       />

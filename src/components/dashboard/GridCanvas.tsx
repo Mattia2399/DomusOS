@@ -39,6 +39,7 @@ import {
   MEMBERS_WIDGET_SPAN_BY_BREAKPOINT,
   MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
   SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
+  SWITCH_WIDGET_SPAN_BY_BREAKPOINT,
   SCENES_SECTION_SPAN_BY_BREAKPOINT,
   VACUUM_WIDGET_SPAN_BY_BREAKPOINT,
   resolveWidgetTypeLayoutSpan,
@@ -87,6 +88,7 @@ type GridCanvasProps = {
   onSceneTrigger: (section: DashboardSection, sceneId: SceneKey) => void | Promise<void>;
   onWidgetClick: (widget: Widget) => void;
   onWidgetLightToggle: (widget: Widget) => void;
+  onWidgetSwitchToggle: (widget: Widget) => void;
   onWidgetBrightnessChange: (widget: Widget, value: number) => void;
   onWidgetClimateTargetTempChange: (widget: Widget, value: number) => void;
   onWidgetClimateTargetRangeChange: (widget: Widget, low: number, high: number) => void;
@@ -96,6 +98,7 @@ type GridCanvasProps = {
   onWidgetMediaPrevious: (widget: Widget) => void;
   onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
+  onWidgetMediaSelectSource: (widget: Widget, source: string) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onWidgetVacuumStartPause: (widget: Widget) => void;
@@ -553,6 +556,7 @@ function enforceRootWidgetSpans(
   lightWidgetStateById: ReadonlyMap<string, boolean>,
   useExplicitLightSpan: boolean,
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
@@ -588,8 +592,17 @@ function enforceRootWidgetSpans(
     useExplicitLightSpan,
     widgetTypeLayoutOverrides,
   );
-  const withClimate = enforceSimpleWidgetKindSpan(
+  const withSwitch = enforceSimpleWidgetKindSpan(
     withLight,
+    'switch',
+    breakpoint,
+    cols,
+    switchWidgetIds,
+    widgetTypeLayoutOverrides,
+    Boolean(widgetTypeLayoutOverrides.switch?.[breakpoint]),
+  );
+  const withClimate = enforceSimpleWidgetKindSpan(
+    withSwitch,
     'climate',
     breakpoint,
     cols,
@@ -675,6 +688,7 @@ function resolveRootMobileCompactIds(
   breakpoint: GridBreakpoint,
   cols: number,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
+  switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
@@ -697,6 +711,7 @@ function resolveRootMobileCompactIds(
   };
 
   addIfNarrowerThanGrid(lightWidgetStateById.keys(), LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
+  addIfNarrowerThanGrid(switchWidgetIds, SWITCH_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
   addIfNarrowerThanGrid(climateWidgetIds, CLIMATE_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
   addIfNarrowerThanGrid(cameraWidgetIds, CAMERA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
   addIfNarrowerThanGrid(mediaWidgetIds, MEDIA_WIDGET_SPAN_BY_BREAKPOINT[breakpoint].w);
@@ -715,6 +730,7 @@ function buildResponsiveLayoutsFromDesktop(
   scenesSectionIds: ReadonlySet<string>,
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
+  switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
@@ -734,6 +750,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.xl),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -755,6 +772,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.['2xl']),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -776,6 +794,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.lg),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -797,6 +816,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.md),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -813,6 +833,7 @@ function buildResponsiveLayoutsFromDesktop(
     'sm',
     GRID_ENGINE_SM_COLS,
     lightWidgetStateById,
+    switchWidgetIds,
     climateWidgetIds,
     cameraWidgetIds,
     mediaWidgetIds,
@@ -832,6 +853,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.sm),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -848,6 +870,7 @@ function buildResponsiveLayoutsFromDesktop(
     'xs',
     GRID_ENGINE_XS_COLS,
     lightWidgetStateById,
+    switchWidgetIds,
     climateWidgetIds,
     cameraWidgetIds,
     mediaWidgetIds,
@@ -867,6 +890,7 @@ function buildResponsiveLayoutsFromDesktop(
       lightWidgetStateById,
       Boolean(widgetTypeLayoutOverrides.light?.xs),
       widgetTypeLayoutOverrides,
+      switchWidgetIds,
       climateWidgetIds,
       cameraWidgetIds,
       mediaWidgetIds,
@@ -904,6 +928,7 @@ export function GridCanvas({
   onSceneTrigger,
   onWidgetClick,
   onWidgetLightToggle,
+  onWidgetSwitchToggle,
   onWidgetBrightnessChange,
   onWidgetClimateTargetTempChange,
   onWidgetClimateTargetRangeChange,
@@ -913,6 +938,7 @@ export function GridCanvas({
   onWidgetMediaPrevious,
   onWidgetMediaNext,
   onWidgetMediaSeek,
+  onWidgetMediaSelectSource,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
   onWidgetVacuumStartPause,
@@ -1103,6 +1129,15 @@ export function GridCanvas({
       ),
     [rootWidgets],
   );
+  const rootSwitchWidgetIds = useMemo(
+    () =>
+      new Set(
+        rootWidgets
+          .filter((widget) => widget.kind === 'switch')
+          .map((widget) => widget.id),
+      ),
+    [rootWidgets],
+  );
   const rootClimateWidgetIds = useMemo(
     () =>
       new Set(
@@ -1215,6 +1250,7 @@ export function GridCanvas({
         rootScenesSectionIds,
         widgetTypeLayoutOverrides,
         rootLightWidgetStateById,
+        rootSwitchWidgetIds,
         rootClimateWidgetIds,
         rootCameraWidgetIds,
         rootMediaWidgetIds,
@@ -1230,6 +1266,7 @@ export function GridCanvas({
       widgetTypeLayoutOverrides,
       rootScenesSectionIds,
       rootLightWidgetStateById,
+      rootSwitchWidgetIds,
       rootClimateWidgetIds,
       rootCameraWidgetIds,
       rootMediaWidgetIds,
@@ -1267,6 +1304,7 @@ export function GridCanvas({
           rootLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
           widgetTypeLayoutOverrides,
+          rootSwitchWidgetIds,
           rootClimateWidgetIds,
           rootCameraWidgetIds,
           rootMediaWidgetIds,
@@ -1281,6 +1319,7 @@ export function GridCanvas({
       ),
     [
       rootLightWidgetStateById,
+      rootSwitchWidgetIds,
       widgetTypeLayoutOverrides,
       rootScenesSectionIds,
       rootClimateWidgetIds,
@@ -1407,6 +1446,7 @@ export function GridCanvas({
           rootLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[GRID_ENGINE_CANONICAL_BREAKPOINT]),
           widgetTypeLayoutOverrides,
+          rootSwitchWidgetIds,
           rootClimateWidgetIds,
           rootCameraWidgetIds,
           rootMediaWidgetIds,
@@ -1449,6 +1489,7 @@ export function GridCanvas({
       rootLockWidgetIds,
       rootCoverWidgetIds,
       rootLightWidgetStateById,
+      rootSwitchWidgetIds,
       widgetTypeLayoutOverrides,
     ],
   );
@@ -1494,6 +1535,7 @@ export function GridCanvas({
             gridEngineActiveBreakpoint,
             currentCols,
             rootLightWidgetStateById,
+            rootSwitchWidgetIds,
             rootClimateWidgetIds,
             rootCameraWidgetIds,
             rootMediaWidgetIds,
@@ -1519,6 +1561,7 @@ export function GridCanvas({
               rootLightWidgetStateById,
               Boolean(widgetTypeLayoutOverrides.light?.[gridEngineActiveBreakpoint]),
               widgetTypeLayoutOverrides,
+              rootSwitchWidgetIds,
               rootClimateWidgetIds,
               rootCameraWidgetIds,
               rootMediaWidgetIds,
@@ -1552,6 +1595,7 @@ export function GridCanvas({
       rootMediaWidgetIds,
       rootMembersWidgetIds,
       rootSensorWidgetIds,
+      rootSwitchWidgetIds,
       rootVacuumWidgetIds,
       widgetTypeLayoutOverrides,
     ],
@@ -1806,6 +1850,7 @@ export function GridCanvas({
                 onSelectSection={onSelectSection}
                 onWidgetClick={onWidgetClick}
                 onWidgetLightToggle={onWidgetLightToggle}
+                onWidgetSwitchToggle={onWidgetSwitchToggle}
                 onWidgetBrightnessChange={onWidgetBrightnessChange}
                 onWidgetClimateTargetTempChange={onWidgetClimateTargetTempChange}
                 onWidgetClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
@@ -1815,6 +1860,7 @@ export function GridCanvas({
                 onWidgetMediaPrevious={onWidgetMediaPrevious}
                 onWidgetMediaNext={onWidgetMediaNext}
                 onWidgetMediaSeek={onWidgetMediaSeek}
+                onWidgetMediaSelectSource={onWidgetMediaSelectSource}
                 onWidgetAlarmDisarm={onWidgetAlarmDisarm}
                 onWidgetAlarmArm={onWidgetAlarmArm}
                 onWidgetVacuumStartPause={onWidgetVacuumStartPause}
@@ -1851,6 +1897,7 @@ export function GridCanvas({
       onWidgetBrightnessChange,
       onWidgetClick,
       onWidgetLightToggle,
+      onWidgetSwitchToggle,
       onWidgetClimateFanModeChange,
       onWidgetClimateModeChange,
       onWidgetClimateTargetRangeChange,
@@ -1862,6 +1909,7 @@ export function GridCanvas({
       onWidgetMediaPrevious,
       onWidgetMediaNext,
       onWidgetMediaSeek,
+      onWidgetMediaSelectSource,
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
       onWidgetVacuumStartPause,
@@ -2120,11 +2168,15 @@ export function GridCanvas({
                           if (widget.kind === 'light') {
                             onWidgetLightToggle(widget);
                           }
+                          if (widget.kind === 'switch') {
+                            onWidgetSwitchToggle(widget);
+                          }
                           return;
                         }
                         onWidgetClick(widget);
                       }}
                       onLightBrightnessChange={onWidgetBrightnessChange}
+                      onSwitchToggle={onWidgetSwitchToggle}
                       onClimateTargetTempChange={onWidgetClimateTargetTempChange}
                       onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
                       onClimateModeChange={onWidgetClimateModeChange}
@@ -2133,6 +2185,7 @@ export function GridCanvas({
                       onMediaPrevious={onWidgetMediaPrevious}
                       onMediaNext={onWidgetMediaNext}
                       onMediaSeek={onWidgetMediaSeek}
+                      onMediaSelectSource={onWidgetMediaSelectSource}
                       onAlarmDisarm={onWidgetAlarmDisarm}
                       onAlarmArm={onWidgetAlarmArm}
                       onVacuumStartPause={onWidgetVacuumStartPause}

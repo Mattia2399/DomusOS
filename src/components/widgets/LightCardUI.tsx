@@ -11,6 +11,10 @@ export interface LightCardUIProps {
   colorMode?: string;
   hsColor?: [number, number];
   rgbColor?: [number, number, number];
+  icon?: React.ReactNode;
+  visualState?: 'on' | 'off' | 'unavailable';
+  statusText?: string;
+  pressed?: boolean;
   pendingToggle?: boolean;
   pendingToggleTargetOn?: boolean;
   activeTimerEnd?: number;
@@ -113,6 +117,10 @@ export function LightCardUI({
   colorMode,
   hsColor,
   rgbColor,
+  icon,
+  visualState,
+  statusText: statusTextOverride,
+  pressed,
   pendingToggle = false,
   pendingToggleTargetOn,
   activeTimerEnd,
@@ -123,35 +131,39 @@ export function LightCardUI({
 }: LightCardUIProps) {
   const isOn = state === 'on';
   const isUnavailable = state === 'unavailable';
+  const renderedState = visualState ?? state;
   const longPressTimerRef = useRef<number | null>(null);
   const longPressFiredRef = useRef(false);
   const skipNextBlurCommitRef = useRef(false);
   const sliderPendingTimeoutRef = useRef<number | null>(null);
   const [sliderDraftValue, setSliderDraftValue] = useState<number | null>(null);
   const [sliderPointerActive, setSliderPointerActive] = useState(false);
+  const hasBrightnessValue = typeof brightness === 'number';
 
   const inputScale = useMemo(() => {
-    const raw = typeof brightness === 'number' ? brightness : 0;
+    const raw = hasBrightnessValue ? brightness : 0;
     return raw > 100 ? 255 : 100;
-  }, [brightness]);
+  }, [brightness, hasBrightnessValue]);
 
   const normalizedValue = useMemo(() => {
-    const fallback = isOn ? 72 : 0;
-    const raw = typeof brightness === 'number' ? brightness : fallback;
+    const raw = hasBrightnessValue ? brightness : 0;
     const clamped = clamp(raw, 0, inputScale);
     return Math.round((clamped / inputScale) * 100);
-  }, [brightness, inputScale, isOn]);
+  }, [brightness, hasBrightnessValue, inputScale]);
 
   const sliderValue = sliderDraftValue ?? normalizedValue;
   const sliderValueLabel = `${sliderValue}%`;
-  const canRenderSlider = isOn && showBrightnessSlider;
-  const statusText = pendingToggle
-    ? pendingToggleTargetOn === false
-      ? 'Spegnimento in corso...'
-      : 'Accensione in corso...'
-    : isOn
-      ? `${statusLabel(state)} \u2022 ${sliderValue}%`
-      : statusLabel(state);
+  const canRenderSlider = isOn && showBrightnessSlider && hasBrightnessValue;
+  const canShowBrightnessText = isOn && (hasBrightnessValue || sliderDraftValue !== null);
+  const statusText =
+    statusTextOverride ??
+    (pendingToggle
+      ? pendingToggleTargetOn === false
+        ? 'Spegnimento in corso...'
+        : 'Accensione in corso...'
+      : canShowBrightnessText
+        ? `${statusLabel(state)} \u2022 ${sliderValue}%`
+        : statusLabel(state));
   const hasActiveTimer = activeTimerEnd !== undefined;
   const supportsRgb = useMemo(() => {
     const mode = (colorMode ?? '').toLowerCase();
@@ -161,7 +173,7 @@ export function LightCardUI({
     return normalizeRgb(rgbColor) ?? hsToRgb(hsColor);
   }, [rgbColor, hsColor]);
   const onSurfaceStyle = useMemo(() => {
-    if (!isOn || !supportsRgb || !resolvedBaseRgb) {
+    if (renderedState !== 'on' || !supportsRgb || !resolvedBaseRgb) {
       return undefined;
     }
     const start = mixWithWhite(resolvedBaseRgb, 0.16);
@@ -175,7 +187,7 @@ export function LightCardUI({
       ['--light-card-on-glow' as string]: rgbaString(resolvedBaseRgb, 0.28),
       ['--light-slider-right' as string]: rgbaString(sliderRight, 0.86),
     } as React.CSSProperties;
-  }, [isOn, resolvedBaseRgb, supportsRgb]);
+  }, [renderedState, resolvedBaseRgb, supportsRgb]);
 
   const clearLongPressTimer = () => {
     if (longPressTimerRef.current !== null) {
@@ -253,7 +265,7 @@ export function LightCardUI({
 
   return (
     <div
-      className={`light-card-ui light-card-ui--${state}${selected ? ' light-card-ui--selected' : ''}${
+      className={`light-card-ui light-card-ui--${renderedState}${selected ? ' light-card-ui--selected' : ''}${
         showBrightnessSlider ? '' : ' light-card-ui--slider-hidden'
       }`}
     >
@@ -286,7 +298,7 @@ export function LightCardUI({
           }
         }}
         aria-disabled={isUnavailable}
-        aria-pressed={onToggle ? isOn : undefined}
+        aria-pressed={onToggle ? (pressed ?? isOn) : undefined}
         aria-busy={pendingToggle || undefined}
       >
         <div className="light-card-ui__header">
@@ -294,7 +306,7 @@ export function LightCardUI({
             className={`light-card-ui__icon-shell${pendingToggle ? ' light-card-ui__icon-shell--pending' : ''}`}
             aria-hidden="true"
           >
-            <Lightbulb className="light-card-ui__icon" />
+            {icon ?? <Lightbulb className="light-card-ui__icon" />}
           </span>
           <div className="light-card-ui__meta">
             <div className="light-card-ui__name">{name}</div>

@@ -14,6 +14,7 @@ type MediaCardProps = {
   onSeek?: (position: number) => void;
   onShuffle?: () => void;
   onRepeat?: () => void;
+  onSelectSource?: (source: string) => void;
   hideHeader?: boolean;
   liveEntity?: MockEntityState;
 };
@@ -63,6 +64,24 @@ function resolveMediaCardState(status: string | undefined, isOn: boolean): Media
   return isOn ? 'playing' : 'idle';
 }
 
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function toTrimmedString(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export function MediaCard({
   widget,
   isSelected,
@@ -74,6 +93,7 @@ export function MediaCard({
   onSeek,
   onShuffle,
   onRepeat,
+  onSelectSource,
   hideHeader = false,
   liveEntity,
 }: MediaCardProps) {
@@ -118,6 +138,8 @@ export function MediaCard({
       : typeof rawAttributes?.repeat_mode === 'string'
         ? rawAttributes.repeat_mode
         : 'off');
+  const source = toTrimmedString(rawAttributes?.source) ?? toTrimmedString(rawAttributes?.source_name);
+  const sourceList = toStringArray(rawAttributes?.source_list);
 
   useEffect(() => {
     if (mediaState !== 'playing' || mediaDuration <= 0) {
@@ -161,6 +183,8 @@ export function MediaCard({
             media_position: mediaPosition,
             shuffle: shuffleEnabled,
             repeat: repeatMode,
+            source,
+            source_list: sourceList,
           }}
           onTogglePlay={!isEditMode ? onTogglePlayback : undefined}
           onPreviousTrack={!isEditMode ? onPreviousTrack : undefined}
@@ -168,6 +192,7 @@ export function MediaCard({
           onSeek={!isEditMode ? onSeek : undefined}
           onShuffle={!isEditMode ? onShuffle : undefined}
           onRepeat={!isEditMode ? onRepeat : undefined}
+          onSelectSource={!isEditMode ? onSelectSource : undefined}
           hideHeader={hideHeader}
         />
       </div>

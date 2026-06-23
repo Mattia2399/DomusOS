@@ -2,6 +2,7 @@ import type { MicroWidget } from '../../types/dashboardModels';
 
 export type ActiveDeviceType =
   | 'light'
+  | 'switch'
   | 'climate'
   | 'camera'
   | 'sensor'

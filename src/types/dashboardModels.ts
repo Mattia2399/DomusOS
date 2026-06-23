@@ -1,5 +1,6 @@
 export type WidgetKind =
   | 'light'
+  | 'switch'
   | 'climate'
   | 'camera'
   | 'sensor'
@@ -164,6 +165,7 @@ export type DashboardSection = {
 
 export const ENTITY_OPTIONS: Record<WidgetKind, string[]> = {
   light: ['light.living_room_lamp', 'light.lamp_2', 'light.lamp_4'],
+  switch: ['switch.kitchen_outlet', 'switch.garden_lights', 'input_boolean.guest_mode'],
   climate: ['climate.air_conditioner', 'climate.living_room'],
   camera: ['camera.front_door', 'camera.garage'],
   sensor: ['sensor.nest_wifi_download', 'sensor.living_room_humidity'],
@@ -177,6 +179,7 @@ export const ENTITY_OPTIONS: Record<WidgetKind, string[]> = {
 
 export const WIDGET_CATALOG: Array<{ kind: WidgetKind; label: string }> = [
   { kind: 'light', label: 'Luce' },
+  { kind: 'switch', label: 'Switch' },
   { kind: 'climate', label: 'Clima' },
   { kind: 'camera', label: 'Camera' },
   { kind: 'sensor', label: 'Sensore' },

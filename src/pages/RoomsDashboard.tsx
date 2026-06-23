@@ -1,8 +1,10 @@
 import React from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
+  ArrowDownToLine,
   Building2,
   Car,
+  Check,
   ChevronDown,
   ChevronLeft,
   CirclePlus,
@@ -26,6 +28,7 @@ import {
   Rows2,
   Rows3,
   Save,
+  Search,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -51,6 +54,7 @@ import {
   LOCK_WIDGET_SPAN_BY_BREAKPOINT,
   MEDIA_WIDGET_SPAN_BY_BREAKPOINT,
   SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
+  SWITCH_WIDGET_SPAN_BY_BREAKPOINT,
   STACK_GRID_COLS_BY_BREAKPOINT,
   type GridEngineBreakpoint,
 } from '../components/dashboard/dashboardBreakpointConfig';
@@ -63,6 +67,7 @@ import type { MockEntityState, MockEntityStateMap } from '../types/ha';
 
 const CUSTOM_ROOMS_STORAGE_KEY = 'ha.dashboard.rooms.customRooms.v1';
 const ACTIVE_ROOM_STORAGE_KEY = 'ha.dashboard.rooms.activeRoomId.v1';
+const ROOM_ENTITY_VISIBILITY_STORAGE_KEY = 'ha.dashboard.rooms.hiddenEntitiesByRoom.v1';
 const ROOM_ID_CUSTOM_PREFIX = 'custom:';
 const ROOM_TITLE_TRANSITION = { duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const;
 const ROOM_MODAL_INPUT_CLASS =
@@ -83,8 +88,31 @@ const FLOOR_ADD_CARD_CLASS =
   'snap-center flex-shrink-0 w-64 h-80 rounded-[2rem] border border-dashed border-white/10 border-t border-t-white/14 bg-white/[0.01] hover:bg-white/[0.03] p-6 flex flex-col items-center justify-center gap-3 group transition-all duration-200 active:scale-[0.98]';
 const FLOOR_CAROUSEL_DRAG_THRESHOLD_PX = 6;
 const ROOM_TITLE_DRAG_THRESHOLD_PX = 3;
+const ROOM_SWIPER_ANIMATION_MS = 280;
+const ROOM_SWIPER_FLICK_VELOCITY_PX_PER_MS = 0.42;
+const ROOM_SWIPER_MIN_SWIPE_DISTANCE_PX = 44;
+const ROOM_SWIPER_MAX_SWIPE_DISTANCE_PX = 96;
+const ROOM_SWIPER_WHEEL_LOCK_MS = 360;
+const ROOM_SWIPER_SCROLLER_CLASS =
+  'flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto overscroll-x-contain [scrollbar-width:none] [touch-action:pan-y] active:cursor-grabbing [&::-webkit-scrollbar]:hidden';
 const ROOM_SECTION_PREVIEW_LIMIT = 4;
 const ROOM_ACCESSORY_PREVIEW_LIMIT = 8;
+const ROOM_LIGHT_OPTIMISTIC_TTL_MS = 5000;
+const ROOM_QUICK_SLIDER_DRAFT_TTL_MS = 2500;
+const ROOM_SECTION_TARGET_LONG_PRESS_MS = 460;
+const ROOM_SECTION_TARGET_LONG_PRESS_CANCEL_PX = 10;
+const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
+const SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_switch_toggle';
+const ROOM_WIDGET_CLUSTER_HEADER_HEIGHT_PX = 18;
+const ROOM_WIDGET_CLUSTER_CONTENT_GAP_PX = 12;
+const ROOM_WIDGET_CLUSTER_PADDING_Y_BY_BREAKPOINT: Record<GridEngineBreakpoint, number> = {
+  '2xl': 32,
+  xl: 32,
+  lg: 32,
+  md: 32,
+  sm: 32,
+  xs: 24,
+};
 const EMPTY_FLOOR_DRAFT: FloorDraft = {
   name: '',
   aliases: '',
@@ -152,7 +180,7 @@ type RoomLightRow = {
   entityId?: string;
   isLive: boolean;
   isOn: boolean;
-  brightnessPct: number;
+  brightnessPct?: number;
 };
 
 type RoomWidgetCluster = {
@@ -170,18 +198,6 @@ type RoomAccessoryCard = {
   icon: React.ReactNode;
   isOn: boolean;
 };
-
-type ExpandedRoomSection =
-  | {
-      kind: 'widgets';
-      id: string;
-      label: string;
-    }
-  | {
-      kind: 'accessories';
-      id: 'accessories';
-      label: string;
-    };
 
 type HaAreaCreateResult = {
   area_id?: unknown;
@@ -217,12 +233,44 @@ type FloorCarouselDragState = {
   didMove: boolean;
 };
 
+type RoomSwiperDragState = FloorCarouselDragState & {
+  startY: number;
+  startIndex: number;
+  startTime: number;
+  slideCount: number;
+  slideWidth: number;
+};
+
+type RoomSwiperAnimationState = {
+  frame: number;
+  targetLeft: number;
+};
+
+type RoomSectionTargetLongPressState = {
+  timerId: number;
+  pointerId: number;
+  targetId: string;
+  startX: number;
+  startY: number;
+};
+
 type RoomStatusChip = {
   id: string;
   label: string;
   status: string;
   icon: React.ReactNode;
   className: string;
+};
+
+type RoomOptimisticToggleState = {
+  isOn: boolean;
+  brightnessPct?: number;
+  expiresAt: number;
+};
+
+type RoomQuickSliderDraftState = {
+  value: number;
+  expiresAt: number;
 };
 
 type AreaCreationDraft = {
@@ -238,15 +286,74 @@ type AreaEditDraft = AreaCreationDraft & {
   name: string;
 };
 
+type HaRegistryEntityEntry = {
+  entityId: string;
+  deviceId: string | null;
+  areaId: string | null;
+  name: string | null;
+  originalName: string | null;
+  disabledBy: string | null;
+  hiddenBy: string | null;
+  platform: string | null;
+};
+
+type HaRegistryDeviceEntry = {
+  id: string;
+  areaId: string | null;
+  name: string;
+  nameByUser: string | null;
+  manufacturer: string | null;
+  model: string | null;
+};
+
+type RegistrySnapshot = {
+  entityAreaByEntityId: Record<string, string>;
+  registryEntities: HaRegistryEntityEntry[];
+  registryDevices: HaRegistryDeviceEntry[];
+};
+
 type RoomEditTarget = {
   id: string;
   source: 'custom' | 'ha';
 };
 
+type RoomSectionEditTarget = {
+  kind: 'widgets' | 'accessories';
+  id: string;
+  label: string;
+  entityIds: string[];
+};
+
+type RoomSectionDeviceTarget = {
+  id: string;
+  kind: 'device' | 'entity';
+  deviceId?: string;
+  entityIds: string[];
+  entities: RoomSectionDeviceEntityTarget[];
+  name: string;
+  deviceName: string;
+  subtitle: string;
+  areaId: string | null;
+  domains: string[];
+};
+
+type RoomSectionDeviceEntityTarget = {
+  entityId: string;
+  name: string;
+  domain: string;
+  status: string;
+  isVisible: boolean;
+};
+
+type SectionDeviceSheetMode = 'add' | 'move' | null;
+
+type HiddenRoomEntitiesByRoom = Record<string, string[]>;
+
 type RoomsDashboardProps = {
   suppressBrowserNavigation?: boolean;
   navigationRoute?: string;
   haConnected: boolean;
+  canManageRooms?: boolean;
   haAreas: HaArea[];
   haStates: MockEntityStateMap;
   onCallService?: (
@@ -289,6 +396,90 @@ const GRID_BREAKPOINT_ORDER: GridEngineBreakpoint[] = ['2xl', 'xl', 'lg', 'md', 
 
 function cn(...values: Array<string | false | null | undefined>) {
   return twMerge(clsx(values));
+}
+
+const roomSwiperAnimations = new WeakMap<HTMLDivElement, RoomSwiperAnimationState>();
+const roomSwiperWheelLocks = new WeakMap<HTMLDivElement, number>();
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function easeOutCubic(value: number) {
+  return 1 - Math.pow(1 - value, 3);
+}
+
+function getRoomSwiperSlideCount(scroller: HTMLDivElement) {
+  return Math.max(1, scroller.children.length);
+}
+
+function setRoomSwiperSnap(scroller: HTMLDivElement, enabled: boolean) {
+  if (enabled) {
+    scroller.classList.remove('snap-none');
+    scroller.classList.add('snap-x', 'snap-mandatory');
+    return;
+  }
+  scroller.classList.remove('snap-x', 'snap-mandatory');
+  scroller.classList.add('snap-none');
+}
+
+function cancelRoomSwiperAnimation(scroller: HTMLDivElement, restoreSnap = true) {
+  const animation = roomSwiperAnimations.get(scroller);
+  if (!animation) {
+    return;
+  }
+  window.cancelAnimationFrame(animation.frame);
+  roomSwiperAnimations.delete(scroller);
+  if (restoreSnap) {
+    setRoomSwiperSnap(scroller, true);
+  }
+}
+
+function animateRoomSwiperToLeft(scroller: HTMLDivElement, targetLeft: number, prefersReducedMotion: boolean) {
+  const currentAnimation = roomSwiperAnimations.get(scroller);
+  if (currentAnimation && Math.abs(currentAnimation.targetLeft - targetLeft) < 1) {
+    return;
+  }
+  cancelRoomSwiperAnimation(scroller, false);
+  setRoomSwiperSnap(scroller, false);
+
+  if (prefersReducedMotion) {
+    scroller.scrollLeft = targetLeft;
+    setRoomSwiperSnap(scroller, true);
+    return;
+  }
+
+  const startLeft = scroller.scrollLeft;
+  const delta = targetLeft - startLeft;
+  if (Math.abs(delta) < 1) {
+    scroller.scrollLeft = targetLeft;
+    setRoomSwiperSnap(scroller, true);
+    return;
+  }
+
+  const startedAt = window.performance.now();
+  const step = (now: number) => {
+    const progress = clampNumber((now - startedAt) / ROOM_SWIPER_ANIMATION_MS, 0, 1);
+    scroller.scrollLeft = startLeft + delta * easeOutCubic(progress);
+    if (progress < 1) {
+      const frame = window.requestAnimationFrame(step);
+      roomSwiperAnimations.set(scroller, { frame, targetLeft });
+      return;
+    }
+    roomSwiperAnimations.delete(scroller);
+    scroller.scrollLeft = targetLeft;
+    setRoomSwiperSnap(scroller, true);
+  };
+
+  const frame = window.requestAnimationFrame(step);
+  roomSwiperAnimations.set(scroller, { frame, targetLeft });
+}
+
+function scrollRoomSwiperToSlide(scroller: HTMLDivElement, index: number, prefersReducedMotion: boolean) {
+  const slideWidth = Math.max(1, scroller.clientWidth);
+  const maxIndex = getRoomSwiperSlideCount(scroller) - 1;
+  const targetIndex = clampNumber(index, 0, maxIndex);
+  animateRoomSwiperToLeft(scroller, targetIndex * slideWidth, prefersReducedMotion);
 }
 
 function parseDelimitedList(value: string) {
@@ -593,24 +784,191 @@ function resolveWidgetKindFromEntityId(entityId: string): WidgetKind | null {
   if (domain === 'media_player') return 'media';
   if (domain === 'lock') return 'lock';
   if (domain === 'cover') return 'cover';
+  if (domain === 'switch' || domain === 'input_boolean' || domain === 'fan') return 'switch';
   if (domain === 'sensor' || domain === 'binary_sensor') return 'sensor';
   return null;
 }
 
+function formatRoomDeviceCount(count: number) {
+  return `${count} ${count === 1 ? 'dispositivo' : 'dispositivi'}`;
+}
+
+function formatSelectedDeviceCount(count: number) {
+  return `${formatRoomDeviceCount(count)} ${count === 1 ? 'selezionato' : 'selezionati'}`;
+}
+
+function formatDomainLabel(domain: string) {
+  if (domain === 'media_player') return 'Media';
+  if (domain === 'binary_sensor') return 'Sensore';
+  if (domain === 'input_boolean') return 'Interruttore';
+  if (domain === 'light') return 'Luce';
+  if (domain === 'climate') return 'Clima';
+  if (domain === 'switch') return 'Interruttore';
+  if (domain === 'fan') return 'Ventola';
+  if (domain === 'sensor') return 'Sensore';
+  if (domain === 'lock') return 'Serratura';
+  if (domain === 'camera') return 'Videocamera';
+  if (domain === 'cover') return 'Tapparella';
+  if (domain === 'weather') return 'Meteo';
+  if (domain === 'scene') return 'Scena';
+  return toTitleCase(domain);
+}
+
+function translateEntityStateValue(domain: string, value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'unavailable') return 'Non disponibile';
+  if (normalized === 'unknown') return 'Sconosciuto';
+  if (domain === 'light') {
+    if (normalized === 'on') return 'Accesa';
+    if (normalized === 'off') return 'Spenta';
+  }
+  if (domain === 'switch' || domain === 'input_boolean') {
+    if (normalized === 'on') return 'Acceso';
+    if (normalized === 'off') return 'Spento';
+  }
+  if (domain === 'fan') {
+    if (normalized === 'on') return 'Accesa';
+    if (normalized === 'off') return 'Spenta';
+  }
+  if (domain === 'media_player') {
+    if (normalized === 'playing') return 'In riproduzione';
+    if (normalized === 'paused') return 'In pausa';
+    if (normalized === 'idle') return 'Inattivo';
+    if (normalized === 'standby') return 'Standby';
+    if (normalized === 'off') return 'Spento';
+  }
+  if (domain === 'cover') {
+    if (normalized === 'open') return 'Aperta';
+    if (normalized === 'closed') return 'Chiusa';
+    if (normalized === 'opening') return 'In apertura';
+    if (normalized === 'closing') return 'In chiusura';
+  }
+  if (domain === 'lock') {
+    if (normalized === 'locked') return 'Bloccata';
+    if (normalized === 'unlocked') return 'Sbloccata';
+    if (normalized === 'open') return 'Aperta';
+  }
+  if (domain === 'binary_sensor') {
+    if (normalized === 'on') return 'Attivo';
+    if (normalized === 'off') return 'Inattivo';
+  }
+  if (domain === 'climate') {
+    if (normalized === 'heat') return 'Riscaldamento';
+    if (normalized === 'cool') return 'Raffrescamento';
+    if (normalized === 'dry') return 'Deumidificazione';
+    if (normalized === 'fan_only') return 'Ventilazione';
+    if (normalized === 'auto') return 'Automatico';
+    if (normalized === 'off') return 'Spento';
+  }
+  return null;
+}
+
+function formatEntityStateLabel(entityId: string, entity?: MockEntityState) {
+  const domain = entityId.split('.')[0];
+  const stateLabel = `${entity?.stateLabel ?? ''}`.trim();
+  const rawState = `${entity?.state ?? ''}`.trim();
+  const translatedStateLabel = translateEntityStateValue(domain, stateLabel);
+  if (translatedStateLabel) {
+    return translatedStateLabel;
+  }
+  const translatedRawState = translateEntityStateValue(domain, rawState);
+  if (translatedRawState) {
+    return translatedRawState;
+  }
+  if (stateLabel) {
+    return stateLabel;
+  }
+  if (domain === 'media_player') {
+    const title = `${entity?.mediaTitle ?? entity?.nowPlaying ?? ''}`.trim();
+    const artist = `${entity?.mediaArtist ?? ''}`.trim();
+    if (title && artist) {
+      return `${title} - ${artist}`;
+    }
+    if (title) {
+      return title;
+    }
+  }
+  const secondary = `${entity?.secondary ?? ''}`.trim();
+  if (secondary) {
+    return secondary;
+  }
+  const numericValue = getEntityNumericValue(entity);
+  const unit = `${entity?.unit ?? entity?.rawAttributes?.unit_of_measurement ?? ''}`.trim();
+  if (numericValue !== undefined) {
+    const formattedValue = Number.isInteger(numericValue) ? `${numericValue}` : numericValue.toFixed(1);
+    return unit ? `${formattedValue} ${unit}` : formattedValue;
+  }
+  if (!rawState) {
+    return 'Stato non disponibile';
+  }
+  return toTitleCase(rawState);
+}
+
+function hasDistinctDeviceName(target: RoomSectionDeviceTarget) {
+  return target.deviceName.trim().toLowerCase() !== target.name.trim().toLowerCase();
+}
+
+function formatGroupTitle(value: string) {
+  const normalized = value.trim();
+  return normalized ? `${normalized[0].toLocaleUpperCase('it-IT')}${normalized.slice(1)}` : normalized;
+}
+
+function doesEntityMatchRoomSection(entityId: string, sectionId: string) {
+  const domain = entityId.split('.')[0];
+  if (sectionId === 'lights') {
+    return domain === 'light';
+  }
+  if (sectionId === 'switches') {
+    return domain === 'switch' || domain === 'input_boolean' || domain === 'fan';
+  }
+  if (sectionId === 'lights_switches') {
+    return domain === 'light' || domain === 'switch' || domain === 'input_boolean' || domain === 'fan';
+  }
+  if (sectionId === 'clima') {
+    return domain === 'climate';
+  }
+  if (sectionId === 'media') {
+    return domain === 'media_player';
+  }
+  if (sectionId === 'sensors') {
+    return domain === 'sensor' || domain === 'binary_sensor';
+  }
+  if (sectionId === 'security') {
+    return domain === 'lock' || domain === 'camera';
+  }
+  if (sectionId === 'accessories') {
+    return (
+      domain === 'cover' ||
+      domain === 'weather' ||
+      domain === 'scene' ||
+      domain === 'script' ||
+      domain === 'automation' ||
+      !resolveWidgetKindFromEntityId(entityId)
+    );
+  }
+  return true;
+}
+
 function buildRoomWidget(entityId: string, kind: WidgetKind, state: MockEntityState | undefined, layout: Widget['layout']): Widget {
+  const isOn = isEntityOn(entityId, state);
   const value =
-    toNumber(state?.numericValue) ??
-    toNumber(state?.currentValue) ??
-    toNumber(state?.targetValue) ??
-    toNumber(state?.state) ??
-    0;
+    kind === 'light'
+      ? resolveLightBrightnessPercent(state)
+      : toNumber(state?.numericValue) ??
+        toNumber(state?.currentValue) ??
+        toNumber(state?.targetValue) ??
+        toNumber(state?.state) ??
+        0;
   return {
     id: entityId,
     kind,
     title: getEntityFriendlyName(entityId, state),
     entityId,
     status: state?.stateLabel ?? state?.state ?? 'Pronto',
-    isOn: isEntityOn(entityId, state),
+    isOn,
     value,
     unit: state?.unit,
     layout,
@@ -620,10 +978,14 @@ function buildRoomWidget(entityId: string, kind: WidgetKind, state: MockEntitySt
 function resolveRoomWidgetSpan(widget: Widget, breakpoint: GridEngineBreakpoint) {
   if (widget.kind === 'light') {
     const span = LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
-    return { w: span.w, h: widget.isOn ? span.hOn : span.hOff };
+    const configuredHeight = Math.max(1, Math.round(widget.isOn ? span.hOn : span.hOff));
+    return { w: span.w, h: widget.isOn ? Math.max(2, configuredHeight) : configuredHeight };
   }
   if (widget.kind === 'sensor') {
     return SENSOR_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
+  }
+  if (widget.kind === 'switch') {
+    return SWITCH_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
   }
   if (widget.kind === 'lock') {
     return LOCK_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
@@ -641,6 +1003,89 @@ function resolveRoomWidgetSpan(widget: Widget, breakpoint: GridEngineBreakpoint)
     w: Math.max(1, Math.round(widget.layout.w)),
     h: Math.max(1, Math.round(widget.layout.h)),
   };
+}
+
+function resolveRoomWidgetGridRowCount(
+  widgets: Widget[],
+  breakpoint: GridEngineBreakpoint,
+  gridCols: number,
+) {
+  const safeCols = Math.max(1, Math.round(gridCols));
+  const occupiedRows: boolean[][] = [];
+  const ensureRows = (rowCount: number) => {
+    while (occupiedRows.length < rowCount) {
+      occupiedRows.push(Array.from({ length: safeCols }, () => false));
+    }
+  };
+
+  widgets.forEach((widget) => {
+    const span = resolveRoomWidgetSpan(widget, breakpoint);
+    const safeW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+    const safeH = Math.max(1, Math.round(span.h));
+    let placed = false;
+
+    for (let row = 0; !placed; row += 1) {
+      ensureRows(row + safeH);
+
+      for (let col = 0; col <= safeCols - safeW; col += 1) {
+        let fits = true;
+        for (let nextRow = row; nextRow < row + safeH && fits; nextRow += 1) {
+          for (let nextCol = col; nextCol < col + safeW; nextCol += 1) {
+            if (occupiedRows[nextRow]?.[nextCol]) {
+              fits = false;
+              break;
+            }
+          }
+        }
+
+        if (!fits) {
+          continue;
+        }
+
+        for (let nextRow = row; nextRow < row + safeH; nextRow += 1) {
+          for (let nextCol = col; nextCol < col + safeW; nextCol += 1) {
+            occupiedRows[nextRow][nextCol] = true;
+          }
+        }
+        placed = true;
+        break;
+      }
+    }
+  });
+
+  let lastOccupiedRow = -1;
+  occupiedRows.forEach((row, index) => {
+    if (row.some(Boolean)) {
+      lastOccupiedRow = index;
+    }
+  });
+  return lastOccupiedRow + 1;
+}
+
+function resolveRoomWidgetGridHeightPx(rowCount: number) {
+  if (rowCount <= 0) {
+    return 0;
+  }
+  return rowCount * GRID_ENGINE_ROW_UNIT_PX + Math.max(0, rowCount - 1) * GRID_ENGINE_GAP_PX;
+}
+
+function resolveRoomWidgetClusterMinHeightPx(
+  rowCount: number,
+  breakpoint: GridEngineBreakpoint,
+  hasControls = false,
+) {
+  const gridHeight = resolveRoomWidgetGridHeightPx(rowCount);
+  if (gridHeight <= 0) {
+    return 0;
+  }
+  const contentBlocks = hasControls ? 3 : 2;
+  const contentGaps = Math.max(0, contentBlocks - 1) * ROOM_WIDGET_CLUSTER_CONTENT_GAP_PX;
+  return (
+    (ROOM_WIDGET_CLUSTER_PADDING_Y_BY_BREAKPOINT[breakpoint] ?? 32) +
+    ROOM_WIDGET_CLUSTER_HEADER_HEIGHT_PX +
+    contentGaps +
+    gridHeight
+  );
 }
 
 function RoomCardSlot({
@@ -710,6 +1155,38 @@ function readStoredActiveRoomId() {
   return typeof raw === 'string' ? raw.trim() : '';
 }
 
+function parseHiddenRoomEntitiesByRoom(raw: string | null): HiddenRoomEntitiesByRoom {
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.entries(parsed as Record<string, unknown>).reduce<HiddenRoomEntitiesByRoom>((acc, [roomId, value]) => {
+      const normalizedRoomId = roomId.trim();
+      if (!normalizedRoomId || !Array.isArray(value)) {
+        return acc;
+      }
+      const entityIds = uniqueStrings(value.filter((entry): entry is string => typeof entry === 'string'));
+      if (entityIds.length > 0) {
+        acc[normalizedRoomId] = entityIds;
+      }
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function readStoredHiddenRoomEntitiesByRoom() {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  return parseHiddenRoomEntitiesByRoom(window.localStorage.getItem(ROOM_ENTITY_VISIBILITY_STORAGE_KEY));
+}
+
 function createEmptyBuckets(): RoomEntityBuckets {
   return {
     lights: [],
@@ -766,6 +1243,56 @@ function bucketEntityId(entityId: string, buckets: RoomEntityBuckets) {
   buckets.others.push(entityId);
 }
 
+function filterRoomEntityBuckets(
+  buckets: RoomEntityBuckets,
+  predicate: (entityId: string) => boolean,
+): RoomEntityBuckets {
+  return {
+    lights: buckets.lights.filter(predicate),
+    climates: buckets.climates.filter(predicate),
+    locks: buckets.locks.filter(predicate),
+    medias: buckets.medias.filter(predicate),
+    switches: buckets.switches.filter(predicate),
+    sensors: buckets.sensors.filter(predicate),
+    covers: buckets.covers.filter(predicate),
+    cameras: buckets.cameras.filter(predicate),
+    weathers: buckets.weathers.filter(predicate),
+    others: buckets.others.filter(predicate),
+  };
+}
+
+function getRoomSectionEntityIds(sectionId: string, buckets: RoomEntityBuckets) {
+  if (sectionId === 'lights') {
+    return buckets.lights;
+  }
+  if (sectionId === 'switches') {
+    return buckets.switches;
+  }
+  if (sectionId === 'lights_switches') {
+    return [...buckets.lights, ...buckets.switches];
+  }
+  if (sectionId === 'clima') {
+    return buckets.climates;
+  }
+  if (sectionId === 'media') {
+    return buckets.medias;
+  }
+  if (sectionId === 'sensors') {
+    return buckets.sensors;
+  }
+  if (sectionId === 'security') {
+    return [...buckets.locks, ...buckets.cameras];
+  }
+  if (sectionId === 'accessories') {
+    return uniqueStrings([
+      ...buckets.covers,
+      ...buckets.weathers,
+      ...buckets.others.filter((entityId) => !entityId.startsWith('automation.') && !entityId.startsWith('script.')),
+    ]);
+  }
+  return [];
+}
+
 function isEntityOn(entityId: string, entity?: MockEntityState) {
   const state = `${entity?.state ?? ''}`.trim().toLowerCase();
   const domain = entityId.split('.')[0];
@@ -776,6 +1303,20 @@ function isEntityOn(entityId: string, entity?: MockEntityState) {
     return state === 'unlocked' || state === 'open';
   }
   return ['on', 'open', 'unlocked', 'playing', 'heat', 'cool'].includes(state);
+}
+
+function resolveLightBrightnessPercent(entity?: MockEntityState) {
+  const directBrightness = toNumber(entity?.brightness);
+  if (directBrightness !== undefined) {
+    return Math.max(0, Math.min(100, Math.round(directBrightness > 100 ? (directBrightness / 255) * 100 : directBrightness)));
+  }
+
+  const rawBrightness = toNumber(entity?.rawAttributes?.brightness);
+  if (rawBrightness !== undefined) {
+    return Math.max(0, Math.min(100, Math.round(rawBrightness > 100 ? (rawBrightness / 255) * 100 : rawBrightness)));
+  }
+
+  return undefined;
 }
 
 function isMediaEntityPlaying(entity?: MockEntityState) {
@@ -810,62 +1351,134 @@ function buildEnergyBars(referenceValue: number | undefined) {
   });
 }
 
-function parseEntityAreaMap(payload: unknown, deviceAreaByDeviceId: Record<string, string>) {
-  if (!Array.isArray(payload)) {
-    return {};
-  }
+function readTrimmedRecordString(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
 
+function extractRegistryArray(payload: unknown, key: 'entities' | 'devices') {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+  const record = payload as Record<string, unknown>;
+  const direct = record[key];
+  if (Array.isArray(direct)) {
+    return direct;
+  }
+  const result = record.result;
+  if (result && typeof result === 'object') {
+    const resultDirect = (result as Record<string, unknown>)[key];
+    if (Array.isArray(resultDirect)) {
+      return resultDirect;
+    }
+  }
+  return [];
+}
+
+function parseRegistryEntityEntries(payload: unknown): HaRegistryEntityEntry[] {
+  return extractRegistryArray(payload, 'entities')
+    .map((entry): HaRegistryEntityEntry | null => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const entityId = readTrimmedRecordString(record, 'entity_id');
+      if (!entityId) {
+        return null;
+      }
+      const deviceId = readTrimmedRecordString(record, 'device_id');
+      const areaId = readTrimmedRecordString(record, 'area_id');
+      const name = readTrimmedRecordString(record, 'name') || readTrimmedRecordString(record, 'name_by_user');
+      const originalName = readTrimmedRecordString(record, 'original_name');
+      const disabledBy = readTrimmedRecordString(record, 'disabled_by');
+      const hiddenBy = readTrimmedRecordString(record, 'hidden_by');
+      const platform = readTrimmedRecordString(record, 'platform');
+      return {
+        entityId,
+        deviceId: deviceId || null,
+        areaId: areaId || null,
+        name: name || null,
+        originalName: originalName || null,
+        disabledBy: disabledBy || null,
+        hiddenBy: hiddenBy || null,
+        platform: platform || null,
+      };
+    })
+    .filter((entry): entry is HaRegistryEntityEntry => entry !== null);
+}
+
+function parseRegistryDeviceEntries(payload: unknown): HaRegistryDeviceEntry[] {
+  return extractRegistryArray(payload, 'devices')
+    .map((entry): HaRegistryDeviceEntry | null => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const id = readTrimmedRecordString(record, 'id') || readTrimmedRecordString(record, 'device_id');
+      if (!id) {
+        return null;
+      }
+      const nameByUser = readTrimmedRecordString(record, 'name_by_user');
+      const manufacturer = readTrimmedRecordString(record, 'manufacturer');
+      const model = readTrimmedRecordString(record, 'model');
+      const registryName =
+        nameByUser ||
+        readTrimmedRecordString(record, 'name') ||
+        readTrimmedRecordString(record, 'original_name') ||
+        model ||
+        id;
+      const areaId = readTrimmedRecordString(record, 'area_id');
+      return {
+        id,
+        areaId: areaId || null,
+        name: registryName,
+        nameByUser: nameByUser || null,
+        manufacturer: manufacturer || null,
+        model: model || null,
+      };
+    })
+    .filter((entry): entry is HaRegistryDeviceEntry => entry !== null);
+}
+
+function buildDeviceAreaMap(registryDevices: HaRegistryDeviceEntry[]) {
+  return registryDevices.reduce<Record<string, string>>((acc, device) => {
+    if (device.areaId) {
+      acc[device.id] = device.areaId;
+    }
+    return acc;
+  }, {});
+}
+
+function buildEntityAreaMap(
+  registryEntities: HaRegistryEntityEntry[],
+  deviceAreaByDeviceId: Record<string, string>,
+) {
   const result: Record<string, string> = {};
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
+  registryEntities.forEach((entry) => {
+    if (entry.areaId) {
+      result[entry.entityId] = entry.areaId;
       return;
     }
-    const record = entry as Record<string, unknown>;
-    const entityId = typeof record.entity_id === 'string' ? record.entity_id.trim() : '';
-    if (!entityId) {
+    if (!entry.deviceId) {
       return;
     }
-    const directAreaId = typeof record.area_id === 'string' ? record.area_id.trim() : '';
-    if (directAreaId) {
-      result[entityId] = directAreaId;
-      return;
-    }
-    const deviceId = typeof record.device_id === 'string' ? record.device_id.trim() : '';
-    if (!deviceId) {
-      return;
-    }
-    const areaFromDevice = deviceAreaByDeviceId[deviceId];
+    const areaFromDevice = deviceAreaByDeviceId[entry.deviceId];
     if (areaFromDevice) {
-      result[entityId] = areaFromDevice;
+      result[entry.entityId] = areaFromDevice;
     }
   });
   return result;
 }
 
+function parseEntityAreaMap(payload: unknown, deviceAreaByDeviceId: Record<string, string>) {
+  return buildEntityAreaMap(parseRegistryEntityEntries(payload), deviceAreaByDeviceId);
+}
+
 function parseDeviceAreaMap(payload: unknown) {
-  if (!Array.isArray(payload)) {
-    return {};
-  }
-  const result: Record<string, string> = {};
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const record = entry as Record<string, unknown>;
-    const deviceIdRaw =
-      typeof record.id === 'string'
-        ? record.id
-        : typeof record.device_id === 'string'
-          ? record.device_id
-          : '';
-    const deviceId = deviceIdRaw.trim();
-    const areaId = typeof record.area_id === 'string' ? record.area_id.trim() : '';
-    if (!deviceId || !areaId) {
-      return;
-    }
-    result[deviceId] = areaId;
-  });
-  return result;
+  return buildDeviceAreaMap(parseRegistryDeviceEntries(payload));
 }
 
 function parseHaAreaEntry(payload: unknown): HaArea | null {
@@ -957,16 +1570,18 @@ function parseHaFloorEntry(payload: unknown): HaFloorEntry | null {
 
 async function fetchRegistrySnapshot(
   onCallApi: NonNullable<RoomsDashboardProps['onCallApi']>,
-) {
+): Promise<RegistrySnapshot> {
   const [entityPayload, devicePayload] = await Promise.all([
     (await onCallApi({ type: 'config/entity_registry/list' }, { reportError: false })) ??
       (await onCallApi({ type: 'config/entity_registry/list_for_display' }, { reportError: false })),
     (await onCallApi({ type: 'config/device_registry/list' }, { reportError: false })) ??
       (await onCallApi({ type: 'config/device_registry/list_for_display' }, { reportError: false })),
   ]);
-  const deviceAreaByDeviceId = parseDeviceAreaMap(devicePayload);
-  const entityAreaByEntityId = parseEntityAreaMap(entityPayload, deviceAreaByDeviceId);
-  return { entityAreaByEntityId };
+  const registryDevices = parseRegistryDeviceEntries(devicePayload);
+  const registryEntities = parseRegistryEntityEntries(entityPayload);
+  const deviceAreaByDeviceId = buildDeviceAreaMap(registryDevices);
+  const entityAreaByEntityId = buildEntityAreaMap(registryEntities, deviceAreaByDeviceId);
+  return { entityAreaByEntityId, registryEntities, registryDevices };
 }
 
 function RoomsTopTab({
@@ -1068,6 +1683,7 @@ function ClimateAction({
 
 export function RoomsDashboard({
   haConnected,
+  canManageRooms = false,
   haAreas,
   haStates,
   onCallApi,
@@ -1081,12 +1697,16 @@ export function RoomsDashboard({
   const floorCarouselDragRef = React.useRef<FloorCarouselDragState | null>(null);
   const floorCarouselSuppressClickRef = React.useRef(false);
   const mobileClimateSwiperRef = React.useRef<HTMLDivElement | null>(null);
-  const climateSwiperDragRef = React.useRef<FloorCarouselDragState | null>(null);
+  const climateSwiperDragRef = React.useRef<RoomSwiperDragState | null>(null);
   const climateSwiperSuppressClickRef = React.useRef(false);
   const mediaSwiperRef = React.useRef<HTMLDivElement | null>(null);
-  const mediaSwiperDragRef = React.useRef<FloorCarouselDragState | null>(null);
+  const mediaSwiperDragRef = React.useRef<RoomSwiperDragState | null>(null);
   const mediaSwiperSuppressClickRef = React.useRef(false);
+  const sectionTargetLongPressRef = React.useRef<RoomSectionTargetLongPressState | null>(null);
+  const suppressNextSectionTargetClickRef = React.useRef<string | null>(null);
   const [customRooms, setCustomRooms] = React.useState<CustomRoomRecord[]>(readStoredCustomRooms);
+  const [hiddenRoomEntitiesByRoom, setHiddenRoomEntitiesByRoom] =
+    React.useState<HiddenRoomEntitiesByRoom>(readStoredHiddenRoomEntitiesByRoom);
   const [createdHaAreas, setCreatedHaAreas] = React.useState<HaArea[]>([]);
   const [deletedHaAreaIds, setDeletedHaAreaIds] = React.useState<string[]>([]);
   const [activeRoomId, setActiveRoomId] = React.useState<string>(readStoredActiveRoomId);
@@ -1098,7 +1718,6 @@ export function RoomsDashboard({
   const [isCreatingRoom, setIsCreatingRoom] = React.useState(false);
   const [isAreaCreateDetailsOpen, setIsAreaCreateDetailsOpen] = React.useState(false);
   const [editingRoom, setEditingRoom] = React.useState<RoomEditTarget | null>(null);
-  const [expandedRoomSection, setExpandedRoomSection] = React.useState<ExpandedRoomSection | null>(null);
   const [newRoomName, setNewRoomName] = React.useState('');
   const [areaCreationDraft, setAreaCreationDraft] = React.useState<AreaCreationDraft>(EMPTY_AREA_CREATION_DRAFT);
   const [roomCreateError, setRoomCreateError] = React.useState<string | null>(null);
@@ -1118,7 +1737,23 @@ export function RoomsDashboard({
   const [floorCreateError, setFloorCreateError] = React.useState<string | null>(null);
   const [isLoadingAreaMetadata, setIsLoadingAreaMetadata] = React.useState(false);
   const [entityAreaByEntityId, setEntityAreaByEntityId] = React.useState<Record<string, string>>({});
+  const [registryEntityEntries, setRegistryEntityEntries] = React.useState<HaRegistryEntityEntry[]>([]);
+  const [registryDeviceEntries, setRegistryDeviceEntries] = React.useState<HaRegistryDeviceEntry[]>([]);
   const [registryLoadAt, setRegistryLoadAt] = React.useState<number>(0);
+  const [editingRoomSection, setEditingRoomSection] = React.useState<RoomSectionEditTarget | null>(null);
+  const [isSectionTargetSelectionMode, setIsSectionTargetSelectionMode] = React.useState(false);
+  const [selectedSectionTargetIds, setSelectedSectionTargetIds] = React.useState<Record<string, boolean>>({});
+  const [sectionDeviceSheetMode, setSectionDeviceSheetMode] = React.useState<SectionDeviceSheetMode>(null);
+  const [sectionDeviceSearch, setSectionDeviceSearch] = React.useState('');
+  const [sectionMoveTargetAreaId, setSectionMoveTargetAreaId] = React.useState('');
+  const [sectionActionBusy, setSectionActionBusy] = React.useState(false);
+  const [sectionActionError, setSectionActionError] = React.useState<string | null>(null);
+  const [optimisticRoomToggleByEntityId, setOptimisticRoomToggleByEntityId] = React.useState<
+    Record<string, RoomOptimisticToggleState>
+  >({});
+  const [quickSliderDraftByEntityId, setQuickSliderDraftByEntityId] = React.useState<
+    Record<string, RoomQuickSliderDraftState>
+  >({});
   const [demoToggleById, setDemoToggleById] = React.useState<Record<string, boolean>>({
     'demo-light': true,
     'demo-stereo': false,
@@ -1126,6 +1761,63 @@ export function RoomsDashboard({
     'demo-monitoring': true,
   });
   const [sceneByRoomId, setSceneByRoomId] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    const entries = Object.entries(optimisticRoomToggleByEntityId);
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    const cleanup = () => {
+      const now = Date.now();
+      setOptimisticRoomToggleByEntityId((current) => {
+        let changed = false;
+        const next = { ...current };
+        Object.entries(current).forEach(([entityId, optimisticState]) => {
+          const liveEntity = haStates[entityId];
+          const liveIsOn = isEntityOn(entityId, liveEntity);
+          if (optimisticState.expiresAt <= now || liveIsOn === optimisticState.isOn) {
+            delete next[entityId];
+            changed = true;
+          }
+        });
+        return changed ? next : current;
+      });
+    };
+
+    cleanup();
+    const nextExpiry = Math.min(...entries.map(([, optimisticState]) => optimisticState.expiresAt));
+    const cleanupDelay = Math.max(250, nextExpiry - Date.now());
+    const cleanupTimer = window.setTimeout(cleanup, cleanupDelay);
+    return () => window.clearTimeout(cleanupTimer);
+  }, [haStates, optimisticRoomToggleByEntityId]);
+
+  React.useEffect(() => {
+    const entries = Object.entries(quickSliderDraftByEntityId);
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    const cleanup = () => {
+      const now = Date.now();
+      setQuickSliderDraftByEntityId((current) => {
+        let changed = false;
+        const next = { ...current };
+        Object.entries(current).forEach(([entityId, draftState]) => {
+          if (draftState.expiresAt <= now) {
+            delete next[entityId];
+            changed = true;
+          }
+        });
+        return changed ? next : current;
+      });
+    };
+
+    const nextExpiry = Math.min(...entries.map(([, draftState]) => draftState.expiresAt));
+    const cleanupDelay = Math.max(250, nextExpiry - Date.now());
+    const cleanupTimer = window.setTimeout(cleanup, cleanupDelay);
+    return () => window.clearTimeout(cleanupTimer);
+  }, [quickSliderDraftByEntityId]);
 
   const resetRoomForm = React.useCallback(() => {
     setEditingRoom(null);
@@ -1265,10 +1957,6 @@ export function RoomsDashboard({
   }, [activeRoomTitleKey, prefersReducedMotion]);
 
   React.useEffect(() => {
-    setExpandedRoomSection(null);
-  }, [activeRoomTitleKey]);
-
-  React.useEffect(() => {
     if (roomTabs.length === 0) {
       if (activeRoomId) {
         setActiveRoomId('');
@@ -1305,6 +1993,13 @@ export function RoomsDashboard({
     if (typeof window === 'undefined') {
       return;
     }
+    window.localStorage.setItem(ROOM_ENTITY_VISIBILITY_STORAGE_KEY, JSON.stringify(hiddenRoomEntitiesByRoom));
+  }, [hiddenRoomEntitiesByRoom]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     if (!activeRoomId) {
       window.localStorage.removeItem(ACTIVE_ROOM_STORAGE_KEY);
       return;
@@ -1313,8 +2008,19 @@ export function RoomsDashboard({
   }, [activeRoomId]);
 
   React.useEffect(() => {
+    setEditingRoomSection(null);
+    setSelectedSectionTargetIds({});
+    setSectionDeviceSheetMode(null);
+    setSectionDeviceSearch('');
+    setSectionMoveTargetAreaId('');
+    setSectionActionError(null);
+  }, [activeRoomId]);
+
+  React.useEffect(() => {
     if (!haConnected || !onCallApi) {
       setEntityAreaByEntityId({});
+      setRegistryEntityEntries([]);
+      setRegistryDeviceEntries([]);
       return;
     }
     let cancelled = false;
@@ -1325,6 +2031,8 @@ export function RoomsDashboard({
         return;
       }
       setEntityAreaByEntityId(snapshot.entityAreaByEntityId);
+      setRegistryEntityEntries(snapshot.registryEntities);
+      setRegistryDeviceEntries(snapshot.registryDevices);
       setRegistryLoadAt(Date.now());
     };
 
@@ -1854,25 +2562,43 @@ export function RoomsDashboard({
     }
     return bucketsByAreaId[activeRoomTab.id] ?? createEmptyBuckets();
   }, [activeRoomTab, bucketsByAreaId]);
+  const hiddenActiveRoomEntityIds = React.useMemo(
+    () => new Set(activeRoomTab ? hiddenRoomEntitiesByRoom[activeRoomTab.id] ?? [] : []),
+    [activeRoomTab, hiddenRoomEntitiesByRoom],
+  );
+  const visibleActiveBuckets = React.useMemo(
+    () => filterRoomEntityBuckets(activeBuckets, (entityId) => !hiddenActiveRoomEntityIds.has(entityId)),
+    [activeBuckets, hiddenActiveRoomEntityIds],
+  );
   const activeRoomArea = React.useMemo(
     () => (activeRoomTab?.source === 'ha' ? areaById.get(activeRoomTab.id) ?? null : null),
     [activeRoomTab, areaById],
   );
+  const registryEntityByEntityId = React.useMemo(
+    () => new Map(registryEntityEntries.map((entry) => [entry.entityId, entry])),
+    [registryEntityEntries],
+  );
+  const registryDeviceById = React.useMemo(
+    () => new Map(registryDeviceEntries.map((entry) => [entry.id, entry])),
+    [registryDeviceEntries],
+  );
+  const canOpenActiveHaRoomSection = Boolean(activeRoomTab?.source === 'ha' && haConnected && onCallApi);
+  const canEditActiveHaRoom = Boolean(canOpenActiveHaRoomSection && canManageRooms);
   const isDemoSeedRoom = Boolean(activeRoomTab?.id.startsWith('demo-'));
 
   const weatherEntityId = React.useMemo(() => {
-    if (activeBuckets.weathers.length > 0) {
-      return activeBuckets.weathers[0];
+    if (visibleActiveBuckets.weathers.length > 0) {
+      return visibleActiveBuckets.weathers[0];
     }
     if (isDemoSeedRoom) {
       return Object.keys(haStates).find((entityId) => entityId.startsWith('weather.')) ?? null;
     }
     return null;
-  }, [activeBuckets.weathers, haStates, isDemoSeedRoom]);
+  }, [haStates, isDemoSeedRoom, visibleActiveBuckets.weathers]);
 
   const climateEntityIds = React.useMemo(
-    () => (activeBuckets.climates.length > 0 ? activeBuckets.climates : isDemoSeedRoom ? ['climate.air_conditioner'] : []),
-    [activeBuckets.climates, isDemoSeedRoom],
+    () => (visibleActiveBuckets.climates.length > 0 ? visibleActiveBuckets.climates : isDemoSeedRoom ? ['climate.air_conditioner'] : []),
+    [isDemoSeedRoom, visibleActiveBuckets.climates],
   );
 
   React.useEffect(() => {
@@ -1899,7 +2625,7 @@ export function RoomsDashboard({
       .toUpperCase();
 
   const doorTiles = React.useMemo<RoomDoorTile[]>(() => {
-    const lockIds = activeBuckets.locks.slice(0, 2);
+    const lockIds = visibleActiveBuckets.locks.slice(0, 2);
     if (lockIds.length === 0 && isDemoSeedRoom) {
       return [
         {
@@ -1937,13 +2663,13 @@ export function RoomsDashboard({
         isLive: true,
       };
     });
-  }, [activeBuckets.locks, haStates, isDemoSeedRoom]);
+  }, [haStates, isDemoSeedRoom, visibleActiveBuckets.locks]);
 
   const quickTiles = React.useMemo<RoomQuickTile[]>(() => {
     const liveCandidates = [
-      ...activeBuckets.lights,
-      ...activeBuckets.switches,
-      ...activeBuckets.medias,
+      ...visibleActiveBuckets.lights,
+      ...visibleActiveBuckets.switches,
+      ...visibleActiveBuckets.medias,
     ]
       .slice(0, 4)
       .map((entityId) => {
@@ -2016,17 +2742,17 @@ export function RoomsDashboard({
       },
     ];
   }, [
-    activeBuckets.lights,
-    activeBuckets.medias,
-    activeBuckets.switches,
     demoToggleById,
     haStates,
     isDemoSeedRoom,
+    visibleActiveBuckets.lights,
+    visibleActiveBuckets.medias,
+    visibleActiveBuckets.switches,
   ]);
 
   const mediaEntityIds = React.useMemo(
     () => {
-      const ids = activeBuckets.medias.length > 0 ? activeBuckets.medias : isDemoSeedRoom ? ['media_player.living_room_tv'] : [];
+      const ids = visibleActiveBuckets.medias.length > 0 ? visibleActiveBuckets.medias : isDemoSeedRoom ? ['media_player.living_room_tv'] : [];
       return [...ids].sort((left, right) => {
         const leftPlaying = isMediaEntityPlaying(haStates[left]);
         const rightPlaying = isMediaEntityPlaying(haStates[right]);
@@ -2036,7 +2762,7 @@ export function RoomsDashboard({
         return leftPlaying ? -1 : 1;
       });
     },
-    [activeBuckets.medias, haStates, isDemoSeedRoom],
+    [haStates, isDemoSeedRoom, visibleActiveBuckets.medias],
   );
   const primaryPlayingMediaEntityId = React.useMemo(
     () => mediaEntityIds.find((entityId) => isMediaEntityPlaying(haStates[entityId])) ?? '',
@@ -2072,7 +2798,7 @@ export function RoomsDashboard({
   );
 
   const energyReferenceValue = React.useMemo(() => {
-    const sensorEntityId = activeBuckets.sensors.find((entityId) =>
+    const sensorEntityId = visibleActiveBuckets.sensors.find((entityId) =>
       /energy|power|consum|watt|kw|kwh/i.test(entityId),
     );
     if (!sensorEntityId) {
@@ -2080,7 +2806,7 @@ export function RoomsDashboard({
     }
     const entity = haStates[sensorEntityId];
     return toNumber(entity?.numericValue) ?? toNumber(entity?.state);
-  }, [activeBuckets.sensors, haStates]);
+  }, [haStates, visibleActiveBuckets.sensors]);
   const hasEnergyCard = energyReferenceValue !== undefined || isDemoSeedRoom;
   const energyBars = React.useMemo(() => buildEnergyBars(energyReferenceValue), [energyReferenceValue]);
   const maxEnergyValue = React.useMemo(
@@ -2147,25 +2873,74 @@ export function RoomsDashboard({
     }
     return 'Nessun sensore';
   }, [activeRoomArea, haStates]);
+  const resolveOptimisticEntityIsOn = React.useCallback(
+    (entityId: string, entity?: MockEntityState) => {
+      const optimisticState = optimisticRoomToggleByEntityId[entityId];
+      if (optimisticState && optimisticState.expiresAt > Date.now()) {
+        return optimisticState.isOn;
+      }
+      return isEntityOn(entityId, entity);
+    },
+    [optimisticRoomToggleByEntityId],
+  );
+  const resolveOptimisticRoomToggleState = React.useCallback(
+    (entityId: string) => {
+      const optimisticState = optimisticRoomToggleByEntityId[entityId];
+      return optimisticState && optimisticState.expiresAt > Date.now() ? optimisticState : undefined;
+    },
+    [optimisticRoomToggleByEntityId],
+  );
+  const resolveRoomWidgetLiveEntity = React.useCallback(
+    (widget: Widget): MockEntityState | undefined => {
+      const liveEntity = haStates[widget.entityId];
+      const optimisticState = resolveOptimisticRoomToggleState(widget.entityId);
+      if (!optimisticState || (widget.kind !== 'light' && widget.kind !== 'switch')) {
+        return liveEntity;
+      }
+
+      const nextState = optimisticState.isOn ? 'on' : 'off';
+      const rawAttributes = { ...(liveEntity?.rawAttributes ?? {}) };
+      if (widget.kind === 'light') {
+        rawAttributes[LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY] = optimisticState.isOn;
+        if (optimisticState.isOn) {
+          const brightnessPct = optimisticState.brightnessPct ?? resolveLightBrightnessPercent(liveEntity);
+          if (brightnessPct !== undefined) {
+            rawAttributes.brightness = Math.round((Math.max(1, Math.min(100, brightnessPct)) / 100) * 255);
+          }
+        }
+      } else {
+        rawAttributes[SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY] = optimisticState.isOn;
+      }
+
+      return {
+        ...(liveEntity ?? { state: nextState }),
+        state: nextState,
+        stateLabel: nextState,
+        toggleOn: optimisticState.isOn,
+        brightness:
+          widget.kind === 'light'
+            ? optimisticState.brightnessPct ?? resolveLightBrightnessPercent(liveEntity)
+            : liveEntity?.brightness,
+        rawAttributes,
+      };
+    },
+    [haStates, resolveOptimisticRoomToggleState],
+  );
   const lightRows = React.useMemo<RoomLightRow[]>(() => {
-    const liveIds = [...activeBuckets.lights, ...activeBuckets.switches].slice(0, 4);
+    const liveIds = [...visibleActiveBuckets.lights, ...visibleActiveBuckets.switches].slice(0, 4);
     if (liveIds.length > 0) {
       return liveIds.map((entityId) => {
         const state = haStates[entityId];
-        const rawBrightness = toNumber(state?.rawAttributes?.brightness);
-        const brightnessPct = rawBrightness
-          ? Math.round((rawBrightness / 255) * 100)
-          : isEntityOn(entityId, state)
-            ? 72
-            : 24;
+        const isOn = resolveOptimisticEntityIsOn(entityId, state);
+        const brightnessPct = resolveLightBrightnessPercent(state);
         return {
           id: entityId,
           title: getEntityFriendlyName(entityId, state),
           domain: entityId.split('.')[0],
           entityId,
           isLive: true,
-          isOn: isEntityOn(entityId, state),
-          brightnessPct: Math.max(1, Math.min(100, brightnessPct)),
+          isOn,
+          brightnessPct,
         };
       });
     }
@@ -2184,27 +2959,27 @@ export function RoomsDashboard({
         isOn: tile.isOn,
         brightnessPct: tile.isOn ? 70 : 28,
       }));
-  }, [activeBuckets.lights, activeBuckets.switches, haStates, isDemoSeedRoom, quickTiles]);
+  }, [haStates, isDemoSeedRoom, quickTiles, resolveOptimisticEntityIsOn, visibleActiveBuckets.lights, visibleActiveBuckets.switches]);
   const activeLightCount = React.useMemo(
     () =>
-      activeBuckets.lights.length > 0
-        ? activeBuckets.lights.reduce(
-            (total, entityId) => total + (isEntityOn(entityId, haStates[entityId]) ? 1 : 0),
+      visibleActiveBuckets.lights.length > 0
+        ? visibleActiveBuckets.lights.reduce(
+            (total, entityId) => total + (resolveOptimisticEntityIsOn(entityId, haStates[entityId]) ? 1 : 0),
             0,
           )
         : quickTiles.filter((tile) => tile.domain === 'light' && tile.isOn).length,
-    [activeBuckets.lights, haStates, quickTiles],
+    [haStates, quickTiles, resolveOptimisticEntityIsOn, visibleActiveBuckets.lights],
   );
   const primaryLightPct = React.useMemo(() => {
     const firstLight = lightRows[0];
-    if (firstLight) {
+    if (firstLight?.brightnessPct !== undefined) {
       return firstLight.brightnessPct;
     }
-    return 68;
+    return undefined;
   }, [lightRows]);
   const sceneEntityIds = React.useMemo(
-    () => activeBuckets.others.filter((entityId) => entityId.startsWith('scene.')).slice(0, 4),
-    [activeBuckets.others],
+    () => visibleActiveBuckets.others.filter((entityId) => entityId.startsWith('scene.')).slice(0, 4),
+    [visibleActiveBuckets.others],
   );
   const sceneOptions = React.useMemo(() => {
     if (sceneEntityIds.length > 0) {
@@ -2248,9 +3023,9 @@ export function RoomsDashboard({
 
   const accessoryCards = React.useMemo<RoomAccessoryCard[]>(() => {
     const entityIds = uniqueStrings([
-      ...activeBuckets.covers,
-      ...activeBuckets.weathers,
-      ...activeBuckets.others.filter((entityId) => !entityId.startsWith('automation.') && !entityId.startsWith('script.')),
+      ...visibleActiveBuckets.covers,
+      ...visibleActiveBuckets.weathers,
+      ...visibleActiveBuckets.others.filter((entityId) => !entityId.startsWith('automation.') && !entityId.startsWith('script.')),
     ]);
 
     return entityIds.map((entityId) => {
@@ -2281,11 +3056,11 @@ export function RoomsDashboard({
         isOn,
       };
     });
-  }, [activeBuckets.covers, activeBuckets.others, activeBuckets.weathers, haStates]);
+  }, [haStates, visibleActiveBuckets.covers, visibleActiveBuckets.others, visibleActiveBuckets.weathers]);
   const ambientSummaryParts = React.useMemo(() => {
     const parts: string[] = [];
     if (hasLightsCard) {
-      parts.push(`Luce ${primaryLightPct}%`);
+      parts.push(primaryLightPct !== undefined ? `Luce ${primaryLightPct}%` : 'Luce accesa');
     }
     if (hasClimateCard) {
       parts.push(`Clima ${Math.round(climateCurrentTemp)}\u00b0`);
@@ -2337,9 +3112,9 @@ export function RoomsDashboard({
   const isSecurityAlert = React.useMemo(
     () =>
       doorTiles.some((tile) => !tile.isClosed) ||
-      activeBuckets.covers.some((entityId) => isEntityOn(entityId, haStates[entityId])) ||
-      activeBuckets.sensors.some((entityId) => isSecurityAlertEntity(entityId, haStates[entityId])),
-    [activeBuckets.covers, activeBuckets.sensors, doorTiles, haStates],
+      visibleActiveBuckets.covers.some((entityId) => isEntityOn(entityId, haStates[entityId])) ||
+      visibleActiveBuckets.sensors.some((entityId) => isSecurityAlertEntity(entityId, haStates[entityId])),
+    [doorTiles, haStates, visibleActiveBuckets.covers, visibleActiveBuckets.sensors],
   );
   const isMobileRoomsGrid =
     roomsGridBreakpoint === 'xs' || roomsGridBreakpoint === 'sm' || roomsGridBreakpoint === 'md';
@@ -2495,10 +3270,7 @@ export function RoomsDashboard({
       if (!scroller) {
         return;
       }
-      scroller.scrollTo({
-        left: index * scroller.clientWidth,
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      });
+      scrollRoomSwiperToSlide(scroller, index, Boolean(prefersReducedMotion));
     },
     [prefersReducedMotion],
   );
@@ -2603,7 +3375,7 @@ export function RoomsDashboard({
         }),
       ],
       switches: [
-        buildRoomWidget('switch.smart_plug', 'light', haStates['switch.smart_plug'], {
+        buildRoomWidget('switch.smart_plug', 'switch', haStates['switch.smart_plug'], {
           i: 'switch.smart_plug',
           x: 0,
           y: 0,
@@ -2642,16 +3414,42 @@ export function RoomsDashboard({
     };
   }, [haStates, isDemoSeedRoom]);
 
+  const applyOptimisticRoomWidgetState = React.useCallback(
+    (widget: Widget) => {
+      if (widget.kind !== 'light' && widget.kind !== 'switch') {
+        return widget;
+      }
+      const optimisticState = resolveOptimisticRoomToggleState(widget.entityId);
+      if (!optimisticState) {
+        return widget;
+      }
+      const nextIsOn = optimisticState.isOn;
+      const nextValue =
+        widget.kind === 'light'
+          ? nextIsOn
+            ? optimisticState.brightnessPct ?? resolveLightBrightnessPercent(haStates[widget.entityId])
+            : widget.value
+          : widget.value;
+      return {
+        ...widget,
+        isOn: nextIsOn,
+        status: nextIsOn ? (widget.kind === 'light' ? 'Accesa' : 'Acceso') : 'Spento',
+        value: nextValue,
+      };
+    },
+    [haStates, resolveOptimisticRoomToggleState],
+  );
+
   const roomWidgetClusters = React.useMemo<RoomWidgetCluster[]>(() => {
     const clusters: RoomWidgetCluster[] = [];
     const lightWidgets =
-      activeBuckets.lights.length > 0
-        ? buildWidgetsForEntities(activeBuckets.lights, { i: 'lights', x: 0, y: 0, w: 2, h: 2 })
-        : demoWidgets.lights;
+      visibleActiveBuckets.lights.length > 0
+        ? buildWidgetsForEntities(visibleActiveBuckets.lights, { i: 'lights', x: 0, y: 0, w: 2, h: 2 })
+        : demoWidgets.lights.map(applyOptimisticRoomWidgetState);
     const switchWidgets =
-      activeBuckets.switches.length > 0
-        ? activeBuckets.switches.map((entityId) =>
-            buildRoomWidget(entityId, 'light', haStates[entityId], {
+      visibleActiveBuckets.switches.length > 0
+        ? visibleActiveBuckets.switches.map((entityId) =>
+            buildRoomWidget(entityId, 'switch', haStates[entityId], {
               i: entityId,
               x: 0,
               y: 0,
@@ -2659,14 +3457,16 @@ export function RoomsDashboard({
               h: 1,
             }),
           )
-        : demoWidgets.switches;
+        : demoWidgets.switches.map(applyOptimisticRoomWidgetState);
+    const resolvedLightWidgets = lightWidgets.map(applyOptimisticRoomWidgetState);
+    const resolvedSwitchWidgets = switchWidgets.map(applyOptimisticRoomWidgetState);
     const sensorWidgets =
-      activeBuckets.sensors.length > 0
-        ? buildWidgetsForEntities(activeBuckets.sensors, { i: 'sensors', x: 0, y: 0, w: 2, h: 2 })
+      visibleActiveBuckets.sensors.length > 0
+        ? buildWidgetsForEntities(visibleActiveBuckets.sensors, { i: 'sensors', x: 0, y: 0, w: 2, h: 2 })
         : demoWidgets.sensors;
     const securityWidgets =
-      activeBuckets.locks.length > 0 || activeBuckets.cameras.length > 0
-        ? buildWidgetsForEntities([...activeBuckets.locks, ...activeBuckets.cameras], {
+      visibleActiveBuckets.locks.length > 0 || visibleActiveBuckets.cameras.length > 0
+        ? buildWidgetsForEntities([...visibleActiveBuckets.locks, ...visibleActiveBuckets.cameras], {
             i: 'security',
             x: 0,
             y: 0,
@@ -2674,20 +3474,21 @@ export function RoomsDashboard({
             h: 2,
           })
         : demoWidgets.security;
-    if (lightWidgets.length > 0) clusters.push({ id: 'lights', label: 'Luci', widgets: lightWidgets });
-    if (switchWidgets.length > 0) clusters.push({ id: 'switches', label: 'Switches', widgets: switchWidgets });
-    if (sensorWidgets.length > 0) clusters.push({ id: 'sensors', label: 'Sensors', widgets: sensorWidgets });
-    if (securityWidgets.length > 0) clusters.push({ id: 'security', label: 'Security', widgets: securityWidgets });
+    if (resolvedLightWidgets.length > 0) clusters.push({ id: 'lights', label: 'Luci', widgets: resolvedLightWidgets });
+    if (resolvedSwitchWidgets.length > 0) clusters.push({ id: 'switches', label: 'Interruttori', widgets: resolvedSwitchWidgets });
+    if (sensorWidgets.length > 0) clusters.push({ id: 'sensors', label: 'Sensori', widgets: sensorWidgets });
+    if (securityWidgets.length > 0) clusters.push({ id: 'security', label: 'Sicurezza', widgets: securityWidgets });
     return clusters;
   }, [
-    activeBuckets.cameras,
-    activeBuckets.lights,
-    activeBuckets.locks,
-    activeBuckets.sensors,
-    activeBuckets.switches,
+    applyOptimisticRoomWidgetState,
     buildWidgetsForEntities,
     demoWidgets,
     haStates,
+    visibleActiveBuckets.cameras,
+    visibleActiveBuckets.lights,
+    visibleActiveBuckets.locks,
+    visibleActiveBuckets.sensors,
+    visibleActiveBuckets.switches,
   ]);
 
   const mediaRoomWidget = React.useMemo<Widget | null>(() => {
@@ -2720,10 +3521,7 @@ export function RoomsDashboard({
       if (!scroller) {
         return;
       }
-      scroller.scrollTo({
-        left: index * scroller.clientWidth,
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      });
+      scrollRoomSwiperToSlide(scroller, index, Boolean(prefersReducedMotion));
     },
     [prefersReducedMotion],
   );
@@ -2795,6 +3593,450 @@ export function RoomsDashboard({
   const roomHasRenderedCards =
     Boolean(climateControlModel) || roomWidgetClusters.length > 0 || Boolean(mediaRoomWidget);
 
+  const buildSectionDeviceTargets = React.useCallback(
+    (entityIds: string[]): RoomSectionDeviceTarget[] => {
+      type TargetDraft = {
+        id: string;
+        kind: 'device' | 'entity';
+        deviceId?: string;
+        entityIds: string[];
+        domains: Set<string>;
+      };
+
+      const drafts = new Map<string, TargetDraft>();
+      uniqueStrings(entityIds).forEach((entityId) => {
+        const registryEntity = registryEntityByEntityId.get(entityId);
+        const deviceId = registryEntity?.deviceId ?? null;
+        const key = deviceId ? `device:${deviceId}` : `entity:${entityId}`;
+        const draft =
+          drafts.get(key) ??
+          {
+            id: key,
+            kind: deviceId ? 'device' : 'entity',
+            deviceId: deviceId ?? undefined,
+            entityIds: [],
+            domains: new Set<string>(),
+          };
+        draft.entityIds.push(entityId);
+        draft.domains.add(entityId.split('.')[0]);
+        drafts.set(key, draft);
+      });
+
+      return Array.from(drafts.values())
+        .map((draft) => {
+          const firstEntityId =
+            draft.entityIds.find((entityId) => !hiddenActiveRoomEntityIds.has(entityId)) ?? draft.entityIds[0];
+          const firstEntity = haStates[firstEntityId];
+          const registryEntity = registryEntityByEntityId.get(firstEntityId);
+          const registryDevice = draft.deviceId ? registryDeviceById.get(draft.deviceId) : undefined;
+          const domains = Array.from(draft.domains).sort();
+          const entities = draft.entityIds
+            .map((entityId) => {
+              const domain = entityId.split('.')[0];
+              const state = haStates[entityId];
+              return {
+                entityId,
+                name: getEntityFriendlyName(entityId, state),
+                domain,
+                status: formatEntityStateLabel(entityId, state),
+                isVisible: !hiddenActiveRoomEntityIds.has(entityId),
+              } satisfies RoomSectionDeviceEntityTarget;
+            })
+            .sort((left, right) => left.name.localeCompare(right.name));
+          const entityLabel = getEntityFriendlyName(firstEntityId, firstEntity);
+          const deviceLabel = registryDevice?.name?.trim();
+          const name = draft.entityIds.length > 1 && draft.kind === 'device' && deviceLabel ? deviceLabel : entityLabel;
+          const deviceName =
+            draft.kind === 'device' && deviceLabel
+              ? deviceLabel
+              : registryEntity?.originalName?.trim() || registryEntity?.name?.trim() || firstEntityId;
+          const domainLabel = domains.map(formatDomainLabel).join(' / ');
+          const subtitle =
+            draft.entityIds.length > 1
+              ? `${draft.entityIds.length} entita - ${domainLabel}`
+              : domainLabel;
+          const areaId =
+            registryEntity?.areaId ??
+            (draft.deviceId ? registryDeviceById.get(draft.deviceId)?.areaId ?? null : null) ??
+            entityAreaByEntityId[firstEntityId] ??
+            null;
+          return {
+            id: draft.id,
+            kind: draft.kind,
+            deviceId: draft.deviceId,
+            entityIds: draft.entityIds,
+            entities,
+            name,
+            deviceName,
+            subtitle,
+            areaId,
+            domains,
+          } satisfies RoomSectionDeviceTarget;
+        })
+        .sort((left, right) => left.name.localeCompare(right.name));
+    },
+    [entityAreaByEntityId, haStates, hiddenActiveRoomEntityIds, registryDeviceById, registryEntityByEntityId],
+  );
+
+  const startEditRoomSection = React.useCallback(
+    (target: RoomSectionEditTarget) => {
+      if (!canOpenActiveHaRoomSection) {
+        return;
+      }
+      setEditingRoomSection({
+        ...target,
+        entityIds: uniqueStrings(target.entityIds),
+      });
+      setSelectedSectionTargetIds({});
+      setIsSectionTargetSelectionMode(false);
+      setSectionDeviceSheetMode(null);
+      setSectionDeviceSearch('');
+      setSectionMoveTargetAreaId('');
+      setSectionActionError(null);
+    },
+    [canOpenActiveHaRoomSection],
+  );
+
+  const sectionEditTargets = React.useMemo(
+    () => (editingRoomSection ? buildSectionDeviceTargets(editingRoomSection.entityIds) : []),
+    [buildSectionDeviceTargets, editingRoomSection],
+  );
+  const selectedSectionTargets = React.useMemo(
+    () => sectionEditTargets.filter((target) => selectedSectionTargetIds[target.id]),
+    [sectionEditTargets, selectedSectionTargetIds],
+  );
+  const sectionAddCandidates = React.useMemo(() => {
+    if (!editingRoomSection || activeRoomTab?.source !== 'ha') {
+      return [];
+    }
+    const candidateEntityIds = registryEntityEntries
+      .filter((entry) => {
+        if (!Object.prototype.hasOwnProperty.call(haStates, entry.entityId)) {
+          return false;
+        }
+        if (!doesEntityMatchRoomSection(entry.entityId, editingRoomSection.id)) {
+          return false;
+        }
+        const effectiveAreaId = entityAreaByEntityId[entry.entityId] ?? null;
+        return effectiveAreaId !== activeRoomTab.id;
+      })
+      .map((entry) => entry.entityId);
+    return buildSectionDeviceTargets(candidateEntityIds).filter((target) => target.areaId !== activeRoomTab.id);
+  }, [
+    activeRoomTab,
+    buildSectionDeviceTargets,
+    editingRoomSection,
+    entityAreaByEntityId,
+    haStates,
+    registryEntityEntries,
+  ]);
+  const visibleSectionAddCandidates = React.useMemo(() => {
+    const query = sectionDeviceSearch.trim().toLowerCase();
+    if (!query) {
+      return sectionAddCandidates;
+    }
+    return sectionAddCandidates.filter((target) => {
+      const haystack = [
+        target.name,
+        target.deviceName,
+        target.subtitle,
+        target.entityIds.join(' '),
+        target.areaId ? areaById.get(target.areaId)?.name ?? '' : 'nessuna stanza',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [areaById, sectionAddCandidates, sectionDeviceSearch]);
+
+  const applyRegistrySnapshotState = React.useCallback((snapshot: RegistrySnapshot) => {
+    setEntityAreaByEntityId(snapshot.entityAreaByEntityId);
+    setRegistryEntityEntries(snapshot.registryEntities);
+    setRegistryDeviceEntries(snapshot.registryDevices);
+    setRegistryLoadAt(Date.now());
+  }, []);
+
+  const refreshRegistrySnapshot = React.useCallback(async () => {
+    if (!onCallApi) {
+      return;
+    }
+    const snapshot = await fetchRegistrySnapshot(onCallApi);
+    applyRegistrySnapshotState(snapshot);
+  }, [applyRegistrySnapshotState, onCallApi]);
+
+  const applyOptimisticRegistryAreaUpdate = React.useCallback(
+    (targets: RoomSectionDeviceTarget[], nextAreaId: string | null) => {
+      const targetDeviceIds = new Set(targets.flatMap((target) => (target.deviceId ? [target.deviceId] : [])));
+      const directlyUpdatedEntityIds = new Set(targets.flatMap((target) => target.entityIds));
+      const affectedEntityIds = new Set<string>();
+
+      targets.forEach((target) => {
+        if (target.kind === 'device' && target.deviceId) {
+          registryEntityEntries.forEach((entry) => {
+            if (entry.deviceId === target.deviceId && (!entry.areaId || target.entityIds.includes(entry.entityId))) {
+              affectedEntityIds.add(entry.entityId);
+            }
+          });
+          return;
+        }
+        target.entityIds.forEach((entityId) => affectedEntityIds.add(entityId));
+      });
+
+      setRegistryDeviceEntries((current) =>
+        current.map((device) => (targetDeviceIds.has(device.id) ? { ...device, areaId: nextAreaId } : device)),
+      );
+      setRegistryEntityEntries((current) =>
+        current.map((entry) =>
+          directlyUpdatedEntityIds.has(entry.entityId) ? { ...entry, areaId: nextAreaId } : entry,
+        ),
+      );
+      setEntityAreaByEntityId((current) => {
+        const next = { ...current };
+        affectedEntityIds.forEach((entityId) => {
+          if (nextAreaId) {
+            next[entityId] = nextAreaId;
+            return;
+          }
+          delete next[entityId];
+        });
+        return next;
+      });
+      setRegistryLoadAt(Date.now());
+    },
+    [registryEntityEntries],
+  );
+
+  const assignSectionTargetsToArea = React.useCallback(
+    async (targets: RoomSectionDeviceTarget[], nextAreaId: string | null) => {
+      if (!onCallApi || targets.length === 0) {
+        return false;
+      }
+      setSectionActionBusy(true);
+      setSectionActionError(null);
+      const normalizedAreaId = nextAreaId && nextAreaId.trim().length > 0 ? nextAreaId : null;
+      try {
+        for (const target of targets) {
+          if (target.kind === 'device' && target.deviceId) {
+            const deviceResult = await onCallApi({
+              type: 'config/device_registry/update',
+              device_id: target.deviceId,
+              area_id: normalizedAreaId,
+            });
+            if (deviceResult === null) {
+              throw new Error('device update failed');
+            }
+
+            const directEntityIds = target.entityIds.filter((entityId) => registryEntityByEntityId.get(entityId)?.areaId);
+            for (const entityId of directEntityIds) {
+              const entityResult = await onCallApi({
+                type: 'config/entity_registry/update',
+                entity_id: entityId,
+                area_id: normalizedAreaId,
+              });
+              if (entityResult === null) {
+                throw new Error('entity update failed');
+              }
+            }
+            continue;
+          }
+
+          for (const entityId of target.entityIds) {
+            const entityResult = await onCallApi({
+              type: 'config/entity_registry/update',
+              entity_id: entityId,
+              area_id: normalizedAreaId,
+            });
+            if (entityResult === null) {
+              throw new Error('entity update failed');
+            }
+          }
+        }
+
+        applyOptimisticRegistryAreaUpdate(targets, normalizedAreaId);
+        const movedEntityIds = new Set(targets.flatMap((target) => target.entityIds));
+        if (normalizedAreaId === activeRoomTab?.id) {
+          setHiddenRoomEntitiesByRoom((current) => {
+            const currentHiddenIds = current[activeRoomTab.id] ?? [];
+            const nextHiddenIds = currentHiddenIds.filter((entityId) => !movedEntityIds.has(entityId));
+            if (nextHiddenIds.length === currentHiddenIds.length) {
+              return current;
+            }
+            const next = { ...current };
+            if (nextHiddenIds.length > 0) {
+              next[activeRoomTab.id] = nextHiddenIds;
+            } else {
+              delete next[activeRoomTab.id];
+            }
+            return next;
+          });
+        }
+        setEditingRoomSection((current) => {
+          if (!current || activeRoomTab?.source !== 'ha') {
+            return current;
+          }
+          const nextEntityIds =
+            normalizedAreaId === activeRoomTab.id
+              ? uniqueStrings([...current.entityIds, ...Array.from(movedEntityIds)])
+              : current.entityIds.filter((entityId) => !movedEntityIds.has(entityId));
+          return { ...current, entityIds: nextEntityIds };
+        });
+        setSelectedSectionTargetIds({});
+        setIsSectionTargetSelectionMode(false);
+        void refreshRegistrySnapshot().catch(() => undefined);
+        return true;
+      } catch {
+        setSectionActionError('Non sono riuscito ad aggiornare i dispositivi su Home Assistant.');
+        return false;
+      } finally {
+        setSectionActionBusy(false);
+      }
+    },
+    [
+      activeRoomTab,
+      applyOptimisticRegistryAreaUpdate,
+      onCallApi,
+      refreshRegistrySnapshot,
+      registryEntityByEntityId,
+    ],
+  );
+
+  const toggleRoomEntityVisibility = React.useCallback((entityId: string) => {
+    if (!activeRoomTab || activeRoomTab.source !== 'ha') {
+      return;
+    }
+    const roomId = activeRoomTab.id;
+    setHiddenRoomEntitiesByRoom((current) => {
+      const currentHiddenIds = current[roomId] ?? [];
+      const isHidden = currentHiddenIds.includes(entityId);
+      const nextHiddenIds = isHidden
+        ? currentHiddenIds.filter((hiddenEntityId) => hiddenEntityId !== entityId)
+        : uniqueStrings([...currentHiddenIds, entityId]);
+      const next = { ...current };
+      if (nextHiddenIds.length > 0) {
+        next[roomId] = nextHiddenIds;
+      } else {
+        delete next[roomId];
+      }
+      return next;
+    });
+    setSectionActionError(null);
+  }, [activeRoomTab]);
+
+  const clearSectionTargetLongPress = React.useCallback(() => {
+    const longPress = sectionTargetLongPressRef.current;
+    if (!longPress) {
+      return;
+    }
+    window.clearTimeout(longPress.timerId);
+    sectionTargetLongPressRef.current = null;
+  }, []);
+
+  const enterSectionActionMode = React.useCallback(() => {
+    if (!canEditActiveHaRoom) {
+      return;
+    }
+    setIsSectionTargetSelectionMode(true);
+    setSectionActionError(null);
+  }, [canEditActiveHaRoom]);
+
+  const startSectionTargetSelection = React.useCallback((targetId: string) => {
+    if (!canEditActiveHaRoom) {
+      return;
+    }
+    enterSectionActionMode();
+    setSelectedSectionTargetIds((current) => (current[targetId] ? current : { ...current, [targetId]: true }));
+  }, [canEditActiveHaRoom, enterSectionActionMode]);
+
+  const cancelSectionTargetSelection = React.useCallback(() => {
+    clearSectionTargetLongPress();
+    setIsSectionTargetSelectionMode(false);
+    setSelectedSectionTargetIds({});
+    setSectionActionError(null);
+  }, [clearSectionTargetLongPress]);
+
+  const toggleSectionTargetSelection = React.useCallback((targetId: string) => {
+    setSelectedSectionTargetIds((current) => {
+      const next = { ...current };
+      if (next[targetId]) {
+        delete next[targetId];
+      } else {
+        next[targetId] = true;
+      }
+      return next;
+    });
+    setSectionActionError(null);
+  }, []);
+
+  const beginSectionTargetLongPress = React.useCallback(
+    (targetId: string, event: React.PointerEvent<HTMLDivElement>) => {
+      if (!canEditActiveHaRoom) {
+        return;
+      }
+      const targetElement = event.target as HTMLElement | null;
+      const quickControl = targetElement?.closest('button, input, [data-quick-control="true"]') as HTMLElement | null;
+      if (quickControl && quickControl.dataset.quickSlider !== 'true') {
+        return;
+      }
+      clearSectionTargetLongPress();
+      const pointerId = event.pointerId;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const timerId = window.setTimeout(() => {
+        sectionTargetLongPressRef.current = null;
+        suppressNextSectionTargetClickRef.current = targetId;
+        startSectionTargetSelection(targetId);
+        window.setTimeout(() => {
+          if (suppressNextSectionTargetClickRef.current === targetId) {
+            suppressNextSectionTargetClickRef.current = null;
+          }
+        }, 500);
+      }, ROOM_SECTION_TARGET_LONG_PRESS_MS);
+      sectionTargetLongPressRef.current = { timerId, pointerId, targetId, startX, startY };
+    },
+    [canEditActiveHaRoom, clearSectionTargetLongPress, startSectionTargetSelection],
+  );
+
+  const beginSectionActionLongPress = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!canEditActiveHaRoom) {
+        return;
+      }
+      const targetElement = event.target as HTMLElement | null;
+      const quickControl = targetElement?.closest('button, input, [data-quick-control="true"]') as HTMLElement | null;
+      if (quickControl && quickControl.dataset.quickSlider !== 'true') {
+        return;
+      }
+      clearSectionTargetLongPress();
+      const timerId = window.setTimeout(() => {
+        sectionTargetLongPressRef.current = null;
+        enterSectionActionMode();
+      }, ROOM_SECTION_TARGET_LONG_PRESS_MS);
+      sectionTargetLongPressRef.current = {
+        timerId,
+        pointerId: event.pointerId,
+        targetId: '',
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+    },
+    [canEditActiveHaRoom, clearSectionTargetLongPress, enterSectionActionMode],
+  );
+
+  const updateSectionTargetLongPress = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const longPress = sectionTargetLongPressRef.current;
+    if (!longPress || longPress.pointerId !== event.pointerId) {
+      return;
+    }
+    const deltaX = event.clientX - longPress.startX;
+    const deltaY = event.clientY - longPress.startY;
+    if (Math.hypot(deltaX, deltaY) > ROOM_SECTION_TARGET_LONG_PRESS_CANCEL_PX) {
+      window.clearTimeout(longPress.timerId);
+      sectionTargetLongPressRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => () => clearSectionTargetLongPress(), [clearSectionTargetLongPress]);
+
   const renderRoomWidget = (widget: Widget) => (
     <WidgetCardRenderer
       key={widget.id}
@@ -2806,18 +4048,51 @@ export function RoomsDashboard({
       value={widget.value ?? 0}
       onClick={() => {
         const domain = widget.entityId.split('.')[0];
-        if (!onCallService) {
-          return;
-        }
         if (domain === 'media_player') {
-          void onCallService('media_player', 'media_play_pause', { entity_id: widget.entityId });
+          void onCallService?.('media_player', 'media_play_pause', { entity_id: widget.entityId });
           return;
         }
         if (['light', 'switch', 'input_boolean', 'fan'].includes(domain)) {
-          void onCallService(domain, widget.isOn ? 'turn_off' : 'turn_on', { entity_id: widget.entityId });
+          const nextIsOn = !widget.isOn;
+          const nextBrightnessPct =
+            domain === 'light' && nextIsOn
+              ? (() => {
+                  const realBrightnessPct =
+                    typeof widget.value === 'number' && widget.value > 0
+                      ? widget.value
+                      : resolveLightBrightnessPercent(haStates[widget.entityId]);
+                  return realBrightnessPct !== undefined
+                    ? Math.max(1, Math.min(100, Math.round(realBrightnessPct)))
+                    : undefined;
+                })()
+              : undefined;
+          setOptimisticRoomToggleByEntityId((current) => ({
+            ...current,
+            [widget.entityId]: {
+              isOn: nextIsOn,
+              brightnessPct: nextBrightnessPct,
+              expiresAt: Date.now() + ROOM_LIGHT_OPTIMISTIC_TTL_MS,
+            },
+          }));
+          if (!onCallService) {
+            return;
+          }
+          void onCallService(domain, nextIsOn ? 'turn_on' : 'turn_off', { entity_id: widget.entityId }).then((success) => {
+            if (success !== false) {
+              return;
+            }
+            setOptimisticRoomToggleByEntityId((current) => {
+              if (!current[widget.entityId]) {
+                return current;
+              }
+              const next = { ...current };
+              delete next[widget.entityId];
+              return next;
+            });
+          });
         }
       }}
-      liveEntity={haStates[widget.entityId]}
+      liveEntity={resolveRoomWidgetLiveEntity(widget)}
       onLightBrightnessChange={(nextWidget, value) => {
         void onCallService?.('light', 'turn_on', {
           entity_id: nextWidget.entityId,
@@ -2889,6 +4164,12 @@ export function RoomsDashboard({
           repeat: nextRepeat,
         });
       }}
+      onMediaSelectSource={(nextWidget, source) => {
+        void onCallService?.('media_player', 'select_source', {
+          entity_id: nextWidget.entityId,
+          source,
+        });
+      }}
       mediaHideHeader={widget.kind === 'media'}
       onLockToggle={(nextWidget) => {
         void onCallService?.('lock', nextWidget.isOn ? 'lock' : 'unlock', { entity_id: nextWidget.entityId });
@@ -2899,44 +4180,55 @@ export function RoomsDashboard({
     />
   );
 
-  const renderWidgetGrid = (widgets: Widget[], gridCols = Math.max(1, Math.round(STACK_GRID_COLS_BY_BREAKPOINT[roomsGridBreakpoint] ?? 1))) => (
-    <div
-      className="grid min-h-0 min-w-0"
-      style={{
-        gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-        gridAutoRows: `${GRID_ENGINE_ROW_UNIT_PX}px`,
-        columnGap: `${GRID_ENGINE_GAP_PX}px`,
-        rowGap: `${GRID_ENGINE_GAP_PX}px`,
-        gridAutoFlow: 'row dense',
-      }}
-    >
-      {widgets.map((widget) => {
-        const span = resolveRoomWidgetSpan(widget, roomsGridBreakpoint);
-        const safeW = Math.min(gridCols, Math.max(1, Math.round(span.w)));
-        const safeH = Math.max(1, Math.round(span.h));
-        const sizedWidget: Widget = {
-          ...widget,
-          layout: {
-            ...widget.layout,
-            w: safeW,
-            h: safeH,
-          },
-        };
-        return (
-          <div
-            key={widget.id}
-            className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
-            style={{
-              gridColumn: `span ${safeW}`,
-              gridRow: `span ${safeH}`,
-            }}
-          >
-            {renderRoomWidget(sizedWidget)}
-          </div>
-        );
-      })}
-    </div>
-  );
+  const roomWidgetGridCols = Math.max(1, Math.round(STACK_GRID_COLS_BY_BREAKPOINT[roomsGridBreakpoint] ?? 1));
+
+  const renderWidgetGrid = (
+    widgets: Widget[],
+    gridCols = roomWidgetGridCols,
+    resolvedRowCount?: number,
+  ) => {
+    const rowCount = resolvedRowCount ?? resolveRoomWidgetGridRowCount(widgets, roomsGridBreakpoint, gridCols);
+    const gridMinHeight = resolveRoomWidgetGridHeightPx(rowCount);
+    return (
+      <div
+        className="grid min-h-0 min-w-0 transition-[min-height] duration-300 ease-out"
+        style={{
+          gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+          gridAutoRows: `${GRID_ENGINE_ROW_UNIT_PX}px`,
+          columnGap: `${GRID_ENGINE_GAP_PX}px`,
+          rowGap: `${GRID_ENGINE_GAP_PX}px`,
+          gridAutoFlow: 'row dense',
+          minHeight: gridMinHeight > 0 ? gridMinHeight : undefined,
+        }}
+      >
+        {widgets.map((widget) => {
+          const span = resolveRoomWidgetSpan(widget, roomsGridBreakpoint);
+          const safeW = Math.min(gridCols, Math.max(1, Math.round(span.w)));
+          const safeH = Math.max(1, Math.round(span.h));
+          const sizedWidget: Widget = {
+            ...widget,
+            layout: {
+              ...widget.layout,
+              w: safeW,
+              h: safeH,
+            },
+          };
+          return (
+            <div
+              key={widget.id}
+              className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
+              style={{
+                gridColumn: `span ${safeW}`,
+                gridRow: `span ${safeH}`,
+              }}
+            >
+              {renderRoomWidget(sizedWidget)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const renderEntitySegmentControl = (
     entityIds: string[],
@@ -2980,11 +4272,80 @@ export function RoomsDashboard({
     );
   };
 
+  const renderRoomSectionHeader = (
+    label: string,
+    count: number,
+    options?: {
+      onOpen?: () => void;
+      onEdit?: () => void;
+      editDisabled?: boolean;
+    },
+  ) => (
+    <div className="flex items-start justify-between gap-3">
+      {options?.onOpen ? (
+        <button
+          type="button"
+          onClick={options.onOpen}
+          className="group min-w-0 text-left transition-all active:scale-[0.99]"
+          aria-label={`Mostra tutti i dispositivi in ${label}`}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-semibold leading-tight tracking-normal text-white/86">{label}</span>
+            <ChevronRight size={14} className="shrink-0 text-white/32 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
+          </span>
+          <span className="mt-0.5 block text-[0.72rem] font-medium leading-tight text-white/36">
+            {formatRoomDeviceCount(count)}
+          </span>
+        </button>
+      ) : (
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold leading-tight tracking-normal text-white/86">{label}</h2>
+          <p className="mt-0.5 text-[0.72rem] font-medium leading-tight text-white/36">
+            {formatRoomDeviceCount(count)}
+          </p>
+        </div>
+      )}
+      {options?.onEdit && !options.editDisabled ? (
+        <button
+          type="button"
+          onClick={options.onEdit}
+          disabled={options.editDisabled}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/42 transition-all hover:bg-white/[0.06] hover:text-white/78 active:scale-95 disabled:cursor-not-allowed disabled:opacity-25"
+          aria-label={`Modifica sezione ${label}`}
+          title={options.editDisabled ? 'Disponibile con una stanza Home Assistant connessa' : `Modifica ${label}`}
+        >
+          <Pencil size={13} />
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const renderFloatingSectionEditButton = (target: RoomSectionEditTarget, className?: string) => {
+    if (!canEditActiveHaRoom) {
+      return null;
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => startEditRoomSection(target)}
+        className={cn(
+          'absolute right-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/22 text-white/56 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.08] hover:text-white active:scale-95',
+          className,
+        )}
+        aria-label={`Modifica sezione ${target.label}`}
+        title={`Modifica ${target.label}`}
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  };
+
   const renderEmptyRoomArea = (
     gridArea: string,
     title: string,
     description = 'Aggiungi entita a questa stanza da Home Assistant per popolare automaticamente il riquadro.',
     className?: string,
+    editTarget?: RoomSectionEditTarget,
   ) => {
     if (isMobileRoomsGrid) {
       return null;
@@ -2995,37 +4356,22 @@ export function RoomsDashboard({
         style={{ gridArea }}
       >
         <div>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/38">Non configurato</p>
-          <h2 className="mt-2 text-sm font-semibold leading-snug text-white/82">{title}</h2>
+          {editTarget ? (
+            <div className="mb-4">
+              {renderRoomSectionHeader(editTarget.label, 0, {
+                onOpen: canOpenActiveHaRoomSection ? () => startEditRoomSection(editTarget) : undefined,
+              })}
+            </div>
+          ) : (
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/38">Non configurato</p>
+          )}
+          <h2 className="text-sm font-semibold leading-snug text-white/82">{title}</h2>
           <p className="mt-2 text-xs leading-relaxed text-white/42">{description}</p>
         </div>
         <div className="mt-6 h-1.5 w-14 rounded-full bg-white/[0.06]" />
       </section>
     );
   };
-
-  const renderRoomSectionHeader = (
-    label: string,
-    count: number,
-    onOpen?: () => void,
-  ) => (
-    <div className="flex items-center justify-between gap-3">
-      {onOpen ? (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="group inline-flex min-w-0 items-center gap-1.5 rounded-full text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-white/58 transition-all hover:text-white active:scale-95"
-          aria-label={`Mostra tutti i dispositivi in ${label}`}
-        >
-          <span className="truncate">{label}</span>
-          <ChevronRight size={13} className="text-white/32 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
-        </button>
-      ) : (
-        <h2 className="truncate text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-white/52">{label}</h2>
-      )}
-      <span className="text-[0.7rem] font-medium text-white/34">{count}</span>
-    </div>
-  );
 
   const callAccessoryAction = (accessory: RoomAccessoryCard) => {
     if (!onCallService) {
@@ -3063,14 +4409,25 @@ export function RoomsDashboard({
 
   const renderAccessoriesArea = () => {
     if (accessoryCards.length === 0) {
+      const allAccessoryEntityIds = getRoomSectionEntityIds('accessories', activeBuckets);
       return renderEmptyRoomArea(
         'accessories',
         'Nessun accessorio configurato per questa stanza',
         'Qui compariranno cover, scene, meteo e accessori secondari non inclusi nelle sezioni principali.',
+        undefined,
+        { kind: 'accessories', id: 'accessories', label: 'Accessori', entityIds: allAccessoryEntityIds },
       );
     }
     const visibleAccessories = accessoryCards.slice(0, ROOM_ACCESSORY_PREVIEW_LIMIT);
-    const hasHiddenAccessories = accessoryCards.length > visibleAccessories.length;
+    const accessoryEntityIds = accessoryCards.map((accessory) => accessory.entityId);
+    const allAccessoryEntityIds = getRoomSectionEntityIds('accessories', activeBuckets);
+    const accessoryDeviceCount = buildSectionDeviceTargets(accessoryEntityIds).length;
+    const accessoryEditTarget = {
+      kind: 'accessories' as const,
+      id: 'accessories',
+      label: 'Accessori',
+      entityIds: allAccessoryEntityIds,
+    };
     return (
       <section
         className="rooms-surface min-w-0 p-3 sm:p-4"
@@ -3079,10 +4436,10 @@ export function RoomsDashboard({
         <div className="mb-3">
           {renderRoomSectionHeader(
             'Accessori',
-            accessoryCards.length,
-            hasHiddenAccessories
-              ? () => setExpandedRoomSection({ kind: 'accessories', id: 'accessories', label: 'Accessori' })
-              : undefined,
+            accessoryDeviceCount,
+            {
+              onOpen: canOpenActiveHaRoomSection ? () => startEditRoomSection(accessoryEditTarget) : undefined,
+            },
           )}
         </div>
         {renderAccessoryCards(visibleAccessories)}
@@ -3097,6 +4454,9 @@ export function RoomsDashboard({
   const renderWidgetCluster = (
     cluster: RoomWidgetCluster | undefined,
     options?: {
+      sectionId?: string;
+      label?: string;
+      allEntityIds?: string[];
       gridArea?: string;
       controls?: React.ReactNode;
       count?: number;
@@ -3109,27 +4469,77 @@ export function RoomsDashboard({
   ) => {
     if (!cluster) {
       if (options?.gridArea && options.emptyTitle) {
-        return renderEmptyRoomArea(options.gridArea, options.emptyTitle, options.emptyDescription, options.emptyClassName);
+        const emptyEditTarget =
+          options.sectionId && options.label
+            ? { kind: 'widgets' as const, id: options.sectionId, label: options.label, entityIds: uniqueStrings(options.allEntityIds ?? []) }
+            : undefined;
+        return renderEmptyRoomArea(
+          options.gridArea,
+          options.emptyTitle,
+          options.emptyDescription,
+          options.emptyClassName,
+          emptyEditTarget,
+        );
+      }
+      if (options?.label && options.sectionId && options.allEntityIds && options.allEntityIds.length > 0) {
+        const hiddenDeviceCount = buildSectionDeviceTargets(options.allEntityIds).length;
+        return (
+          <section className="rooms-surface min-w-0 space-y-3 p-3 transition-[min-height] duration-300 ease-out sm:p-4">
+            {renderRoomSectionHeader(options.label, 0, {
+              onOpen: canOpenActiveHaRoomSection
+                ? () =>
+                    startEditRoomSection({
+                      kind: 'widgets',
+                      id: options.sectionId ?? '',
+                      label: options.label ?? '',
+                      entityIds: uniqueStrings(options.allEntityIds ?? []),
+                    })
+                : undefined,
+            })}
+            <p className="text-xs font-medium text-white/38">
+              {hiddenDeviceCount === 1 ? '1 dispositivo nascosto' : `${hiddenDeviceCount} dispositivi nascosti`}
+            </p>
+          </section>
+        );
       }
       return null;
     }
+    const clusterEntityIds = cluster.widgets.map((widget) => widget.entityId);
+    const editableEntityIds = uniqueStrings(options?.allEntityIds ?? clusterEntityIds);
+    const clusterDeviceCount = buildSectionDeviceTargets(clusterEntityIds).length;
     const previewLimit = options?.previewLimit ?? ROOM_SECTION_PREVIEW_LIMIT;
     const visibleWidgets = cluster.widgets.slice(0, previewLimit);
-    const hasHiddenWidgets = cluster.widgets.length > visibleWidgets.length;
+    const gridRowCount = resolveRoomWidgetGridRowCount(visibleWidgets, roomsGridBreakpoint, roomWidgetGridCols);
+    const clusterMinHeight = resolveRoomWidgetClusterMinHeightPx(
+      gridRowCount,
+      roomsGridBreakpoint,
+      Boolean(options?.controls),
+    );
     return (
       <section
-        className={cn('rooms-surface min-w-0 space-y-3 p-3 sm:p-4', options?.className)}
-        style={options?.gridArea ? { gridArea: options.gridArea } : undefined}
+        className={cn('rooms-surface min-w-0 space-y-3 p-3 transition-[min-height] duration-300 ease-out sm:p-4', options?.className)}
+        style={{
+          ...(options?.gridArea ? { gridArea: options.gridArea } : null),
+          minHeight: clusterMinHeight > 0 ? clusterMinHeight : undefined,
+        }}
       >
         {renderRoomSectionHeader(
           cluster.label,
-          options?.count ?? cluster.widgets.length,
-          hasHiddenWidgets
-            ? () => setExpandedRoomSection({ kind: 'widgets', id: cluster.id, label: cluster.label })
-            : undefined,
+          options?.count ?? clusterDeviceCount,
+          {
+            onOpen: canOpenActiveHaRoomSection
+              ? () =>
+                  startEditRoomSection({
+                    kind: 'widgets',
+                    id: cluster.id,
+                    label: cluster.label,
+                    entityIds: editableEntityIds,
+                  })
+              : undefined,
+          },
         )}
         {options?.controls ? <div>{options.controls}</div> : null}
-        {renderWidgetGrid(visibleWidgets)}
+        {renderWidgetGrid(visibleWidgets, roomWidgetGridCols, gridRowCount)}
       </section>
     );
   };
@@ -3182,6 +4592,12 @@ export function RoomsDashboard({
   };
 
   const renderMediaPlayerArea = () => {
+    const mediaEditTarget: RoomSectionEditTarget = {
+      kind: 'widgets',
+      id: 'media',
+      label: 'Media',
+      entityIds: getRoomSectionEntityIds('media', activeBuckets),
+    };
     if (showMediaBottomBar) {
       return null;
     }
@@ -3190,18 +4606,21 @@ export function RoomsDashboard({
         'media',
         'Nessun media configurato per questa stanza',
         'TV, speaker e player multimediali associati alla stanza verranno mostrati qui.',
+        undefined,
+        mediaEditTarget,
       );
     }
     if (useMediaBottomBar) {
       return (
         <section
-          className="flex min-w-0 flex-col gap-3 overflow-visible p-0"
+          className="relative flex min-w-0 flex-col gap-3 overflow-visible p-0"
           style={{ gridArea: 'media' }}
         >
+          {renderFloatingSectionEditButton(mediaEditTarget)}
           <div className="-mx-1.5">
             <div
               ref={mediaSwiperRef}
-              className="flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+              className={ROOM_SWIPER_SCROLLER_CLASS}
               onScroll={handleMediaSwiperScroll}
               {...mediaSwiperPointerHandlers}
             >
@@ -3271,14 +4690,15 @@ export function RoomsDashboard({
     }
     return (
       <section
-        className="flex min-h-[16rem] min-w-0 flex-col overflow-visible p-0"
+        className="relative flex min-h-[16rem] min-w-0 flex-col overflow-visible p-0"
         style={{ gridArea: 'media' }}
       >
+        {renderFloatingSectionEditButton(mediaEditTarget)}
         <div className="min-h-0 flex-1">
           <div className="-mx-1.5 h-full min-h-[16rem]">
             <div
               ref={mediaSwiperRef}
-              className="flex h-full cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+              className={cn(ROOM_SWIPER_SCROLLER_CLASS, 'h-full')}
               onScroll={handleMediaSwiperScroll}
               {...mediaSwiperPointerHandlers}
             >
@@ -3411,53 +4831,726 @@ export function RoomsDashboard({
     );
   };
 
-  const renderExpandedRoomSection = () => {
-    if (!expandedRoomSection) {
-      return null;
+  const renderSectionDeviceIcon = (target: RoomSectionDeviceTarget) => {
+    const domain = target.domains[0] ?? '';
+    if (domain === 'light') return <Lightbulb size={18} />;
+    if (domain === 'climate') return <Thermometer size={18} />;
+    if (domain === 'media_player') return <Speaker size={18} />;
+    if (domain === 'switch' || domain === 'input_boolean') return <Tv size={18} />;
+    if (domain === 'fan') return <Fan size={18} />;
+    if (domain === 'sensor' || domain === 'binary_sensor') return <Thermometer size={18} />;
+    if (domain === 'lock') return <Lock size={18} />;
+    if (domain === 'camera') return <Video size={18} />;
+    if (domain === 'cover') return <ChevronRight size={18} />;
+    if (domain === 'weather') return <Leaf size={18} />;
+    if (domain === 'scene') return <Play size={18} />;
+    return <Layers size={18} />;
+  };
+
+  const renderQuickEntityIcon = (domain: string, size = 28) => {
+    if (domain === 'light') return <Lightbulb size={size} />;
+    if (domain === 'climate') return <Thermometer size={size} />;
+    if (domain === 'media_player') return <Speaker size={size} />;
+    if (domain === 'switch' || domain === 'input_boolean') return <Tv size={size} />;
+    if (domain === 'fan') return <Fan size={size} />;
+    if (domain === 'sensor' || domain === 'binary_sensor') return <Thermometer size={size} />;
+    if (domain === 'lock') return <Lock size={size} />;
+    if (domain === 'camera') return <Video size={size} />;
+    if (domain === 'cover') return <ChevronRight size={size} />;
+    if (domain === 'weather') return <Leaf size={size} />;
+    if (domain === 'scene') return <Play size={size} />;
+    return <Layers size={size} />;
+  };
+
+  const resolveQuickEntitySlider = (entity: RoomSectionDeviceEntityTarget) => {
+    const state = haStates[entity.entityId];
+    if (entity.domain === 'light') {
+      return {
+        value: resolveLightBrightnessPercent(state) ?? (isEntityOn(entity.entityId, state) ? 100 : 0),
+        min: 0,
+        max: 100,
+        step: 1,
+        accent: 'rgb(250 204 21 / 0.24)',
+        label: 'Luminosita',
+        onChange: (value: number) => {
+          const nextBrightness = Math.round(value);
+          if (nextBrightness <= 0) {
+            return onCallService?.('light', 'turn_off', { entity_id: entity.entityId });
+          }
+          return onCallService?.('light', 'turn_on', {
+            entity_id: entity.entityId,
+            brightness_pct: Math.max(1, Math.min(100, nextBrightness)),
+          });
+        },
+      };
     }
-    const expandedCluster =
-      expandedRoomSection.kind === 'widgets'
-        ? roomWidgetClusters.find((cluster) => cluster.id === expandedRoomSection.id)
-        : null;
-    const isAccessories = expandedRoomSection.kind === 'accessories';
-    const title = isAccessories ? 'Accessori' : expandedCluster?.label ?? expandedRoomSection.label;
-    const itemCount = isAccessories ? accessoryCards.length : expandedCluster?.widgets.length ?? 0;
-    const expandedGridCols = Math.max(
-      isMobileRoomsGrid ? 2 : 4,
-      Math.round(STACK_GRID_COLS_BY_BREAKPOINT[roomsGridBreakpoint] ?? 2),
+    if (entity.domain === 'media_player') {
+      const volume = toNumber(state?.volumeLevel) ?? toNumber(state?.rawAttributes?.volume_level);
+      if (volume === undefined) {
+        return null;
+      }
+      return {
+        value: Math.max(0, Math.min(100, Math.round(volume * 100))),
+        min: 0,
+        max: 100,
+        step: 1,
+        accent: 'rgb(133 173 255 / 0.24)',
+        label: 'Volume',
+        onChange: (value: number) => {
+          return onCallService?.('media_player', 'volume_set', {
+            entity_id: entity.entityId,
+            volume_level: Math.max(0, Math.min(1, value / 100)),
+          });
+        },
+      };
+    }
+    if (entity.domain === 'cover') {
+      const position =
+        toNumber(state?.currentValue) ??
+        toNumber(state?.numericValue) ??
+        toNumber(state?.rawAttributes?.current_position) ??
+        toNumber(state?.rawAttributes?.position);
+      if (position === undefined) {
+        return null;
+      }
+      return {
+        value: Math.max(0, Math.min(100, Math.round(position))),
+        min: 0,
+        max: 100,
+        step: 1,
+        accent: 'rgb(148 163 184 / 0.22)',
+        label: 'Posizione',
+        onChange: (value: number) => {
+          return onCallService?.('cover', 'set_cover_position', {
+            entity_id: entity.entityId,
+            position: Math.round(value),
+          });
+        },
+      };
+    }
+    return null;
+  };
+
+  const canQuickToggleEntity = (entity: RoomSectionDeviceEntityTarget) =>
+    Boolean(
+      onCallService &&
+        ['light', 'switch', 'input_boolean', 'fan', 'media_player', 'cover', 'scene'].includes(entity.domain),
     );
 
-    if (!isAccessories && !expandedCluster) {
-      return null;
+  const markQuickEntityTogglePending = (entityId: string, isOn: boolean, brightnessPct?: number) => {
+    setOptimisticRoomToggleByEntityId((current) => ({
+      ...current,
+      [entityId]: {
+        isOn,
+        brightnessPct,
+        expiresAt: Date.now() + ROOM_LIGHT_OPTIMISTIC_TTL_MS,
+      },
+    }));
+  };
+
+  const clearQuickEntityTogglePending = (entityId: string) => {
+    setOptimisticRoomToggleByEntityId((current) => {
+      if (!current[entityId]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[entityId];
+      return next;
+    });
+  };
+
+  const clearQuickSliderDraft = (entityId: string) => {
+    setQuickSliderDraftByEntityId((current) => {
+      if (!current[entityId]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[entityId];
+      return next;
+    });
+  };
+
+  const handleQuickEntitySliderChange = (
+    entityId: string,
+    slider: NonNullable<ReturnType<typeof resolveQuickEntitySlider>>,
+    value: number,
+  ) => {
+    const clampedValue = Math.max(slider.min, Math.min(slider.max, value));
+    const steppedValue =
+      slider.step > 0
+        ? Math.max(slider.min, Math.min(slider.max, Math.round((clampedValue - slider.min) / slider.step) * slider.step + slider.min))
+        : clampedValue;
+
+    setQuickSliderDraftByEntityId((current) => ({
+      ...current,
+      [entityId]: {
+        value: steppedValue,
+        expiresAt: Date.now() + ROOM_QUICK_SLIDER_DRAFT_TTL_MS,
+      },
+    }));
+
+    const result = slider.onChange(steppedValue);
+    if (result) {
+      void result.then((success) => {
+        if (success === false) {
+          clearQuickSliderDraft(entityId);
+        }
+      });
     }
+  };
+
+  const toggleQuickEntity = (entity: RoomSectionDeviceEntityTarget) => {
+    if (!onCallService) {
+      return;
+    }
+    const state = haStates[entity.entityId];
+    const isOn = optimisticRoomToggleByEntityId[entity.entityId]?.isOn ?? isEntityOn(entity.entityId, state);
+    if (entity.domain === 'light') {
+      const nextIsOn = !isOn;
+      const nextBrightnessPct = nextIsOn ? resolveLightBrightnessPercent(state) ?? 100 : undefined;
+      markQuickEntityTogglePending(entity.entityId, nextIsOn, nextBrightnessPct);
+      void onCallService('light', nextIsOn ? 'turn_on' : 'turn_off', { entity_id: entity.entityId }).then((success) => {
+        if (success === false) {
+          clearQuickEntityTogglePending(entity.entityId);
+        }
+      });
+      return;
+    }
+    if (entity.domain === 'switch' || entity.domain === 'input_boolean' || entity.domain === 'fan') {
+      const nextIsOn = !isOn;
+      markQuickEntityTogglePending(entity.entityId, nextIsOn);
+      void onCallService(entity.domain, nextIsOn ? 'turn_on' : 'turn_off', { entity_id: entity.entityId }).then((success) => {
+        if (success === false) {
+          clearQuickEntityTogglePending(entity.entityId);
+        }
+      });
+      return;
+    }
+    if (entity.domain === 'media_player') {
+      void onCallService('media_player', 'media_play_pause', { entity_id: entity.entityId });
+      return;
+    }
+    if (entity.domain === 'cover') {
+      void onCallService('cover', isOn ? 'close_cover' : 'open_cover', { entity_id: entity.entityId });
+      return;
+    }
+    if (entity.domain === 'scene') {
+      void onCallService('scene', 'turn_on', { entity_id: entity.entityId });
+    }
+  };
+
+  const renderQuickEntityCard = (
+    entity: RoomSectionDeviceEntityTarget,
+    target: RoomSectionDeviceTarget,
+    options?: { compact?: boolean },
+  ) => {
+    const state = haStates[entity.entityId];
+    const pendingToggle = optimisticRoomToggleByEntityId[entity.entityId];
+    const isHidden = !entity.isVisible;
+    const baseIsOn = pendingToggle?.isOn ?? isEntityOn(entity.entityId, state);
+    const resolvedSlider = !isSectionTargetSelectionMode ? resolveQuickEntitySlider(entity) : null;
+    const slider = resolvedSlider && (entity.domain !== 'light' || baseIsOn) ? resolvedSlider : null;
+    const sliderDraft = slider ? quickSliderDraftByEntityId[entity.entityId] : undefined;
+    const sliderValue = slider
+      ? Math.max(slider.min, Math.min(slider.max, sliderDraft?.value ?? slider.value))
+      : 0;
+    const isOn = entity.domain === 'light' && sliderDraft ? sliderValue > 0 : baseIsOn;
+    const isPoweringOn = Boolean(pendingToggle?.isOn && !isSectionTargetSelectionMode);
+    const sliderPct = slider
+      ? ((sliderValue - slider.min) / Math.max(1, slider.max - slider.min)) * 100
+      : 0;
+    const showToggle = canQuickToggleEntity(entity) || isSectionTargetSelectionMode;
+    const secondaryLabel = target.kind === 'device' && hasDistinctDeviceName(target) ? target.name : formatDomainLabel(entity.domain);
+    const iconSize = options?.compact ? 24 : 30;
+    const toggleSizeClass = options?.compact ? 'h-9 w-9' : 'h-11 w-11';
 
     return (
-      <div className="fixed inset-0 z-[65] bg-[#05070d]/82 text-white backdrop-blur-3xl">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.10),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.16))]" />
-        <div className="relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-6 lg:p-8">
-          <header className="flex shrink-0 items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/38">{activeRoomTitle}</p>
-              <h2 className="mt-2 truncate text-3xl font-semibold tracking-normal text-white sm:text-4xl">{title}</h2>
-              <p className="mt-1 text-sm font-medium text-white/42">
-                {itemCount} {itemCount === 1 ? 'dispositivo' : 'dispositivi'}
+      <div
+        key={entity.entityId}
+        className={cn(
+          'relative isolate aspect-square min-w-0 overflow-hidden rounded-[1.25rem] border text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_34px_rgba(0,0,0,0.16)] transition-all',
+          options?.compact ? 'p-2.5' : 'p-3.5',
+          isHidden
+            ? 'border-white/[0.055] bg-black/12 text-white/42'
+            : isOn
+              ? 'border-[#facc15]/18 bg-[rgb(72_59_24_/_0.74)] text-white'
+              : 'border-white/[0.07] bg-white/[0.045] text-white',
+        )}
+      >
+        {slider ? (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-0 z-0 transition-[width]"
+              style={{ width: `${sliderPct}%`, background: slider.accent }}
+            />
+            <input
+              type="range"
+              data-quick-control="true"
+              data-quick-slider="true"
+              min={slider.min}
+              max={slider.max}
+              step={slider.step}
+              value={sliderValue}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => handleQuickEntitySliderChange(entity.entityId, slider, Number(event.currentTarget.value))}
+              className="absolute inset-0 z-10 h-full w-full cursor-ew-resize opacity-0 [touch-action:pan-y]"
+              aria-label={`${slider.label} ${entity.name}`}
+            />
+          </>
+        ) : null}
+        <div className="pointer-events-none relative z-20 flex h-full flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <span className={cn('text-white/72', isOn && 'text-[#facc15]', isHidden && 'text-white/32')}>
+              {renderQuickEntityIcon(entity.domain, iconSize)}
+            </span>
+            {showToggle ? (
+              <button
+                type="button"
+                data-quick-control="true"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (isSectionTargetSelectionMode) {
+                    toggleRoomEntityVisibility(entity.entityId);
+                    return;
+                  }
+                  toggleQuickEntity(entity);
+                }}
+                className={cn(
+                  'pointer-events-auto relative z-30 inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full p-[2px] text-white shadow-sm transition-all active:scale-95',
+                  toggleSizeClass,
+                  isHidden && 'text-white/45',
+                )}
+                aria-label={
+                  isSectionTargetSelectionMode
+                    ? `${entity.isVisible ? 'Nascondi' : 'Mostra'} ${entity.name}`
+                    : `${isOn ? 'Spegni' : 'Accendi'} ${entity.name}`
+                }
+              >
+                {isPoweringOn ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-0 animate-spin rounded-full bg-[conic-gradient(from_0deg,rgba(255,255,255,0),rgba(255,255,255,0.95),rgba(255,255,255,0))] motion-reduce:animate-none"
+                  />
+                ) : null}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'absolute inset-[2px] rounded-full backdrop-blur-md transition-colors',
+                    isOn && !isSectionTargetSelectionMode ? 'bg-[rgb(72_59_24_/_0.92)]' : isHidden ? 'bg-white/14' : 'bg-white/28',
+                  )}
+                />
+                <span
+                  className={cn(
+                    'relative z-10 h-4 w-4 rounded-full border-[3px]',
+                    isSectionTargetSelectionMode
+                      ? entity.isVisible
+                        ? 'border-white bg-white'
+                        : 'border-white/70'
+                      : isOn
+                        ? 'border-white bg-white'
+                        : 'border-white/80',
+                  )}
+                />
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-auto min-w-0 pt-3">
+            <p className={cn('line-clamp-2 font-bold leading-tight', options?.compact ? 'text-[13px]' : 'text-[15px]', isHidden ? 'text-white/44' : 'text-white/90')}>
+              {entity.name}
+            </p>
+            <p className={cn('mt-1 truncate font-semibold leading-tight', options?.compact ? 'text-[11px]' : 'text-[12px]', isOn ? 'text-[#fde68a]' : isHidden ? 'text-white/34' : 'text-white/62')}>
+              {entity.status}
+            </p>
+            <p className={cn('mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.08em]', isHidden ? 'text-white/24' : 'text-white/30')}>
+              {secondaryLabel}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSectionDeviceSheet = () => {
+    if (!editingRoomSection || !sectionDeviceSheetMode) {
+      return null;
+    }
+    const selectedCount = selectedSectionTargets.length;
+    const canMove = selectedCount > 0 && sectionMoveTargetAreaId && sectionMoveTargetAreaId !== activeRoomTab?.id;
+    const moveLabel = selectedCount === 1 ? 'Sposta il dispositivo' : 'Sposta i dispositivi';
+
+    return (
+      <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/46 p-0 backdrop-blur-md sm:p-6">
+        <button
+          type="button"
+          className="absolute inset-0"
+          onClick={() => {
+            if (!sectionActionBusy) {
+              setSectionDeviceSheetMode(null);
+            }
+          }}
+          aria-label="Chiudi pannello dispositivi"
+        />
+        <div className="relative z-10 w-full max-w-md rounded-t-[2rem] border border-white/[0.08] bg-[#f3f4f6]/92 p-4 text-zinc-950 shadow-[0_-24px_80px_rgba(0,0,0,0.38)] backdrop-blur-3xl sm:rounded-[2rem]">
+          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-zinc-400/55" />
+          {sectionDeviceSheetMode === 'add' ? (
+            <>
+              <div className="text-center">
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_22px_rgba(15,23,42,0.12)]">
+                  <Plus size={22} />
+                </span>
+                <h3 className="mt-3 text-lg font-bold tracking-normal">Aggiungi dispositivo</h3>
+                <p className="mt-0.5 text-sm font-medium text-zinc-500">{editingRoomSection.label}</p>
+              </div>
+              <label className="mt-5 flex items-center gap-2 rounded-full border border-zinc-300/75 bg-white/80 px-3.5 py-2 text-sm shadow-sm">
+                <Search size={15} className="text-zinc-400" />
+                <input
+                  value={sectionDeviceSearch}
+                  onChange={(event) => setSectionDeviceSearch(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400"
+                  placeholder="Cerca dispositivo"
+                />
+              </label>
+              <div className="mt-4 max-h-[42dvh] overflow-y-auto pr-1 glass-scrollbar">
+                {visibleSectionAddCandidates.length > 0 ? (
+                  <div className="grid gap-2">
+                    {visibleSectionAddCandidates.map((target) => {
+                      const areaLabel = target.areaId ? areaById.get(target.areaId)?.name ?? 'Altra stanza' : 'Nessuna stanza';
+                      return (
+                        <button
+                          key={target.id}
+                          type="button"
+                          onClick={async () => {
+                            if (activeRoomTab?.source !== 'ha') {
+                              return;
+                            }
+                            const success = await assignSectionTargetsToArea([target], activeRoomTab.id);
+                            if (success) {
+                              setSectionDeviceSheetMode(null);
+                            }
+                          }}
+                          disabled={sectionActionBusy}
+                          className="flex min-w-0 items-center gap-3 rounded-2xl border border-zinc-200 bg-white/84 p-3 text-left shadow-sm transition-all hover:bg-white active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                        >
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700">
+                            {renderSectionDeviceIcon(target)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-zinc-950">{target.name}</span>
+                            {hasDistinctDeviceName(target) ? (
+                              <span className="mt-0.5 block truncate text-xs font-semibold text-zinc-600">{target.deviceName}</span>
+                            ) : null}
+                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-zinc-400">
+                              {areaLabel} - {target.subtitle}
+                            </span>
+                          </span>
+                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e9ecff] text-[#3d5afe]">
+                            <Plus size={16} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 bg-white/72 p-5 text-center">
+                    <p className="text-sm font-bold text-zinc-800">Nessun dispositivo disponibile</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-center">
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-zinc-950 shadow-[0_8px_22px_rgba(15,23,42,0.12)]">
+                  <ArrowDownToLine size={22} />
+                </span>
+                <h3 className="mt-3 text-lg font-bold tracking-normal">Sposta</h3>
+                <p className="mt-0.5 text-sm font-medium text-zinc-500">{formatSelectedDeviceCount(selectedCount)}</p>
+              </div>
+              {selectedSectionTargets.length > 0 ? (
+                <div className="mt-5 flex justify-center gap-2 overflow-hidden">
+                  {selectedSectionTargets.slice(0, 3).map((target) => (
+                    <div
+                      key={target.id}
+                      className="flex w-20 flex-col items-center gap-2 rounded-2xl bg-white/82 p-3 text-center shadow-sm"
+                      title={hasDistinctDeviceName(target) ? `${target.name} - ${target.deviceName}` : target.name}
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700">
+                        {renderSectionDeviceIcon(target)}
+                      </span>
+                      <span className="max-w-full truncate text-[11px] font-bold text-zinc-900">{target.name}</span>
+                      {hasDistinctDeviceName(target) ? (
+                        <span className="max-w-full truncate text-[10px] font-semibold text-zinc-500">{target.deviceName}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-5 grid gap-2">
+                {effectiveHaAreas.map((area) => {
+                  const isCurrentRoom = area.area_id === activeRoomTab?.id;
+                  const isSelectedArea = sectionMoveTargetAreaId === area.area_id;
+                  return (
+                    <button
+                      key={area.area_id}
+                      type="button"
+                      onClick={() => {
+                        if (!isCurrentRoom) {
+                          setSectionMoveTargetAreaId(area.area_id);
+                          setSectionActionError(null);
+                        }
+                      }}
+                      disabled={isCurrentRoom || sectionActionBusy}
+                      className={cn(
+                        'rounded-full border px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.99] disabled:cursor-not-allowed',
+                        isSelectedArea
+                          ? 'border-transparent bg-[#e4e7ff] text-[#3d5afe]'
+                          : 'border-zinc-300/80 bg-white/50 text-zinc-500 hover:bg-white hover:text-zinc-900',
+                        isCurrentRoom && 'opacity-45',
+                      )}
+                    >
+                      {area.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!canMove) {
+                    setSectionActionError('Seleziona una stanza di destinazione.');
+                    return;
+                  }
+                  const success = await assignSectionTargetsToArea(selectedSectionTargets, sectionMoveTargetAreaId);
+                  if (success) {
+                    setSectionDeviceSheetMode(null);
+                    setSectionMoveTargetAreaId('');
+                  }
+                }}
+                disabled={!canMove || sectionActionBusy}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-bold text-zinc-950 shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition-all hover:bg-zinc-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {sectionActionBusy ? 'Sposto...' : moveLabel}
+              </button>
+            </>
+          )}
+          {sectionActionError ? <p className="mt-3 text-center text-xs font-semibold text-red-600">{sectionActionError}</p> : null}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSectionEditOverlay = () => {
+    if (!editingRoomSection) {
+      return null;
+    }
+    const selectedCount = selectedSectionTargets.length;
+    const sectionDeviceCount = sectionEditTargets.length;
+    const defaultMoveAreaId =
+      effectiveHaAreas.find((area) => area.area_id !== activeRoomTab?.id)?.area_id ?? '';
+
+    return (
+      <div className="fixed inset-0 z-[260] overflow-hidden bg-[#05070d]/86 text-white backdrop-blur-3xl">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_28%,rgba(0,0,0,0.18))]" />
+        <div className="relative z-10 flex h-full min-h-0 w-full flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-6 lg:p-8">
+          <header className="relative flex shrink-0 items-start justify-center">
+            <div className="min-w-0 text-center">
+              <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.06] text-white/82 shadow-sm backdrop-blur-xl">
+                {isSectionTargetSelectionMode ? <Pencil size={20} /> : <Layers size={20} />}
+              </span>
+              <h2 className="mt-3 text-lg font-bold tracking-normal">
+                {isSectionTargetSelectionMode ? 'Modifica' : editingRoomSection.label}
+              </h2>
+              <p className="mt-0.5 text-sm font-medium text-white/38">
+                {isSectionTargetSelectionMode ? formatSelectedDeviceCount(selectedCount) : formatRoomDeviceCount(sectionDeviceCount)}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setExpandedRoomSection(null)}
-              className="shrink-0 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
+              onClick={() => {
+                clearSectionTargetLongPress();
+                setSelectedSectionTargetIds({});
+                setIsSectionTargetSelectionMode(false);
+                setEditingRoomSection(null);
+              }}
+              disabled={sectionActionBusy}
+              className="absolute right-0 top-0 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-white/10 active:scale-95 disabled:cursor-wait disabled:opacity-55"
             >
               Fine
             </button>
           </header>
 
-          <div className="mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 glass-scrollbar">
-            {isAccessories
-              ? renderAccessoryCards(accessoryCards, 'expanded')
-              : renderWidgetGrid(expandedCluster?.widgets ?? [], expandedGridCols)}
-          </div>
+          {isSectionTargetSelectionMode ? (
+            <div className="mt-8 flex shrink-0 items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (selectedSectionTargets.length === 0) {
+                      setSectionActionError('Seleziona almeno un dispositivo.');
+                      return;
+                    }
+                    await assignSectionTargetsToArea(selectedSectionTargets, null);
+                  }}
+                  disabled={selectedSectionTargets.length === 0 || sectionActionBusy}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-red-400/10 bg-red-500/12 text-red-200 transition-all hover:bg-red-500/18 hover:text-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Rimuovi dalla stanza"
+                  title="Rimuovi dalla stanza"
+                >
+                  <Trash2 size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedSectionTargets.length === 0) {
+                      setSectionActionError('Seleziona almeno un dispositivo.');
+                      return;
+                    }
+                    setSectionDeviceSheetMode('move');
+                    setSectionMoveTargetAreaId((current) => current || defaultMoveAreaId);
+                    setSectionActionError(null);
+                  }}
+                  disabled={selectedSectionTargets.length === 0 || sectionActionBusy || effectiveHaAreas.length <= 1}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Sposta dispositivo"
+                  title="Sposta dispositivo"
+                >
+                  <ArrowDownToLine size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelSectionTargetSelection}
+                  disabled={sectionActionBusy}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                  aria-label="Annulla selezione"
+                  title="Annulla selezione"
+                >
+                  <X size={18} />
+                </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSectionDeviceSheetMode('add');
+                  setSectionDeviceSearch('');
+                  setSectionActionError(null);
+                }}
+                disabled={sectionActionBusy}
+                className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.07] text-white/76 transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                aria-label="Aggiungi dispositivo"
+                title="Aggiungi dispositivo"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          ) : null}
+          {sectionActionError && !sectionDeviceSheetMode ? (
+            <p className="mt-3 text-center text-xs font-semibold text-rose-200/82">{sectionActionError}</p>
+          ) : null}
+
+          <section className="mt-8 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 glass-scrollbar">
+            <div className="mb-4 min-w-0">
+              <p className="truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-white/36">
+                {isSectionTargetSelectionMode ? `${activeRoomTitle} - ${editingRoomSection.label}` : activeRoomTitle}
+              </p>
+            </div>
+            {sectionEditTargets.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
+                {sectionEditTargets.map((target) => {
+                  const isSelected = Boolean(selectedSectionTargetIds[target.id]);
+                  const isActionSelected = isSectionTargetSelectionMode && isSelected;
+                  const isGroupedDevice = target.entities.length > 1;
+                  const singleEntity = target.entities.length === 1 ? target.entities[0] : null;
+                  const targetVisibleCount = target.entities.filter((entity) => entity.isVisible).length;
+                  return (
+                    <div
+                      key={target.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSectionTargetSelectionMode ? isSelected : undefined}
+                      onPointerDown={(event) => beginSectionTargetLongPress(target.id, event)}
+                      onPointerMove={updateSectionTargetLongPress}
+                      onPointerUp={clearSectionTargetLongPress}
+                      onPointerCancel={clearSectionTargetLongPress}
+                      onPointerLeave={clearSectionTargetLongPress}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        clearSectionTargetLongPress();
+                        startSectionTargetSelection(target.id);
+                      }}
+                      onClick={() => {
+                        if (suppressNextSectionTargetClickRef.current === target.id) {
+                          suppressNextSectionTargetClickRef.current = null;
+                          return;
+                        }
+                        if (isSectionTargetSelectionMode) {
+                          toggleSectionTargetSelection(target.id);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          if (isSectionTargetSelectionMode) {
+                            toggleSectionTargetSelection(target.id);
+                          } else {
+                            startSectionTargetSelection(target.id);
+                          }
+                        }
+                      }}
+                      className={cn(
+                        'relative min-w-0 cursor-pointer text-left transition-all active:scale-[0.99]',
+                        !isGroupedDevice && 'overflow-hidden rounded-[1.35rem]',
+                        isGroupedDevice && 'col-span-2 sm:col-span-1',
+                        target.entities.length > 2 && 'sm:col-span-2',
+                        isActionSelected && !isGroupedDevice && 'ring-2 ring-[#85adff]/70 ring-offset-2 ring-offset-[#05070d]',
+                      )}
+                    >
+                      {singleEntity ? (
+                        renderQuickEntityCard(singleEntity, target)
+                      ) : (
+                        <div className="min-w-0">
+                          <div className="mb-3 min-w-0 pr-8">
+                            <p className={cn('truncate text-base font-bold leading-tight text-white', isActionSelected && 'text-[#dfe6ff]')}>
+                              {formatGroupTitle(target.name)}
+                            </p>
+                            <p className="mt-1 truncate text-[11px] font-semibold leading-tight text-white/38">
+                              {hasDistinctDeviceName(target) ? `${target.deviceName} - ` : ''}
+                              {targetVisibleCount}/{target.entities.length} visibili - {target.domains.map(formatDomainLabel).join(' / ')}
+                            </p>
+                          </div>
+                          <div className="grid min-w-0 grid-cols-2 gap-2">
+                            {target.entities.map((entity) => renderQuickEntityCard(entity, target, { compact: true }))}
+                          </div>
+                        </div>
+                      )}
+                      {isSectionTargetSelectionMode && !singleEntity && isSelected ? (
+                        <span
+                          className={cn(
+                            'absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-all',
+                            'border-white bg-white text-[#3d5afe]',
+                          )}
+                        >
+                          <Check size={13} strokeWidth={3} />
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                className="rounded-[1.5rem] border border-white/[0.08] bg-white/[0.05] p-6 text-center backdrop-blur-xl"
+                onPointerDown={beginSectionActionLongPress}
+                onPointerMove={updateSectionTargetLongPress}
+                onPointerUp={clearSectionTargetLongPress}
+                onPointerCancel={clearSectionTargetLongPress}
+                onPointerLeave={clearSectionTargetLongPress}
+              >
+                <p className="text-sm font-semibold text-white/72">Nessun dispositivo in questa sezione</p>
+              </div>
+            )}
+          </section>
         </div>
+        {renderSectionDeviceSheet()}
       </div>
     );
   };
@@ -3554,7 +5647,7 @@ export function RoomsDashboard({
 
   const createRoomSwiperPointerHandlers = (
     scrollerRef: React.RefObject<HTMLDivElement | null>,
-    dragRef: React.MutableRefObject<FloorCarouselDragState | null>,
+    dragRef: React.MutableRefObject<RoomSwiperDragState | null>,
     suppressClickRef: React.MutableRefObject<boolean>,
   ) => {
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -3568,11 +5661,19 @@ export function RoomsDashboard({
       ) {
         return;
       }
+      cancelRoomSwiperAnimation(scroller);
+      const slideWidth = Math.max(1, scroller.clientWidth);
+      const slideCount = getRoomSwiperSlideCount(scroller);
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
+        startY: event.clientY,
         scrollLeft: scroller.scrollLeft,
         didMove: false,
+        startIndex: clampNumber(Math.round(scroller.scrollLeft / slideWidth), 0, slideCount - 1),
+        startTime: event.timeStamp,
+        slideCount,
+        slideWidth,
       };
       suppressClickRef.current = false;
       if (!scroller.hasPointerCapture(event.pointerId)) {
@@ -3586,17 +5687,33 @@ export function RoomsDashboard({
       if (!scroller || !dragState || dragState.pointerId !== event.pointerId) {
         return;
       }
-      const dragOffset = event.clientX - dragState.startX;
-      if (!dragState.didMove && Math.abs(dragOffset) < FLOOR_CAROUSEL_DRAG_THRESHOLD_PX) {
-        return;
-      }
       if (!dragState.didMove) {
+        const dragOffsetY = event.clientY - dragState.startY;
+        const dragOffsetX = event.clientX - dragState.startX;
+        if (Math.abs(dragOffsetX) < FLOOR_CAROUSEL_DRAG_THRESHOLD_PX) {
+          return;
+        }
+        if (Math.abs(dragOffsetY) > Math.abs(dragOffsetX)) {
+          dragRef.current = null;
+          if (scroller.hasPointerCapture(event.pointerId)) {
+            scroller.releasePointerCapture(event.pointerId);
+          }
+          return;
+        }
         dragState.didMove = true;
-        scroller.classList.remove('snap-x', 'snap-mandatory');
-        scroller.classList.add('snap-none');
+        setRoomSwiperSnap(scroller, false);
       }
       event.preventDefault();
-      scroller.scrollLeft = dragState.scrollLeft - dragOffset;
+      const dragOffset = event.clientX - dragState.startX;
+      const slideWidth = Math.max(1, scroller.clientWidth || dragState.slideWidth);
+      const slideCount = getRoomSwiperSlideCount(scroller);
+      const minIndex = Math.max(0, dragState.startIndex - 1);
+      const maxIndex = Math.min(slideCount - 1, dragState.startIndex + 1);
+      scroller.scrollLeft = clampNumber(
+        dragState.scrollLeft - dragOffset,
+        minIndex * slideWidth,
+        maxIndex * slideWidth,
+      );
     };
 
     const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -3611,20 +5728,57 @@ export function RoomsDashboard({
         scroller.releasePointerCapture(event.pointerId);
       }
       if (dragState.didMove) {
-        const slideIndex = Math.max(0, Math.round(scroller.scrollLeft / Math.max(1, scroller.clientWidth)));
-        scroller.classList.remove('snap-none');
-        scroller.classList.add('snap-x', 'snap-mandatory');
-        scroller.scrollTo({
-          left: slideIndex * scroller.clientWidth,
-          behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        });
+        const slideWidth = Math.max(1, scroller.clientWidth || dragState.slideWidth);
+        const slideCount = getRoomSwiperSlideCount(scroller);
+        const dragOffset = event.clientX - dragState.startX;
+        const dragDuration = Math.max(1, event.timeStamp - dragState.startTime);
+        const dragVelocity = dragOffset / dragDuration;
+        const visualDelta = scroller.scrollLeft - dragState.scrollLeft;
+        const distanceThreshold = clampNumber(
+          slideWidth * 0.18,
+          ROOM_SWIPER_MIN_SWIPE_DISTANCE_PX,
+          ROOM_SWIPER_MAX_SWIPE_DISTANCE_PX,
+        );
+        const shouldChangeSlide =
+          Math.abs(dragOffset) >= distanceThreshold ||
+          Math.abs(dragVelocity) >= ROOM_SWIPER_FLICK_VELOCITY_PX_PER_MS ||
+          Math.abs(visualDelta) >= slideWidth * 0.32;
+        const direction = dragOffset < 0 || visualDelta > 0 ? 1 : -1;
+        const slideIndex = shouldChangeSlide
+          ? clampNumber(dragState.startIndex + direction, 0, slideCount - 1)
+          : dragState.startIndex;
+        scrollRoomSwiperToSlide(scroller, slideIndex, Boolean(prefersReducedMotion));
         window.setTimeout(() => {
           suppressClickRef.current = false;
         }, 0);
       } else {
-        scroller.classList.remove('snap-none');
-        scroller.classList.add('snap-x', 'snap-mandatory');
+        setRoomSwiperSnap(scroller, true);
       }
+    };
+
+    const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
+        return;
+      }
+      const absDeltaX = Math.abs(event.deltaX);
+      const absDeltaY = Math.abs(event.deltaY);
+      const horizontalDelta = absDeltaX >= absDeltaY ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+      if (Math.abs(horizontalDelta) < 1 || (!event.shiftKey && absDeltaX < absDeltaY * 0.9)) {
+        return;
+      }
+      event.preventDefault();
+      const lockedUntil = roomSwiperWheelLocks.get(scroller) ?? 0;
+      if (event.timeStamp < lockedUntil) {
+        return;
+      }
+      const slideWidth = Math.max(1, scroller.clientWidth);
+      const slideCount = getRoomSwiperSlideCount(scroller);
+      const currentIndex = clampNumber(Math.round(scroller.scrollLeft / slideWidth), 0, slideCount - 1);
+      const direction = horizontalDelta > 0 ? 1 : -1;
+      const slideIndex = clampNumber(currentIndex + direction, 0, slideCount - 1);
+      roomSwiperWheelLocks.set(scroller, event.timeStamp + ROOM_SWIPER_WHEEL_LOCK_MS);
+      scrollRoomSwiperToSlide(scroller, slideIndex, Boolean(prefersReducedMotion));
     };
 
     const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -3641,6 +5795,7 @@ export function RoomsDashboard({
       onPointerMove: handlePointerMove,
       onPointerUp: handlePointerEnd,
       onPointerCancel: handlePointerEnd,
+      onWheel: handleWheel,
       onClickCapture: handleClickCapture,
     };
   };
@@ -3985,18 +6140,24 @@ export function RoomsDashboard({
           {climateControlModel ? (
             <section
               className={cn(
-                'min-h-0 min-w-0 max-w-full p-0',
+                'relative min-h-0 min-w-0 max-w-full p-0',
                 isCompactClimateControls
                   ? 'overflow-visible'
-                  : 'rooms-surface overflow-hidden lg:min-h-[min(540px,calc(100dvh-13rem))] xl:min-h-[min(600px,calc(100dvh-12rem))]',
+                  : 'overflow-visible lg:min-h-[min(540px,calc(100dvh-13rem))] xl:min-h-[min(600px,calc(100dvh-12rem))]',
               )}
               style={{ gridArea: 'clima' }}
             >
+              {renderFloatingSectionEditButton({
+                kind: 'widgets',
+                id: 'clima',
+                label: 'Clima',
+                entityIds: getRoomSectionEntityIds('clima', activeBuckets),
+              })}
               {isCompactClimateControls ? (
                 <div className="-mx-1.5">
                   <div
                     ref={mobileClimateSwiperRef}
-                    className="flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+                    className={ROOM_SWIPER_SCROLLER_CLASS}
                     onScroll={handleMobileClimateScroll}
                     {...climateSwiperPointerHandlers}
                   >
@@ -4032,84 +6193,86 @@ export function RoomsDashboard({
                   ) : null}
                 </div>
               ) : (
-                <div className="h-full min-h-[min(540px,calc(100dvh-13rem))] min-w-0 overflow-hidden xl:min-h-[min(600px,calc(100dvh-12rem))]">
+                <div className="-mx-1.5 h-full min-h-[min(540px,calc(100dvh-13rem))] min-w-0 overflow-visible xl:min-h-[min(600px,calc(100dvh-12rem))]">
                   <div
                     ref={mobileClimateSwiperRef}
-                    className="flex h-full cursor-grab snap-x snap-mandatory select-none overflow-x-auto [scrollbar-width:none] active:cursor-grabbing [&::-webkit-scrollbar]:hidden"
+                    className={cn(ROOM_SWIPER_SCROLLER_CLASS, 'h-full')}
                     onScroll={handleMobileClimateScroll}
                     {...climateSwiperPointerHandlers}
                   >
                     {climatePanelModels.map(({ entityId, model }) => (
                       <div key={entityId} className="min-w-0 basis-full snap-center shrink-0 px-1.5">
-                        <RoomClimateCard
-                          climate={model}
-                          onTogglePower={() => {
-                            const nextMode =
-                              model.isOn
-                                ? 'off'
-                                : model.hvacModes?.find((mode) => mode !== 'off') ?? 'heat';
-                            void onCallService?.('climate', 'set_hvac_mode', {
-                              entity_id: entityId,
-                              hvac_mode: nextMode,
-                            });
-                          }}
-                          onDecreaseTarget={() => {
-                            void onCallService?.('climate', 'set_temperature', {
-                              entity_id: entityId,
-                              temperature: Math.max(
-                                model.minTemp,
-                                model.targetTemp - (model.targetTempStep ?? 0.5),
-                              ),
-                            });
-                          }}
-                          onIncreaseTarget={() => {
-                            void onCallService?.('climate', 'set_temperature', {
-                              entity_id: entityId,
-                              temperature: Math.min(
-                                model.maxTemp,
-                                model.targetTemp + (model.targetTempStep ?? 0.5),
-                              ),
-                            });
-                          }}
-                          onAutoAdjust={() => {
-                            void onCallService?.('climate', 'set_temperature', {
-                              entity_id: entityId,
-                              temperature: Math.round(model.currentTemp),
-                            });
-                          }}
-                          onRefreshCurrent={() => undefined}
-                          onSetTargetTemp={(value) => {
-                            void onCallService?.('climate', 'set_temperature', {
-                              entity_id: entityId,
-                              temperature: value,
-                            });
-                          }}
-                          onSetTargetRange={(low, high) => {
-                            void onCallService?.('climate', 'set_temperature', {
-                              entity_id: entityId,
-                              target_temp_low: low,
-                              target_temp_high: high,
-                            });
-                          }}
-                          onSetMode={(mode) => {
-                            void onCallService?.('climate', 'set_hvac_mode', {
-                              entity_id: entityId,
-                              hvac_mode: mode,
-                            });
-                          }}
-                          onSetFanMode={(mode) => {
-                            void onCallService?.('climate', 'set_fan_mode', {
-                              entity_id: entityId,
-                              fan_mode: mode,
-                            });
-                          }}
-                          onSetPresetMode={(mode) => {
-                            void onCallService?.('climate', 'set_preset_mode', {
-                              entity_id: entityId,
-                              preset_mode: mode,
-                            });
-                          }}
-                        />
+                        <div className="rooms-surface h-full min-h-[min(540px,calc(100dvh-13rem))] min-w-0 overflow-hidden xl:min-h-[min(600px,calc(100dvh-12rem))]">
+                          <RoomClimateCard
+                            climate={model}
+                            onTogglePower={() => {
+                              const nextMode =
+                                model.isOn
+                                  ? 'off'
+                                  : model.hvacModes?.find((mode) => mode !== 'off') ?? 'heat';
+                              void onCallService?.('climate', 'set_hvac_mode', {
+                                entity_id: entityId,
+                                hvac_mode: nextMode,
+                              });
+                            }}
+                            onDecreaseTarget={() => {
+                              void onCallService?.('climate', 'set_temperature', {
+                                entity_id: entityId,
+                                temperature: Math.max(
+                                  model.minTemp,
+                                  model.targetTemp - (model.targetTempStep ?? 0.5),
+                                ),
+                              });
+                            }}
+                            onIncreaseTarget={() => {
+                              void onCallService?.('climate', 'set_temperature', {
+                                entity_id: entityId,
+                                temperature: Math.min(
+                                  model.maxTemp,
+                                  model.targetTemp + (model.targetTempStep ?? 0.5),
+                                ),
+                              });
+                            }}
+                            onAutoAdjust={() => {
+                              void onCallService?.('climate', 'set_temperature', {
+                                entity_id: entityId,
+                                temperature: Math.round(model.currentTemp),
+                              });
+                            }}
+                            onRefreshCurrent={() => undefined}
+                            onSetTargetTemp={(value) => {
+                              void onCallService?.('climate', 'set_temperature', {
+                                entity_id: entityId,
+                                temperature: value,
+                              });
+                            }}
+                            onSetTargetRange={(low, high) => {
+                              void onCallService?.('climate', 'set_temperature', {
+                                entity_id: entityId,
+                                target_temp_low: low,
+                                target_temp_high: high,
+                              });
+                            }}
+                            onSetMode={(mode) => {
+                              void onCallService?.('climate', 'set_hvac_mode', {
+                                entity_id: entityId,
+                                hvac_mode: mode,
+                              });
+                            }}
+                            onSetFanMode={(mode) => {
+                              void onCallService?.('climate', 'set_fan_mode', {
+                                entity_id: entityId,
+                                fan_mode: mode,
+                              });
+                            }}
+                            onSetPresetMode={(mode) => {
+                              void onCallService?.('climate', 'set_preset_mode', {
+                                entity_id: entityId,
+                                preset_mode: mode,
+                              });
+                            }}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4144,31 +6307,61 @@ export function RoomsDashboard({
               'Nessun clima configurato per questa stanza',
               'Associa un termostato, una stufa o un climatizzatore alla stanza per controllarlo da qui.',
               'min-h-[540px] xl:min-h-[600px]',
+              {
+                kind: 'widgets',
+                id: 'clima',
+                label: 'Clima',
+                entityIds: getRoomSectionEntityIds('clima', activeBuckets),
+              },
             )
           )}
 
         {renderWidgetCluster(sensorsCluster, {
+          sectionId: 'sensors',
+          label: 'Sensori',
+          allEntityIds: getRoomSectionEntityIds('sensors', activeBuckets),
           gridArea: 'sensors',
           emptyTitle: 'Nessun sensore configurato per questa stanza',
           emptyDescription: 'Temperatura, umidita e altri sensori ambientali appariranno in questa area.',
         })}
 
         {renderWidgetCluster(securityCluster, {
+          sectionId: 'security',
+          label: 'Sicurezza',
+          allEntityIds: getRoomSectionEntityIds('security', activeBuckets),
           gridArea: 'security_cams',
           emptyTitle: 'Nessuna sicurezza configurata per questa stanza',
           emptyDescription: 'Serrature, camere e dispositivi di sicurezza collegati alla stanza saranno raccolti qui.',
         })}
 
         {lightsCluster || switchesCluster ? (
-          <section className="flex min-w-0 flex-col gap-4 xl:gap-5" style={{ gridArea: 'lights_switches' }}>
-            {renderWidgetCluster(lightsCluster)}
-            {renderWidgetCluster(switchesCluster)}
+          <section
+            className="flex min-w-0 flex-col gap-4 overflow-visible transition-[min-height] duration-300 ease-out xl:gap-5"
+            style={{ gridArea: 'lights_switches', alignSelf: 'start' }}
+          >
+            {renderWidgetCluster(lightsCluster, {
+              sectionId: 'lights',
+              label: 'Luci',
+              allEntityIds: getRoomSectionEntityIds('lights', activeBuckets),
+            })}
+            {renderWidgetCluster(switchesCluster, {
+              sectionId: 'switches',
+              label: 'Interruttori',
+              allEntityIds: getRoomSectionEntityIds('switches', activeBuckets),
+            })}
           </section>
         ) : (
           renderEmptyRoomArea(
             'lights_switches',
             'Nessuna luce o interruttore configurato per questa stanza',
-            'Collega luci, switch o ventole all area per controllarli da questa sezione.',
+            'Collega luci, interruttori o ventole all area per controllarli da questa sezione.',
+            undefined,
+            {
+              kind: 'widgets',
+              id: 'lights_switches',
+              label: 'Luci e interruttori',
+              entityIds: getRoomSectionEntityIds('lights_switches', activeBuckets),
+            },
           )
         )}
 
@@ -4188,14 +6381,14 @@ export function RoomsDashboard({
         ) : null}
         </main>
       </div>
-      {renderExpandedRoomSection()}
+      {renderSectionEditOverlay()}
       {renderMediaBottomBar()}
       {isFloorLayerOpen ? (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/20 p-6 backdrop-blur-md">
+        <div className="fixed inset-0 z-[240] flex flex-col items-center justify-center bg-black/20 p-6 backdrop-blur-md">
           <button
             type="button"
             onClick={() => setIsFloorLayerOpen(false)}
-            className="fixed right-6 top-8 z-50 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
+            className="fixed right-6 top-8 z-[241] rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
           >
             Fine
           </button>

@@ -33,7 +33,7 @@ const VALID_SECTION_KINDS: SectionKind[] = [
   'stack-grid',
 ];
 
-const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover', 'members'];
+const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'switch', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover', 'members'];
 const VALID_GRID_BREAKPOINTS: DashboardGridBreakpoint[] = ['2xl', 'xl', 'lg', 'md', 'sm', 'xs'];
 
 type StoredLayout = {
@@ -854,6 +854,8 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
       ? parentSection?.kind === 'stack-vertical'
         ? 1
         : 2
+      : widget.kind === 'switch'
+        ? 2
       : widget.kind === 'vacuum'
         ? 2
       : widget.kind === 'media'

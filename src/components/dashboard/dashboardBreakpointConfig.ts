@@ -15,6 +15,7 @@ type SectionSpan = { w: number; h: number };
 
 const WIDGET_KIND_ORDER: WidgetKind[] = [
   'light',
+  'switch',
   'climate',
   'camera',
   'sensor',
@@ -156,6 +157,15 @@ const DEFAULT_LIGHT_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, Ligh
   xs: { w: 1, hOff: 1, hOn: 2 }, // Luce sta bene a w=1 per affiancarsi su mobile
 };
 
+const DEFAULT_SWITCH_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
+  '2xl': { w: 2, h: 1 },
+  xl: { w: 2, h: 1 },
+  lg: { w: 2, h: 1 },
+  md: { w: 2, h: 1 },
+  sm: { w: 2, h: 1 },
+  xs: { w: 2, h: 1 },
+};
+
 const DEFAULT_CLIMATE_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
   '2xl': { w: 3, h: 3 },
   xl: { w: 3, h: 3 },
@@ -240,6 +250,7 @@ const DEFAULT_ALARM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, Widg
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_WIDGET_SPANS_BY_KIND: Record<Exclude<WidgetKind, 'light'>, Record<GridEngineBreakpoint, WidgetSpan>> = {
+  switch: DEFAULT_SWITCH_WIDGET_SPAN_BY_BREAKPOINT,
   climate: DEFAULT_CLIMATE_WIDGET_SPAN_BY_BREAKPOINT,
   camera: DEFAULT_CAMERA_WIDGET_SPAN_BY_BREAKPOINT,
   sensor: DEFAULT_SENSOR_WIDGET_SPAN_BY_BREAKPOINT,
@@ -335,6 +346,7 @@ export function resolveWidgetTypeLayoutSpan(
 }
 
 export const LIGHT_WIDGET_SPAN_BY_BREAKPOINT = createLightWidgetSpanProxy();
+export const SWITCH_WIDGET_SPAN_BY_BREAKPOINT = createSimpleWidgetSpanProxy('switch');
 export const CLIMATE_WIDGET_SPAN_BY_BREAKPOINT = createSimpleWidgetSpanProxy('climate');
 export const MEDIA_WIDGET_SPAN_BY_BREAKPOINT = createSimpleWidgetSpanProxy('media');
 export const VACUUM_WIDGET_SPAN_BY_BREAKPOINT = createSimpleWidgetSpanProxy('vacuum');

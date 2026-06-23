@@ -1253,15 +1253,19 @@ export function RightSidebarManager({
       }
     : null;
 
-  const entityDomain = selectedWidget
+  const entityDomains = selectedWidget
     ? selectedWidget.kind === 'media'
-      ? 'media_player.'
+      ? ['media_player.']
       : selectedWidget.kind === 'alarm'
-        ? 'alarm_control_panel.'
-      : `${selectedWidget.kind}.`
-    : '';
+        ? ['alarm_control_panel.']
+        : selectedWidget.kind === 'switch'
+          ? ['switch.', 'input_boolean.', 'fan.']
+          : [`${selectedWidget.kind}.`]
+    : [];
   const liveEntitySuggestions = haConnected
-    ? haEntityIds.filter((entityId) => (entityDomain ? entityId.startsWith(entityDomain) : true))
+    ? haEntityIds.filter((entityId) =>
+        entityDomains.length > 0 ? entityDomains.some((domain) => entityId.startsWith(domain)) : true,
+      )
     : [];
   const staticSuggestions = selectedWidget ? entityOptions[selectedWidget.kind] ?? [] : [];
   const entitySuggestions = Array.from(new Set([...liveEntitySuggestions, ...staticSuggestions]));

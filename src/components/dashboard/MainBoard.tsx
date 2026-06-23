@@ -253,6 +253,7 @@ const CLIMATE_SEND_DELAY_MS = 5000;
 const LIGHT_TOGGLE_PENDING_TTL_MS = 5000;
 const LIGHT_BRIGHTNESS_PENDING_TTL_MS = 6000;
 const LIGHT_COLOR_PENDING_TTL_MS = 2500;
+const SWITCH_TOGGLE_PENDING_TTL_MS = 5000;
 const LOCK_PENDING_TTL_MS = 7000;
 const ALARM_PENDING_TTL_MS = 10000;
 const COVER_PENDING_TTL_MS = 7000;
@@ -272,6 +273,7 @@ const CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY = '__dashboard_pending_climate_target
 const CLIMATE_PENDING_FAN_ATTRIBUTE_KEY = '__dashboard_pending_climate_fan';
 const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
 const LIGHT_BRIGHTNESS_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_brightness';
+const SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_switch_toggle';
 const LOCK_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_lock';
 const ALARM_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_alarm_action';
 const COVER_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_cover';
@@ -497,7 +499,7 @@ function resolveWidgetKindFromEntityId(entityId: string): WidgetKind | null {
     return 'sensor';
   }
   if (domain === 'switch' || domain === 'input_boolean' || domain === 'fan') {
-    return 'sensor';
+    return 'switch';
   }
   if (domain === 'media_player') {
     return 'media';
@@ -553,6 +555,11 @@ type LightTogglePendingState = {
 
 type LightBrightnessPendingState = {
   brightness: number;
+  expiresAt: number;
+};
+
+type SwitchTogglePendingState = {
+  targetOn: boolean;
   expiresAt: number;
 };
 
@@ -2956,6 +2963,7 @@ export function MainBoard() {
   const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
   const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
   const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
+  const [switchTogglePendingByEntity, setSwitchTogglePendingByEntity] = useState<Record<string, SwitchTogglePendingState>>({});
   const [lockPendingByEntity, setLockPendingByEntity] = useState<Record<string, LockPendingState>>({});
   const [alarmPendingByEntity, setAlarmPendingByEntity] = useState<Record<string, AlarmPendingState>>({});
   const [coverPendingByEntity, setCoverPendingByEntity] = useState<Record<string, CoverPendingState>>({});
@@ -3296,6 +3304,24 @@ export function MainBoard() {
       };
     });
 
+    Object.entries(switchTogglePendingByEntity).forEach(([entityId, pending]) => {
+      const entity = resolveBaseEntity(entityId);
+      if (!entity) {
+        return;
+      }
+
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      rawAttributes[SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY] = pending.targetOn;
+
+      ensureNextStates()[entityId] = {
+        ...entity,
+        state: pending.targetOn ? 'on' : 'off',
+        stateLabel: pending.targetOn ? 'on' : 'off',
+        toggleOn: pending.targetOn,
+        rawAttributes,
+      };
+    });
+
     Object.entries(lockPendingByEntity).forEach(([entityId, pending]) => {
       const entity = resolveBaseEntity(entityId);
       if (!entity) {
@@ -3331,7 +3357,7 @@ export function MainBoard() {
     });
 
     return nextStates ?? haStates;
-  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity]);
+  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity, switchTogglePendingByEntity]);
   const initialLayoutRef = useRef(loadDashboardLayout());
   const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
   const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
@@ -3431,6 +3457,7 @@ export function MainBoard() {
   const lightTogglePendingTimeoutRef = useRef<Record<string, number>>({});
   const lightBrightnessPendingTimeoutRef = useRef<Record<string, number>>({});
   const lightColorPendingTimeoutRef = useRef<Record<string, number>>({});
+  const switchTogglePendingTimeoutRef = useRef<Record<string, number>>({});
   const lockPendingTimeoutRef = useRef<Record<string, number>>({});
   const alarmPendingTimeoutRef = useRef<Record<string, number>>({});
   const lockActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
@@ -3840,6 +3867,8 @@ export function MainBoard() {
       h: nextHeight,
     });
   };
+  const resolveSwitchLayout = (widget: Widget): GridItem =>
+    resolveWidgetMinimumLayout(widget, 2, 1);
   const resolveClimateWidth = (widget: Widget) => {
     const parentSection =
       widget.parentSectionId ? sections.find((section) => section.id === widget.parentSectionId) : undefined;
@@ -3890,6 +3919,9 @@ export function MainBoard() {
     };
     if (widget.kind === 'light') {
       return resolveLightLayoutForState(draftWidget, widget.isOn);
+    }
+    if (widget.kind === 'switch') {
+      return resolveSwitchLayout(draftWidget);
     }
     if (widget.kind === 'climate') {
       return resolveClimateLayout(draftWidget);
@@ -4448,6 +4480,8 @@ export function MainBoard() {
           status:
             kind === 'media'
               ? 'paused'
+              : kind === 'switch'
+                ? 'off'
               : kind === 'alarm'
                 ? 'disarmed'
                 : kind === 'vacuum'
@@ -4465,7 +4499,7 @@ export function MainBoard() {
               ? '%'
               : kind === 'climate'
                 ? 'C'
-                : kind === 'alarm' || kind === 'lock'
+                : kind === 'alarm' || kind === 'lock' || kind === 'switch'
                   ? ''
                   : '%',
           parentSectionId: targetSection.id,
@@ -6059,9 +6093,11 @@ export function MainBoard() {
               ? liveEntity.toggleOn
               : widget.kind === 'climate' && typeof liveEntity.state === 'string'
                 ? liveEntity.state !== 'off'
-                : widget.kind === 'media'
-                  ? ['playing', 'paused'].includes(resolveMediaState(liveEntity.stateLabel ?? liveEntity.state))
-                  : widget.kind === 'alarm'
+              : widget.kind === 'media'
+                ? ['playing', 'paused'].includes(resolveMediaState(liveEntity.stateLabel ?? liveEntity.state))
+                : widget.kind === 'switch'
+                  ? normalizeLower(liveEntity.stateLabel ?? liveEntity.state) === 'on'
+                : widget.kind === 'alarm'
                     ? isAlarmArmedState(liveEntity.stateLabel ?? liveEntity.state ?? widget.status)
                   : widget.kind === 'vacuum'
                     ? ['cleaning', 'paused', 'returning'].includes(
@@ -6087,6 +6123,8 @@ export function MainBoard() {
                 : typeof liveEntity.numericValue === 'number'
                   ? liveEntity.numericValue
                   : value;
+          } else if (widget.kind === 'switch') {
+            statusLabel = normalizeLower(liveEntity.stateLabel ?? liveEntity.state) === 'on' ? 'on' : 'off';
           } else if (widget.kind === 'sensor') {
             value = typeof liveEntity.numericValue === 'number' ? liveEntity.numericValue : value;
             statusLabel = resolveSensorMeta(widget, liveEntity, haStatesForUi).status;
@@ -6129,6 +6167,8 @@ export function MainBoard() {
           const nextLayout =
             widget.kind === 'light'
               ? resolveLightLayoutForState(widget, isOn)
+              : widget.kind === 'switch'
+                ? resolveSwitchLayout(widget)
                 : widget.kind === 'media'
                 ? resolveMediaLayout(widget)
                 : widget.kind === 'climate'
@@ -6375,6 +6415,7 @@ export function MainBoard() {
       clearTimeoutRegistry(lightTogglePendingTimeoutRef);
       clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
       clearTimeoutRegistry(lightColorPendingTimeoutRef);
+      clearTimeoutRegistry(switchTogglePendingTimeoutRef);
       clearTimeoutRegistry(lockPendingTimeoutRef);
       clearTimeoutRegistry(alarmPendingTimeoutRef);
       clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
@@ -6402,6 +6443,9 @@ export function MainBoard() {
 
     clearTimeoutRegistry(lightColorPendingTimeoutRef);
     setLightColorPendingByEntity({});
+
+    clearTimeoutRegistry(switchTogglePendingTimeoutRef);
+    setSwitchTogglePendingByEntity({});
 
     clearTimeoutRegistry(lockPendingTimeoutRef);
     clearTimeoutRegistry(alarmPendingTimeoutRef);
@@ -6525,6 +6569,33 @@ export function MainBoard() {
     removePendingEntities(setLightTogglePendingByEntity, resolvedEntityIds);
     resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightTogglePendingTimeoutRef, entityId));
   }, [haStates, isHaConnected, lightTogglePendingByEntity]);
+
+  useEffect(() => {
+    if (!isHaConnected || Object.keys(switchTogglePendingByEntity).length === 0) {
+      return;
+    }
+
+    const resolvedEntityIds = Object.entries(switchTogglePendingByEntity)
+      .filter(([entityId, pending]) => {
+        const liveEntity = haStates[entityId];
+        if (!liveEntity) {
+          return false;
+        }
+        const liveIsOn =
+          typeof liveEntity.toggleOn === 'boolean'
+            ? liveEntity.toggleOn
+            : normalizeLower(liveEntity.state) === 'on';
+        return liveIsOn === pending.targetOn;
+      })
+      .map(([entityId]) => entityId);
+
+    if (!resolvedEntityIds.length) {
+      return;
+    }
+
+    removePendingEntities(setSwitchTogglePendingByEntity, resolvedEntityIds);
+    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(switchTogglePendingTimeoutRef, entityId));
+  }, [haStates, isHaConnected, switchTogglePendingByEntity]);
 
   useEffect(() => {
     if (!isHaConnected || Object.keys(lightBrightnessPendingByEntity).length === 0) {
@@ -7596,6 +7667,17 @@ export function MainBoard() {
     );
   };
 
+  const setSwitchTogglePending = (entityId: string, targetOn: boolean) => {
+    const expiresAt = Date.now() + SWITCH_TOGGLE_PENDING_TTL_MS;
+    setEntityPendingWithExpiry(
+      entityId,
+      { targetOn, expiresAt },
+      SWITCH_TOGGLE_PENDING_TTL_MS,
+      switchTogglePendingTimeoutRef,
+      setSwitchTogglePendingByEntity,
+    );
+  };
+
   const setLockPending = (entityId: string, action: LockPendingAction) => {
     const expiresAt = Date.now() + LOCK_PENDING_TTL_MS;
     const targetState = resolveLockPendingTargetState(action);
@@ -7701,6 +7783,38 @@ export function MainBoard() {
       return;
     }
     actions.toggleLamp();
+  };
+
+  const toggleSwitchEntity = (widget?: Widget) => {
+    const targetWidget = widget?.kind === 'switch' ? widget : activeWidget?.kind === 'switch' ? activeWidget : undefined;
+    if (!targetWidget) {
+      return;
+    }
+    const entityId = targetWidget.entityId;
+    const applyLocalToggle = (nextOn: boolean) => {
+      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
+        ...current,
+        isOn: nextOn,
+        status: nextOn ? 'on' : 'off',
+        value: nextOn ? 1 : 0,
+        layout: resolveSwitchLayout(current),
+      }));
+    };
+
+    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const currentIsOn =
+      typeof liveEntity?.toggleOn === 'boolean'
+        ? liveEntity.toggleOn
+        : normalizeLower(liveEntity?.stateLabel ?? liveEntity?.state ?? targetWidget.status) === 'on' ||
+          targetWidget.isOn;
+    const nextIsOn = !currentIsOn;
+    if (isHaConnected && entityId) {
+      setSwitchTogglePending(entityId, nextIsOn);
+      applyLocalToggle(nextIsOn);
+      void callHaService('homeassistant', 'toggle', { entity_id: entityId });
+      return;
+    }
+    applyLocalToggle(nextIsOn);
   };
 
   const setLightBrightness = (value: number) => {
@@ -9100,12 +9214,17 @@ export function MainBoard() {
     actions.cycleSpeakerRepeatMode();
   };
 
-  const selectMediaOutputDevice = (deviceId: string) => {
+  const selectMediaOutputDevice = (deviceId: string, widget?: Widget) => {
     const selectedSource = deviceId.trim();
     if (!selectedSource) {
       return;
     }
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
     const entityId = targetWidget?.entityId;
     if (isHaConnected && entityId) {
       void callHaService('media_player', 'select_source', {
@@ -10033,6 +10152,8 @@ export function MainBoard() {
         status:
           kind === 'media'
             ? 'paused'
+            : kind === 'switch'
+              ? 'off'
             : kind === 'alarm'
               ? 'disarmed'
               : kind === 'vacuum'
@@ -10050,7 +10171,7 @@ export function MainBoard() {
             ? '%'
             : kind === 'climate'
               ? 'C'
-              : kind === 'alarm' || kind === 'lock' || kind === 'members'
+              : kind === 'alarm' || kind === 'lock' || kind === 'switch' || kind === 'members'
                 ? ''
                 : '%',
         ...(kind === 'alarm' || kind === 'lock'
@@ -10462,6 +10583,7 @@ export function MainBoard() {
     haCurrentUser?.email ??
     (haCurrentUser?.username && haCurrentUser.username.includes('@') ? haCurrentUser.username : undefined);
   const profileUserRoleLabel = haCurrentUser?.isOwner ? 'Creatore' : haCurrentUser?.isAdmin ? 'Admin' : 'Utente';
+  const canManageRooms = Boolean(haCurrentUser?.isOwner || haCurrentUser?.isAdmin);
   const profileUserOwnedDeviceCount = profileMovementSource.trackerDeviceCount;
   const isSecurityImmersiveView = isSecurityView && isSecurityCamerasView;
   const isConsumptionImmersiveView = isConsumptionView && isConsumptionDetailView;
@@ -10594,6 +10716,7 @@ export function MainBoard() {
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
               haConnected={isHaConnected}
+              canManageRooms={canManageRooms}
               haAreas={haAreas}
               haStates={haStatesForUi}
               onCallService={callHaService}
@@ -10663,6 +10786,12 @@ export function MainBoard() {
                 }
                 toggleLightEntity(widget);
               }}
+              onWidgetSwitchToggle={(widget) => {
+                if (widget.kind !== 'switch') {
+                  return;
+                }
+                toggleSwitchEntity(widget);
+              }}
               onWidgetBrightnessChange={handleWidgetBrightnessChange}
               onWidgetClimateTargetTempChange={(widget, nextValue) => {
                 setClimateTargetTemp(nextValue, widget);
@@ -10687,6 +10816,12 @@ export function MainBoard() {
                   setSelectedWidgetId(widget.id);
                 }
                 seekMediaPosition(position, widget);
+              }}
+              onWidgetMediaSelectSource={(widget, source) => {
+                if (widget.kind !== 'media') {
+                  return;
+                }
+                selectMediaOutputDevice(source, widget);
               }}
               onWidgetAlarmDisarm={(widget) => {
                 if (widget.kind !== 'alarm') {

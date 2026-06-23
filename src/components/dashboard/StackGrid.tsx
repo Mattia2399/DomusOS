@@ -38,6 +38,7 @@ type HouseMemberCardItem = {
 
 const STACK_WIDGET_MIN_WIDTH_PX: Record<Widget['kind'], number> = {
   light: 168,
+  switch: 168,
   climate: 208,
   camera: 208,
   sensor: 156,
@@ -141,6 +142,34 @@ function enforceClimateWidgetSpan(
   return normalizeRuntimeLayout(
     layouts.map((item) => {
       if (!climateWidgetIds.has(item.i)) {
+        return item;
+      }
+      return {
+        ...item,
+        w: forcedW,
+        h: forcedH,
+      };
+    }),
+  );
+}
+
+function enforceSwitchWidgetSpan(
+  layouts: GridItem[],
+  breakpoint: GridEngineBreakpoint,
+  cols: number,
+  switchWidgetIds: ReadonlySet<string>,
+  widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+): GridItem[] {
+  if (switchWidgetIds.size === 0) {
+    return normalizeRuntimeLayout(layouts);
+  }
+  const span = resolveWidgetTypeLayoutSpan('switch', breakpoint, widgetTypeLayoutOverrides);
+  const safeCols = Math.max(1, Math.round(cols));
+  const forcedW = Math.min(safeCols, Math.max(1, Math.round(span.w)));
+  const forcedH = Math.max(1, Math.round(span.h));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      if (!switchWidgetIds.has(item.i)) {
         return item;
       }
       return {
@@ -424,6 +453,7 @@ function enforceGridStackWidgetSpans(
   lightWidgetStateById: ReadonlyMap<string, boolean>,
   useExplicitLightSpan: boolean,
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
   mediaWidgetIds: ReadonlySet<string>,
@@ -442,8 +472,15 @@ function enforceGridStackWidgetSpans(
     useExplicitLightSpan,
     widgetTypeLayoutOverrides,
   );
-  const withClimate = enforceClimateWidgetSpan(
+  const withSwitch = enforceSwitchWidgetSpan(
     withLight,
+    breakpoint,
+    cols,
+    switchWidgetIds,
+    widgetTypeLayoutOverrides,
+  );
+  const withClimate = enforceClimateWidgetSpan(
+    withSwitch,
     breakpoint,
     cols,
     climateWidgetIds,
@@ -527,6 +564,7 @@ type StackGridProps = {
   onSelectSection: (id: string | null) => void;
   onWidgetClick: (widget: Widget) => void;
   onWidgetLightToggle: (widget: Widget) => void;
+  onWidgetSwitchToggle: (widget: Widget) => void;
   onWidgetBrightnessChange: (widget: Widget, value: number) => void;
   onWidgetClimateTargetTempChange: (widget: Widget, value: number) => void;
   onWidgetClimateTargetRangeChange: (widget: Widget, low: number, high: number) => void;
@@ -536,6 +574,7 @@ type StackGridProps = {
   onWidgetMediaPrevious: (widget: Widget) => void;
   onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
+  onWidgetMediaSelectSource: (widget: Widget, source: string) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onWidgetVacuumStartPause: (widget: Widget) => void;
@@ -570,6 +609,7 @@ function StackGridComponent({
   onSelectSection,
   onWidgetClick,
   onWidgetLightToggle,
+  onWidgetSwitchToggle,
   onWidgetBrightnessChange,
   onWidgetClimateTargetTempChange,
   onWidgetClimateTargetRangeChange,
@@ -579,6 +619,7 @@ function StackGridComponent({
   onWidgetMediaPrevious,
   onWidgetMediaNext,
   onWidgetMediaSeek,
+  onWidgetMediaSelectSource,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
   onWidgetVacuumStartPause,
@@ -794,6 +835,15 @@ function StackGridComponent({
       ),
     [stackWidgets],
   );
+  const stackSwitchWidgetIds = useMemo(
+    () =>
+      new Set(
+        stackWidgets
+          .filter((widget) => widget.kind === 'switch')
+          .map((widget) => widget.id),
+      ),
+    [stackWidgets],
+  );
   const stackClimateWidgetIds = useMemo(
     () =>
       new Set(
@@ -921,6 +971,7 @@ function StackGridComponent({
           stackLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
           widgetTypeLayoutOverrides,
+          stackSwitchWidgetIds,
           stackClimateWidgetIds,
           stackCameraWidgetIds,
           stackMediaWidgetIds,
@@ -948,6 +999,7 @@ function StackGridComponent({
           stackLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
           widgetTypeLayoutOverrides,
+          stackSwitchWidgetIds,
           stackClimateWidgetIds,
           stackCameraWidgetIds,
           stackMediaWidgetIds,
@@ -1000,6 +1052,7 @@ function StackGridComponent({
       section.kind,
       stackColWidth,
       stackLightWidgetStateById,
+      stackSwitchWidgetIds,
       stackClimateWidgetIds,
       stackCameraWidgetIds,
       stackMediaWidgetIds,
@@ -1058,6 +1111,7 @@ function StackGridComponent({
           stackLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
           widgetTypeLayoutOverrides,
+          stackSwitchWidgetIds,
           stackClimateWidgetIds,
           stackCameraWidgetIds,
           stackMediaWidgetIds,
@@ -1077,6 +1131,7 @@ function StackGridComponent({
     widgetTypeLayoutOverrides,
     isGridStack,
     stackLightWidgetStateById,
+    stackSwitchWidgetIds,
     stackClimateWidgetIds,
     stackCameraWidgetIds,
     stackMediaWidgetIds,
@@ -1145,6 +1200,7 @@ function StackGridComponent({
             stackLightWidgetStateById,
             Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
             widgetTypeLayoutOverrides,
+            stackSwitchWidgetIds,
             stackClimateWidgetIds,
             stackCameraWidgetIds,
             stackMediaWidgetIds,
@@ -1192,6 +1248,7 @@ function StackGridComponent({
       isHorizontalStack,
       section.kind,
       stackLightWidgetStateById,
+      stackSwitchWidgetIds,
       stackClimateWidgetIds,
       stackCameraWidgetIds,
       stackMediaWidgetIds,
@@ -1369,11 +1426,15 @@ function StackGridComponent({
                             if (widget.kind === 'light') {
                               onWidgetLightToggle(widget);
                             }
+                            if (widget.kind === 'switch') {
+                              onWidgetSwitchToggle(widget);
+                            }
                             return;
                           }
                           onWidgetClick(widget);
                         }}
                         onLightBrightnessChange={onWidgetBrightnessChange}
+                        onSwitchToggle={onWidgetSwitchToggle}
                         onClimateTargetTempChange={onWidgetClimateTargetTempChange}
                         onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
                         onClimateModeChange={onWidgetClimateModeChange}
@@ -1382,6 +1443,7 @@ function StackGridComponent({
                         onMediaPrevious={onWidgetMediaPrevious}
                         onMediaNext={onWidgetMediaNext}
                         onMediaSeek={onWidgetMediaSeek}
+                        onMediaSelectSource={onWidgetMediaSelectSource}
                         onAlarmDisarm={onWidgetAlarmDisarm}
                         onAlarmArm={onWidgetAlarmArm}
                         onVacuumStartPause={onWidgetVacuumStartPause}
@@ -1490,6 +1552,7 @@ function StackGridComponent({
                             value={overlayValue}
                             onClick={() => {}}
                             onLightBrightnessChange={onWidgetBrightnessChange}
+                            onSwitchToggle={onWidgetSwitchToggle}
                             onClimateTargetTempChange={onWidgetClimateTargetTempChange}
                             onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
                             onClimateModeChange={onWidgetClimateModeChange}
@@ -1498,6 +1561,7 @@ function StackGridComponent({
                             onMediaPrevious={onWidgetMediaPrevious}
                             onMediaNext={onWidgetMediaNext}
                             onMediaSeek={onWidgetMediaSeek}
+                            onMediaSelectSource={onWidgetMediaSelectSource}
                             onAlarmDisarm={onWidgetAlarmDisarm}
                             onAlarmArm={onWidgetAlarmArm}
                             onVacuumStartPause={onWidgetVacuumStartPause}

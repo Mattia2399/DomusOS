@@ -88,7 +88,7 @@ export function LightCard({
           name={widget.title}
           state={cardState}
           selected={isSelected}
-          brightness={widget.value ?? 0}
+          brightness={widget.value}
           colorMode={resolvedColorMode}
           hsColor={resolvedHsColor}
           rgbColor={resolvedRgbColor}
