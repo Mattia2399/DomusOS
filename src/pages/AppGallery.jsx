@@ -278,7 +278,7 @@ async function resolveHaApiContext(haUrl, haToken) {
   const token = directToken || oauthToken;
 
   if (!baseUrl) {
-    throw new Error('URL Home Assistant mancante. Apri Profilo e completa la configurazione.');
+    throw new Error('URL Home Assistant mancante. Apri Impostazioni e completa la configurazione.');
   }
   if (!token) {
     throw new Error('Token Home Assistant mancante. Inserisci token o riconnetti OAuth.');

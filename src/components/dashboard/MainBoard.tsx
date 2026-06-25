@@ -7,6 +7,7 @@ import { AutomationsBuilder } from '../../pages/AutomationsBuilder';
 import AppGallery from '../../pages/AppGallery';
 import RoomsDashboard from '../../pages/RoomsDashboard';
 import SecurityDashboard from '../../pages/SecurityDashboard';
+import SettingsDashboard from '../../pages/SettingsDashboard';
 import { ConsumptionEditorSidebar } from '../settings/ConsumptionEditorSidebar';
 import SecurityAuthModal from '../security/SecurityAuthModal';
 import { LeftSidebar } from './LeftSidebar';
@@ -1129,6 +1130,83 @@ function resolveSecurityCamerasFromLocation() {
     return false;
   }
   return isSecurityCamerasNavigationTarget(window.location.href);
+}
+
+function isProfileNavigationTarget(path: string) {
+  const target = path.trim();
+  if (!target) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(target, 'http://dashboard.local');
+    const pathname = parsed.pathname.toLowerCase();
+    const hash = parsed.hash.toLowerCase();
+    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
+    const pathSegments = pathname.split('/').filter(Boolean);
+    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
+    const hashSegments = hashNormalized.split('/').filter(Boolean);
+    const pathHasProfile = pathSegments.includes('profile') || pathSegments.includes('profilo');
+    const hashHasProfile =
+      hashSegments.includes('profile') || hashSegments.includes('profilo') || hashNormalized === 'profile' || hashNormalized === 'profilo';
+    return (
+      pathHasProfile ||
+      hash === '#profile' ||
+      hash === '#profilo' ||
+      hashHasProfile ||
+      view === 'profile' ||
+      view === 'profilo'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveProfileFromLocation() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return isProfileNavigationTarget(window.location.href);
+}
+
+function isSettingsNavigationTarget(path: string) {
+  const target = path.trim();
+  if (!target) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(target, 'http://dashboard.local');
+    const pathname = parsed.pathname.toLowerCase();
+    const hash = parsed.hash.toLowerCase();
+    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
+    const pathSegments = pathname.split('/').filter(Boolean);
+    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
+    const hashSegments = hashNormalized.split('/').filter(Boolean);
+    const pathHasSettings = pathSegments.includes('settings') || pathSegments.includes('impostazioni');
+    const hashHasSettings =
+      hashSegments.includes('settings') ||
+      hashSegments.includes('impostazioni') ||
+      hashNormalized === 'settings' ||
+      hashNormalized === 'impostazioni';
+    return (
+      pathHasSettings ||
+      hash === '#settings' ||
+      hash === '#impostazioni' ||
+      hashHasSettings ||
+      view === 'settings' ||
+      view === 'impostazioni'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveSettingsFromLocation() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return isSettingsNavigationTarget(window.location.href);
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
@@ -3426,9 +3504,9 @@ export function MainBoard() {
   const [selectedSidebarPathId, setSelectedSidebarPathId] = useState<string | null>(null);
   const [runningSceneBySectionId, setRunningSceneBySectionId] = useState<Partial<Record<string, SceneRunState>>>({});
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(resolveProfileFromLocation);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('theme');
+  const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('members');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
   const [isConsumptionDetailView, setIsConsumptionDetailView] = useState(resolveConsumptionDetailFromLocation);
@@ -3437,6 +3515,7 @@ export function MainBoard() {
   const [isRoomsView, setIsRoomsView] = useState(resolveRoomsFromLocation);
   const [isSecurityView, setIsSecurityView] = useState(resolveSecurityFromLocation);
   const [isSecurityCamerasView, setIsSecurityCamerasView] = useState(resolveSecurityCamerasFromLocation);
+  const [isSettingsView, setIsSettingsView] = useState(resolveSettingsFromLocation);
   const [isEditAvailableForRoute, setIsEditAvailableForRoute] = useState(resolveEditAvailabilityFromLocation);
   const [internalNavigationRoute, setInternalNavigationRoute] = useState(() =>
     typeof window === 'undefined' ? '/home' : window.location.href,
@@ -3468,6 +3547,7 @@ export function MainBoard() {
   const coverPendingTimeoutRef = useRef<Record<string, number>>({});
   const activityFetchSeqRef = useRef(0);
   const vacuumReturnToBaseTimeoutRef = useRef<Record<string, number>>({});
+  const profileReturnRouteRef = useRef('/home');
   const cameraPtzControlModeRef = useRef<'button' | 'service' | null>(null);
   const previousHaStatusRef = useRef<typeof haStatus | null>(null);
   const reconnectToastIdRef = useRef<string | null>(null);
@@ -6909,13 +6989,17 @@ export function MainBoard() {
     const nextIsRooms = isRoomsNavigationTarget(currentRoute);
     const nextIsSecurity = isSecurityNavigationTarget(currentRoute);
     const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(currentRoute);
+    const nextIsProfile = isProfileNavigationTarget(currentRoute);
+    const nextIsSettings = isSettingsNavigationTarget(currentRoute);
     const nextIsKnownRoute =
       isHomeNavigationTarget(currentRoute) ||
       nextIsConsumption ||
       nextIsAutomation ||
       nextIsAppGallery ||
       nextIsRooms ||
-      nextIsSecurity;
+      nextIsSecurity ||
+      nextIsProfile ||
+      nextIsSettings;
     const nextEditAvailability =
       isHomeNavigationTarget(currentRoute) ||
       nextIsConsumption ||
@@ -6929,6 +7013,16 @@ export function MainBoard() {
     setIsRoomsView(nextIsRooms);
     setIsSecurityView(nextIsSecurity);
     setIsSecurityCamerasView(nextIsSecurityCameras);
+    setIsSettingsView(nextIsSettings);
+    setIsProfileOpen(nextIsProfile);
+    if (nextIsProfile) {
+      setProfileInitialSection((currentSection) => {
+        if (currentSection === 'movements' || currentSection === 'members' || currentSection === 'security') {
+          return currentSection;
+        }
+        return 'members';
+      });
+    }
     setIsEditAvailableForRoute(nextEditAvailability);
   }, [
     canUseBrowserRouteNavigation,
@@ -9599,6 +9693,79 @@ export function MainBoard() {
     [callHaApi, isHaConnected],
   );
 
+  const loadSensorHistoryFromRest = useCallback(
+    async (entityId: string) => {
+      const normalizedEntityId = entityId.trim();
+      const normalizedUrl = normalizeHassUrl(haUrl);
+      const token = haToken.trim();
+      if (!normalizedEntityId || !normalizedUrl || !token || !isHaConnected) {
+        return null;
+      }
+
+      const requestKey = `${normalizedEntityId}:rest`;
+      if (sensorHistoryInFlightRef.current[requestKey]) {
+        return null;
+      }
+
+      sensorHistoryInFlightRef.current[requestKey] = true;
+      try {
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - SENSOR_HISTORY_WINDOW_HOURS * 60 * 60 * 1000);
+        const endpoint = new URL(`${normalizedUrl}/api/history/period/${encodeURIComponent(startTime.toISOString())}`);
+        endpoint.searchParams.set('filter_entity_id', normalizedEntityId);
+        endpoint.searchParams.set('end_time', endTime.toISOString());
+        endpoint.searchParams.set('minimal_response', '1');
+        endpoint.searchParams.set('no_attributes', '1');
+        endpoint.searchParams.set('significant_changes_only', '0');
+
+        const response = await fetch(endpoint.toString(), {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          return null;
+        }
+
+        const payload = (await response.json()) as unknown;
+        const nextHistory = extractSensorHistoryValues(payload, normalizedEntityId, SENSOR_HISTORY_MAX_POINTS);
+        setSensorHistoryByEntity((current) =>
+          sameNumberSeries(current[normalizedEntityId], nextHistory)
+            ? current
+            : { ...current, [normalizedEntityId]: nextHistory },
+        );
+        return nextHistory;
+      } catch {
+        return null;
+      } finally {
+        delete sensorHistoryInFlightRef.current[requestKey];
+      }
+    },
+    [haToken, haUrl, isHaConnected],
+  );
+
+  const serverPerformanceHistoryEntityIds = useMemo(
+    () =>
+      Object.entries(haStatesForUi)
+        .filter(([entityId, entity]) => {
+          if (!entityId.startsWith('sensor.')) {
+            return false;
+          }
+          const attributes = entity.rawAttributes ?? {};
+          const haystack = `${entityId} ${String(attributes.friendly_name ?? '')} ${String(attributes.device_class ?? '')}`.toLowerCase();
+          const isProcessorSensor = haystack.includes('processor') || haystack.includes('processore') || haystack.includes('cpu');
+          const isProcessorTemperature =
+            isProcessorSensor &&
+            (haystack.includes('temperature') || haystack.includes('temperatura') || haystack.includes('temp'));
+          return isProcessorSensor || isProcessorTemperature;
+        })
+        .map(([entityId]) => entityId.trim())
+        .filter((entityId) => entityId.length > 0),
+    [haStatesForUi],
+  );
+
   useEffect(() => {
     if (!isHaConnected) {
       return;
@@ -9616,6 +9783,7 @@ export function MainBoard() {
               .map((microWidget) => microWidget.entity.trim())
               .filter((entityId) => entityId.length > 0),
           ),
+          ...serverPerformanceHistoryEntityIds,
         ],
       ),
     );
@@ -9624,9 +9792,25 @@ export function MainBoard() {
       if (cached && cached.length >= 3) {
         return;
       }
+      if (serverPerformanceHistoryEntityIds.includes(entityId)) {
+        void loadSensorHistoryFromRest(entityId).then((nextHistory) => {
+          if (nextHistory && nextHistory.length >= 2) {
+            return;
+          }
+          void loadSensorHistory(entityId);
+        });
+        return;
+      }
       void loadSensorHistory(entityId);
     });
-  }, [isHaConnected, loadSensorHistory, sensorHistoryByEntity, widgets]);
+  }, [
+    isHaConnected,
+    loadSensorHistory,
+    loadSensorHistoryFromRest,
+    sensorHistoryByEntity,
+    serverPerformanceHistoryEntityIds,
+    widgets,
+  ]);
 
   const openLiveControls = (widget: Widget) => {
     const liveEntity = isHaConnected ? haStatesForUi[widget.entityId] : undefined;
@@ -10528,13 +10712,17 @@ export function MainBoard() {
       const nextIsRooms = isRoomsNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurity = isSecurityNavigationTarget(normalizedRouteForNavigate);
       const nextIsSecurityCameras = isSecurityCamerasNavigationTarget(normalizedRouteForNavigate);
+      const nextIsProfile = isProfileNavigationTarget(normalizedRouteForNavigate);
+      const nextIsSettings = isSettingsNavigationTarget(normalizedRouteForNavigate);
       const nextIsKnownRoute =
         isHomeNavigationTarget(normalizedRouteForNavigate) ||
         nextIsConsumption ||
         nextIsAutomation ||
         nextIsAppGallery ||
         nextIsRooms ||
-        nextIsSecurity;
+        nextIsSecurity ||
+        nextIsProfile ||
+        nextIsSettings;
       const nextEditAvailability =
         isHomeNavigationTarget(normalizedRouteForNavigate) ||
         nextIsConsumption ||
@@ -10548,6 +10736,16 @@ export function MainBoard() {
       setIsRoomsView(nextIsRooms);
       setIsSecurityView(nextIsSecurity);
       setIsSecurityCamerasView(nextIsSecurityCameras);
+      setIsSettingsView(nextIsSettings);
+      setIsProfileOpen(nextIsProfile);
+      if (nextIsProfile) {
+        setProfileInitialSection((currentSection) => {
+          if (currentSection === 'movements' || currentSection === 'members' || currentSection === 'security') {
+            return currentSection;
+          }
+          return 'members';
+        });
+      }
       setIsEditAvailableForRoute(nextEditAvailability);
       setActiveDevice(null);
       setSelectedWidgetId(null);
@@ -10592,12 +10790,12 @@ export function MainBoard() {
   const isConsumptionImmersiveView = isConsumptionView && isConsumptionDetailView;
   const isImmersiveView = isSecurityImmersiveView || isConsumptionImmersiveView;
   const isDashboardCanvasView =
-    !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView;
+    !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView && !isSettingsView;
   const shouldShowMobileSidebarShell =
-    !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView;
+    !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView && !isProfileOpen;
   const shouldApplyXsShellBottomInset =
     !isImmersiveView && isXsViewport && !isDashboardCanvasView;
-  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isCatalogOpen;
+  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isCatalogOpen && !isProfileOpen;
 
   useEffect(() => {
     if (!shouldShowMobileSidebarShell) {
@@ -10605,9 +10803,44 @@ export function MainBoard() {
     }
   }, [shouldShowMobileSidebarShell]);
 
-  const openProfilePanel = (section: ProfileSectionId = 'theme') => {
+  const getCurrentNavigationRoute = () =>
+    canUseBrowserRouteNavigation
+      ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+      : internalNavigationRoute;
+
+  const navigateWithinDashboard = (path: string) => {
+    if (canUseBrowserRouteNavigation) {
+      const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
+      if (path !== currentRoute) {
+        navigate(path);
+      }
+      return;
+    }
+    setInternalNavigationRoute(path);
+  };
+
+  const openProfileRoute = (section: ProfileSectionId = 'members') => {
+    const currentRoute = getCurrentNavigationRoute();
+    if (!isProfileNavigationTarget(currentRoute) && !isSettingsNavigationTarget(currentRoute)) {
+      profileReturnRouteRef.current = currentRoute || '/home';
+    }
     setProfileInitialSection(section);
     setIsProfileOpen(true);
+    navigateWithinDashboard('/profile');
+  };
+
+  const openSettingsRoute = () => {
+    setIsProfileOpen(false);
+    navigateWithinDashboard('/settings');
+  };
+
+  const closeProfileRoute = () => {
+    setIsProfileOpen(false);
+    setProfileInitialSection('members');
+    const currentRoute = getCurrentNavigationRoute();
+    if (isProfileNavigationTarget(currentRoute)) {
+      navigateWithinDashboard(profileReturnRouteRef.current || '/home');
+    }
   };
   const quickAlarmRequiresCode = Boolean(pendingQuickAlarmAction?.requiresCode);
   const quickAlarmCodeTypeLabel = pendingQuickAlarmAction?.numericCodeMode === false ? 'Codice' : 'PIN';
@@ -10668,12 +10901,17 @@ export function MainBoard() {
           <MobileSidebarDrawer
             isOpen={isMobileSidebarOpen}
             isEditMode={isEditMode}
+            canToggleEditMode={canToggleEditMode}
             quickPaths={visibleSidebarPaths}
             selectedPathId={selectedSidebarPathId}
             userAvatarUrl={currentUserAvatarUrl}
             userAvatarAlt={stateWithConnectedUser.userName}
             userEmail={profileUserEmail}
+            haStatus={haStatus}
             onPathClick={handleSidebarPathClick}
+            onToggleEditMode={requestToggleEditMode}
+            onOpenProfile={() => openProfileRoute('members')}
+            onOpenSettings={openSettingsRoute}
             onDisconnectHomeAssistant={disconnectHa}
             onClose={() => setIsMobileSidebarOpen(false)}
           />
@@ -10683,15 +10921,15 @@ export function MainBoard() {
       {!isImmersiveView && !isCompactViewport ? (
         <LeftSidebar
           isEditMode={isEditMode}
-          canToggleEditMode={canToggleEditMode}
           userAvatarUrl={currentUserAvatarUrl}
           userAvatarAlt={stateWithConnectedUser.userName}
           haStatus={haStatus}
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
           onPathClick={handleSidebarPathClick}
-          onToggleEditMode={requestToggleEditMode}
-          onOpenProfile={() => openProfilePanel('theme')}
+          onOpenProfile={() => openProfileRoute('members')}
+          onOpenSettings={openSettingsRoute}
+          isSettingsActive={isSettingsView}
         />
       ) : null}
 
@@ -10779,6 +11017,26 @@ export function MainBoard() {
               alarmEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('alarm_control_panel.'))}
               sensorEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('binary_sensor.'))}
               deviceAuthUser={deviceAuthUser}
+              onCallService={callHaService}
+            />
+          </div>
+        ) : isSettingsView ? (
+          <div className="h-full min-h-0 flex-1 overflow-hidden">
+            <SettingsDashboard
+              developerMode={developerMode}
+              haStatus={haStatus}
+              haError={oauthFlowError ?? haError}
+              haStates={haStatesForUi}
+              haAreas={haAreas}
+              sections={sections}
+              widgets={widgets}
+              houseMembers={profileHouseMembers}
+              currentLayoutId={activeGridBreakpoint}
+              sensorHistoryByEntity={sensorHistoryByEntity}
+              onDeveloperModeChange={setDeveloperMode}
+              onDownloadBackup={downloadConfigurationBackup}
+              onRestoreBackup={restoreConfigurationFromFile}
+              onResetAll={resetAllConfiguration}
               onCallService={callHaService}
             />
           </div>
@@ -10894,7 +11152,7 @@ export function MainBoard() {
                 }
                 openDoor(undefined, widget);
               }}
-              onOpenMembersPanel={() => openProfilePanel('members')}
+              onOpenMembersPanel={() => openProfileRoute('members')}
               onWeatherClick={openWeatherControls}
               onSceneTrigger={triggerSceneAction}
               onWidgetLayoutChange={handleWidgetLayoutChange}
@@ -11049,16 +11307,14 @@ export function MainBoard() {
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
           onPathClick={handleSidebarPathClick}
-          onOpenSettings={() => openProfilePanel('theme')}
+          onOpenSettings={openSettingsRoute}
         />
       ) : null}
 
       <ProfilePanel
         isOpen={isProfileOpen}
-        onClose={() => {
-          setIsProfileOpen(false);
-          setProfileInitialSection('theme');
-        }}
+        onClose={closeProfileRoute}
+        mode="profile"
         initialSection={profileInitialSection}
         userAvatarUrl={currentUserAvatarUrl}
         userAvatarAlt={stateWithConnectedUser.userName}

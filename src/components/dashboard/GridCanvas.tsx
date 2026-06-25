@@ -143,8 +143,8 @@ const GRID_ENGINE_CONTAINER_PADDING: Record<GridBreakpoint, [number, number]> = 
   xl: [0, 14],
   lg: [0, 12],
   md: [0, 10],
-  sm: [0, 8],
-  xs: [2, 8],
+  sm: [0, 4],
+  xs: [2, 4],
 };
 const XS_CONTEXT_OPEN_LONG_PRESS_MS = 420;
 const XS_CONTEXT_OPEN_MOVE_TOLERANCE_PX = 14;
@@ -1710,7 +1710,7 @@ export function GridCanvas({
       const sectionPaddingClass = isStack
         ? 'p-0'
         : isGreetingSection
-          ? 'px-0 py-2 sm:py-2.5'
+          ? 'px-0 pt-0 pb-1 md:py-2.5'
         : isCompactWeatherSection
           ? isTabletCanvas
             ? 'px-3 py-2 sm:px-4 sm:py-2.5'
@@ -1930,7 +1930,7 @@ export function GridCanvas({
       <div className="h-full overflow-y-scroll pb-[calc(env(safe-area-inset-bottom)+8.25rem)] sm:pb-10 [scroll-padding-bottom:calc(env(safe-area-inset-bottom)+8.25rem)] sm:[scroll-padding-bottom:2.5rem] glass-scrollbar">
         <div
           ref={runtimeGridHostRef}
-          className={`relative behance-canvas-shell rounded-[2rem] pt-2 pb-4 min-h-[48rem] ${
+          className={`relative behance-canvas-shell rounded-[2rem] pt-0.5 pb-4 md:pt-2 min-h-[48rem] ${
             isEditMode ? 'bg-white/5 border border-white/10' : 'bg-transparent border border-transparent'
           }`}
         >

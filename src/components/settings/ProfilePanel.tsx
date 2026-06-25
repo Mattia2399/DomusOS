@@ -45,6 +45,7 @@ import type { DashboardConfig } from '../../types/dashboard';
 type ProfilePanelProps = {
   isOpen: boolean;
   onClose: () => void;
+  mode?: ProfilePanelMode;
   initialSection?: ProfileSectionId;
   userAvatarUrl?: string;
   userAvatarAlt?: string;
@@ -107,6 +108,7 @@ const MEMBER_DASHBOARD_SOURCE_OPTIONS = [
 ];
 
 export type ProfileSectionId = 'theme' | 'movements' | 'members' | 'security' | 'ha' | 'config';
+export type ProfilePanelMode = 'profile' | 'settings';
 
 export type ProfileMovementTimelineEntry = {
   id: string;
@@ -145,6 +147,50 @@ const PROFILE_SECTIONS: { id: ProfileSectionId; label: string; hint: string }[] 
   { id: 'ha', label: 'Home Assistant', hint: 'Connessione live' },
   { id: 'config', label: 'Configurazione', hint: 'Backup e reset' },
 ];
+
+const PROFILE_PANEL_MODE_SECTIONS: Record<ProfilePanelMode, ProfileSectionId[]> = {
+  profile: ['theme', 'movements', 'members', 'security', 'ha'],
+  settings: ['theme', 'ha', 'config'],
+};
+
+const PROFILE_PANEL_MODE_DEFAULT_SECTION: Record<ProfilePanelMode, ProfileSectionId> = {
+  profile: 'members',
+  settings: 'theme',
+};
+
+const PROFILE_PANEL_MODE_COPY: Record<
+  ProfilePanelMode,
+  {
+    title: string;
+    subtitle: string;
+    detailSubtitle: string;
+    menuLabel: string;
+  }
+> = {
+  profile: {
+    title: 'Profilo',
+    subtitle: 'Account e persone',
+    detailSubtitle: 'Profilo',
+    menuLabel: 'Menu profilo',
+  },
+  settings: {
+    title: 'Impostazioni',
+    subtitle: 'Dashboard e sistema',
+    detailSubtitle: 'Impostazioni',
+    menuLabel: 'Menu impostazioni',
+  },
+};
+
+function isProfilePanelSectionAllowed(sectionId: ProfileSectionId, mode: ProfilePanelMode) {
+  return PROFILE_PANEL_MODE_SECTIONS[mode].includes(sectionId);
+}
+
+function resolveProfilePanelSection(sectionId: ProfileSectionId | undefined, mode: ProfilePanelMode) {
+  if (sectionId && isProfilePanelSectionAllowed(sectionId, mode)) {
+    return sectionId;
+  }
+  return PROFILE_PANEL_MODE_DEFAULT_SECTION[mode];
+}
 
 const WALLPAPER_PREVIEW_CLASS_BY_ID: Record<DashboardWallpaperPreset, string> = {
   'home-hub': 'profile-wallpaper-thumb-home-hub',
@@ -357,6 +403,7 @@ function buildGuestAccessUrl(
 export function ProfilePanel({
   isOpen,
   onClose,
+  mode = 'settings',
   initialSection = 'theme',
   userAvatarUrl,
   userAvatarAlt,
@@ -410,7 +457,13 @@ export function ProfilePanel({
   onUnlinkCurrentDevice,
   onRelinkCurrentDevice,
 }: ProfilePanelProps) {
-  const [activeSection, setActiveSection] = useState<ProfileSectionId>('theme');
+  const defaultSectionForMode = PROFILE_PANEL_MODE_DEFAULT_SECTION[mode];
+  const initialSectionForMode = resolveProfilePanelSection(initialSection, mode);
+  const availableSections = PROFILE_SECTIONS.filter((section) =>
+    isProfilePanelSectionAllowed(section.id, mode),
+  );
+  const modeCopy = PROFILE_PANEL_MODE_COPY[mode];
+  const [activeSection, setActiveSection] = useState<ProfileSectionId>(initialSectionForMode);
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
     typeof window === 'undefined' ? false : window.innerWidth < PROFILE_MD_BREAKPOINT_PX,
   );
@@ -466,7 +519,7 @@ export function ProfilePanel({
       setConfigActionError(null);
       setIsConfigActionBusy(false);
       setSecurityActionFeedback({ tone: 'idle', text: '' });
-      setActiveSection('theme');
+      setActiveSection(defaultSectionForMode);
       setIsCompactDetailOpen(false);
       setMembersInspectorMode('overview');
       setExpandedMemberId(null);
@@ -475,17 +528,31 @@ export function ProfilePanel({
       setGuestAccessCopyState('idle');
       setDashboardShareFeedback({ tone: 'idle', text: '' });
     }
-  }, [isOpen]);
+  }, [defaultSectionForMode, isOpen]);
 
   useEffect(() => {
-    if (isOpen && !wasOpenRef.current) {
-      setActiveSection(initialSection);
-      if (initialSection === 'members') {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) {
+      setActiveSection(initialSectionForMode);
+      if (initialSectionForMode === 'members') {
         setMembersInspectorMode('overview');
       }
+      wasOpenRef.current = true;
+      return;
     }
-    wasOpenRef.current = isOpen;
-  }, [initialSection, isOpen]);
+
+    if (isProfilePanelSectionAllowed(activeSection, mode)) {
+      return;
+    }
+    setActiveSection(initialSectionForMode);
+    if (initialSectionForMode === 'members') {
+      setMembersInspectorMode('overview');
+    }
+  }, [activeSection, initialSectionForMode, isOpen, mode]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -586,7 +653,8 @@ export function ProfilePanel({
   const canStartOAuth = !isManagedByParent && haUrl.trim().length > 0;
   const canConnect = !isManagedByParent && haUrl.trim().length > 0 && haToken.trim().length > 0;
   const haErrorMessage = haActionError ?? haError;
-  const activeSectionMeta = PROFILE_SECTIONS.find((section) => section.id === activeSection) ?? PROFILE_SECTIONS[0];
+  const activeSectionMeta =
+    availableSections.find((section) => section.id === activeSection) ?? availableSections[0] ?? PROFILE_SECTIONS[0];
   const showMenuOnCompact = isCompactViewport && !isCompactDetailOpen;
   const showDetailOnCompact = isCompactViewport && isCompactDetailOpen;
   const isCompactFullScreenPage = isCompactViewport;
@@ -603,13 +671,13 @@ export function ProfilePanel({
       ? membersSubpageTitle
       : showDetailOnCompact
         ? activeSectionMeta.label
-        : 'Profilo';
+        : modeCopy.title;
   const compactPageHeaderSubtitle =
     showDetailOnCompact && activeSection === 'members' && membersSubpageTitle
       ? 'Membri'
       : showDetailOnCompact
-        ? 'Impostazioni'
-        : 'Impostazioni account';
+        ? modeCopy.detailSubtitle
+        : modeCopy.subtitle;
   const compactDisplayName = userAvatarAlt?.trim() || 'Utente';
   const compactDisplayEmail = userEmail?.trim() || 'Email non disponibile';
   const compactDisplayRole = userRoleLabel?.trim() || 'Utente';
@@ -1885,7 +1953,7 @@ export function ProfilePanel({
                 type="button"
                 onClick={handleCompactPageBack}
                 className={`flex h-10 w-10 items-center justify-center rounded-xl text-[color:var(--profile-sheet-text)] hover:bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.14)] ${touchMotionClass}`}
-                aria-label={showDetailOnCompact ? 'Torna al menu impostazioni' : 'Torna alla dashboard'}
+                aria-label={showDetailOnCompact ? `Torna al ${modeCopy.menuLabel.toLowerCase()}` : 'Torna alla dashboard'}
               >
                 <ChevronLeft size={18} />
               </button>
@@ -1957,15 +2025,15 @@ export function ProfilePanel({
                     <span className="font-semibold">{compactDisplayRole}</span>
                   </p>
                 </div>
-                <p className={`text-[11px] uppercase tracking-[0.2em] ${menuTitleClass}`}>Impostazioni</p>
+                <p className={`text-[11px] uppercase tracking-[0.2em] ${menuTitleClass}`}>{modeCopy.title}</p>
               </>
             ) : (
               <p className={`text-[11px] uppercase tracking-[0.2em] ${menuTitleClass}`}>
-                {isCompactViewport ? 'Impostazioni' : 'Menu impostazioni'}
+                {isCompactViewport ? modeCopy.title : modeCopy.menuLabel}
               </p>
             )}
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-1">
-              {PROFILE_SECTIONS.map((section) => {
+              {availableSections.map((section) => {
                 const isActive = activeSection === section.id;
                 const SectionIcon =
                   section.id === 'theme'
