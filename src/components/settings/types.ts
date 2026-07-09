@@ -25,10 +25,13 @@ export interface ActiveDevice {
   sensorUnit?: string;
   sensorEntityId?: string;
   sensorDeviceClass?: string;
+  sensorDisplayPrecision?: number;
   sensorHistory?: number[];
   sensorBattery?: string;
   sensorConnection?: string;
   sensorConnectionState?: SensorConnectionState;
+  switchEntityId?: string;
+  switchConsumptionEntityId?: string;
   alarmState?: string;
   alarmCodeRequired?: boolean;
   alarmChangedBy?: string;

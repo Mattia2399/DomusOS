@@ -1,6 +1,8 @@
 import type { DashboardSection, GridItem, SectionKind, Widget, WidgetKind } from '../types/dashboardModels';
 import type {
+  DashboardResponsiveLayouts,
   DashboardGridBreakpoint,
+  WidgetLayoutOverrides,
   WidgetTypeBreakpointLayoutOverride,
   WidgetTypeLayoutOverrides,
 } from '../types/widgetTypeLayout';
@@ -20,9 +22,16 @@ import {
   WEATHER_SECTION_CHIP_ROWS,
   createDefaultSectionLayout,
 } from '../types/dashboardModels';
+import { normalizeSensorDisplayPrecision } from '../utils/sensorValue';
+import {
+  mergeWidgetSecretsIntoWidgets,
+  migrateLegacyWidgetSecretsFromWidgets,
+  persistWidgetSecretsFromWidgets,
+  stripWidgetSecretsFromWidgets,
+} from './widgetSecrets';
 
 const STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
-const STORAGE_VERSION = 13;
+const STORAGE_VERSION = 14;
 
 const VALID_SECTION_KINDS: SectionKind[] = [
   'greeting',
@@ -35,12 +44,22 @@ const VALID_SECTION_KINDS: SectionKind[] = [
 
 const VALID_WIDGET_KINDS: WidgetKind[] = ['light', 'switch', 'climate', 'camera', 'sensor', 'media', 'alarm', 'vacuum', 'lock', 'cover', 'members'];
 const VALID_GRID_BREAKPOINTS: DashboardGridBreakpoint[] = ['2xl', 'xl', 'lg', 'md', 'sm', 'xs'];
+const GRID_COLS_BY_BREAKPOINT: Record<DashboardGridBreakpoint, number> = {
+  '2xl': 12,
+  xl: 12,
+  lg: 8,
+  md: 6,
+  sm: 4,
+  xs: 2,
+};
 
 type StoredLayout = {
   version: number;
   sections: DashboardSection[];
   widgets: Widget[];
   widgetTypeLayoutOverrides?: WidgetTypeLayoutOverrides;
+  widgetLayoutOverrides?: WidgetLayoutOverrides;
+  responsiveLayouts?: DashboardResponsiveLayouts;
 };
 
 function isNumber(value: unknown): value is number {
@@ -99,6 +118,118 @@ function normalizeWidgetTypeLayoutOverrides(raw: unknown): WidgetTypeLayoutOverr
     }
   });
   return normalized;
+}
+
+function normalizeWidgetLayoutOverrides(raw: unknown): WidgetLayoutOverrides {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+  const source = raw as WidgetLayoutOverrides;
+  const normalized: WidgetLayoutOverrides = {};
+  Object.entries(source).forEach(([widgetId, byBreakpointRaw]) => {
+    if (!widgetId || !byBreakpointRaw || typeof byBreakpointRaw !== 'object') {
+      return;
+    }
+    const nextByBreakpoint: Partial<Record<DashboardGridBreakpoint, WidgetTypeBreakpointLayoutOverride>> = {};
+    VALID_GRID_BREAKPOINTS.forEach((breakpoint) => {
+      const nextOverride = normalizeBreakpointLayoutOverride(byBreakpointRaw[breakpoint]);
+      if (nextOverride) {
+        nextByBreakpoint[breakpoint] = nextOverride;
+      }
+    });
+    if (Object.keys(nextByBreakpoint).length > 0) {
+      normalized[widgetId] = nextByBreakpoint;
+    }
+  });
+  return normalized;
+}
+
+function normalizeStoredGridItems(raw: unknown, maxCols?: number): GridItem[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalized: GridItem[] = [];
+  raw.forEach((item) => {
+    if (!item || typeof item !== 'object') {
+      return;
+    }
+    const source = item as Partial<GridItem>;
+    if (typeof source.i !== 'string' || source.i.trim().length === 0 || seen.has(source.i)) {
+      return;
+    }
+    const fallback: GridItem = { i: source.i, x: 0, y: normalized.length, w: 1, h: 1 };
+    normalized.push(normalizeLayout(source.i, source as GridItem, fallback, maxCols));
+    seen.add(source.i);
+  });
+  return normalized;
+}
+
+function normalizeResponsiveLayouts(raw: unknown): DashboardResponsiveLayouts {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+  const source = raw as DashboardResponsiveLayouts;
+  const root: DashboardResponsiveLayouts['root'] = {};
+  VALID_GRID_BREAKPOINTS.forEach((breakpoint) => {
+    const normalized = normalizeStoredGridItems(source.root?.[breakpoint], GRID_COLS_BY_BREAKPOINT[breakpoint]);
+    if (normalized.length > 0) {
+      root[breakpoint] = normalized;
+    }
+  });
+
+  const stacks: NonNullable<DashboardResponsiveLayouts['stacks']> = {};
+  if (source.stacks && typeof source.stacks === 'object') {
+    Object.entries(source.stacks).forEach(([sectionId, byBreakpoint]) => {
+      if (!sectionId || !byBreakpoint || typeof byBreakpoint !== 'object') {
+        return;
+      }
+      const nextByBreakpoint: NonNullable<DashboardResponsiveLayouts['root']> = {};
+      VALID_GRID_BREAKPOINTS.forEach((breakpoint) => {
+        const normalized = normalizeStoredGridItems(byBreakpoint[breakpoint]);
+        if (normalized.length > 0) {
+          nextByBreakpoint[breakpoint] = normalized;
+        }
+      });
+      if (Object.keys(nextByBreakpoint).length > 0) {
+        stacks[sectionId] = nextByBreakpoint;
+      }
+    });
+  }
+
+  return {
+    ...(Object.keys(root).length > 0 ? { root } : null),
+    ...(Object.keys(stacks).length > 0 ? { stacks } : null),
+  };
+}
+
+function createInitialResponsiveLayouts(
+  sections: DashboardSection[],
+  widgets: Widget[],
+): DashboardResponsiveLayouts {
+  const rootWidgets = widgets.filter((widget) => !widget.parentSectionId);
+  const root = normalizeStoredGridItems(
+    [
+      ...sections.map((section) => section.layout),
+      ...rootWidgets.map((widget) => widget.layout),
+    ],
+    GRID_COLS_BY_BREAKPOINT.xl,
+  );
+  const stacks: NonNullable<DashboardResponsiveLayouts['stacks']> = {};
+  sections.forEach((section) => {
+    const stackWidgets = widgets.filter((widget) => widget.parentSectionId === section.id);
+    if (stackWidgets.length === 0) {
+      return;
+    }
+    const stackLayout = normalizeStoredGridItems(stackWidgets.map((widget) => widget.layout));
+    if (stackLayout.length > 0) {
+      stacks[section.id] = { xl: stackLayout };
+    }
+  });
+  return {
+    ...(root.length > 0 ? { root: { xl: root } } : null),
+    ...(Object.keys(stacks).length > 0 ? { stacks } : null),
+  };
 }
 
 function normalizeLayout(
@@ -778,6 +909,26 @@ function migrateStoredLayoutV12ToV13(layout: StoredLayout): StoredLayout {
   };
 }
 
+function migrateStoredLayoutV13ToV14(layout: StoredLayout): StoredLayout {
+  if (layout.version !== 13) {
+    return layout;
+  }
+  const sections = Array.isArray(layout.sections) ? layout.sections : [];
+  const widgets = Array.isArray(layout.widgets) ? layout.widgets : [];
+  const responsiveLayouts = normalizeResponsiveLayouts(layout.responsiveLayouts);
+  return {
+    version: 14,
+    sections,
+    widgets,
+    widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides),
+    widgetLayoutOverrides: normalizeWidgetLayoutOverrides(layout.widgetLayoutOverrides),
+    responsiveLayouts:
+      responsiveLayouts.root || responsiveLayouts.stacks
+        ? responsiveLayouts
+        : createInitialResponsiveLayouts(sections, widgets),
+  };
+}
+
 function normalizeSection(section: DashboardSection, index: number): DashboardSection {
   const fallback = createDefaultSectionLayout(section.kind, section.id, index * 2);
   const layout = normalizeLayout(section.id, section.layout, fallback, ROOT_CANVAS_COLS);
@@ -897,9 +1048,15 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
       ? minHeight
       : Math.max(minHeight, Math.round(normalizedLayout.h));
   const maxX = isRootWidget ? Math.max(0, ROOT_CANVAS_COLS - targetWidth) : Number.POSITIVE_INFINITY;
+  const { sensorDisplayPrecision: _storedSensorDisplayPrecision, ...widgetWithoutSensorDisplayPrecision } = widget;
+  const sensorDisplayPrecision =
+    widget.kind === 'sensor'
+      ? normalizeSensorDisplayPrecision(widget.sensorDisplayPrecision)
+      : undefined;
 
   return {
-    ...widget,
+    ...widgetWithoutSensorDisplayPrecision,
+    ...(sensorDisplayPrecision !== undefined ? { sensorDisplayPrecision } : null),
     layout: {
       ...normalizedLayout,
       x: Math.min(normalizedLayout.x, maxX),
@@ -924,14 +1081,28 @@ export function loadDashboardLayout(): {
   sections: DashboardSection[];
   widgets: Widget[];
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
+  widgetLayoutOverrides: WidgetLayoutOverrides;
+  responsiveLayouts: DashboardResponsiveLayouts;
 } {
   if (typeof window === 'undefined') {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
+    return {
+      sections: INITIAL_SECTIONS,
+      widgets: INITIAL_WIDGETS,
+      widgetTypeLayoutOverrides: {},
+      widgetLayoutOverrides: {},
+      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+    };
   }
 
   const parsed = safeParse(window.localStorage.getItem(STORAGE_KEY));
   if (!parsed) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
+    return {
+      sections: INITIAL_SECTIONS,
+      widgets: INITIAL_WIDGETS,
+      widgetTypeLayoutOverrides: {},
+      widgetLayoutOverrides: {},
+      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+    };
   }
   const migratedV2 = parsed.version === 1 ? migrateStoredLayoutV1ToV2(parsed) : parsed;
   const migratedV3 = migratedV2.version === 2 ? migrateStoredLayoutV2ToV3(migratedV2) : migratedV2;
@@ -944,9 +1115,16 @@ export function loadDashboardLayout(): {
   const migratedV10 = migratedV9.version === 9 ? migrateStoredLayoutV9ToV10(migratedV9) : migratedV9;
   const migratedV11 = migratedV10.version === 10 ? migrateStoredLayoutV10ToV11(migratedV10) : migratedV10;
   const migratedV12 = migratedV11.version === 11 ? migrateStoredLayoutV11ToV12(migratedV11) : migratedV11;
-  const hydrated = migratedV12.version === 12 ? migrateStoredLayoutV12ToV13(migratedV12) : migratedV12;
+  const migratedV13 = migratedV12.version === 12 ? migrateStoredLayoutV12ToV13(migratedV12) : migratedV12;
+  const hydrated = migratedV13.version === 13 ? migrateStoredLayoutV13ToV14(migratedV13) : migratedV13;
   if (hydrated.version !== STORAGE_VERSION) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
+    return {
+      sections: INITIAL_SECTIONS,
+      widgets: INITIAL_WIDGETS,
+      widgetTypeLayoutOverrides: {},
+      widgetLayoutOverrides: {},
+      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+    };
   }
 
   const rawSections = Array.isArray(hydrated.sections) ? hydrated.sections : [];
@@ -957,7 +1135,7 @@ export function loadDashboardLayout(): {
     .map((section, index) => normalizeSection(section, index));
 
   const sectionById = new Map(sections.map((section) => [section.id, section]));
-  const widgets = rawWidgets
+  const normalizedWidgets = rawWidgets
     .filter((widget) => widget && VALID_WIDGET_KINDS.includes(widget.kind))
     .map((widget, index) => {
       const parentSection =
@@ -969,15 +1147,29 @@ export function loadDashboardLayout(): {
         parentSectionId: isRootWidget ? undefined : parentSection?.id,
       };
     });
+  migrateLegacyWidgetSecretsFromWidgets(normalizedWidgets, window.localStorage);
+  const widgets = mergeWidgetSecretsIntoWidgets(normalizedWidgets, window.localStorage);
 
   if (!sections.length && !widgets.length) {
-    return { sections: INITIAL_SECTIONS, widgets: INITIAL_WIDGETS, widgetTypeLayoutOverrides: {} };
+    return {
+      sections: INITIAL_SECTIONS,
+      widgets: INITIAL_WIDGETS,
+      widgetTypeLayoutOverrides: {},
+      widgetLayoutOverrides: {},
+      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+    };
   }
 
+  const responsiveLayouts = normalizeResponsiveLayouts(hydrated.responsiveLayouts);
   return {
     sections,
     widgets,
     widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(hydrated.widgetTypeLayoutOverrides),
+    widgetLayoutOverrides: normalizeWidgetLayoutOverrides(hydrated.widgetLayoutOverrides),
+    responsiveLayouts:
+      responsiveLayouts.root || responsiveLayouts.stacks
+        ? responsiveLayouts
+        : createInitialResponsiveLayouts(sections, widgets),
   };
 }
 
@@ -985,6 +1177,8 @@ export function saveDashboardLayout(
   sections: DashboardSection[],
   widgets: Widget[],
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides = {},
+  responsiveLayouts: DashboardResponsiveLayouts = {},
+  widgetLayoutOverrides: WidgetLayoutOverrides = {},
 ) {
   if (typeof window === 'undefined') {
     return;
@@ -993,11 +1187,14 @@ export function saveDashboardLayout(
   const payload: StoredLayout = {
     version: STORAGE_VERSION,
     sections,
-    widgets,
+    widgets: stripWidgetSecretsFromWidgets(widgets),
     widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides),
+    widgetLayoutOverrides: normalizeWidgetLayoutOverrides(widgetLayoutOverrides),
+    responsiveLayouts: normalizeResponsiveLayouts(responsiveLayouts),
   };
 
   try {
+    persistWidgetSecretsFromWidgets(widgets, window.localStorage);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // ignore storage failures

@@ -1,7 +1,9 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { Lock, Unlock } from 'lucide-react';
+import { AlertTriangle, Battery, DoorOpen, Lock, Unlock } from 'lucide-react';
 import { useHoldToConfirm } from '../../hooks/useHoldToConfirm';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
+import { normalizeLockCardState, translateLockCardState } from '../widgets/lockCardModel';
 
 type LockControlsProps = {
   lock: {
@@ -17,6 +19,7 @@ type LockControlsProps = {
     }>;
     activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
+    batteryLevel?: number;
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
   };
@@ -32,45 +35,7 @@ type TimelineEntry = {
 
 const RING_RADIUS = 57;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-function normalizeLockState(value: string | undefined) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (!normalized) {
-    return 'unknown';
-  }
-  if (normalized === 'opening') {
-    return 'unlocking';
-  }
-  if (normalized === 'closing') {
-    return 'locking';
-  }
-  return normalized;
-}
-
-function translateLockState(state: string) {
-  if (state === 'locked') {
-    return 'Bloccata';
-  }
-  if (state === 'unlocked') {
-    return 'Sbloccata';
-  }
-  if (state === 'locking') {
-    return 'Blocco...';
-  }
-  if (state === 'unlocking') {
-    return 'Sblocco...';
-  }
-  if (state === 'jammed') {
-    return 'Inceppata';
-  }
-  if (state === 'open') {
-    return 'Aperta';
-  }
-  if (state === 'unavailable') {
-    return 'Non disponibile';
-  }
-  return 'Sconosciuta';
-}
+const LOCK_FEATURE_OPEN = 1;
 
 function formatTimeLabel(date: Date) {
   return date.toLocaleTimeString('it-IT', {
@@ -79,15 +44,43 @@ function formatTimeLabel(date: Date) {
   });
 }
 
+function toFiniteNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim().replace(',', '.'));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function resolveBatteryLevel(lock: LockControlsProps['lock']) {
+  const candidates = [
+    lock.batteryLevel,
+    lock.rawAttributes?.battery_level,
+    lock.rawAttributes?.battery,
+    lock.rawAttributes?.battery_percentage,
+    lock.rawAttributes?.battery_percent,
+    lock.rawAttributes?.battery_state_of_charge,
+  ];
+
+  for (const candidate of candidates) {
+    const value = toFiniteNumber(candidate);
+    if (value !== undefined) {
+      return Math.max(0, Math.min(100, Math.round(value)));
+    }
+  }
+
+  return undefined;
+}
+
 export function LockControls({
   lock,
   onLock,
   onUnlock,
   onOpen,
 }: LockControlsProps) {
-  void onOpen;
   const actionCode = lock.lockCode?.trim() || undefined;
-  const [simulatedState, setSimulatedState] = useState(normalizeLockState(lock.state));
+  const [simulatedState, setSimulatedState] = useState(normalizeLockCardState(lock.state));
   const maxTimelineEntries = useMemo(() => {
     const parsed = Number(lock.activityLogLimit);
     if (!Number.isFinite(parsed)) {
@@ -100,7 +93,7 @@ export function LockControls({
   const shouldUseLocalTimeline = !lock.activityTimelineStatus || lock.activityTimelineStatus === 'offline';
 
   useEffect(() => {
-    setSimulatedState(normalizeLockState(lock.state));
+    setSimulatedState(normalizeLockCardState(lock.state));
   }, [lock.name, lock.state]);
 
   useEffect(() => {
@@ -117,8 +110,32 @@ export function LockControls({
     setTimeline((lock.activityTimeline ?? []).slice(0, maxTimelineEntries));
   }, [lock.name, lock.activityTimeline, lock.activityTimelineStatus, maxTimelineEntries]);
 
+  const supportedFeatures = typeof lock.supportedFeatures === 'number'
+    ? lock.supportedFeatures
+    : typeof lock.rawAttributes?.supported_features === 'number'
+      ? lock.rawAttributes.supported_features
+      : undefined;
+  const supportsOpen = typeof supportedFeatures === 'number' && (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
+  const batteryLevel = resolveBatteryLevel(lock);
+  const batteryTone =
+    batteryLevel === undefined
+      ? 'unknown'
+      : batteryLevel <= 20
+        ? 'low'
+        : batteryLevel <= 45
+          ? 'medium'
+          : 'good';
   const isLocked = simulatedState === 'locked' || simulatedState === 'locking';
-  const statusLabel = translateLockState(simulatedState);
+  const isUnlocked = simulatedState === 'unlocked' || simulatedState === 'open' || simulatedState === 'opening';
+  const isOpen = simulatedState === 'open' || simulatedState === 'opening';
+  const isTransitioning = simulatedState === 'locking' || simulatedState === 'unlocking' || simulatedState === 'opening';
+  const isJammed = simulatedState === 'jammed';
+  const isUnavailable = simulatedState === 'unavailable' || simulatedState === 'unknown';
+  const canLock = isUnlocked && !isTransitioning && !isUnavailable;
+  const canUnlock = isLocked && !isTransitioning && !isUnavailable;
+  const canOpen = supportsOpen && !isTransitioning && !isJammed && !isUnavailable;
+  const statusLabel = translateLockCardState(simulatedState);
+  const HeaderIcon = isJammed || isUnavailable ? AlertTriangle : isOpen ? DoorOpen : isLocked ? Lock : Unlock;
 
   const pushTimeline = (text: string) => {
     setTimeline((prev) => [
@@ -137,7 +154,7 @@ export function LockControls({
     startHold,
     endHold,
   } = useHoldToConfirm({
-    enabled: isLocked,
+    enabled: canUnlock,
     durationMs: 1000,
     onComplete: () => {
       const didUnlock = onUnlock(actionCode);
@@ -154,11 +171,11 @@ export function LockControls({
   const ringDashOffset = RING_CIRCUMFERENCE * (1 - progress);
 
   const panelAuraClass = useMemo(() => {
-    if (isLocked) {
-      return 'bg-white/5';
-    }
-    return 'bg-red-950/30';
-  }, [isLocked]);
+    if (isJammed) return 'border-rose-200/20 bg-rose-500/12';
+    if (isTransitioning) return 'border-sky-200/18 bg-sky-500/10';
+    if (isLocked) return 'border-emerald-100/16 bg-emerald-300/8';
+    return 'border-orange-200/18 bg-orange-500/12';
+  }, [isJammed, isLocked, isTransitioning]);
   const activityUnavailableMessage = useMemo(() => {
     const historyHours = Math.max(1, Math.round(Number(lock.activityLogHours) || 24));
     if (lock.activityTimelineStatus === 'loading') {
@@ -178,19 +195,12 @@ export function LockControls({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white">
-            {isLocked ? <Lock size={21} /> : <Unlock size={21} />}
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-[1.2rem] font-semibold tracking-tight text-white truncate">
-              {lock.name || 'Serratura'}
-            </h3>
-            <p className="mt-1 text-sm text-white/60">Stato: {statusLabel}</p>
-          </div>
-        </div>
-      </div>
+      <ContextPanelHeader
+        title={lock.name}
+        subtitle={statusLabel}
+        icon={<HeaderIcon size={21} />}
+        fallbackTitle="Serratura"
+      />
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mt-6 flex flex-col items-center">
@@ -203,7 +213,7 @@ export function LockControls({
                 : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
             }`}
             onMouseDown={(event) => {
-              if (!isLocked) {
+              if (!canUnlock) {
                 return;
               }
               event.preventDefault();
@@ -212,7 +222,7 @@ export function LockControls({
             onMouseUp={endHold}
             onMouseLeave={endHold}
             onTouchStart={(event) => {
-              if (!isLocked) {
+              if (!canUnlock) {
                 return;
               }
               event.preventDefault();
@@ -242,17 +252,25 @@ export function LockControls({
               />
             </svg>
             <div className="h-[clamp(4.6rem,24vw,6rem)] w-[clamp(4.6rem,24vw,6rem)] rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
-              {isLocked ? <Lock size={36} /> : <Unlock size={36} />}
+              <HeaderIcon size={36} />
             </div>
           </div>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-white/50">Tenere premuto per sbloccare</p>
+          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-white/50">
+            {canUnlock
+              ? 'Tenere premuto per sbloccare'
+              : canLock
+                ? 'Serratura pronta al blocco'
+                : isJammed
+                  ? 'Intervento richiesto'
+                  : statusLabel}
+          </p>
         </div>
 
         <div className="mt-6 rounded-3xl border border-white/5 bg-white/[0.04] p-1.5 flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => {
-              if (isLocked) {
+              if (!canLock) {
                 return;
               }
               setSimulatedState('locked');
@@ -261,11 +279,11 @@ export function LockControls({
                 pushTimeline(`${timelineActor} ha bloccato ${formatTimeLabel(new Date())}`);
               }
             }}
-            disabled={isLocked}
+            disabled={!canLock}
             className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
-              isLocked
-                ? 'bg-white/6 text-white/35 cursor-not-allowed'
-                : 'bg-white/18 text-white hover:bg-white/24 active:scale-[0.98]'
+              canLock
+                ? 'bg-white/18 text-white hover:bg-white/24 active:scale-[0.98]'
+                : 'bg-white/6 text-white/35 cursor-not-allowed'
             }`}
           >
             <Lock size={16} />
@@ -274,7 +292,7 @@ export function LockControls({
           <button
             type="button"
             onClick={() => {
-              if (!isLocked) {
+              if (!canUnlock) {
                 return;
               }
               const didUnlock = onUnlock(actionCode);
@@ -286,9 +304,9 @@ export function LockControls({
                 pushTimeline(`${timelineActor} ha sbloccato ${formatTimeLabel(new Date())}`);
               }
             }}
-            disabled={!isLocked}
+            disabled={!canUnlock}
             className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
-              isLocked
+              canUnlock
                 ? 'bg-red-500/30 border border-red-300/35 text-red-100 hover:bg-red-500/40 active:scale-[0.98]'
                 : 'bg-white/6 text-white/35 cursor-not-allowed'
             }`}
@@ -296,7 +314,64 @@ export function LockControls({
             <Unlock size={16} />
             SBLOCCA
           </button>
+          {supportsOpen ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!canOpen) {
+                  return;
+                }
+                setSimulatedState('opening');
+                onOpen(actionCode);
+                if (shouldUseLocalTimeline) {
+                  pushTimeline(`${timelineActor} ha aperto lo scrocco ${formatTimeLabel(new Date())}`);
+                }
+              }}
+              disabled={!canOpen}
+              className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+                canOpen
+                  ? 'bg-orange-400/18 border border-orange-200/25 text-orange-50 hover:bg-orange-400/26 active:scale-[0.98]'
+                  : 'bg-white/6 text-white/35 cursor-not-allowed'
+              }`}
+            >
+              <DoorOpen size={16} />
+              APRI
+            </button>
+          ) : null}
         </div>
+
+        {batteryLevel !== undefined ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-[1.35rem] border border-white/[0.07] bg-white/[0.045] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+            <span className="flex min-w-0 items-center gap-3">
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${
+                  batteryTone === 'low'
+                    ? 'border-rose-200/20 bg-rose-500/12 text-rose-100'
+                    : batteryTone === 'medium'
+                      ? 'border-amber-200/20 bg-amber-400/12 text-amber-100'
+                      : 'border-emerald-200/18 bg-emerald-400/10 text-emerald-100'
+                }`}
+              >
+                <Battery size={17} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-white/48">Batteria</span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-white/82">Dispositivo</span>
+              </span>
+            </span>
+            <span
+              className={`shrink-0 text-lg font-bold tracking-[-0.04em] ${
+                batteryTone === 'low'
+                  ? 'text-rose-100'
+                  : batteryTone === 'medium'
+                    ? 'text-amber-100'
+                    : 'text-white/92'
+              }`}
+            >
+              {batteryLevel}%
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>

@@ -23,6 +23,7 @@ import {
   Webcam,
 } from 'lucide-react';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
 
 export type CameraPtzDirection =
   | 'up'
@@ -794,17 +795,13 @@ export function CameraControlsPanel({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center gap-4 min-w-0 pr-11">
-            <span className="w-14 h-14 rounded-full bg-white/10 border border-white/12 flex items-center justify-center text-white shrink-0">
-              <Webcam size={22} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-[1.35rem] font-semibold tracking-tight text-white truncate">{name}</h2>
-              <p className={`text-sm truncate ${subtitleClass}`}>{subtitle}</p>
-            </div>
-        </div>
-      </div>
+      <ContextPanelHeader
+        title={name}
+        subtitle={subtitle}
+        icon={<Webcam size={22} />}
+        fallbackTitle="Videocamera"
+        subtitleClassName={subtitleClass}
+      />
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
         <div

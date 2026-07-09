@@ -316,6 +316,75 @@
     @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] shadow-lg rounded-2xl transition-all duration-300;
   }
 
+  .segmented-control,
+  .liquid-segmented-control {
+    @apply relative overflow-hidden rounded-full border border-white/[0.14] bg-white/[0.08] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_10px_24px_rgba(0,0,0,0.14)] backdrop-blur-xl backdrop-saturate-150 transition-all duration-200 ease-out;
+    background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.025) 52%, rgba(255, 255, 255, 0.07));
+  }
+
+  .segmented-control-clear,
+  .liquid-segmented-control-clear {
+    @apply border-white/[0.16] bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_8px_18px_rgba(0,0,0,0.10)];
+  }
+
+  .segmented-options {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(var(--segmented-option-min, 2.5rem), 1fr);
+    gap: 0.25rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .segmented-options::-webkit-scrollbar {
+    display: none;
+  }
+
+  .segmented-options > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .segmented-thumb,
+  .segmented-option-active,
+  .liquid-segmented-thumb,
+  .liquid-segmented-option-active {
+    @apply relative overflow-hidden rounded-full bg-white/[0.15] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_20px_rgba(0,0,0,0.14)] backdrop-blur-xl transition-all duration-200 ease-out;
+  }
+
+  .segmented-option-active:is(:hover, :focus-visible),
+  .segmented-thumb:is(:hover, :focus-visible),
+  .liquid-segmented-option-active:is(:hover, :focus-visible),
+  .liquid-segmented-thumb:is(:hover, :focus-visible) {
+    @apply bg-white/[0.18];
+  }
+
+  .segmented-option-inactive,
+  .liquid-segmented-option-inactive {
+    @apply text-white/52 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white/86;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .segmented-control,
+    .segmented-control *,
+    .liquid-segmented-control,
+    .liquid-segmented-control * {
+      transition-duration: 120ms !important;
+      animation: none !important;
+    }
+
+    .segmented-control button:active,
+    .liquid-segmented-control button:active {
+      transform: none !important;
+    }
+  }
+
   .liquid-glass-sheet {
     @apply bg-white/[0.01] backdrop-blur-3xl border border-white/[0.08] shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-[2rem] rounded-b-none;
   }
@@ -1360,10 +1429,41 @@ button:not(:disabled):active,
   }
 }
 
+@keyframes compact-drag-arm-wiggle {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  22% {
+    transform: translate3d(-1px, 0, 0) rotate(-0.45deg) scale(1.006);
+  }
+  48% {
+    transform: translate3d(1px, 0, 0) rotate(0.45deg) scale(1.008);
+  }
+  74% {
+    transform: translate3d(-0.5px, 0, 0) rotate(-0.22deg) scale(1.004);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+}
+
+.compact-drag-arm-feedback {
+  animation: compact-drag-arm-wiggle 220ms ease-out both;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-drag-arm-feedback {
+    animation: none;
+  }
+}
+
 .react-grid-item.react-draggable-dragging {
   transition: none !important;
   z-index: 100;
   opacity: 0.96;
+  border-radius: 2rem;
   box-shadow:
     0 0 0 1px rgb(56 189 248 / 0.35),
     0 24px 48px -12px rgb(2 6 23 / 0.7),
@@ -1373,16 +1473,22 @@ button:not(:disabled):active,
 .react-grid-item.react-resizable-resizing {
   z-index: 95;
   opacity: 0.98;
+  border-radius: 2rem;
   box-shadow:
     0 0 0 1px rgb(52 211 153 / 0.35),
     0 24px 48px -12px rgb(2 6 23 / 0.65);
+}
+
+.react-grid-item.react-draggable-dragging > div,
+.react-grid-item.react-resizable-resizing > div {
+  border-radius: inherit;
 }
 
 .react-grid-item.react-grid-placeholder {
   background:
     linear-gradient(135deg, rgb(56 189 248 / 0.14), rgb(14 165 233 / 0.06)) !important;
   border: 2px dashed rgb(56 189 248 / 0.55) !important;
-  border-radius: 1rem;
+  border-radius: 2rem;
   box-shadow: inset 0 0 0 1px rgb(56 189 248 / 0.18);
   transition-duration: 100ms;
   z-index: 2;
@@ -1528,4 +1634,30 @@ button:not(:disabled):active,
     inset 0 0 0 var(--selection-ring-primary-width, 2px) rgb(var(--selection-ring-primary-rgb, 147 197 253) / var(--selection-ring-primary-alpha, 0.95)),
     inset 0 0 0 var(--selection-ring-secondary-width, 3px) rgb(var(--selection-ring-secondary-rgb, 15 23 42) / var(--selection-ring-secondary-alpha, 0.35)),
     0 0 0 var(--selection-ring-outer-width, 1px) rgb(var(--selection-ring-outer-rgb, 56 189 248) / var(--selection-ring-outer-alpha, 0.42));
+}
+@keyframes alarm-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  55% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes alarm-orb-breathe {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.99);
+  }
+
+  50% {
+    opacity: 0.28;
+    transform: scale(1.035);
+  }
 }

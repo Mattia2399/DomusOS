@@ -6,6 +6,7 @@ import { DummyCard } from '../components/dashboard/DummyCard';
 import { WidgetWrapper } from '../components/dashboard/WidgetWrapper';
 import type { MockEntityStateMap } from '../types/ha';
 import { useDashboardState } from '../hooks/useDashboardState';
+import { SensorCard } from '../components/widgets/SensorCard';
 
 type DummyWidget = {
   id: string;
@@ -30,6 +31,13 @@ type SectionTestItem = {
 };
 
 const MEDIA_DURATION_SECONDS = 4200;
+const SENSOR_LAB_SIZES = [
+  { id: 'mini', label: 'Mini · 104×48', width: 104, height: 48, gridW: 1, gridH: 1 },
+  { id: 'compact', label: 'Compact · 104×112', width: 104, height: 112, gridW: 1, gridH: 2 },
+  { id: 'standard', label: 'Standard · 192×112', width: 192, height: 112, gridW: 2, gridH: 2 },
+  { id: 'full-wide', label: 'Full wide · 296×112', width: 296, height: 112, gridW: 3, gridH: 2 },
+  { id: 'full-tall', label: 'Full tall · 192×176', width: 192, height: 176, gridW: 2, gridH: 3 },
+] as const;
 
 const DUMMY_WIDGETS: DummyWidget[] = [
   { id: 'compact-sensor-1', title: 'Sensore Ingresso 1x1', width: 1, height: 1, color: 'bg-cyan-500/20' },
@@ -106,14 +114,35 @@ export function GridTestView() {
         state: dashboardState.lamp.isOn ? 'on' : 'off',
         stateLabel: dashboardState.lamp.status,
         brightness: dashboardState.lamp.brightness,
+        supportedFeatures: 191,
         colorMode: 'hs',
+        supportedColorModes: ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww', 'white'],
         hsColor: dashboardState.lamp.hsColor,
+        rgbColor: [82, 125, 255],
+        rgbwColor: [82, 125, 255, 32],
+        rgbwwColor: [82, 125, 255, 16, 42],
+        xyColor: [0.18, 0.15],
+        colorTempKelvin: dashboardState.lamp.colorTemp,
+        minColorTempKelvin: 2000,
+        maxColorTempKelvin: 6500,
+        effect: 'off',
+        effectList: ['off', 'colorloop', 'pulse', 'rainbow'],
         rawAttributes: {
           friendly_name: dashboardState.lamp.name,
           brightness: Math.round((dashboardState.lamp.brightness / 100) * 255),
+          supported_features: 191,
           color_mode: 'hs',
+          supported_color_modes: ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww', 'white'],
           hs_color: dashboardState.lamp.hsColor,
-          supported_color_modes: ['hs'],
+          rgb_color: [82, 125, 255],
+          rgbw_color: [82, 125, 255, 32],
+          rgbww_color: [82, 125, 255, 16, 42],
+          xy_color: [0.18, 0.15],
+          color_temp_kelvin: dashboardState.lamp.colorTemp,
+          min_color_temp_kelvin: 2000,
+          max_color_temp_kelvin: 6500,
+          effect: 'off',
+          effect_list: ['off', 'colorloop', 'pulse', 'rainbow'],
         },
       },
       'climate.air_conditioner': {
@@ -126,15 +155,28 @@ export function GridTestView() {
         minTemp: dashboardState.climate.minTemp,
         maxTemp: dashboardState.climate.maxTemp,
         targetTempStep: dashboardState.climate.targetTempStep,
+        supportedFeatures: dashboardState.climate.supportedFeatures,
         hvacMode: safeClimateMode,
         hvacAction: dashboardState.climate.hvacAction,
         fanMode: dashboardState.climate.fanMode,
         fanModes: dashboardState.climate.fanModes,
+        currentHumidity: dashboardState.climate.currentHumidity,
+        targetHumidity: dashboardState.climate.targetHumidity,
+        minHumidity: dashboardState.climate.minHumidity,
+        maxHumidity: dashboardState.climate.maxHumidity,
+        targetHumidityStep: dashboardState.climate.targetHumidityStep,
+        presetMode: dashboardState.climate.presetMode,
+        presetModes: dashboardState.climate.presetModes,
+        swingMode: dashboardState.climate.swingMode,
+        swingModes: dashboardState.climate.swingModes,
+        swingHorizontalMode: dashboardState.climate.swingHorizontalMode,
+        swingHorizontalModes: dashboardState.climate.swingHorizontalModes,
         unit: dashboardState.climate.temperatureUnit ?? 'C',
         rawAttributes: {
           friendly_name: dashboardState.climate.name,
           hvac_mode: safeClimateMode,
           hvac_action: dashboardState.climate.hvacAction,
+          supported_features: dashboardState.climate.supportedFeatures,
           current_temperature: dashboardState.climate.currentTemp,
           temperature: dashboardState.climate.targetTemp,
           target_temp_low: dashboardState.climate.targetTempLow,
@@ -146,6 +188,17 @@ export function GridTestView() {
           fan_mode: dashboardState.climate.fanMode,
           fan_modes: dashboardState.climate.fanModes ?? [],
           hvac_modes: dashboardState.climate.hvacModes ?? [],
+          current_humidity: dashboardState.climate.currentHumidity,
+          humidity: dashboardState.climate.targetHumidity,
+          min_humidity: dashboardState.climate.minHumidity,
+          max_humidity: dashboardState.climate.maxHumidity,
+          target_humidity_step: dashboardState.climate.targetHumidityStep,
+          preset_mode: dashboardState.climate.presetMode,
+          preset_modes: dashboardState.climate.presetModes ?? [],
+          swing_mode: dashboardState.climate.swingMode,
+          swing_modes: dashboardState.climate.swingModes ?? [],
+          swing_horizontal_mode: dashboardState.climate.swingHorizontalMode,
+          swing_horizontal_modes: dashboardState.climate.swingHorizontalModes ?? [],
         },
       },
       'media_player.living_room_tv': {
@@ -339,6 +392,50 @@ export function GridTestView() {
         </div>
 
         <div className="space-y-4">
+          <div>
+            <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-white/70">Sensor Card Lab</h2>
+            <p className="mt-1 text-xs text-white/50">Stesso modello dati, cinque contenitori reali.</p>
+          </div>
+          <div className="flex flex-wrap items-start gap-6">
+            {SENSOR_LAB_SIZES.map((item) => {
+              const sensorWidget = buildTestWidget({
+                id: `sensor-lab-${item.id}`,
+                kind: 'sensor',
+                title: 'Umidità soggiorno',
+                entityId: 'sensor.living_room_humidity',
+                width: item.gridW,
+                height: item.gridH,
+                status: 'Tracking',
+                isOn: true,
+                value: 58,
+                unit: '%',
+              });
+              return (
+                <div key={item.id} className="space-y-2">
+                  <div style={{ width: item.width, height: item.height }}>
+                    <SensorCard
+                      widget={sensorWidget}
+                      isSelected={false}
+                      value={58}
+                      sensorHistory={[42, 46, 45, 51, 49, 54, 56, 58]}
+                      liveEntity={{
+                        state: '58',
+                        numericValue: 58,
+                        unit: '%',
+                        rawAttributes: { device_class: 'humidity' },
+                      }}
+                      isEditMode={false}
+                      onClick={() => undefined}
+                    />
+                  </div>
+                  <p className="text-[11px] text-white/48">{item.label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-4">
           <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-white/70">Dummy Layout Test</h2>
           <DashboardGrid rowUnit={96}>
             {DUMMY_WIDGETS.map((widget) => (
@@ -359,9 +456,14 @@ export function GridTestView() {
                   dashboardState={dashboardState}
                   isEditMode={false}
                   isSelected={selectedWidgetId === item.widget.id}
-                  value={item.widget.value ?? 0}
+                  value={item.widget.value}
                   onClick={() => handleWidgetCardClick(item.widget)}
                   liveEntity={liveEntities[item.widget.entityId]}
+                  switchConsumptionEntity={
+                    item.widget.kind === 'switch' && item.widget.switchConsumptionEntityId
+                      ? liveEntities[item.widget.switchConsumptionEntityId]
+                      : undefined
+                  }
                   onLightBrightnessChange={(_, value) => actions.setLampBrightness(value)}
                   onClimateTargetTempChange={(_, nextTemp) => actions.setClimateTarget(nextTemp)}
                   onClimateTargetRangeChange={(_, low, high) => actions.setClimateTargetRange(low, high)}

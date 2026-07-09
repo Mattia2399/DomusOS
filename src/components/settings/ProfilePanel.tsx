@@ -2096,11 +2096,7 @@ export function ProfilePanel({
                         <p className={settingsSubtitleClass}>Scegli come applicare il tema della dashboard.</p>
                     </div>
                     </div>
-                    <div
-                      className={`mt-3 grid grid-cols-3 rounded-full p-1 ${
-                        isLightTheme ? 'bg-white/50' : 'bg-white/10'
-                      }`}
-                    >
+                    <div className="liquid-segmented-control mt-3 grid grid-cols-3 gap-1">
                       {[
                         { id: 'auto' as const, label: 'Auto' },
                         { id: 'light' as const, label: 'Light' },
@@ -2112,12 +2108,10 @@ export function ProfilePanel({
                             key={option.id}
                             type="button"
                             onClick={() => onThemeModeChange(option.id)}
-                            className={`rounded-full px-3 py-2 text-xs font-semibold transition-all ${
+                            className={`rounded-full px-3 py-2 text-xs font-semibold transition-all active:scale-[0.96] ${
                               isSelected
-                                ? isLightTheme
-                                  ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.12)]'
-                                  : 'bg-white/88 text-slate-950 shadow-[0_6px_18px_rgba(0,0,0,0.25)]'
-                                : 'text-[color:var(--profile-sheet-muted)]'
+                                ? 'liquid-segmented-option-active'
+                                : 'liquid-segmented-option-inactive'
                             }`}
                           >
                             {option.label}
@@ -2589,6 +2583,9 @@ export function ProfilePanel({
                     {renderSettingsIcon(Eye)}
                     <div className="min-w-0 flex-1">
                       <p className={settingsTitleClass}>Ricorda token</p>
+                      <p className={settingsSubtitleClass}>
+                        Se attivo, il token resta salvato solo in questo browser.
+                      </p>
                     </div>
                     {renderAppleSwitch({
                       checked: haRememberToken,
@@ -2666,7 +2663,7 @@ export function ProfilePanel({
                 </p>
                 {!isManagedByParent && haToken.trim().length > 0 ? (
                   <div className={`mt-3 ${infoCardClass}`}>
-                    I backup rimuovono i segreti Home Assistant, ma un token manuale salvato nel browser va trattato come sensibile.
+                    I backup e la condivisione configurazione non esportano i token Home Assistant. Se abiliti "Ricorda token", trattalo comunque come un segreto locale del dispositivo.
                   </div>
                 ) : null}
                 {haErrorMessage ? <p className={`mt-2 ${errorTextClass}`}>{haErrorMessage}</p> : null}

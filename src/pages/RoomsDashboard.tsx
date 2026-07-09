@@ -4110,7 +4110,11 @@ export function RoomsDashboard({
       isEditMode={false}
       isSelected={false}
       gridBreakpoint={roomsGridBreakpoint}
-      value={widget.value ?? 0}
+      value={
+        widget.kind === 'sensor'
+          ? resolveRoomWidgetLiveEntity(widget)?.numericValue
+          : widget.value
+      }
       onClick={() => {
         const domain = widget.entityId.split('.')[0];
         if (domain === 'media_player') {
@@ -4158,6 +4162,11 @@ export function RoomsDashboard({
         }
       }}
       liveEntity={resolveRoomWidgetLiveEntity(widget)}
+      switchConsumptionEntity={
+        widget.kind === 'switch' && widget.switchConsumptionEntityId
+          ? haStates[widget.switchConsumptionEntityId] ?? haStates[widget.switchConsumptionEntityId.toLowerCase()]
+          : undefined
+      }
       onLightBrightnessChange={(nextWidget, value) => {
         void onCallService?.('light', 'turn_on', {
           entity_id: nextWidget.entityId,

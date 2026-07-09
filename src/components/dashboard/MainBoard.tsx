@@ -16,8 +16,10 @@ import { XsNotificationBell } from './XsNotificationBell';
 import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 import { RightSidebarManager } from './RightSidebarManager';
 import { GridCanvas } from './GridCanvas';
+import type { WidgetDisplayMetrics } from '../widgets/widgetDisplayVariant';
+import { createHomeAlarmMock, HOME_ALARM_MOCK_ENTITY_ID } from '../widgets/alarmMock';
 import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
-import { Menu } from 'lucide-react';
+import { Menu, Plus, X } from 'lucide-react';
 import {
   normalizeWidgetTypeLayoutOverrides,
   setActiveWidgetTypeLayoutOverrides,
@@ -55,7 +57,9 @@ import {
 } from '../../types/dashboardModels';
 import { loadDashboardLayout, saveDashboardLayout } from '../../services/dashboardStorage';
 import type {
+  DashboardResponsiveLayouts,
   DashboardGridBreakpoint,
+  WidgetLayoutOverrides,
   WidgetTypeBreakpointLayoutOverride,
   WidgetTypeLayoutOverrides,
 } from '../../types/widgetTypeLayout';
@@ -75,6 +79,7 @@ import {
   persistOAuthTokensAsAuthData,
 } from '../../services/haLive';
 import type { MockEntityState, MockEntityStateMap } from '../../types/ha';
+import { resolveSensorDisplayPrecision } from '../../utils/sensorValue';
 import {
   clearManagedDashboardStorage,
   createDashboardBackupPayload,
@@ -101,6 +106,13 @@ import {
   resolveAlarmSupportedFeatures,
 } from '../../utils/alarmUtils';
 import {
+  resolveAlarmManualCodeSubmission,
+  resolveAlarmSecurityRequirement,
+  type AlarmActionAuthOptions,
+  type AlarmCredentialKind,
+  type AlarmSecurityActionKind,
+} from '../../utils/alarmSecurityPolicy';
+import {
   clampPercent,
   COVER_FEATURE_CLOSE,
   COVER_FEATURE_OPEN,
@@ -119,7 +131,104 @@ import {
 
 const LIGHT_FEATURE_BRIGHTNESS = 1;
 const LIGHT_FEATURE_COLOR_TEMP = 2;
+const LIGHT_FEATURE_EFFECT = 4;
+const LIGHT_FEATURE_FLASH = 8;
 const LIGHT_FEATURE_COLOR = 16;
+const LIGHT_FEATURE_TRANSITION = 32;
+const LIGHT_FEATURE_WHITE = 128;
+const CLIMATE_FEATURE_TARGET_TEMPERATURE = 1;
+const CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE = 2;
+const CLIMATE_FEATURE_TARGET_HUMIDITY = 4;
+const CLIMATE_FEATURE_FAN_MODE = 8;
+const CLIMATE_FEATURE_PRESET_MODE = 16;
+const CLIMATE_FEATURE_SWING_MODE = 32;
+const CLIMATE_FEATURE_TURN_OFF = 128;
+const CLIMATE_FEATURE_TURN_ON = 256;
+const CLIMATE_FEATURE_SWING_HORIZONTAL_MODE = 512;
+const CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID = 'climate.living_room';
+const CLIMATE_LIVING_ROOM_MOCK_FEATURES =
+  CLIMATE_FEATURE_TARGET_TEMPERATURE |
+  CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE |
+  CLIMATE_FEATURE_TARGET_HUMIDITY |
+  CLIMATE_FEATURE_FAN_MODE |
+  CLIMATE_FEATURE_PRESET_MODE |
+  CLIMATE_FEATURE_SWING_MODE |
+  CLIMATE_FEATURE_TURN_OFF |
+  CLIMATE_FEATURE_TURN_ON |
+  CLIMATE_FEATURE_SWING_HORIZONTAL_MODE;
+
+function resolveMockClimateAction(mode: string) {
+  if (mode === 'heat') return 'heating';
+  if (mode === 'cool') return 'cooling';
+  if (mode === 'dry') return 'drying';
+  if (mode === 'fan_only') return 'fan';
+  if (mode === 'off') return 'off';
+  return 'idle';
+}
+
+function createLivingRoomClimateMock(): MockEntityState {
+  const hvacMode = 'heat';
+  const hvacAction = resolveMockClimateAction(hvacMode);
+  const hvacModes = ['off', 'heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'];
+  const fanModes = ['auto', 'low', 'medium', 'high', 'quiet', 'turbo'];
+  const presetModes = ['none', 'eco', 'comfort', 'away', 'sleep', 'boost'];
+  const swingModes = ['off', 'vertical', 'horizontal', 'both'];
+  const swingHorizontalModes = ['off', 'left', 'center', 'right', 'wide'];
+  return {
+    state: hvacMode,
+    stateLabel: hvacAction,
+    toggleOn: true,
+    hvacMode,
+    hvacAction,
+    hvacModes,
+    currentValue: 20.5,
+    targetValue: 22,
+    minTemp: 7,
+    maxTemp: 35,
+    targetTempStep: 0.5,
+    supportedFeatures: CLIMATE_LIVING_ROOM_MOCK_FEATURES,
+    currentHumidity: 48,
+    targetHumidity: 60,
+    minHumidity: 30,
+    maxHumidity: 80,
+    targetHumidityStep: 1,
+    fanMode: 'auto',
+    fanModes,
+    presetMode: 'comfort',
+    presetModes,
+    swingMode: 'off',
+    swingModes,
+    swingHorizontalMode: 'center',
+    swingHorizontalModes,
+    unit: '°C',
+    rawAttributes: {
+      friendly_name: 'Clima Living Room',
+      hvac_mode: hvacMode,
+      hvac_action: hvacAction,
+      hvac_modes: hvacModes,
+      current_temperature: 20.5,
+      temperature: 22,
+      min_temp: 7,
+      max_temp: 35,
+      target_temp_step: 0.5,
+      temperature_unit: '°C',
+      current_humidity: 48,
+      humidity: 60,
+      min_humidity: 30,
+      max_humidity: 80,
+      target_humidity_step: 1,
+      fan_mode: 'auto',
+      fan_modes: fanModes,
+      preset_mode: 'comfort',
+      preset_modes: presetModes,
+      swing_mode: 'off',
+      swing_modes: swingModes,
+      swing_horizontal_mode: 'center',
+      swing_horizontal_modes: swingHorizontalModes,
+      supported_features: CLIMATE_LIVING_ROOM_MOCK_FEATURES,
+    },
+  };
+}
 const MEDIA_FEATURE_PAUSE = 1;
 const MEDIA_FEATURE_SEEK = 2;
 const MEDIA_FEATURE_VOLUME_SET = 4;
@@ -207,7 +316,7 @@ const SENSOR_CONNECTION_OFF_VALUES = new Set([
   '0',
 ]);
 const SENSOR_HISTORY_WINDOW_HOURS = 24;
-const SENSOR_HISTORY_MAX_POINTS = 8;
+const SENSOR_HISTORY_MAX_POINTS = 24;
 const CAMERA_OFFLINE_STATES = new Set([
   'off',
   'offline',
@@ -248,6 +357,12 @@ const LIGHT_COLOR_MODES_WITH_BRIGHTNESS = new Set([
   'rgbw',
   'rgbww',
 ]);
+const LIGHT_COLOR_MODE_PRIORITY = ['hs', 'rgb', 'xy', 'rgbw', 'rgbww'] as const;
+type LightColorPayloadMode = (typeof LIGHT_COLOR_MODE_PRIORITY)[number];
+type LightCommandOptions = {
+  transition?: number;
+};
+type LightFlashMode = 'short' | 'long';
 const BACKUP_FILENAME_PREFIX = 'ha-dashboard-backup';
 const HA_OAUTH_CALLBACK_PARAM = 'ha_oauth_callback';
 const HA_OAUTH_SESSION_NONCE_KEY = 'ha.dashboard.oauth.nonce';
@@ -274,6 +389,10 @@ const MIN_ACTIVITY_MAX_ENTRIES = 1;
 const MAX_ACTIVITY_MAX_ENTRIES = 30;
 const CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY = '__dashboard_pending_climate_target';
 const CLIMATE_PENDING_FAN_ATTRIBUTE_KEY = '__dashboard_pending_climate_fan';
+const CLIMATE_PENDING_HUMIDITY_ATTRIBUTE_KEY = '__dashboard_pending_climate_humidity';
+const CLIMATE_PENDING_PRESET_ATTRIBUTE_KEY = '__dashboard_pending_climate_preset';
+const CLIMATE_PENDING_SWING_ATTRIBUTE_KEY = '__dashboard_pending_climate_swing';
+const CLIMATE_PENDING_SWING_HORIZONTAL_ATTRIBUTE_KEY = '__dashboard_pending_climate_swing_horizontal';
 const LIGHT_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_toggle';
 const LIGHT_BRIGHTNESS_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_light_brightness';
 const SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_switch_toggle';
@@ -536,6 +655,10 @@ type ClimatePendingState = {
   targetTempLow?: number;
   targetTempHigh?: number;
   fanMode?: string;
+  targetHumidity?: number;
+  presetMode?: string;
+  swingMode?: string;
+  swingHorizontalMode?: string;
   expiresAt: number;
 };
 
@@ -544,6 +667,10 @@ type ClimateQueuedCommand = {
   targetTempLow?: number;
   targetTempHigh?: number;
   fanMode?: string;
+  targetHumidity?: number;
+  presetMode?: string;
+  swingMode?: string;
+  swingHorizontalMode?: string;
 };
 
 type LightColorPendingState = {
@@ -588,8 +715,32 @@ type AlarmQuickAuthAction = {
   requiresCode: boolean;
   requiresBiometric: boolean;
   unlockCode: string;
+  localExtraCode: string;
+  credentialKind: AlarmCredentialKind;
   numericCodeMode: boolean;
 };
+
+function resolveAlarmSecurityActionKind(service: AlarmServiceName): AlarmSecurityActionKind {
+  if (service === 'alarm_arm_home') {
+    return 'arm_home';
+  }
+  if (service === 'alarm_arm_away') {
+    return 'arm_away';
+  }
+  if (service === 'alarm_arm_night') {
+    return 'arm_night';
+  }
+  if (service === 'alarm_arm_vacation') {
+    return 'arm_vacation';
+  }
+  if (service === 'alarm_arm_custom_bypass') {
+    return 'arm_custom_bypass';
+  }
+  if (service === 'alarm_trigger') {
+    return 'trigger';
+  }
+  return 'disarm';
+}
 
 type CoverPendingState = {
   state?: string;
@@ -1826,7 +1977,11 @@ function hasClimatePendingValues(value: ClimatePendingState | undefined) {
     Number.isFinite(value.targetTemp) ||
     Number.isFinite(value.targetTempLow) ||
     Number.isFinite(value.targetTempHigh) ||
-    normalizeLower(value.fanMode).length > 0
+    Number.isFinite(value.targetHumidity) ||
+    normalizeLower(value.fanMode).length > 0 ||
+    normalizeLower(value.presetMode).length > 0 ||
+    normalizeLower(value.swingMode).length > 0 ||
+    normalizeLower(value.swingHorizontalMode).length > 0
   );
 }
 
@@ -2353,20 +2508,23 @@ function normalizeConnectionState(value: unknown): SensorConnectionState {
   }
   const text = toTrimmedString(value);
   if (!text) {
-    return 'offline';
+    return 'unknown';
   }
   const normalized = text.toLowerCase();
-  if (normalized === 'unknown' || SENSOR_CONNECTION_OFF_VALUES.has(normalized)) {
+  if (normalized === 'unknown') {
+    return 'unknown';
+  }
+  if (SENSOR_CONNECTION_OFF_VALUES.has(normalized)) {
     return 'offline';
   }
   if (SENSOR_CONNECTION_ON_VALUES.has(normalized)) {
     return 'online';
   }
-  return 'online';
+  return 'unknown';
 }
 
 function normalizeConnectionLabel(state: SensorConnectionState): string {
-  return state === 'offline' ? 'Disconnesso' : 'Connesso';
+  return state === 'offline' ? 'Disconnesso' : state === 'online' ? 'Connesso' : 'Stato sconosciuto';
 }
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
@@ -2479,7 +2637,7 @@ function extractSensorHistoryValues(payload: unknown, entityId: string, maxPoint
     return [];
   }
 
-  const series = points.map((point) => Math.round(point.value * 10) / 10);
+  const series = points.map((point) => point.value);
   return downsampleNumberSeries(series, maxPoints);
 }
 
@@ -2779,7 +2937,7 @@ function normalizeLockState(value: string | undefined) {
     return 'unknown';
   }
   if (normalized === 'opening') {
-    return 'unlocking';
+    return 'opening';
   }
   if (normalized === 'closing') {
     return 'locking';
@@ -2803,6 +2961,9 @@ function translateLockState(state: string) {
   }
   if (state === 'unlocking') {
     return 'Sblocco...';
+  }
+  if (state === 'opening') {
+    return 'Apertura...';
   }
   if (state === 'jammed') {
     return 'Inceppata';
@@ -2943,28 +3104,183 @@ function isDemoVacuumEntity(entityId: string | undefined) {
   return value === 'vacuum.demo_robot' || value.startsWith('vacuum.demo_');
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeLightColorMode(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function readLightSupportedColorModes(entity: MockEntityState | undefined) {
+  const rawModes =
+    entity?.supportedColorModes ??
+    entity?.supported_color_modes ??
+    entity?.rawAttributes?.supported_color_modes;
+  if (!Array.isArray(rawModes)) {
+    return [];
+  }
+  return rawModes
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => normalizeLightColorMode(entry))
+    .filter((entry) => entry.length > 0);
+}
+
+function readLightEffectList(entity: MockEntityState | undefined) {
+  const rawEffects = entity?.effectList ?? entity?.effect_list ?? entity?.rawAttributes?.effect_list;
+  if (!Array.isArray(rawEffects)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  return rawEffects
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => {
+      if (!entry) {
+        return false;
+      }
+      const key = entry.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
+function hsToRgbColor(hue: number, saturation: number): [number, number, number] {
+  const h = ((Number(hue) || 0) % 360 + 360) % 360;
+  const s = clampNumber((Number(saturation) || 0) / 100, 0, 1);
+  const c = s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  let rPrime = 0;
+  let gPrime = 0;
+  let bPrime = 0;
+  if (h < 60) {
+    rPrime = c;
+    gPrime = x;
+  } else if (h < 120) {
+    rPrime = x;
+    gPrime = c;
+  } else if (h < 180) {
+    gPrime = c;
+    bPrime = x;
+  } else if (h < 240) {
+    gPrime = x;
+    bPrime = c;
+  } else if (h < 300) {
+    rPrime = x;
+    bPrime = c;
+  } else {
+    rPrime = c;
+    bPrime = x;
+  }
+  const m = 1 - c;
+  return [
+    Math.round(clampNumber((rPrime + m) * 255, 0, 255)),
+    Math.round(clampNumber((gPrime + m) * 255, 0, 255)),
+    Math.round(clampNumber((bPrime + m) * 255, 0, 255)),
+  ];
+}
+
+function rgbToXyColor(rgb: [number, number, number]): [number, number] {
+  const normalizeChannel = (channel: number) => {
+    const normalized = clampNumber(channel, 0, 255) / 255;
+    return normalized > 0.04045
+      ? ((normalized + 0.055) / 1.055) ** 2.4
+      : normalized / 12.92;
+  };
+  const red = normalizeChannel(rgb[0]);
+  const green = normalizeChannel(rgb[1]);
+  const blue = normalizeChannel(rgb[2]);
+  const x = red * 0.664511 + green * 0.154324 + blue * 0.162028;
+  const y = red * 0.283881 + green * 0.668433 + blue * 0.047685;
+  const z = red * 0.000088 + green * 0.07231 + blue * 0.986039;
+  const total = x + y + z;
+  if (total <= 0) {
+    return [0.3127, 0.329];
+  }
+  return [
+    Math.round((x / total) * 10000) / 10000,
+    Math.round((y / total) * 10000) / 10000,
+  ];
+}
+
+function buildLightColorServicePayload(mode: LightColorPayloadMode, hsColor: [number, number]) {
+  const safeHue = clampNumber(Math.round(hsColor[0]), 0, 360);
+  const safeSat = clampNumber(Math.round(hsColor[1]), 0, 100);
+  const rgbColor = hsToRgbColor(safeHue, safeSat);
+  if (mode === 'hs') {
+    return { hs_color: [safeHue, safeSat] };
+  }
+  if (mode === 'rgb') {
+    return { rgb_color: rgbColor };
+  }
+  if (mode === 'xy') {
+    return { xy_color: rgbToXyColor(rgbColor) };
+  }
+  if (mode === 'rgbw') {
+    return { rgbw_color: [...rgbColor, 0] };
+  }
+  return { rgbww_color: [...rgbColor, 0, 0] };
+}
+
+function buildLightCommandOptionsPayload(options?: LightCommandOptions) {
+  const transition = toFiniteNumber(options?.transition);
+  if (transition === undefined || transition <= 0) {
+    return {};
+  }
+  return { transition: Math.round(transition * 10) / 10 };
+}
+
+function percentToHaBrightness(value: number) {
+  return Math.round((clampNumber(value, 0, 100) / 100) * 255);
+}
+
 function resolveLightCapabilities(entity?: MockEntityState) {
   if (!entity) {
     return {
+      supportedColorModes: [...LIGHT_COLOR_MODE_PRIORITY, 'color_temp', 'brightness'],
+      colorMode: 'hs',
+      preferredColorMode: 'hs' as LightColorPayloadMode,
+      supportsOnOff: true,
       supportsBrightness: true,
       supportsColorTemp: true,
       supportsColor: true,
+      supportsHs: true,
+      supportsRgb: true,
+      supportsRgbw: true,
+      supportsRgbww: true,
+      supportsXy: true,
+      supportsWhite: true,
+      supportsEffects: true,
+      supportsFlash: true,
+      supportsTransition: true,
+      minColorTempKelvin: 2000,
+      maxColorTempKelvin: 6500,
+      activeEffect: undefined,
+      effectList: ['off', 'colorloop', 'pulse'],
     };
   }
 
-  const rawModes = entity.rawAttributes?.supported_color_modes;
-  const supportedColorModes = Array.isArray(rawModes)
-    ? rawModes
-        .filter((entry): entry is string => typeof entry === 'string')
-        .map((entry) => entry.toLowerCase())
-    : [];
+  const supportedColorModes = readLightSupportedColorModes(entity);
   const features = typeof entity.supportedFeatures === 'number' ? entity.supportedFeatures : 0;
+  const hasExplicitColorModes = supportedColorModes.length > 0;
+  const colorMode = normalizeLightColorMode(entity.colorMode ?? entity.color_mode ?? entity.rawAttributes?.color_mode);
+  const hasLegacyColorFeature = (features & LIGHT_FEATURE_COLOR) !== 0;
 
-  const supportsColor =
-    supportedColorModes.some((mode) => LIGHT_COLOR_MODES_WITH_COLOR.has(mode)) ||
-    (features & LIGHT_FEATURE_COLOR) !== 0 ||
-    Array.isArray(entity.hsColor ?? entity.hs_color) ||
+  const supportsHs =
+    supportedColorModes.includes('hs') ||
+    (!hasExplicitColorModes && hasLegacyColorFeature) ||
+    Array.isArray(entity.hsColor ?? entity.hs_color);
+  const supportsRgb =
+    supportedColorModes.includes('rgb') ||
+    (!hasExplicitColorModes && hasLegacyColorFeature) ||
     Array.isArray(entity.rgbColor ?? entity.rgb_color);
+  const supportsRgbw = supportedColorModes.includes('rgbw') || Array.isArray(entity.rgbwColor ?? entity.rgbw_color);
+  const supportsRgbww = supportedColorModes.includes('rgbww') || Array.isArray(entity.rgbwwColor ?? entity.rgbww_color);
+  const supportsXy = supportedColorModes.includes('xy') || Array.isArray(entity.xyColor ?? entity.xy_color);
+  const supportsColor = supportsHs || supportsRgb || supportsRgbw || supportsRgbww || supportsXy;
 
   const supportsColorTemp =
     supportedColorModes.includes('color_temp') ||
@@ -2974,18 +3290,148 @@ function resolveLightCapabilities(entity?: MockEntityState) {
     typeof entity.rawAttributes?.min_color_temp_kelvin === 'number' ||
     typeof entity.rawAttributes?.max_color_temp_kelvin === 'number';
 
+  const supportsWhite = supportedColorModes.includes('white') || (features & LIGHT_FEATURE_WHITE) !== 0;
   const supportsBrightness =
     supportedColorModes.some((mode) => LIGHT_COLOR_MODES_WITH_BRIGHTNESS.has(mode)) ||
     (features & LIGHT_FEATURE_BRIGHTNESS) !== 0 ||
     typeof entity.brightness === 'number' ||
     entity.rawAttributes?.brightness !== undefined ||
     supportsColor ||
-    supportsColorTemp;
+    supportsColorTemp ||
+    supportsWhite;
+  const effectList = readLightEffectList(entity);
+  const supportsEffects = effectList.length > 0 || (features & LIGHT_FEATURE_EFFECT) !== 0;
+  const supportsFlash = (features & LIGHT_FEATURE_FLASH) !== 0;
+  const supportsTransition = (features & LIGHT_FEATURE_TRANSITION) !== 0;
+  const preferredColorMode =
+    LIGHT_COLOR_MODE_PRIORITY.find((mode) => {
+      if (mode === 'hs') {
+        return supportsHs;
+      }
+      if (mode === 'rgb') {
+        return supportsRgb;
+      }
+      if (mode === 'xy') {
+        return supportsXy;
+      }
+      if (mode === 'rgbw') {
+        return supportsRgbw;
+      }
+      return supportsRgbww;
+    }) ?? null;
+  const minColorTempKelvin =
+    toFiniteNumber(entity.minColorTempKelvin) ??
+    toFiniteNumber(entity.min_color_temp_kelvin) ??
+    toFiniteNumber(entity.rawAttributes?.min_color_temp_kelvin) ??
+    2000;
+  const maxColorTempKelvin =
+    toFiniteNumber(entity.maxColorTempKelvin) ??
+    toFiniteNumber(entity.max_color_temp_kelvin) ??
+    toFiniteNumber(entity.rawAttributes?.max_color_temp_kelvin) ??
+    6500;
+  const activeEffect =
+    toTrimmedString(entity.effect) ??
+    toTrimmedString(entity.rawAttributes?.effect);
 
   return {
+    supportedColorModes,
+    colorMode,
+    preferredColorMode,
+    supportsOnOff: supportedColorModes.includes('onoff') || !hasExplicitColorModes || Boolean(entity.state),
     supportsBrightness,
     supportsColorTemp,
     supportsColor,
+    supportsHs,
+    supportsRgb,
+    supportsRgbw,
+    supportsRgbww,
+    supportsXy,
+    supportsWhite,
+    supportsEffects,
+    supportsFlash,
+    supportsTransition,
+    minColorTempKelvin: Math.min(minColorTempKelvin, maxColorTempKelvin),
+    maxColorTempKelvin: Math.max(minColorTempKelvin, maxColorTempKelvin),
+    activeEffect,
+    effectList,
+  };
+}
+
+function readClimateStringArray(entity: MockEntityState | undefined, directKey: keyof MockEntityState, rawKey: string) {
+  const directValue = entity?.[directKey];
+  if (Array.isArray(directValue)) {
+    return directValue.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+  }
+  const rawValue = entity?.rawAttributes?.[rawKey];
+  if (!Array.isArray(rawValue)) {
+    return [];
+  }
+  return rawValue.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function readClimateNumber(entity: MockEntityState | undefined, directKey: keyof MockEntityState, rawKey: string) {
+  return toFiniteNumber(entity?.[directKey]) ?? toFiniteNumber(entity?.rawAttributes?.[rawKey]);
+}
+
+function readClimateString(entity: MockEntityState | undefined, directKey: keyof MockEntityState, rawKey: string) {
+  return toTrimmedString(entity?.[directKey]) ?? toTrimmedString(entity?.rawAttributes?.[rawKey]);
+}
+
+function resolveClimateCapabilities(entity?: MockEntityState) {
+  const rawFeatures = toFiniteNumber(entity?.rawAttributes?.supported_features);
+  const supportedFeatures =
+    typeof entity?.supportedFeatures === 'number' ? entity.supportedFeatures : rawFeatures;
+  const features = supportedFeatures ?? 0;
+  const hvacModes = readClimateStringArray(entity, 'hvacModes', 'hvac_modes');
+  const fanModes = readClimateStringArray(entity, 'fanModes', 'fan_modes');
+  const presetModes = readClimateStringArray(entity, 'presetModes', 'preset_modes');
+  const swingModes = readClimateStringArray(entity, 'swingModes', 'swing_modes');
+  const swingHorizontalModes = readClimateStringArray(entity, 'swingHorizontalModes', 'swing_horizontal_modes');
+  const hasFeature = (feature: number) => (features & feature) !== 0;
+  const hasAnyTargetTemperatureData =
+    readClimateNumber(entity, 'targetValue', 'temperature') !== undefined ||
+    readClimateNumber(entity, 'minTemp', 'min_temp') !== undefined ||
+    readClimateNumber(entity, 'maxTemp', 'max_temp') !== undefined;
+  const hasAnyTargetRangeData =
+    readClimateNumber(entity, 'targetTempLow', 'target_temp_low') !== undefined ||
+    readClimateNumber(entity, 'targetTempHigh', 'target_temp_high') !== undefined;
+  const hasAnyHumidityData =
+    readClimateNumber(entity, 'targetHumidity', 'humidity') !== undefined ||
+    readClimateNumber(entity, 'currentHumidity', 'current_humidity') !== undefined;
+  const supportsTargetTemperature = hasFeature(CLIMATE_FEATURE_TARGET_TEMPERATURE) || hasAnyTargetTemperatureData;
+  const supportsTargetTemperatureRange = hasFeature(CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE) || hasAnyTargetRangeData;
+  const supportsTargetHumidity = hasFeature(CLIMATE_FEATURE_TARGET_HUMIDITY) || hasAnyHumidityData;
+  const supportsFanMode = hasFeature(CLIMATE_FEATURE_FAN_MODE) || fanModes.length > 0;
+  const supportsPresetMode = hasFeature(CLIMATE_FEATURE_PRESET_MODE) || presetModes.length > 0;
+  const supportsSwingMode = hasFeature(CLIMATE_FEATURE_SWING_MODE) || swingModes.length > 0;
+  const supportsSwingHorizontalMode =
+    hasFeature(CLIMATE_FEATURE_SWING_HORIZONTAL_MODE) || swingHorizontalModes.length > 0;
+  const supportsTurnOff = hasFeature(CLIMATE_FEATURE_TURN_OFF) || hvacModes.includes('off');
+  const supportsTurnOn = hasFeature(CLIMATE_FEATURE_TURN_ON) || hvacModes.some((mode) => mode !== 'off');
+
+  return {
+    supportedFeatures,
+    supportsTargetTemperature,
+    supportsTargetTemperatureRange,
+    supportsTargetHumidity,
+    supportsFanMode,
+    supportsPresetMode,
+    supportsSwingMode,
+    supportsSwingHorizontalMode,
+    supportsTurnOn,
+    supportsTurnOff,
+    currentHumidity: readClimateNumber(entity, 'currentHumidity', 'current_humidity'),
+    targetHumidity: readClimateNumber(entity, 'targetHumidity', 'humidity'),
+    minHumidity: readClimateNumber(entity, 'minHumidity', 'min_humidity') ?? 30,
+    maxHumidity: readClimateNumber(entity, 'maxHumidity', 'max_humidity') ?? 99,
+    targetHumidityStep: readClimateNumber(entity, 'targetHumidityStep', 'target_humidity_step') ?? 1,
+    presetMode: readClimateString(entity, 'presetMode', 'preset_mode'),
+    presetModes,
+    swingMode: readClimateString(entity, 'swingMode', 'swing_mode'),
+    swingModes,
+    swingHorizontalMode: readClimateString(entity, 'swingHorizontalMode', 'swing_horizontal_mode'),
+    swingHorizontalModes,
+    precision: readClimateNumber(entity, 'precision', 'precision'),
   };
 }
 
@@ -3040,6 +3486,8 @@ export function MainBoard() {
   const { addNotification, removeNotification } = useNotifications();
   const isHaConnected = haStatus === 'connected';
   const [climatePendingByEntity, setClimatePendingByEntity] = useState<Record<string, ClimatePendingState>>({});
+  const [livingRoomClimateMock, setLivingRoomClimateMock] = useState<MockEntityState>(createLivingRoomClimateMock);
+  const [homeAlarmMock, setHomeAlarmMock] = useState<MockEntityState>(createHomeAlarmMock);
   const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
   const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
   const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
@@ -3198,7 +3646,11 @@ export function MainBoard() {
 
   const haStatesForUi = useMemo<MockEntityStateMap>(() => {
     if (!isHaConnected) {
-      return haStates;
+      return {
+        ...haStates,
+        [CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]: livingRoomClimateMock,
+        [HOME_ALARM_MOCK_ENTITY_ID]: homeAlarmMock,
+      };
     }
 
     let nextStates: MockEntityStateMap | null = null;
@@ -3231,8 +3683,16 @@ export function MainBoard() {
       let targetTempLow = entity.targetTempLow;
       let targetTempHigh = entity.targetTempHigh;
       let fanMode = entity.fanMode;
+      let targetHumidity = entity.targetHumidity;
+      let presetMode = entity.presetMode;
+      let swingMode = entity.swingMode;
+      let swingHorizontalMode = entity.swingHorizontalMode;
       let hasTargetPending = false;
       let hasFanPending = false;
+      let hasHumidityPending = false;
+      let hasPresetPending = false;
+      let hasSwingPending = false;
+      let hasSwingHorizontalPending = false;
 
       if (Number.isFinite(pending.targetTemp)) {
         targetValue = pending.targetTemp;
@@ -3259,11 +3719,50 @@ export function MainBoard() {
         changed = true;
         hasFanPending = true;
       }
+      if (Number.isFinite(pending.targetHumidity)) {
+        targetHumidity = pending.targetHumidity;
+        rawAttributes.humidity = pending.targetHumidity;
+        changed = true;
+        hasHumidityPending = true;
+      }
+      const pendingPresetMode = normalizeLower(pending.presetMode);
+      if (pendingPresetMode) {
+        presetMode = pendingPresetMode;
+        rawAttributes.preset_mode = pendingPresetMode;
+        changed = true;
+        hasPresetPending = true;
+      }
+      const pendingSwingMode = normalizeLower(pending.swingMode);
+      if (pendingSwingMode) {
+        swingMode = pendingSwingMode;
+        rawAttributes.swing_mode = pendingSwingMode;
+        changed = true;
+        hasSwingPending = true;
+      }
+      const pendingSwingHorizontalMode = normalizeLower(pending.swingHorizontalMode);
+      if (pendingSwingHorizontalMode) {
+        swingHorizontalMode = pendingSwingHorizontalMode;
+        rawAttributes.swing_horizontal_mode = pendingSwingHorizontalMode;
+        changed = true;
+        hasSwingHorizontalPending = true;
+      }
       if (hasTargetPending) {
         rawAttributes[CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY] = true;
       }
       if (hasFanPending) {
         rawAttributes[CLIMATE_PENDING_FAN_ATTRIBUTE_KEY] = true;
+      }
+      if (hasHumidityPending) {
+        rawAttributes[CLIMATE_PENDING_HUMIDITY_ATTRIBUTE_KEY] = true;
+      }
+      if (hasPresetPending) {
+        rawAttributes[CLIMATE_PENDING_PRESET_ATTRIBUTE_KEY] = true;
+      }
+      if (hasSwingPending) {
+        rawAttributes[CLIMATE_PENDING_SWING_ATTRIBUTE_KEY] = true;
+      }
+      if (hasSwingHorizontalPending) {
+        rawAttributes[CLIMATE_PENDING_SWING_HORIZONTAL_ATTRIBUTE_KEY] = true;
       }
       if (!changed) {
         return;
@@ -3275,6 +3774,10 @@ export function MainBoard() {
         targetTempLow,
         targetTempHigh,
         fanMode,
+        targetHumidity,
+        presetMode,
+        swingMode,
+        swingHorizontalMode,
         rawAttributes,
       };
     });
@@ -3436,8 +3939,15 @@ export function MainBoard() {
       };
     });
 
+    if (!haStates[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]) {
+      ensureNextStates()[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID] = livingRoomClimateMock;
+    }
+    if (!haStates[HOME_ALARM_MOCK_ENTITY_ID]) {
+      ensureNextStates()[HOME_ALARM_MOCK_ENTITY_ID] = homeAlarmMock;
+    }
+
     return nextStates ?? haStates;
-  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, lockPendingByEntity, switchTogglePendingByEntity]);
+  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, switchTogglePendingByEntity]);
   const initialLayoutRef = useRef(loadDashboardLayout());
   const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
   const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
@@ -3446,6 +3956,12 @@ export function MainBoard() {
     setActiveWidgetTypeLayoutOverrides(normalized);
     return normalized;
   });
+  const [widgetLayoutOverrides, setWidgetLayoutOverrides] = useState<WidgetLayoutOverrides>(
+    () => initialLayoutRef.current.widgetLayoutOverrides,
+  );
+  const [responsiveLayouts, setResponsiveLayouts] = useState<DashboardResponsiveLayouts>(
+    () => initialLayoutRef.current.responsiveLayouts,
+  );
   setActiveWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides);
   const weatherConfigSection = useMemo(() => {
     const greetingWithWeather = sections.find(
@@ -3474,6 +3990,7 @@ export function MainBoard() {
   const [activeDevice, setActiveDevice] = useState<ActiveDevice | null>(null);
   const [pendingQuickAlarmAction, setPendingQuickAlarmAction] = useState<AlarmQuickAuthAction | null>(null);
   const [quickAlarmAuthCode, setQuickAlarmAuthCode] = useState('');
+  const [quickAlarmSubmissionError, setQuickAlarmSubmissionError] = useState('');
   const [quickAlarmAuthAttemptState, setQuickAlarmAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [isQuickAlarmAuthBusy, setIsQuickAlarmAuthBusy] = useState(false);
   const [isLockAuthBusy, setIsLockAuthBusy] = useState(false);
@@ -3500,6 +4017,7 @@ export function MainBoard() {
   const [isCompactViewport, setIsCompactViewport] = useState(isCompactViewportNow);
   const [activeGridBreakpoint, setActiveGridBreakpoint] = useState<DashboardGridBreakpoint>(resolveGridBreakpointNow);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
+  const [selectedWidgetDisplayMetrics, setSelectedWidgetDisplayMetrics] = useState<WidgetDisplayMetrics | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [selectedSidebarPathId, setSelectedSidebarPathId] = useState<string | null>(null);
   const [runningSceneBySectionId, setRunningSceneBySectionId] = useState<Partial<Record<string, SceneRunState>>>({});
@@ -3735,6 +4253,23 @@ export function MainBoard() {
     [widgets, selectedWidgetId],
   );
 
+  const handleWidgetDisplayMetricsChange = useCallback((metrics: WidgetDisplayMetrics) => {
+    setSelectedWidgetDisplayMetrics((current) =>
+      current?.widgetId === metrics.widgetId &&
+      current.width === metrics.width &&
+      current.height === metrics.height &&
+      current.variant === metrics.variant
+        ? current
+        : metrics,
+    );
+  }, []);
+
+  useEffect(() => {
+    setSelectedWidgetDisplayMetrics((current) =>
+      current?.widgetId === selectedWidgetId ? current : null,
+    );
+  }, [selectedWidgetId]);
+
   const selectedSection = useMemo(
     () => sections.find((section) => section.id === selectedSectionId) ?? null,
     [sections, selectedSectionId],
@@ -3918,6 +4453,21 @@ export function MainBoard() {
   };
   const resolveLightHeightRows = (widget: Widget, nextIsOn: boolean) => {
     const currentHeight = Math.max(1, Math.round(widget.layout.h));
+    const typeOverride = widgetTypeLayoutOverrides.light?.[activeGridBreakpoint];
+    const widgetOverride = widgetLayoutOverrides[widget.id]?.[activeGridBreakpoint];
+    const autoExpand = widgetOverride?.autoExpand ?? typeOverride?.autoExpand ?? true;
+    const configuredHeight = autoExpand
+      ? nextIsOn
+        ? widgetOverride?.hOn ?? widgetOverride?.h ?? typeOverride?.hOn ?? typeOverride?.h
+        : widgetOverride?.hOff ?? widgetOverride?.h ?? typeOverride?.hOff ?? typeOverride?.h
+      : widgetOverride?.h ?? widgetOverride?.hOff ?? widgetOverride?.hOn ??
+        typeOverride?.h ?? typeOverride?.hOff ?? typeOverride?.hOn;
+    if (typeof configuredHeight === 'number' && Number.isFinite(configuredHeight)) {
+      return Math.max(1, Math.round(configuredHeight));
+    }
+    if (!autoExpand) {
+      return currentHeight;
+    }
     if (nextIsOn && currentHeight <= LIGHT_WIDGET_HEIGHT_OFF) {
       return LIGHT_WIDGET_HEIGHT_ON;
     }
@@ -3926,7 +4476,7 @@ export function MainBoard() {
     }
     return currentHeight;
   };
-  const resolveLockMinimumHeightRows = () => (activeGridBreakpoint === 'xs' || activeGridBreakpoint === 'sm' ? 1 : 2);
+  const resolveLockMinimumHeightRows = () => 1;
   const toWidgetLayoutRows = (_widget: Widget, rows: number) => rows;
   const resolveWidgetMinimumLayout = (
     widget: Widget,
@@ -3951,7 +4501,11 @@ export function MainBoard() {
     });
   };
   const resolveSwitchLayout = (widget: Widget): GridItem =>
-    resolveWidgetMinimumLayout(widget, 2, 1);
+    normalizeWidgetLayout(widget, {
+      ...widget.layout,
+      w: Math.max(1, Math.round(widget.layout.w)),
+      h: Math.max(1, Math.round(widget.layout.h)),
+    });
   const resolveClimateWidth = (widget: Widget) => {
     const parentSection =
       widget.parentSectionId ? sections.find((section) => section.id === widget.parentSectionId) : undefined;
@@ -4713,6 +5267,15 @@ export function MainBoard() {
       supportsBrightness: capabilities.supportsBrightness,
       supportsColorTemp: capabilities.supportsColorTemp,
       supportsColor: capabilities.supportsColor,
+      supportsWhite: capabilities.supportsWhite,
+      supportsEffects: capabilities.supportsEffects,
+      supportsFlash: capabilities.supportsFlash,
+      supportsTransition: capabilities.supportsTransition,
+      preferredColorMode: capabilities.preferredColorMode,
+      minColorTempKelvin: capabilities.minColorTempKelvin,
+      maxColorTempKelvin: capabilities.maxColorTempKelvin,
+      effect: capabilities.activeEffect,
+      effectList: capabilities.effectList,
     };
   }, [activeWidget, haStatesForUi, isHaConnected, state.lamp]);
 
@@ -4720,7 +5283,7 @@ export function MainBoard() {
     if (activeWidget?.kind !== 'climate') {
       return state.climate;
     }
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity = haStatesForUi[activeWidget.entityId];
     if (!liveEntity) {
       return {
         ...state.climate,
@@ -4732,6 +5295,7 @@ export function MainBoard() {
       };
     }
     const rawAttributes = liveEntity?.rawAttributes;
+    const capabilities = resolveClimateCapabilities(liveEntity);
     const hvacMode =
       toTrimmedString(liveEntity?.hvacMode) ??
       toTrimmedString(rawAttributes?.hvac_mode) ??
@@ -4761,6 +5325,18 @@ export function MainBoard() {
               (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
             )
           : [];
+    const presetModes =
+      Array.isArray(liveEntity?.presetModes) && liveEntity.presetModes.length > 0
+        ? liveEntity.presetModes
+        : capabilities.presetModes;
+    const swingModes =
+      Array.isArray(liveEntity?.swingModes) && liveEntity.swingModes.length > 0
+        ? liveEntity.swingModes
+        : capabilities.swingModes;
+    const swingHorizontalModes =
+      Array.isArray(liveEntity?.swingHorizontalModes) && liveEntity.swingHorizontalModes.length > 0
+        ? liveEntity.swingHorizontalModes
+        : capabilities.swingHorizontalModes;
     const minTemp =
       toFiniteNumber(liveEntity?.minTemp) ??
       toFiniteNumber(rawAttributes?.min_temp) ??
@@ -4813,13 +5389,35 @@ export function MainBoard() {
       hvacAction,
       fanMode,
       fanModes,
+      supportedFeatures: capabilities.supportedFeatures,
+      precision: capabilities.precision,
+      currentHumidity: capabilities.currentHumidity,
+      targetHumidity: capabilities.targetHumidity,
+      minHumidity: capabilities.minHumidity,
+      maxHumidity: capabilities.maxHumidity,
+      targetHumidityStep: capabilities.targetHumidityStep,
+      presetMode: capabilities.presetMode,
+      presetModes,
+      swingMode: capabilities.swingMode,
+      swingModes,
+      swingHorizontalMode: capabilities.swingHorizontalMode,
+      swingHorizontalModes,
+      supportsTargetTemperature: capabilities.supportsTargetTemperature,
+      supportsTargetTemperatureRange: capabilities.supportsTargetTemperatureRange,
+      supportsTargetHumidity: capabilities.supportsTargetHumidity,
+      supportsFanMode: capabilities.supportsFanMode,
+      supportsPresetMode: capabilities.supportsPresetMode,
+      supportsSwingMode: capabilities.supportsSwingMode,
+      supportsSwingHorizontalMode: capabilities.supportsSwingHorizontalMode,
+      supportsTurnOn: capabilities.supportsTurnOn,
+      supportsTurnOff: capabilities.supportsTurnOff,
       temperatureUnit:
         toTrimmedString(liveEntity?.unit) ??
         toTrimmedString(rawAttributes?.temperature_unit) ??
         '',
       rawAttributes,
     };
-  }, [activeWidget, haStatesForUi, isHaConnected, state.climate]);
+  }, [activeWidget, haStatesForUi, state.climate]);
 
   const cameraPtzServiceTarget = useMemo(
     () => resolveCameraPtzServiceTarget(haServiceRegistry),
@@ -5180,6 +5778,8 @@ export function MainBoard() {
         state: 'disarmed',
         status: getAlarmStateLabel('disarmed'),
         codeArmRequired: false,
+        unlockCode: undefined as string | undefined,
+        localExtraCode: undefined as string | undefined,
         requireAuthToDisarm: false,
         activityLogLimit: DEFAULT_ACTIVITY_MAX_ENTRIES,
         activityLogHours: DEFAULT_ACTIVITY_WINDOW_HOURS,
@@ -5191,7 +5791,7 @@ export function MainBoard() {
       };
     }
 
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity = haStatesForUi[activeWidget.entityId];
     const rawAttributes = liveEntity?.rawAttributes;
     const resolvedState = normalizeAlarmState(
       toTrimmedString(liveEntity?.state) ??
@@ -5199,13 +5799,16 @@ export function MainBoard() {
         activeWidget.status,
     );
     const supportedFeatures = resolveAlarmSupportedFeatures(liveEntity);
+    const useMockAlarm =
+      activeWidget.entityId === HOME_ALARM_MOCK_ENTITY_ID &&
+      (!isHaConnected || !haStates[HOME_ALARM_MOCK_ENTITY_ID]);
     const activityLogLimit = resolveActivityMaxEntries(activeWidget.activityLogLimit);
     const activityLogHours = resolveActivityWindowHours(activeWidget.activityLogHours);
     const normalizedAlarmEntityId = normalizeLower(activeWidget.entityId);
     const activityTimeline = (alarmTimelineByEntity[activeWidget.entityId] ?? [])
       .filter((entry) => normalizeLower(entry.entityId) === normalizedAlarmEntityId)
       .slice(0, activityLogLimit);
-    const activityTimelineStatus = isHaConnected
+    const activityTimelineStatus = !useMockAlarm && isHaConnected
       ? alarmActivityStatusByEntity[activeWidget.entityId] ?? 'loading'
       : 'offline';
     const timelineActor = activityTimeline.find((entry) => entry.actor && entry.actor !== DEFAULT_ACTIVITY_ACTOR)?.actor;
@@ -5220,6 +5823,7 @@ export function MainBoard() {
       status: getAlarmStateLabel(resolvedState),
       codeArmRequired,
       unlockCode: activeWidget.alarmUnlockCode?.trim() || undefined,
+      localExtraCode: activeWidget.alarmLocalExtraCode?.trim() || undefined,
       requireAuthToDisarm: activeWidget.alarmRequireAuthToDisarm ?? false,
       activityLogLimit,
       activityLogHours,
@@ -5229,7 +5833,7 @@ export function MainBoard() {
       activityTimelineStatus,
       rawAttributes,
     };
-  }, [activeWidget, alarmActivityStatusByEntity, alarmTimelineByEntity, haCurrentUser?.name, haStatesForUi, isHaConnected]);
+  }, [activeWidget, alarmActivityStatusByEntity, alarmTimelineByEntity, haCurrentUser?.name, haStates, haStatesForUi, isHaConnected]);
 
   const contextLock = useMemo(() => {
     if (activeWidget?.kind !== 'lock') {
@@ -5243,6 +5847,7 @@ export function MainBoard() {
         activityTimeline: [] as ActivityTimelineEntry[],
         activityTimelineStatus: 'offline' as ActivityTimelineStatus,
         supportedFeatures: undefined as number | undefined,
+        batteryLevel: undefined as number | undefined,
         rawAttributes: undefined as Record<string, unknown> | undefined,
         lockCode: undefined as string | undefined,
       };
@@ -5271,6 +5876,12 @@ export function MainBoard() {
       : 'offline';
     const timelineActor = activityTimeline.find((entry) => entry.actor && entry.actor !== DEFAULT_ACTIVITY_ACTOR)?.actor;
     const changedBy = toTrimmedString(rawAttributes?.changed_by) ?? timelineActor ?? haCurrentUser?.name;
+    const batteryLevel =
+      toFiniteNumber(rawAttributes?.battery_level) ??
+      toFiniteNumber(rawAttributes?.battery) ??
+      toFiniteNumber(rawAttributes?.battery_percentage) ??
+      toFiniteNumber(rawAttributes?.battery_percent) ??
+      toFiniteNumber(rawAttributes?.battery_state_of_charge);
 
     return {
       name:
@@ -5285,6 +5896,7 @@ export function MainBoard() {
       activityTimeline,
       activityTimelineStatus,
       supportedFeatures,
+      batteryLevel,
       rawAttributes,
       lockCode: activeWidget.lockCode?.trim() || undefined,
     };
@@ -6015,9 +6627,13 @@ export function MainBoard() {
   const activeActivityMaxEntries = activeActivityTarget?.activityMaxEntries ?? DEFAULT_ACTIVITY_MAX_ENTRIES;
   const activeActivityFallbackActor = activeActivityTarget?.fallbackActor;
   const activeActivityRefreshKey = activeActivityTarget?.refreshKey;
+  const activeActivityUsesMockAlarm =
+    activeActivityKind === 'alarm' &&
+    activeActivityEntityId === HOME_ALARM_MOCK_ENTITY_ID &&
+    !haStates[HOME_ALARM_MOCK_ENTITY_ID];
 
   useEffect(() => {
-    if (!isHaConnected || !activeActivityKind || !activeActivityEntityId) {
+    if (!isHaConnected || !activeActivityKind || !activeActivityEntityId || activeActivityUsesMockAlarm) {
       return;
     }
 
@@ -6157,6 +6773,7 @@ export function MainBoard() {
     activeActivityMaxEntries,
     activeActivityRefreshKey,
     activeActivityWindowHours,
+    activeActivityUsesMockAlarm,
     activityRefreshNonce,
     callHaApi,
     haCurrentUser?.name,
@@ -6209,7 +6826,7 @@ export function MainBoard() {
           } else if (widget.kind === 'switch') {
             statusLabel = normalizeLower(liveEntity.stateLabel ?? liveEntity.state) === 'on' ? 'on' : 'off';
           } else if (widget.kind === 'sensor') {
-            value = typeof liveEntity.numericValue === 'number' ? liveEntity.numericValue : value;
+            value = typeof liveEntity.numericValue === 'number' ? liveEntity.numericValue : undefined;
             statusLabel = resolveSensorMeta(widget, liveEntity, haStatesForUi).status;
           } else if (widget.kind === 'media') {
             statusLabel = liveEntity.stateLabel ?? liveEntity.state ?? widget.status;
@@ -6583,7 +7200,25 @@ export function MainBoard() {
           toTrimmedString(liveEntity.fanMode) ??
             toTrimmedString(rawAttributes?.fan_mode),
         );
+        const liveTargetHumidity =
+          toFiniteNumber(liveEntity.targetHumidity) ??
+          toFiniteNumber(rawAttributes?.humidity);
+        const livePresetMode = normalizeLower(
+          toTrimmedString(liveEntity.presetMode) ??
+            toTrimmedString(rawAttributes?.preset_mode),
+        );
+        const liveSwingMode = normalizeLower(
+          toTrimmedString(liveEntity.swingMode) ??
+            toTrimmedString(rawAttributes?.swing_mode),
+        );
+        const liveSwingHorizontalMode = normalizeLower(
+          toTrimmedString(liveEntity.swingHorizontalMode) ??
+            toTrimmedString(rawAttributes?.swing_horizontal_mode),
+        );
         const pendingFanMode = normalizeLower(pending.fanMode);
+        const pendingPresetMode = normalizeLower(pending.presetMode);
+        const pendingSwingMode = normalizeLower(pending.swingMode);
+        const pendingSwingHorizontalMode = normalizeLower(pending.swingHorizontalMode);
 
         const targetTempReady =
           !Number.isFinite(pending.targetTemp) ||
@@ -6595,8 +7230,24 @@ export function MainBoard() {
           !Number.isFinite(pending.targetTempHigh) ||
           almostEqual(liveTargetTempHigh, pending.targetTempHigh);
         const fanModeReady = !pendingFanMode || pendingFanMode === liveFanMode;
+        const targetHumidityReady =
+          !Number.isFinite(pending.targetHumidity) ||
+          almostEqual(liveTargetHumidity, pending.targetHumidity, 0.5);
+        const presetModeReady = !pendingPresetMode || pendingPresetMode === livePresetMode;
+        const swingModeReady = !pendingSwingMode || pendingSwingMode === liveSwingMode;
+        const swingHorizontalModeReady =
+          !pendingSwingHorizontalMode || pendingSwingHorizontalMode === liveSwingHorizontalMode;
 
-        return targetTempReady && targetTempLowReady && targetTempHighReady && fanModeReady;
+        return (
+          targetTempReady &&
+          targetTempLowReady &&
+          targetTempHighReady &&
+          fanModeReady &&
+          targetHumidityReady &&
+          presetModeReady &&
+          swingModeReady &&
+          swingHorizontalModeReady
+        );
       })
       .map(([entityId]) => entityId);
 
@@ -7222,8 +7873,8 @@ export function MainBoard() {
   }, [connectHa, haStatus, haToken, haUrl, pendingStoredOAuthReconnectUrl]);
 
   useEffect(() => {
-    saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides);
-  }, [sections, widgetTypeLayoutOverrides, widgets]);
+    saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides, responsiveLayouts, widgetLayoutOverrides);
+  }, [responsiveLayouts, sections, widgetLayoutOverrides, widgetTypeLayoutOverrides, widgets]);
 
   useEffect(() => {
     setWidgets((prev) => {
@@ -7280,6 +7931,71 @@ export function MainBoard() {
       }
       return normalizeWidgetTypeLayoutOverrides(next);
     });
+  };
+
+  const updateWidgetLayoutOverride = (
+    widgetId: string,
+    breakpoint: DashboardGridBreakpoint,
+    nextOverride: WidgetTypeBreakpointLayoutOverride | null,
+  ) => {
+    setWidgetLayoutOverrides((prev) => {
+      const next: WidgetLayoutOverrides = { ...prev };
+      const currentByBreakpoint = { ...(next[widgetId] ?? {}) };
+      if (nextOverride) {
+        currentByBreakpoint[breakpoint] = nextOverride;
+      } else {
+        delete currentByBreakpoint[breakpoint];
+      }
+      if (Object.keys(currentByBreakpoint).length === 0) {
+        delete next[widgetId];
+      } else {
+        next[widgetId] = currentByBreakpoint;
+      }
+      return next;
+    });
+  };
+
+  const updateRootResponsiveLayout = (
+    breakpoint: DashboardGridBreakpoint,
+    nextLayout: GridItem[],
+  ) => {
+    const normalized = nextLayout.map((item) => normalizeRootLayout(item));
+    setResponsiveLayouts((prev) => ({
+      ...prev,
+      root: {
+        ...(prev.root ?? {}),
+        [breakpoint]: normalized,
+      },
+    }));
+  };
+
+  const updateStackResponsiveLayout = (
+    sectionId: string,
+    breakpoint: DashboardGridBreakpoint,
+    nextLayout: GridItem[],
+  ) => {
+    const section = sections.find((entry) => entry.id === sectionId);
+    const normalized = nextLayout.map((item) =>
+      section && isStackSection(section)
+        ? normalizeLayoutForStack(section, item)
+        : {
+            i: item.i,
+            x: Math.max(0, Math.round(item.x)),
+            y: Math.max(0, Math.round(item.y)),
+            w: Math.max(1, Math.round(item.w)),
+            h: Math.max(1, Math.round(item.h)),
+          },
+    );
+    setResponsiveLayouts((prev) => ({
+      ...prev,
+      stacks: {
+        ...(prev.stacks ?? {}),
+        [sectionId]: {
+          ...(prev.stacks?.[sectionId] ?? {}),
+          [breakpoint]: normalized,
+        },
+      },
+    }));
   };
 
   const updateWidgetWithAutoLayout = (id: string, updater: (widget: Widget) => Widget) => {
@@ -7706,6 +8422,37 @@ export function MainBoard() {
         fan_mode: queuedFanMode,
       });
     }
+
+    if (Number.isFinite(queued.targetHumidity)) {
+      void callHaService('climate', 'set_humidity', {
+        entity_id: entityId,
+        humidity: queued.targetHumidity,
+      });
+    }
+
+    const queuedPresetMode = normalizeLower(queued.presetMode);
+    if (queuedPresetMode) {
+      void callHaService('climate', 'set_preset_mode', {
+        entity_id: entityId,
+        preset_mode: queuedPresetMode,
+      });
+    }
+
+    const queuedSwingMode = normalizeLower(queued.swingMode);
+    if (queuedSwingMode) {
+      void callHaService('climate', 'set_swing_mode', {
+        entity_id: entityId,
+        swing_mode: queuedSwingMode,
+      });
+    }
+
+    const queuedSwingHorizontalMode = normalizeLower(queued.swingHorizontalMode);
+    if (queuedSwingHorizontalMode) {
+      void callHaService('climate', 'set_swing_horizontal_mode', {
+        entity_id: entityId,
+        swing_horizontal_mode: queuedSwingHorizontalMode,
+      });
+    }
   };
 
   const queueClimateCommandDispatch = (
@@ -7896,6 +8643,11 @@ export function MainBoard() {
         value: nextOn ? 1 : 0,
         layout: resolveSwitchLayout(current),
       }));
+      setActiveDevice((current) =>
+        current?.type === 'switch' && current.id === targetWidget.id
+          ? { ...current, status: nextOn ? 'Acceso' : 'Spento' }
+          : current,
+      );
     };
 
     const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
@@ -7908,13 +8660,17 @@ export function MainBoard() {
     if (isHaConnected && entityId) {
       setSwitchTogglePending(entityId, nextIsOn);
       applyLocalToggle(nextIsOn);
-      void callHaService('homeassistant', 'toggle', { entity_id: entityId });
+      const entityDomain = entityId.split('.')[0]?.trim() || 'homeassistant';
+      const serviceDomain = ['switch', 'input_boolean', 'fan'].includes(entityDomain)
+        ? entityDomain
+        : 'homeassistant';
+      void callHaService(serviceDomain, nextIsOn ? 'turn_on' : 'turn_off', { entity_id: entityId });
       return;
     }
     applyLocalToggle(nextIsOn);
   };
 
-  const setLightBrightness = (value: number) => {
+  const setLightBrightness = (value: number, options?: LightCommandOptions) => {
     const targetWidget = activeWidget;
     const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
     const safeValue = clamp(Math.round(value), 0, 100);
@@ -7924,7 +8680,11 @@ export function MainBoard() {
       if (safeValue <= 0) {
         void callHaService('light', 'turn_off', { entity_id: entityId });
       } else {
-        void callHaService('light', 'turn_on', { entity_id: entityId, brightness_pct: safeValue });
+        void callHaService('light', 'turn_on', {
+          entity_id: entityId,
+          brightness_pct: safeValue,
+          ...buildLightCommandOptionsPayload(options),
+        });
       }
       return;
     }
@@ -8027,13 +8787,19 @@ export function MainBoard() {
     applyLocal();
   };
 
-  const setLightColorTemp = (kelvin: number) => {
+  const setLightColorTemp = (kelvin: number, options?: LightCommandOptions) => {
     const targetWidget = activeWidget;
     const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const safeKelvin = clamp(Math.round(kelvin), 2000, 6500);
+    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const capabilities = resolveLightCapabilities(liveEntity);
+    const safeKelvin = clamp(Math.round(kelvin), capabilities.minColorTempKelvin, capabilities.maxColorTempKelvin);
     if (isHaConnected && entityId) {
       setLightTogglePending(entityId, true);
-      void callHaService('light', 'turn_on', { entity_id: entityId, color_temp_kelvin: safeKelvin });
+      void callHaService('light', 'turn_on', {
+        entity_id: entityId,
+        color_temp_kelvin: safeKelvin,
+        ...buildLightCommandOptionsPayload(options),
+      });
       return;
     }
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
@@ -8048,15 +8814,21 @@ export function MainBoard() {
     actions.setLampColorTemp(safeKelvin);
   };
 
-  const setLightHsColor = (hs: [number, number]) => {
-    const targetWidget = activeWidget;
+  const setLightHsColor = (hs: [number, number], options?: LightCommandOptions, widget?: Widget) => {
+    const targetWidget = widget?.kind === 'light' ? widget : activeWidget;
     const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
     const safeHue = clamp(Math.round(hs[0]), 0, 360);
     const safeSat = clamp(Math.round(hs[1]), 0, 100);
     if (isHaConnected && entityId) {
+      const capabilities = resolveLightCapabilities(haStatesForUi[entityId]);
+      const preferredColorMode = capabilities.preferredColorMode ?? 'hs';
       setLightTogglePending(entityId, true);
       setLightColorPending(entityId, [safeHue, safeSat]);
-      void callHaService('light', 'turn_on', { entity_id: entityId, hs_color: [safeHue, safeSat] });
+      void callHaService('light', 'turn_on', {
+        entity_id: entityId,
+        ...buildLightColorServicePayload(preferredColorMode, [safeHue, safeSat]),
+        ...buildLightCommandOptionsPayload(options),
+      });
       return;
     }
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
@@ -8071,10 +8843,93 @@ export function MainBoard() {
     actions.setLampHsColor([safeHue, safeSat]);
   };
 
+  const setLightWhite = (value: number, options?: LightCommandOptions) => {
+    const targetWidget = activeWidget;
+    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
+    const safeValue = clamp(Math.round(value), 0, 100);
+    if (isHaConnected && entityId) {
+      setLightBrightnessPending(entityId, safeValue);
+      setLightTogglePending(entityId, safeValue > 0);
+      if (safeValue <= 0) {
+        void callHaService('light', 'turn_off', { entity_id: entityId });
+        return;
+      }
+      void callHaService('light', 'turn_on', {
+        entity_id: entityId,
+        white: percentToHaBrightness(safeValue),
+        ...buildLightCommandOptionsPayload(options),
+      });
+      return;
+    }
+    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
+      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
+        ...current,
+        isOn: safeValue > 0,
+        status: safeValue > 0 ? 'Opening' : 'Closed',
+        value: safeValue,
+        layout: resolveLightLayoutForState(current, safeValue > 0),
+      }));
+      return;
+    }
+    actions.setLampBrightness(safeValue);
+  };
+
+  const setLightEffect = (effect: string, options?: LightCommandOptions) => {
+    const targetWidget = activeWidget;
+    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
+    const safeEffect = effect.trim();
+    if (!safeEffect) {
+      return;
+    }
+    if (isHaConnected && entityId) {
+      setLightTogglePending(entityId, true);
+      void callHaService('light', 'turn_on', {
+        entity_id: entityId,
+        effect: safeEffect,
+        ...buildLightCommandOptionsPayload(options),
+      });
+      return;
+    }
+    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
+      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
+        ...current,
+        isOn: true,
+        status: 'Opening',
+        layout: resolveLightLayoutForState(current, true),
+      }));
+    }
+  };
+
+  const flashLight = (mode: LightFlashMode) => {
+    const targetWidget = activeWidget;
+    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
+    if (isHaConnected && entityId) {
+      void callHaService('light', 'turn_on', { entity_id: entityId, flash: mode });
+    }
+  };
+
+  const updateLivingRoomClimateMock = (
+    patch: Partial<MockEntityState>,
+    rawPatch: Record<string, unknown> = {},
+  ) => {
+    setLivingRoomClimateMock((current) => ({
+      ...current,
+      ...patch,
+      rawAttributes: {
+        ...(current.rawAttributes ?? {}),
+        ...rawPatch,
+      },
+    }));
+  };
+
+  const isLivingRoomClimateMock = (widget: Widget | undefined) =>
+    widget?.entityId === CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID &&
+    !haStates[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID];
+
   const resolveClimateTargetContext = (widget?: Widget) => {
     const targetWidget = widget?.kind === 'climate' ? widget : activeWidget?.kind === 'climate' ? activeWidget : undefined;
     const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const liveEntity = entityId ? haStatesForUi[entityId] : undefined;
     const rawAttributes = liveEntity?.rawAttributes;
     const minTemp =
       toFiniteNumber(liveEntity?.minTemp) ??
@@ -8119,8 +8974,31 @@ export function MainBoard() {
       return;
     }
 
-    if (isHaConnected && entityId) {
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
       void callHaService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: normalizedMode });
+      return;
+    }
+
+    if (isLivingRoomClimateMock(targetWidget)) {
+      const hvacAction = resolveMockClimateAction(normalizedMode);
+      const usesRange = normalizedMode === 'heat_cool' || normalizedMode === 'auto';
+      updateLivingRoomClimateMock(
+        {
+          state: normalizedMode,
+          stateLabel: hvacAction,
+          toggleOn: normalizedMode !== 'off',
+          hvacMode: normalizedMode,
+          hvacAction,
+          targetTempLow: usesRange ? liveEntity?.targetTempLow ?? 20 : undefined,
+          targetTempHigh: usesRange ? liveEntity?.targetTempHigh ?? 24 : undefined,
+        },
+        {
+          hvac_mode: normalizedMode,
+          hvac_action: hvacAction,
+          target_temp_low: usesRange ? liveEntity?.targetTempLow ?? 20 : undefined,
+          target_temp_high: usesRange ? liveEntity?.targetTempHigh ?? 24 : undefined,
+        },
+      );
       return;
     }
 
@@ -8146,9 +9024,13 @@ export function MainBoard() {
     if (!normalizedFan) {
       return;
     }
-    if (isHaConnected && entityId) {
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
       upsertClimatePending(entityId, { fanMode: normalizedFan });
       queueClimateCommandDispatch(entityId, { fanMode: normalizedFan });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock({ fanMode: normalizedFan }, { fan_mode: normalizedFan });
       return;
     }
     if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
@@ -8161,11 +9043,143 @@ export function MainBoard() {
     actions.setClimateFanMode(normalizedFan);
   };
 
+  const setClimateTargetHumidity = (nextValue: number, widget?: Widget) => {
+    const { targetWidget, entityId, liveEntity } = resolveClimateTargetContext(widget);
+    const capabilities = resolveClimateCapabilities(liveEntity);
+    const safeStep = capabilities.targetHumidityStep > 0 ? capabilities.targetHumidityStep : 1;
+    const safeMin = capabilities.minHumidity;
+    const safeMax = capabilities.maxHumidity;
+    const safeHumidity = clamp(Math.round(nextValue / safeStep) * safeStep, safeMin, safeMax);
+
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
+      upsertClimatePending(entityId, { targetHumidity: safeHumidity });
+      queueClimateCommandDispatch(entityId, { targetHumidity: safeHumidity });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock(
+        { targetHumidity: safeHumidity },
+        { humidity: safeHumidity },
+      );
+      return;
+    }
+    if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        status: `${safeHumidity}% humidity`,
+      }));
+      return;
+    }
+    actions.setClimateTargetHumidity(safeHumidity);
+  };
+
+  const setClimatePresetMode = (nextPresetMode: string, widget?: Widget) => {
+    const { targetWidget, entityId } = resolveClimateTargetContext(widget);
+    const normalizedPreset = nextPresetMode.trim().toLowerCase();
+    if (!normalizedPreset) {
+      return;
+    }
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
+      upsertClimatePending(entityId, { presetMode: normalizedPreset });
+      queueClimateCommandDispatch(entityId, { presetMode: normalizedPreset });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock({ presetMode: normalizedPreset }, { preset_mode: normalizedPreset });
+      return;
+    }
+    if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        status: normalizedPreset,
+      }));
+      return;
+    }
+    actions.setClimatePresetMode(normalizedPreset);
+  };
+
+  const setClimateSwingMode = (nextSwingMode: string, widget?: Widget) => {
+    const { targetWidget, entityId } = resolveClimateTargetContext(widget);
+    const normalizedSwing = nextSwingMode.trim().toLowerCase();
+    if (!normalizedSwing) {
+      return;
+    }
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
+      upsertClimatePending(entityId, { swingMode: normalizedSwing });
+      queueClimateCommandDispatch(entityId, { swingMode: normalizedSwing });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock({ swingMode: normalizedSwing }, { swing_mode: normalizedSwing });
+      return;
+    }
+    if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        status: normalizedSwing,
+      }));
+      return;
+    }
+    actions.setClimateSwingMode(normalizedSwing);
+  };
+
+  const setClimateSwingHorizontalMode = (nextSwingHorizontalMode: string, widget?: Widget) => {
+    const { targetWidget, entityId } = resolveClimateTargetContext(widget);
+    const normalizedSwingHorizontal = nextSwingHorizontalMode.trim().toLowerCase();
+    if (!normalizedSwingHorizontal) {
+      return;
+    }
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
+      upsertClimatePending(entityId, { swingHorizontalMode: normalizedSwingHorizontal });
+      queueClimateCommandDispatch(entityId, { swingHorizontalMode: normalizedSwingHorizontal });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock(
+        { swingHorizontalMode: normalizedSwingHorizontal },
+        { swing_horizontal_mode: normalizedSwingHorizontal },
+      );
+      return;
+    }
+    if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        status: normalizedSwingHorizontal,
+      }));
+      return;
+    }
+    actions.setClimateSwingHorizontalMode(normalizedSwingHorizontal);
+  };
+
   const toggleClimatePower = (widget?: Widget) => {
     const { targetWidget, entityId, liveEntity, isOn } = resolveClimateTargetContext(widget);
-    if (isHaConnected && entityId) {
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
+      const capabilities = resolveClimateCapabilities(liveEntity);
+      if (isOn && capabilities.supportsTurnOff) {
+        void callHaService('climate', 'turn_off', { entity_id: entityId });
+        return;
+      }
+      if (!isOn && capabilities.supportsTurnOn) {
+        void callHaService('climate', 'turn_on', { entity_id: entityId });
+        return;
+      }
       const nextMode = isOn ? 'off' : resolvePreferredHvacMode(liveEntity);
       void callHaService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: nextMode });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      const nextMode = isOn ? 'off' : resolvePreferredHvacMode(liveEntity);
+      const hvacAction = resolveMockClimateAction(nextMode);
+      updateLivingRoomClimateMock(
+        {
+          state: nextMode,
+          stateLabel: hvacAction,
+          toggleOn: nextMode !== 'off',
+          hvacMode: nextMode,
+          hvacAction,
+        },
+        { hvac_mode: nextMode, hvac_action: hvacAction },
+      );
       return;
     }
     if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
@@ -8186,7 +9200,7 @@ export function MainBoard() {
     const safeMax = maxTemp ?? Number.POSITIVE_INFINITY;
     const safeTarget = clamp(Math.round(nextValue / safeStep) * safeStep, safeMin, safeMax);
 
-    if (isHaConnected && entityId) {
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
       upsertClimatePending(entityId, {
         targetTemp: safeTarget,
         targetTempLow: undefined,
@@ -8197,6 +9211,21 @@ export function MainBoard() {
         targetTempLow: undefined,
         targetTempHigh: undefined,
       });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      updateLivingRoomClimateMock(
+        {
+          targetValue: safeTarget,
+          targetTempLow: undefined,
+          targetTempHigh: undefined,
+        },
+        {
+          temperature: safeTarget,
+          target_temp_low: undefined,
+          target_temp_high: undefined,
+        },
+      );
       return;
     }
     if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
@@ -8219,7 +9248,7 @@ export function MainBoard() {
     const low = Math.min(safeLow, safeHigh);
     const high = Math.max(safeLow, safeHigh);
 
-    if (isHaConnected && entityId) {
+    if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
       upsertClimatePending(entityId, {
         targetTemp: Math.round(((low + high) / 2) * 10) / 10,
         targetTempLow: low,
@@ -8230,6 +9259,22 @@ export function MainBoard() {
         targetTempLow: low,
         targetTempHigh: high,
       });
+      return;
+    }
+    if (isLivingRoomClimateMock(targetWidget)) {
+      const midpoint = Math.round(((low + high) / 2) * 10) / 10;
+      updateLivingRoomClimateMock(
+        {
+          targetValue: midpoint,
+          targetTempLow: low,
+          targetTempHigh: high,
+        },
+        {
+          temperature: midpoint,
+          target_temp_low: low,
+          target_temp_high: high,
+        },
+      );
       return;
     }
     if (targetWidget?.kind === 'climate' && targetWidget.id !== 'climate.air_conditioner') {
@@ -8272,14 +9317,29 @@ export function MainBoard() {
     setClimateTargetTemp(currentValue);
   };
 
+  const updateHomeAlarmMock = (nextState: string) => {
+    setHomeAlarmMock((current) => ({
+      ...current,
+      state: nextState,
+      stateLabel: nextState,
+      toggleOn: isAlarmArmedState(nextState),
+      rawAttributes: {
+        ...(current.rawAttributes ?? {}),
+        changed_by: 'Dashboard Demo',
+      },
+    }));
+  };
+
+  const isHomeAlarmMock = (widget: Widget | undefined) =>
+    widget?.entityId === HOME_ALARM_MOCK_ENTITY_ID &&
+    (!isHaConnected || !haStates[HOME_ALARM_MOCK_ENTITY_ID]);
+
   const resolveAlarmTargetContext = (widget?: Widget) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
     const entityId = targetWidget?.entityId;
-    const defaultCode = targetWidget?.alarmUnlockCode?.trim() || undefined;
     return {
       targetWidget,
       entityId,
-      defaultCode,
     };
   };
 
@@ -8287,25 +9347,33 @@ export function MainBoard() {
     if (widget.kind !== 'alarm') {
       return null;
     }
-    const liveEntity = widget.entityId && isHaConnected ? haStatesForUi[widget.entityId] : undefined;
+    const liveEntity = widget.entityId ? haStatesForUi[widget.entityId] : undefined;
     const rawAttributes = liveEntity?.rawAttributes;
     const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
     const unlockCode = widget.alarmUnlockCode?.trim() ?? '';
-    const canAuthorizeStoredCodeWithBiometric = unlockCode.length > 0;
+    const localExtraCode = widget.alarmLocalExtraCode?.trim() ?? '';
     const codeFormat = typeof rawAttributes?.code_format === 'string'
       ? rawAttributes.code_format.toLowerCase()
       : undefined;
+    const securityRequirement = resolveAlarmSecurityRequirement({
+      action: resolveAlarmSecurityActionKind(service),
+      codeArmRequired,
+      codeFormat,
+      storedHaPinConfigured: unlockCode.length > 0,
+      localExtraPinConfigured: localExtraCode.length > 0,
+      deviceAuthEnabled: widget.alarmRequireAuthToDisarm ?? false,
+    });
 
     return {
       widget,
       service,
       state: resolveAlarmNextState(service),
-      requiresCode: codeArmRequired || unlockCode.length > 0,
-      requiresBiometric:
-        canAuthorizeStoredCodeWithBiometric ||
-        (service === 'alarm_disarm' && (widget.alarmRequireAuthToDisarm ?? false)),
+      requiresCode: securityRequirement.needsCodeInput,
+      requiresBiometric: securityRequirement.allowsDeviceAuth,
       unlockCode,
-      numericCodeMode: codeFormat !== 'text',
+      localExtraCode,
+      credentialKind: securityRequirement.credentialKind,
+      numericCodeMode: securityRequirement.codeFormat !== 'text',
     };
   };
 
@@ -8314,56 +9382,22 @@ export function MainBoard() {
     if (!quickAction) {
       return false;
     }
-    if (quickAction.requiresBiometric) {
-      const available = await deviceAuth.isBiometricAvailable();
-      if (available && deviceAuth.isEnrolled) {
-        const verified = await deviceAuth.authenticate(`Allarme ${getAlarmStateLabel(quickAction.state)}`);
-        if (!verified) {
-          appendSecurityAuditEvent({
-            tone: 'warning',
-            message: `Verifica biometrica allarme non riuscita: ${getAlarmStateLabel(quickAction.state)}.`,
-            context: quickAction.widget.entityId || quickAction.widget.title,
-          });
-          return false;
-        }
-        const code = quickAction.requiresCode && quickAction.unlockCode ? quickAction.unlockCode : undefined;
-        appendSecurityAuditEvent({
-          tone: 'success',
-          message: `Comando allarme autorizzato con biometria: ${getAlarmStateLabel(quickAction.state)}.`,
-          context: quickAction.widget.entityId || quickAction.widget.title,
-        });
-        return callProtectedAlarmAction(service, code, widget);
-      }
-      if (!(quickAction.requiresCode && quickAction.unlockCode)) {
-        addNotification(
-          'warning',
-          available
-            ? 'Configura una passkey da Profilo > Sicurezza oppure un codice locale dashboard per usare il fallback.'
-            : 'Biometria non disponibile su questo browser o dispositivo. Azione bloccata per sicurezza.',
-        );
-        appendSecurityAuditEvent({
-          tone: 'warning',
-          message: `Comando allarme bloccato: biometria richiesta non disponibile per ${getAlarmStateLabel(quickAction.state)}.`,
-          context: quickAction.widget.entityId || quickAction.widget.title,
-        });
-        return false;
-      }
-    }
-    if (quickAction.requiresCode) {
+    if (quickAction.requiresBiometric || quickAction.requiresCode) {
       setPendingQuickAlarmAction(quickAction);
       setQuickAlarmAuthCode('');
-      return false;
-    }
-    if (quickAction.requiresBiometric) {
-      addNotification('warning', 'Autenticazione dispositivo non disponibile. Configura un codice per usare il fallback PIN.');
+      setQuickAlarmSubmissionError('');
       return false;
     }
     return callProtectedAlarmAction(service, undefined, widget);
   };
 
   const callAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
-    const { targetWidget, entityId, defaultCode } = resolveAlarmTargetContext(widget);
-    const actionCode = code?.trim() || defaultCode;
+    const { targetWidget, entityId } = resolveAlarmTargetContext(widget);
+    const actionCode = code?.trim();
+    if (isHomeAlarmMock(targetWidget)) {
+      updateHomeAlarmMock(resolveAlarmNextState(service));
+      return true;
+    }
     if (isHaConnected && entityId) {
       const payload: Record<string, unknown> = { entity_id: entityId };
       if (actionCode) {
@@ -8435,17 +9469,33 @@ export function MainBoard() {
     }
   };
 
-  const callProtectedAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
+  const authorizeAlarmDeviceAuth = async (label: string) => {
+    if (isLockAuthBusy) {
+      return false;
+    }
+
+    const available = await deviceAuth.isBiometricAvailable();
+    if (!available || !deviceAuth.isEnrolled) {
+      return false;
+    }
+
+    setIsLockAuthBusy(true);
+    try {
+      return await deviceAuth.authenticate(`Allarme ${label}`);
+    } finally {
+      setIsLockAuthBusy(false);
+    }
+  };
+
+  const callProtectedAlarmAction = (
+    service: AlarmServiceName,
+    code?: string,
+    widget?: Widget,
+    options?: AlarmActionAuthOptions,
+  ) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
     if (service === 'alarm_disarm' && targetWidget?.alarmRequireAuthToDisarm) {
-      const fallbackCode = targetWidget.alarmUnlockCode?.trim();
-      const providedCode = code?.trim();
-      if (fallbackCode && providedCode === fallbackCode) {
-        appendSecurityAuditEvent({
-          tone: 'success',
-          message: 'Fallback codice locale allarme verificato.',
-          context: targetWidget.entityId || targetWidget.title,
-        });
+      if (options?.deviceAuthVerified) {
         return callAlarmAction(service, code, widget);
       }
       return requestAuthenticatedAlarmAction(service, targetWidget, code);
@@ -8459,6 +9509,7 @@ export function MainBoard() {
     }
     setPendingQuickAlarmAction(null);
     setQuickAlarmAuthCode('');
+    setQuickAlarmSubmissionError('');
   };
 
   const confirmQuickAlarmAuth = async (useBiometric = false) => {
@@ -8471,39 +9522,61 @@ export function MainBoard() {
     if (!useBiometric && rateLimitStatus.isLocked) {
       appendSecurityAuditEvent({
         tone: 'warning',
-        message: 'Fallback codice locale allarme bloccato temporaneamente.',
+        message: 'PIN allarme bloccato temporaneamente.',
         context: quickAction.widget.entityId || quickAction.widget.title,
       });
       return;
     }
 
-    const trimmedCode = quickAlarmAuthCode.trim();
-    const needsManualCode = quickAction.requiresCode && (!useBiometric || !quickAction.unlockCode);
+    const needsManualCode = quickAction.requiresCode && !useBiometric;
+    const manualCodeSubmission = resolveAlarmManualCodeSubmission({
+      inputCode: quickAlarmAuthCode,
+      localExtraCode: quickAction.localExtraCode,
+      requiresCode: needsManualCode,
+    });
     if (needsManualCode) {
-      if (!trimmedCode) {
+      if (manualCodeSubmission.ok === false && manualCodeSubmission.reason === 'missing') {
+        setQuickAlarmSubmissionError(`Inserisci ${quickAction.credentialKind === 'combined_code' ? 'pin allarme + extra' : 'pin allarme'} per confermare.`);
         return;
       }
-      if (quickAction.unlockCode && trimmedCode !== quickAction.unlockCode) {
+      if (manualCodeSubmission.ok === false) {
+        setQuickAlarmSubmissionError('Impossibile autorizzare il comando.');
         setQuickAlarmAuthAttemptState(recordAuthFailure(quickAlarmAuthAttemptState));
         appendSecurityAuditEvent({
           tone: 'warning',
-          message: 'Tentativo codice locale allarme non valido.',
+          message: 'Tentativo PIN allarme non valido.',
           context: quickAction.widget.entityId || quickAction.widget.title,
         });
         return;
       }
     }
+    setQuickAlarmSubmissionError('');
 
     setIsQuickAlarmAuthBusy(true);
     try {
-      const code = needsManualCode ? trimmedCode : undefined;
-      const didRun = useBiometric
-        ? await requestAuthenticatedAlarmAction(quickAction.service, quickAction.widget, code)
-        : await callProtectedAlarmAction(
-            quickAction.service,
-            code,
-            quickAction.widget,
-          );
+      const manualCode = manualCodeSubmission.ok ? manualCodeSubmission.haCode : undefined;
+      let didRun: boolean | void;
+      if (useBiometric) {
+        const verified = await authorizeAlarmDeviceAuth(getAlarmStateLabel(quickAction.state));
+        if (!verified) {
+          return false;
+        }
+        if (quickAction.requiresCode && !quickAction.unlockCode) {
+          return false;
+        }
+        didRun = await callProtectedAlarmAction(
+          quickAction.service,
+          quickAction.requiresCode ? quickAction.unlockCode : undefined,
+          quickAction.widget,
+          { deviceAuthVerified: true },
+        );
+      } else {
+        didRun = await callProtectedAlarmAction(
+          quickAction.service,
+          manualCode,
+          quickAction.widget,
+        );
+      }
       if (didRun === false) {
         return;
       }
@@ -8511,43 +9584,45 @@ export function MainBoard() {
       if (needsManualCode) {
         appendSecurityAuditEvent({
           tone: 'success',
-          message: 'Fallback codice locale allarme verificato.',
+          message: 'PIN allarme verificato.',
           context: quickAction.widget.entityId || quickAction.widget.title,
         });
       }
       setPendingQuickAlarmAction(null);
       setQuickAlarmAuthCode('');
+      setQuickAlarmSubmissionError('');
+      return true;
     } finally {
       setIsQuickAlarmAuthBusy(false);
     }
   };
 
-  const disarmAlarm = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_disarm', code, widget);
+  const disarmAlarm = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_disarm', code, widget, options);
   };
 
-  const armAlarmHome = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_arm_home', code, widget);
+  const armAlarmHome = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_arm_home', code, widget, options);
   };
 
-  const armAlarmAway = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_arm_away', code, widget);
+  const armAlarmAway = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_arm_away', code, widget, options);
   };
 
-  const armAlarmNight = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_arm_night', code, widget);
+  const armAlarmNight = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_arm_night', code, widget, options);
   };
 
-  const armAlarmVacation = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_arm_vacation', code, widget);
+  const armAlarmVacation = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_arm_vacation', code, widget, options);
   };
 
-  const armAlarmCustomBypass = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_arm_custom_bypass', code, widget);
+  const armAlarmCustomBypass = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_arm_custom_bypass', code, widget, options);
   };
 
-  const triggerAlarm = (code?: string, widget?: Widget) => {
-    return callProtectedAlarmAction('alarm_trigger', code, widget);
+  const triggerAlarm = (code?: string, widget?: Widget, options?: AlarmActionAuthOptions) => {
+    return callProtectedAlarmAction('alarm_trigger', code, widget, options);
   };
 
   const resolveAlarmArmServiceByMode = (
@@ -8572,8 +9647,9 @@ export function MainBoard() {
     mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass',
     code?: string,
     widget?: Widget,
+    options?: AlarmActionAuthOptions,
   ) => {
-    return callProtectedAlarmAction(resolveAlarmArmServiceByMode(mode), code, widget);
+    return callProtectedAlarmAction(resolveAlarmArmServiceByMode(mode), code, widget, options);
   };
 
   const resolveLockTargetContext = (widget?: Widget) => {
@@ -8701,8 +9777,7 @@ export function MainBoard() {
       typeof liveEntity?.supportedFeatures === 'number'
         ? liveEntity.supportedFeatures
         : toFiniteNumber(rawAttributes?.supported_features);
-    const supportsOpen =
-      supportedFeatures === undefined || supportedFeatures === 0 || (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
+    const supportsOpen = typeof supportedFeatures === 'number' && (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
 
     if (stateValue === 'open' && supportsOpen) {
       lockDoor(undefined, widget);
@@ -9783,6 +10858,10 @@ export function MainBoard() {
               .map((microWidget) => microWidget.entity.trim())
               .filter((entityId) => entityId.length > 0),
           ),
+          ...widgets
+            .filter((widget) => widget.kind === 'switch')
+            .map((widget) => widget.switchConsumptionEntityId?.trim() ?? '')
+            .filter((entityId) => entityId.length > 0),
           ...serverPerformanceHistoryEntityIds,
         ],
       ),
@@ -9861,17 +10940,20 @@ export function MainBoard() {
         microWidgets,
         status: sensorMeta.status,
         sensorValue:
-          typeof liveEntity?.numericValue === 'number'
+          typeof liveEntity?.numericValue === 'number' && Number.isFinite(liveEntity.numericValue)
             ? liveEntity.numericValue
-            : widget.entityId === 'sensor.nest_wifi_download'
-              ? state.wifiDownloadMbps
-              : widget.value ?? 48,
-        sensorUnit: liveEntity?.unit ?? widget.unit ?? '%',
+            : undefined,
+        sensorUnit: liveEntity?.unit ?? widget.unit,
         sensorEntityId: widget.entityId,
         sensorDeviceClass:
           typeof liveEntity?.rawAttributes?.device_class === 'string'
             ? liveEntity.rawAttributes.device_class
             : undefined,
+        sensorDisplayPrecision: resolveSensorDisplayPrecision(
+          widget.sensorDisplayPrecision,
+          liveEntity?.rawAttributes,
+          liveEntity?.unit ?? widget.unit,
+        ),
         sensorHistory,
         sensorBattery: sensorMeta.battery,
         sensorConnection: sensorMeta.connection,
@@ -9903,6 +10985,36 @@ export function MainBoard() {
       toggleLightEntity(widget);
     }
 
+    if (widget.kind === 'switch') {
+      const rawAttributes = liveEntity?.rawAttributes;
+      const stateValue = normalizeLower(
+        typeof liveEntity?.toggleOn === 'boolean'
+          ? liveEntity.toggleOn
+            ? 'on'
+            : 'off'
+          : liveEntity?.stateLabel ?? liveEntity?.state ?? widget.status,
+      );
+      setActiveDevice({
+        id: widget.id,
+        type: 'switch',
+        name:
+          widget.title ||
+          toTrimmedString(rawAttributes?.friendly_name) ||
+          'Switch',
+        microWidgets,
+        status:
+          stateValue === 'on'
+            ? 'Acceso'
+            : stateValue === 'off'
+              ? 'Spento'
+              : stateValue === 'unavailable'
+                ? 'Non disponibile'
+                : 'Stato sconosciuto',
+        switchEntityId: widget.entityId,
+        switchConsumptionEntityId: widget.switchConsumptionEntityId,
+      });
+      return;
+    }
     if (widget.kind === 'alarm') {
       const rawAttributes = liveEntity?.rawAttributes;
       const supportedFeatures = resolveAlarmSupportedFeatures(liveEntity);
@@ -9970,8 +11082,7 @@ export function MainBoard() {
         typeof liveEntity?.supportedFeatures === 'number'
           ? liveEntity.supportedFeatures
           : toFiniteNumber(rawAttributes?.supported_features);
-      const supportsOpen =
-        supportedFeatures === undefined || supportedFeatures === 0 || (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
+      const supportsOpen = typeof supportedFeatures === 'number' && (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
 
       setActiveDevice({
         id: widget.id,
@@ -10418,7 +11529,7 @@ export function MainBoard() {
               scenes: ['music', 'going-out', 'night', 'movie'],
               scenesShowBackground: true,
               scenesShowBorder: true,
-              title: 'Scenes',
+              title: 'Scenari',
             }
           : {}),
         ...(kind === 'stack-vertical'
@@ -10659,7 +11770,11 @@ export function MainBoard() {
       return;
     }
     if (editConfirm === 'exit') {
-      saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides);
+      saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides, responsiveLayouts, widgetLayoutOverrides);
+      setIsCatalogOpen(false);
+      setSelectedWidgetId(null);
+      setSelectedSectionId(null);
+      setSelectedSidebarPathId(null);
     }
     setIsEditMode((prev) => !prev);
     setEditConfirm(null);
@@ -10793,9 +11908,7 @@ export function MainBoard() {
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView && !isSettingsView;
   const shouldShowMobileSidebarShell =
     !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView && !isProfileOpen;
-  const shouldApplyXsShellBottomInset =
-    !isImmersiveView && isXsViewport && !isDashboardCanvasView;
-  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isCatalogOpen && !isProfileOpen;
+  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isEditMode && !isCatalogOpen && !isProfileOpen;
 
   useEffect(() => {
     if (!shouldShowMobileSidebarShell) {
@@ -10843,24 +11956,13 @@ export function MainBoard() {
     }
   };
   const quickAlarmRequiresCode = Boolean(pendingQuickAlarmAction?.requiresCode);
-  const quickAlarmCodeTypeLabel = pendingQuickAlarmAction?.numericCodeMode === false ? 'Codice' : 'PIN';
-  const trimmedQuickAlarmAuthCode = quickAlarmAuthCode.trim();
+  const quickAlarmCodeTypeLabel =
+    pendingQuickAlarmAction?.credentialKind === 'combined_code'
+      ? 'PIN allarme + extra'
+      : 'PIN allarme';
   const quickAlarmRateLimitStatus = getAuthRateLimitStatus(quickAlarmAuthAttemptState);
   const quickAlarmRateLimitMessage = formatAuthRateLimitMessage(quickAlarmRateLimitStatus);
-  const quickAlarmCodeMissing =
-    quickAlarmRequiresCode &&
-    trimmedQuickAlarmAuthCode.length === 0;
-  const quickAlarmCodeMismatch =
-    quickAlarmRequiresCode &&
-    Boolean(pendingQuickAlarmAction?.unlockCode) &&
-    trimmedQuickAlarmAuthCode.length > 0 &&
-    trimmedQuickAlarmAuthCode !== pendingQuickAlarmAction?.unlockCode;
-  const quickAlarmAuthError = quickAlarmRateLimitMessage
-    || (quickAlarmCodeMissing
-      ? `Inserisci ${quickAlarmCodeTypeLabel.toLowerCase()} locale per confermare.`
-      : quickAlarmCodeMismatch
-        ? `${quickAlarmCodeTypeLabel} locale non valido.`
-        : '');
+  const quickAlarmAuthError = quickAlarmRateLimitMessage || quickAlarmSubmissionError;
 
   return (
     <div
@@ -10868,10 +11970,6 @@ export function MainBoard() {
         isImmersiveView
           ? 'p-0 gap-0'
           : 'py-1.5 px-0.5 sm:p-2 md:p-2.5 lg:p-4 xl:p-5 gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6'
-      } ${
-        shouldApplyXsShellBottomInset
-          ? 'pb-[calc(env(safe-area-inset-bottom)+5.9rem)]'
-          : ''
       } ${
         shouldShowMobileSidebarShell
           ? '!pt-[calc(env(safe-area-inset-top)+4rem)]'
@@ -10887,16 +11985,39 @@ export function MainBoard() {
       {shouldShowMobileSidebarShell ? (
         <>
           <div className="fixed inset-x-0 top-0 z-[174] flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.65rem)] md:hidden">
-            <button
-              type="button"
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
-              aria-label="Apri menu laterale"
-              aria-expanded={isMobileSidebarOpen}
-            >
-              <Menu size={20} />
-            </button>
-            <XsNotificationBell />
+            {isEditMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsCatalogOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  aria-label="Apri catalogo componenti"
+                >
+                  <Plus size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={requestToggleEditMode}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  aria-label="Esci dalla modalita modifica"
+                >
+                  <X size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  aria-label="Apri menu laterale"
+                  aria-expanded={isMobileSidebarOpen}
+                >
+                  <Menu size={18} />
+                </button>
+                <XsNotificationBell />
+              </>
+            )}
           </div>
           <MobileSidebarDrawer
             isOpen={isMobileSidebarOpen}
@@ -10926,7 +12047,9 @@ export function MainBoard() {
           haStatus={haStatus}
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
+          canToggleEditMode={canToggleEditMode}
           onPathClick={handleSidebarPathClick}
+          onToggleEditMode={requestToggleEditMode}
           onOpenProfile={() => openProfileRoute('members')}
           onOpenSettings={openSettingsRoute}
           isSettingsActive={isSettingsView}
@@ -11056,6 +12179,8 @@ export function MainBoard() {
               selectedSectionId={selectedSectionId}
               isCatalogOpen={isCatalogOpen}
               widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
+              widgetLayoutOverrides={widgetLayoutOverrides}
+              responsiveLayouts={responsiveLayouts}
               onOpenCatalog={() => setIsCatalogOpen(true)}
               onCloseCatalog={() => setIsCatalogOpen(false)}
               onSelectWidget={(id) => {
@@ -11083,20 +12208,39 @@ export function MainBoard() {
                 if (widget.kind !== 'switch') {
                   return;
                 }
+                if (!isXsViewport) {
+                  handleWidgetClick(widget);
+                }
                 toggleSwitchEntity(widget);
               }}
               onWidgetBrightnessChange={handleWidgetBrightnessChange}
+              onWidgetLightColorChange={(widget, hs) => setLightHsColor(hs, undefined, widget)}
               onWidgetClimateTargetTempChange={(widget, nextValue) => {
                 setClimateTargetTemp(nextValue, widget);
               }}
               onWidgetClimateTargetRangeChange={(widget, low, high) => {
                 setClimateTargetRange(low, high, widget);
               }}
+              onWidgetClimateTargetHumidityChange={(widget, nextValue) => {
+                setClimateTargetHumidity(nextValue, widget);
+              }}
+              onWidgetClimatePowerToggle={(widget) => {
+                toggleClimatePower(widget);
+              }}
               onWidgetClimateModeChange={(widget, mode) => {
                 setClimateMode(mode, widget);
               }}
               onWidgetClimateFanModeChange={(widget, mode) => {
                 setClimateFanMode(mode, widget);
+              }}
+              onWidgetClimatePresetModeChange={(widget, mode) => {
+                setClimatePresetMode(mode, widget);
+              }}
+              onWidgetClimateSwingModeChange={(widget, mode) => {
+                setClimateSwingMode(mode, widget);
+              }}
+              onWidgetClimateSwingHorizontalModeChange={(widget, mode) => {
+                setClimateSwingHorizontalMode(mode, widget);
               }}
               onWidgetMediaToggle={toggleMediaPlayback}
               onWidgetMediaPrevious={previousMediaTrack}
@@ -11157,6 +12301,8 @@ export function MainBoard() {
               onSceneTrigger={triggerSceneAction}
               onWidgetLayoutChange={handleWidgetLayoutChange}
               onSectionsLayoutChange={handleSectionsLayoutChange}
+              onRootBreakpointLayoutChange={updateRootResponsiveLayout}
+              onStackBreakpointLayoutChange={updateStackResponsiveLayout}
               onAddWidget={addWidget}
               onAddSection={addSection}
               onRemoveSection={removeSection}
@@ -11164,6 +12310,7 @@ export function MainBoard() {
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               sensorHistoryByEntity={sensorHistoryByEntity}
+              onWidgetDisplayMetricsChange={handleWidgetDisplayMetricsChange}
             />
 
             <RightSidebarManager
@@ -11185,9 +12332,13 @@ export function MainBoard() {
               }
               actions={{
                 toggleLamp: () => toggleLightEntity(),
-                setLampBrightness: (value) => setLightBrightness(value),
-                setLampColorTemp: (kelvin) => setLightColorTemp(kelvin),
-                setLampHsColor: (hs) => setLightHsColor(hs),
+                toggleSwitch: () => toggleSwitchEntity(),
+                setLampBrightness: (value, options) => setLightBrightness(value, options),
+                setLampColorTemp: (kelvin, options) => setLightColorTemp(kelvin, options),
+                setLampHsColor: (hs, options) => setLightHsColor(hs, options),
+                setLampWhite: (value, options) => setLightWhite(value, options),
+                setLampEffect: (effect, options) => setLightEffect(effect, options),
+                flashLamp: (mode) => flashLight(mode),
                 toggleClimatePower: () => toggleClimatePower(),
                 decreaseClimateTarget: () => decreaseClimateTarget(),
                 increaseClimateTarget: () => increaseClimateTarget(),
@@ -11201,6 +12352,10 @@ export function MainBoard() {
                 setClimateTargetRange: (low, high) => setClimateTargetRange(low, high),
                 setClimateMode: (mode) => setClimateMode(mode),
                 setClimateFanMode: (mode) => setClimateFanMode(mode),
+                setClimateTargetHumidity: (value) => setClimateTargetHumidity(value),
+                setClimatePresetMode: (mode) => setClimatePresetMode(mode),
+                setClimateSwingMode: (mode) => setClimateSwingMode(mode),
+                setClimateSwingHorizontalMode: (mode) => setClimateSwingHorizontalMode(mode),
                 toggleSpeakerPlayback: () => toggleMediaPlayback(),
                 toggleSpeakerPower: () => toggleMediaPower(),
                 previousSpeakerTrack: () => previousMediaTrack(),
@@ -11213,13 +12368,13 @@ export function MainBoard() {
                 selectSpeakerOutputDevice: (deviceId) => selectMediaOutputDevice(deviceId),
                 toggleSpeakerGroupMember: (deviceId, shouldJoin) =>
                   toggleMediaGroupMember(deviceId, shouldJoin),
-                disarmAlarm: (code) => disarmAlarm(code),
-                armAlarmHome: (code) => armAlarmHome(code),
-                armAlarmAway: (code) => armAlarmAway(code),
-                armAlarmNight: (code) => armAlarmNight(code),
-                armAlarmVacation: (code) => armAlarmVacation(code),
-                armAlarmCustomBypass: (code) => armAlarmCustomBypass(code),
-                triggerAlarm: (code) => triggerAlarm(code),
+                disarmAlarm: (code, options) => disarmAlarm(code, undefined, options),
+                armAlarmHome: (code, options) => armAlarmHome(code, undefined, options),
+                armAlarmAway: (code, options) => armAlarmAway(code, undefined, options),
+                armAlarmNight: (code, options) => armAlarmNight(code, undefined, options),
+                armAlarmVacation: (code, options) => armAlarmVacation(code, undefined, options),
+                armAlarmCustomBypass: (code, options) => armAlarmCustomBypass(code, undefined, options),
+                triggerAlarm: (code, options) => triggerAlarm(code, undefined, options),
                 startVacuum: () => startVacuum(),
                 pauseVacuum: () => pauseVacuum(),
                 stopVacuum: () => stopVacuum(),
@@ -11240,24 +12395,28 @@ export function MainBoard() {
                 moveCameraPtz: (direction) => moveCameraPtz(direction),
                 stopCameraPtz: () => stopCameraPtz(),
               }}
+              onAuthorizeAlarmDeviceAuth={authorizeAlarmDeviceAuth}
               onToggleMicroWidget={toggleMicroWidgetEntity}
               onSetMicroSliderValue={setMicroSliderEntityValue}
               onNavigateMicroWidgetPage={handleMicroWidgetPageNavigation}
               microChartHistoryByEntity={sensorHistoryByEntity}
               onUpdateUserName={actions.setUserName}
               selectedWidget={selectedWidget}
+              selectedWidgetDisplayMetrics={selectedWidgetDisplayMetrics}
               selectedSection={selectedSection}
               selectedSidebarPath={selectedSidebarPath}
               sidebarPaths={visibleSidebarPaths}
               weatherConfig={weatherSection}
               activeGridBreakpoint={activeGridBreakpoint}
               widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
+              widgetLayoutOverrides={widgetLayoutOverrides}
               entityOptions={ENTITY_OPTIONS}
               haEntityIds={haEntityIds}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               onUpdateWidget={updateWidget}
               onUpdateWidgetTypeLayoutOverride={updateWidgetTypeLayoutOverride}
+              onUpdateWidgetLayoutOverride={updateWidgetLayoutOverride}
               onUpdateSection={updateSection}
               onUpdateSidebarPath={updateSidebarPath}
               onRemoveSelectedWidget={removeSelectedWidget}
@@ -11368,27 +12527,49 @@ export function MainBoard() {
         isOpen={Boolean(pendingQuickAlarmAction)}
         pendingAlarmState={pendingQuickAlarmAction?.state ?? null}
         pendingStateRequiresCode={quickAlarmRequiresCode}
+        title={
+          pendingQuickAlarmAction?.requiresBiometric
+            ? 'Verifica dispositivo'
+            : 'Conferma comando'
+        }
         description={
           quickAlarmRequiresCode
-            ? `${quickAlarmCodeTypeLabel} locale dashboard richiesto per autorizzare l'azione. I codici salvati non vengono esportati nei backup.`
-            : 'Autenticazione dispositivo non disponibile per questa azione.'
+            ? 'Inserisci il PIN allarme per continuare.'
+            : 'Verifica il dispositivo per continuare.'
         }
         authError={quickAlarmAuthError}
         isAuthBusy={isQuickAlarmAuthBusy || isLockAuthBusy}
         isAlarmCodeNumeric={pendingQuickAlarmAction?.numericCodeMode ?? true}
         alarmCodeTypeLabel={quickAlarmCodeTypeLabel}
         authPinInput={quickAlarmAuthCode}
-        onPinInputChange={(value) =>
+        preferDeviceAuth={Boolean(pendingQuickAlarmAction?.requiresBiometric)}
+        deviceAuthLabel="Verifica dispositivo"
+        onVerifyWithDevice={
+          pendingQuickAlarmAction?.requiresBiometric
+            ? async () => Boolean(await confirmQuickAlarmAuth(true))
+            : undefined
+        }
+        onPinInputChange={(value) => {
+          setQuickAlarmSubmissionError('');
           setQuickAlarmAuthCode(
             pendingQuickAlarmAction?.numericCodeMode === false
               ? value.slice(0, 12)
               : value.replace(/[^\d]/g, '').slice(0, 12),
-          )
-        }
+          );
+        }}
         onVerifyWithPin={() => confirmQuickAlarmAuth(false)}
-        onPushPinDigit={(digit) => setQuickAlarmAuthCode((current) => `${current}${digit}`.slice(0, 12))}
-        onPopPinDigit={() => setQuickAlarmAuthCode((current) => current.slice(0, -1))}
-        onClearPin={() => setQuickAlarmAuthCode('')}
+        onPushPinDigit={(digit) => {
+          setQuickAlarmSubmissionError('');
+          setQuickAlarmAuthCode((current) => `${current}${digit}`.slice(0, 12));
+        }}
+        onPopPinDigit={() => {
+          setQuickAlarmSubmissionError('');
+          setQuickAlarmAuthCode((current) => current.slice(0, -1));
+        }}
+        onClearPin={() => {
+          setQuickAlarmSubmissionError('');
+          setQuickAlarmAuthCode('');
+        }}
         onClose={closeQuickAlarmAuth}
         usePortal
       />

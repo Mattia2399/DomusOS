@@ -27,7 +27,7 @@ export type WeatherSecondaryInfo =
   | 'dew_point'
   | 'condition'
   | 'range';
-export type SceneKey = 'music' | 'going-out' | 'night' | 'movie' | 'arrive' | 'morning';
+export type SceneKey = 'music' | 'going-out' | 'night' | 'movie' | 'sleep' | 'arrive' | 'morning';
 export type SceneIconKey =
   | 'music'
   | 'person'
@@ -107,6 +107,7 @@ export type Widget = {
   widgets?: MicroWidget[];
   isFavorite?: boolean;
   alarmUnlockCode?: string;
+  alarmLocalExtraCode?: string;
   alarmRequireAuthToDisarm?: boolean;
   lockCode?: string;
   lockRequireAuthToUnlock?: boolean;
@@ -115,6 +116,8 @@ export type Widget = {
   sensorBatteryEntityId?: string;
   sensorStatusEntityId?: string;
   sensorConnectionEntityId?: string;
+  sensorDisplayPrecision?: number;
+  switchConsumptionEntityId?: string;
   vacuumFanSpeed?: string;
   vacuumMapUrl?: string;
   vacuumCleanedArea?: number;
@@ -164,7 +167,7 @@ export type DashboardSection = {
 };
 
 export const ENTITY_OPTIONS: Record<WidgetKind, string[]> = {
-  light: ['light.living_room_lamp', 'light.lamp_2', 'light.lamp_4'],
+  light: ['light.living_room_lamp'],
   switch: ['switch.kitchen_outlet', 'switch.garden_lights', 'input_boolean.guest_mode'],
   climate: ['climate.air_conditioner', 'climate.living_room'],
   camera: ['camera.front_door', 'camera.garage'],
@@ -193,7 +196,7 @@ export const WIDGET_CATALOG: Array<{ kind: WidgetKind; label: string }> = [
 
 export const SECTION_CATALOG: Array<{ kind: SectionKind; label: string }> = [
   { kind: 'greeting', label: 'Titolo' },
-  { kind: 'scenes', label: 'Scenes' },
+  { kind: 'scenes', label: 'Scenari' },
   { kind: 'stack-vertical', label: 'Vertical Stack' },
   { kind: 'stack-horizontal', label: 'Horizontal Stack' },
   { kind: 'stack-grid', label: 'Grid Stack' },
@@ -245,17 +248,6 @@ export const INITIAL_WIDGETS: Widget[] = [
     layout: { i: 'camera.front_door', x: 0, y: 2, w: 2, h: 4 },
   },
   {
-    id: 'light.lamp_2',
-    kind: 'light',
-    title: 'Lamp 2',
-    entityId: 'light.lamp_2',
-    status: 'Unavailable',
-    isOn: false,
-    value: 0,
-    unit: '%',
-    layout: { i: 'light.lamp_2', x: 2, y: 2, w: 2, h: 1 },
-  },
-  {
     id: 'sensor.living_room_humidity',
     kind: 'sensor',
     title: 'Humidity Sensor',
@@ -291,7 +283,7 @@ export const INITIAL_SECTIONS: DashboardSection[] = [
     scenes: ['music', 'going-out', 'night', 'movie'],
     scenesShowBackground: true,
     scenesShowBorder: true,
-    title: 'Scenes',
+    title: 'Scenari',
   },
   // Nessuno stack di default: l'utente lo aggiunge dal catalogo.
 ];

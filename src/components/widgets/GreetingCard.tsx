@@ -11,12 +11,17 @@ export type GreetingDefaults = {
 
 const GREETING_REFRESH_MS = 60000;
 const SUBTITLE_ROTATE_MS = 120000;
+const RAIN_CONDITIONS = new Set(['lightning-rainy', 'pouring', 'rainy', 'snowy-rainy']);
+const SNOW_CONDITIONS = new Set(['snowy', 'snowy-rainy']);
+const WIND_CONDITIONS = new Set(['windy', 'windy-variant']);
+const STORM_CONDITIONS = new Set([
+  'exceptional',
+  'hail',
+  'lightning',
+  'lightning-rainy',
+]);
 
-function resolveGreetingLabel(state: DashboardStateShape, now: Date) {
-  if (state.livingRoomMasterOff) {
-    return 'Bentornato';
-  }
-
+function resolveTimeGreetingLabel(now: Date) {
   const hour = now.getHours();
   if (hour >= 5 && hour < 11) {
     return 'Buongiorno';
@@ -28,6 +33,33 @@ function resolveGreetingLabel(state: DashboardStateShape, now: Date) {
     return 'Buonasera';
   }
   return 'Bentornato';
+}
+
+function normalizeWeatherCondition(condition: string | undefined) {
+  return (condition ?? '').trim().toLowerCase().replace(/_/g, '-');
+}
+
+function isWeekend(now: Date) {
+  const day = now.getDay();
+  return day === 0 || day === 6;
+}
+
+function resolveGreetingLabel(state: DashboardStateShape, now: Date) {
+  const baseGreeting = resolveTimeGreetingLabel(now);
+  const hour = now.getHours();
+  if (hour >= 22 || hour < 5) {
+    return 'Buonanotte';
+  }
+
+  if (state.livingRoomMasterOff) {
+    return 'Bentornato';
+  }
+
+  if (isWeekend(now) && (baseGreeting === 'Buongiorno' || baseGreeting === 'Buon pomeriggio')) {
+    return 'Buon weekend';
+  }
+
+  return baseGreeting;
 }
 
 function formatStatus(status?: string) {
@@ -48,7 +80,75 @@ function formatStatus(status?: string) {
   return map[normalized] ?? normalized;
 }
 
-function buildSubtitleOptions(state: DashboardStateShape, now: Date) {
+function maxFinite(values: Array<number | undefined>) {
+  const finiteValues = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return finiteValues.length ? Math.max(...finiteValues) : 0;
+}
+
+function buildContextSubtitleOptions(state: DashboardStateShape, now: Date) {
+  const options: string[] = [];
+  const currentCondition = normalizeWeatherCondition(state.weather.condition);
+  const firstForecast = state.weather.forecast[0];
+  const forecastCondition = normalizeWeatherCondition(firstForecast?.condition);
+  const precipitationChance = maxFinite([
+    state.weather.precipitation,
+    firstForecast?.precipitationProbability,
+    firstForecast?.precipitation,
+  ]);
+  const precipitationAmount = maxFinite([
+    state.weather.precipitationAmount,
+    firstForecast?.precipitationAmount,
+  ]);
+  const windGustSpeed = maxFinite([state.weather.windGustSpeed, firstForecast?.windGustSpeed]);
+  const temperature = state.weather.feelsLike ?? state.weather.temperature;
+  const favoritesOn = state.favorites.filter((device) => device.isOn).length;
+
+  if (
+    STORM_CONDITIONS.has(currentCondition) ||
+    STORM_CONDITIONS.has(forecastCondition)
+  ) {
+    options.push('Temporali possibili: meglio controllare finestre e tende.');
+  } else if (
+    RAIN_CONDITIONS.has(currentCondition) ||
+    RAIN_CONDITIONS.has(forecastCondition) ||
+    precipitationChance >= 55 ||
+    precipitationAmount >= 1
+  ) {
+    options.push("Oggi piovera: ricorda l'ombrello.");
+  }
+
+  if (
+    WIND_CONDITIONS.has(currentCondition) ||
+    WIND_CONDITIONS.has(forecastCondition) ||
+    windGustSpeed >= 45
+  ) {
+    options.push("C'e vento fuori: occhio a finestre e balconi.");
+  }
+
+  if (SNOW_CONDITIONS.has(currentCondition) || SNOW_CONDITIONS.has(forecastCondition)) {
+    options.push('Possibile neve: tieni conto dei tempi di uscita.');
+  }
+
+  if (temperature >= 30) {
+    options.push('Giornata calda: tieni acqua a portata.');
+  } else if (temperature <= 5) {
+    options.push('Fuori fa freddo: meglio uscire coperti.');
+  }
+
+  if (state.livingRoomMasterOff) {
+    options.push('Casa in quiete.');
+  } else if (favoritesOn > 0 || state.lamp.isOn || state.climate.isOn || state.speaker.isPlaying) {
+    options.push('Casa pronta, con le funzioni principali gia attive.');
+  }
+
+  if (isWeekend(now)) {
+    options.push('Ritmo piu lento oggi.');
+  }
+
+  return Array.from(new Set(options.filter((line) => line.trim().length > 0)));
+}
+
+function buildStatusSubtitleOptions(state: DashboardStateShape, now: Date) {
   const options: string[] = [];
   const lampStatus = state.lamp.isOn
     ? `${state.lamp.name} ${formatStatus(state.lamp.status)} al ${state.lamp.brightness}%.`
@@ -86,6 +186,10 @@ function buildSubtitleOptions(state: DashboardStateShape, now: Date) {
   return Array.from(new Set(options.filter((line) => line.trim().length > 0)));
 }
 
+function buildSubtitleOptions(state: DashboardStateShape, now: Date) {
+  return Array.from(new Set([...buildContextSubtitleOptions(state, now), ...buildStatusSubtitleOptions(state, now)]));
+}
+
 function hashString(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -105,11 +209,13 @@ function mulberry32(seed: number) {
 }
 
 function pickDynamicSubtitle(state: DashboardStateShape, now: Date) {
+  const contextOptions = buildContextSubtitleOptions(state, now);
   const options = buildSubtitleOptions(state, now);
   if (!options.length) {
     return [];
   }
 
+  const timeSlice = Math.floor(now.getTime() / SUBTITLE_ROTATE_MS);
   const signature = [
     state.lamp.isOn,
     state.lamp.brightness,
@@ -117,22 +223,35 @@ function pickDynamicSubtitle(state: DashboardStateShape, now: Date) {
     state.climate.currentTemp,
     state.climate.targetTemp,
     state.speaker.isPlaying,
+    state.weather.condition,
+    state.weather.precipitation,
+    state.weather.precipitationAmount,
+    state.weather.windGustSpeed,
+    state.weather.temperature,
     state.wifiDownloadMbps,
     state.favorites.filter((device) => device.isOn).length,
   ].join('|');
 
-  const timeSlice = Math.floor(now.getTime() / SUBTITLE_ROTATE_MS);
   const seed = hashString(signature) + timeSlice;
   const rng = mulberry32(seed);
-  const shuffled = [...options];
+  const picked: string[] = [];
+  const contextPick =
+    contextOptions.length > 0
+      ? contextOptions[(hashString(`${signature}|context|${timeSlice}`) % contextOptions.length)]
+      : undefined;
+  if (contextPick) {
+    picked.push(contextPick);
+  }
+
+  const shuffled = options.filter((line) => line !== contextPick);
   for (let i = shuffled.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
 
-  const baseCount = Math.min(2, shuffled.length);
-  const picked = shuffled.slice(0, baseCount);
-  const remaining = shuffled.length - baseCount;
+  const baseCount = Math.min(2, options.length);
+  picked.push(...shuffled.slice(0, Math.max(0, baseCount - picked.length)));
+  const remaining = options.length - picked.length;
   if (remaining > 0) {
     picked.push(`e ${remaining} altre >`);
   }

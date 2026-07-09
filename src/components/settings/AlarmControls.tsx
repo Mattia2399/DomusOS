@@ -13,6 +13,12 @@ import {
   normalizeAlarmState,
 } from '../../utils/alarmUtils';
 import {
+  resolveAlarmManualCodeSubmission,
+  resolveAlarmSecurityRequirement,
+  type AlarmActionAuthOptions,
+  type AlarmSecurityActionKind,
+} from '../../utils/alarmSecurityPolicy';
+import {
   INITIAL_AUTH_ATTEMPT_STATE,
   appendSecurityAuditEvent,
   formatAuthRateLimitMessage,
@@ -21,8 +27,19 @@ import {
   recordAuthSuccess,
 } from '../../services/securityAuth';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
 
 type AlarmActionResult = boolean | void | Promise<boolean | void>;
+
+type AlarmModeId = 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass';
+
+const ALARM_MODE_DESCRIPTIONS: Record<AlarmModeId, string> = {
+  home: 'Perimetro e accessi principali',
+  away: 'Protezione completa',
+  night: 'Protezione silenziosa',
+  vacation: 'Sorveglianza prolungata',
+  custom_bypass: 'Zone escluse manualmente',
+};
 
 interface AlarmControlsProps {
   alarm: {
@@ -31,6 +48,7 @@ interface AlarmControlsProps {
     status?: string;
     codeArmRequired?: boolean;
     unlockCode?: string;
+    localExtraCode?: string;
     requireAuthToDisarm?: boolean;
     changedBy?: string;
     activityLogLimit?: number;
@@ -43,22 +61,23 @@ interface AlarmControlsProps {
     supportedFeatures?: number;
     rawAttributes?: Record<string, unknown>;
   };
-  onDisarm: (code?: string) => AlarmActionResult;
-  onArmHome: (code?: string) => AlarmActionResult;
-  onArmAway: (code?: string) => AlarmActionResult;
-  onArmNight: (code?: string) => AlarmActionResult;
-  onArmVacation: (code?: string) => AlarmActionResult;
-  onArmCustomBypass: (code?: string) => AlarmActionResult;
-  onTrigger: (code?: string) => AlarmActionResult;
+  onAuthorizeDeviceAuth?: (label: string) => Promise<boolean>;
+  onDisarm: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onArmHome: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onArmAway: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onArmNight: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onArmVacation: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onArmCustomBypass: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
+  onTrigger: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
 }
 
 type AlarmModeItem = {
-  id: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass';
+  id: AlarmModeId;
   label: string;
   state: string;
   feature: number;
   icon: React.ReactNode;
-  onPress: (code?: string) => AlarmActionResult;
+  onPress: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
 };
 
 type TimelineEntry = {
@@ -67,13 +86,23 @@ type TimelineEntry = {
 };
 
 type PendingAlarmAction = {
-  id: 'disarm' | 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass' | 'trigger';
+  id: 'disarm' | AlarmModeId | 'trigger';
   label: string;
   state?: string;
   icon: React.ReactNode;
-  onPress: (code?: string) => AlarmActionResult;
+  onPress: (code?: string, options?: AlarmActionAuthOptions) => AlarmActionResult;
   timelineText?: string;
   variant?: 'default' | 'danger' | 'safe';
+};
+
+const ALARM_ACTION_KIND_BY_ID: Record<PendingAlarmAction['id'], AlarmSecurityActionKind> = {
+  home: 'arm_home',
+  away: 'arm_away',
+  night: 'arm_night',
+  vacation: 'arm_vacation',
+  custom_bypass: 'arm_custom_bypass',
+  disarm: 'disarm',
+  trigger: 'trigger',
 };
 
 function resolveHeaderIcon(state: string) {
@@ -86,35 +115,119 @@ function resolveHeaderIcon(state: string) {
   if (state === 'pending' || state === 'arming' || state === 'disarming') {
     return ShieldEllipsis;
   }
-  if (state.startsWith('armed_')) {
+  if (state === 'armed_home') {
+    return Home;
+  }
+  if (state === 'armed_night') {
+    return Moon;
+  }
+  if (state === 'armed_vacation') {
+    return Plane;
+  }
+  if (state === 'armed_custom_bypass') {
+    return ShieldPlus;
+  }
+  if (state === 'armed_away') {
     return Shield;
   }
   return ShieldQuestionMark;
 }
 
-function resolveHeaderAccent(state: string) {
+function resolveAlarmVisual(state: string) {
   if (state === 'triggered') {
-    return 'from-rose-500/35 to-rose-700/15 border-rose-300/35 text-rose-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(94,36,53,0.62)_0%,rgba(43,20,31,0.74)_54%,rgba(255,255,255,0.035)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(251,113,133,0.24),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(244,63,94,0.16),transparent_68%)]',
+      line: 'via-rose-300/86',
+      glow: 'bg-rose-400/24',
+      icon: 'text-rose-100',
+      dot: 'bg-rose-300',
+      selected: 'border-rose-200/34 bg-rose-300/[0.17] text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(244,63,94,0.18)]',
+      cta: 'border-rose-200/26 bg-rose-400/[0.16] text-rose-50 hover:bg-rose-400/[0.23]',
+    };
   }
   if (state === 'disarmed') {
-    return 'from-slate-500/20 to-slate-700/10 border-white/10 text-white';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(69,78,92,0.42)_0%,rgba(29,35,46,0.66)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(255,255,255,0.12),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(148,163,184,0.10),transparent_68%)]',
+      line: 'via-white/40',
+      glow: 'bg-white/[0.08]',
+      icon: 'text-white/82',
+      dot: 'bg-white/60',
+      selected: 'border-white/24 bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.17),0_8px_20px_rgba(0,0,0,0.12)]',
+      cta: 'border-white/[0.14] bg-white/[0.10] text-white hover:bg-white/[0.15]',
+    };
   }
   if (state === 'armed_home') {
-    return 'from-emerald-500/28 to-emerald-700/12 border-emerald-300/35 text-emerald-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(35,88,75,0.62)_0%,rgba(22,60,56,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(110,231,183,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(16,185,129,0.14),transparent_68%)]',
+      line: 'via-emerald-300/80',
+      glow: 'bg-emerald-400/22',
+      icon: 'text-emerald-100',
+      dot: 'bg-emerald-300',
+      selected: 'border-emerald-200/32 bg-emerald-300/[0.16] text-emerald-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(16,185,129,0.17)]',
+      cta: 'border-emerald-100/18 bg-emerald-300/[0.14] text-emerald-50 hover:bg-emerald-300/[0.20]',
+    };
   }
   if (state === 'armed_away') {
-    return 'from-blue-500/28 to-blue-700/10 border-blue-300/35 text-blue-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(34,70,112,0.62)_0%,rgba(25,45,78,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(147,197,253,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(59,130,246,0.15),transparent_68%)]',
+      line: 'via-blue-300/82',
+      glow: 'bg-blue-400/22',
+      icon: 'text-blue-100',
+      dot: 'bg-blue-300',
+      selected: 'border-blue-200/32 bg-blue-300/[0.16] text-blue-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(59,130,246,0.17)]',
+      cta: 'border-blue-100/18 bg-blue-300/[0.14] text-blue-50 hover:bg-blue-300/[0.20]',
+    };
   }
   if (state === 'armed_night') {
-    return 'from-indigo-500/28 to-indigo-700/10 border-indigo-300/35 text-indigo-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(55,52,116,0.60)_0%,rgba(34,32,82,0.72)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(165,180,252,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(99,102,241,0.15),transparent_68%)]',
+      line: 'via-indigo-300/82',
+      glow: 'bg-indigo-400/23',
+      icon: 'text-indigo-100',
+      dot: 'bg-indigo-300',
+      selected: 'border-indigo-200/32 bg-indigo-300/[0.16] text-indigo-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(99,102,241,0.18)]',
+      cta: 'border-indigo-100/18 bg-indigo-300/[0.14] text-indigo-50 hover:bg-indigo-300/[0.20]',
+    };
   }
   if (state === 'armed_vacation') {
-    return 'from-amber-500/28 to-orange-700/10 border-amber-300/35 text-amber-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(101,70,35,0.62)_0%,rgba(72,45,24,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(252,211,77,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(245,158,11,0.15),transparent_68%)]',
+      line: 'via-amber-300/78',
+      glow: 'bg-amber-400/21',
+      icon: 'text-amber-100',
+      dot: 'bg-amber-300',
+      selected: 'border-amber-200/32 bg-amber-300/[0.16] text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(245,158,11,0.17)]',
+      cta: 'border-amber-100/18 bg-amber-300/[0.14] text-amber-50 hover:bg-amber-300/[0.20]',
+    };
   }
   if (state === 'armed_custom_bypass') {
-    return 'from-cyan-500/30 to-cyan-700/10 border-cyan-300/35 text-cyan-100';
+    return {
+      surface: 'bg-[linear-gradient(145deg,rgba(28,86,101,0.60)_0%,rgba(22,61,73,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
+      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(103,232,249,0.20),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(6,182,212,0.14),transparent_68%)]',
+      line: 'via-cyan-300/78',
+      glow: 'bg-cyan-400/21',
+      icon: 'text-cyan-100',
+      dot: 'bg-cyan-300',
+      selected: 'border-cyan-200/32 bg-cyan-300/[0.15] text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(6,182,212,0.16)]',
+      cta: 'border-cyan-100/18 bg-cyan-300/[0.13] text-cyan-50 hover:bg-cyan-300/[0.19]',
+    };
   }
-  return 'from-white/10 to-white/5 border-white/10 text-white';
+  return {
+    surface: 'bg-[linear-gradient(145deg,rgba(255,255,255,0.078),rgba(255,255,255,0.024))]',
+    wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(255,255,255,0.10),transparent_62%)]',
+    line: 'via-white/34',
+    glow: 'bg-white/[0.07]',
+    icon: 'text-white/68',
+    dot: 'bg-white/48',
+    selected: 'border-white/24 bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.17),0_8px_20px_rgba(0,0,0,0.12)]',
+    cta: 'border-white/[0.14] bg-white/[0.09] text-white hover:bg-white/[0.14]',
+  };
 }
 
 function formatTimeLabel(date: Date) {
@@ -126,6 +239,7 @@ function formatTimeLabel(date: Date) {
 
 export function AlarmControls({
   alarm,
+  onAuthorizeDeviceAuth,
   onDisarm,
   onArmHome,
   onArmAway,
@@ -136,6 +250,7 @@ export function AlarmControls({
 }: AlarmControlsProps) {
   const [pendingAction, setPendingAction] = useState<PendingAlarmAction | null>(null);
   const [authCode, setAuthCode] = useState('');
+  const [authSubmissionError, setAuthSubmissionError] = useState('');
   const [authAttemptState, setAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const maxTimelineEntries = useMemo(() => {
@@ -153,28 +268,37 @@ export function AlarmControls({
   const codeFormat = typeof alarm.rawAttributes?.code_format === 'string'
     ? alarm.rawAttributes.code_format.toLowerCase()
     : undefined;
-  const numericCodeMode = codeFormat !== 'text';
-  const alarmCodeTypeLabel = numericCodeMode ? 'PIN' : 'Codice';
-  const unlockCode = alarm.unlockCode?.trim() ?? '';
-  const unlockCodeActive = unlockCode.length > 0;
+  const storedHaPin = alarm.unlockCode?.trim() ?? '';
+  const storedHaPinActive = storedHaPin.length > 0;
+  const localExtraCode = alarm.localExtraCode?.trim() ?? '';
+  const localExtraCodeActive = localExtraCode.length > 0;
+  const pendingSecurityRequirement = pendingAction
+    ? resolveAlarmSecurityRequirement({
+        action: ALARM_ACTION_KIND_BY_ID[pendingAction.id],
+        codeArmRequired: codeRequired,
+        codeFormat,
+        storedHaPinConfigured: storedHaPinActive,
+        localExtraPinConfigured: localExtraCodeActive,
+        deviceAuthEnabled: alarm.requireAuthToDisarm,
+      })
+    : null;
+  const numericCodeMode = pendingSecurityRequirement?.codeFormat !== 'text';
+  const alarmCodeTypeLabel = pendingSecurityRequirement?.inputLabel ?? 'PIN allarme';
   const trimmedCode = authCode.trim();
-  const pendingNeedsCode = Boolean(pendingAction && (codeRequired || unlockCodeActive));
-  const codeMissing = pendingNeedsCode && trimmedCode.length === 0;
-  const codeMismatch = pendingNeedsCode && unlockCodeActive && trimmedCode !== unlockCode;
+  const pendingNeedsCode = Boolean(pendingSecurityRequirement?.needsCodeInput);
+  const pendingPrefersDeviceAuth = Boolean(pendingSecurityRequirement?.allowsDeviceAuth && onAuthorizeDeviceAuth);
   const rateLimitStatus = getAuthRateLimitStatus(authAttemptState);
   const rateLimitMessage = formatAuthRateLimitMessage(rateLimitStatus);
-  const authError = rateLimitMessage
-    || (codeMissing
-      ? `Inserisci ${alarmCodeTypeLabel.toLowerCase()} locale per confermare.`
-      : codeMismatch
-        ? `${alarmCodeTypeLabel} locale non valido.`
-        : '');
+  const authError = rateLimitMessage || authSubmissionError;
   const HeaderIcon = resolveHeaderIcon(normalizedState);
-  const headerAccent = resolveHeaderAccent(normalizedState);
+  const stateVisual = resolveAlarmVisual(normalizedState);
   const codeLengthLimit = 12;
   const timelineActor = changedBy || 'Sistema';
   const shouldUseLocalTimeline = !alarm.activityTimelineStatus || alarm.activityTimelineStatus === 'offline';
   const isTransitioning = normalizedState === 'pending' || normalizedState === 'arming' || normalizedState === 'disarming';
+  const isUnavailable = normalizedState === 'unavailable' || normalizedState === 'unknown';
+  const isProtected = normalizedState.startsWith('armed_') && !isTransitioning;
+  const [selectedModeId, setSelectedModeId] = useState<AlarmModeId | undefined>(undefined);
   const activeBadgeLabel =
     normalizedState === 'triggered'
       ? 'Allarme'
@@ -246,22 +370,46 @@ export function AlarmControls({
 
   const supportedFeatures = alarm.supportedFeatures;
   const hasFeatureMask = typeof supportedFeatures === 'number' && Number.isFinite(supportedFeatures);
-  const supportedModes = hasFeatureMask
-    ? modes.filter((mode) => alarmSupportsFeature(supportedFeatures, mode.feature))
-    : modes.filter((mode) => mode.id === 'home' || mode.id === 'away' || mode.id === 'night');
+  const supportedModes = useMemo(
+    () =>
+      hasFeatureMask
+        ? modes.filter((mode) => alarmSupportsFeature(supportedFeatures, mode.feature))
+        : modes.filter((mode) => mode.id === 'home' || mode.id === 'away' || mode.id === 'night'),
+    [hasFeatureMask, modes, supportedFeatures],
+  );
   const triggerSupported = hasFeatureMask ? alarmSupportsFeature(supportedFeatures, ALARM_FEATURE_TRIGGER) : false;
+  const activeMode = supportedModes.find((mode) => mode.state === normalizedState);
+  const defaultArmMode = supportedModes.find((mode) => mode.id === 'away') ?? supportedModes[0];
+  const selectedMode = supportedModes.find((mode) => mode.id === selectedModeId) ?? activeMode ?? defaultArmMode;
   const currentModeLabel =
     normalizedState === 'disarmed'
       ? 'Disinserito'
-      : supportedModes.find((mode) => mode.state === normalizedState)?.label ?? translatedState;
+      : activeMode?.label ?? translatedState;
   const currentModeCaption =
     normalizedState === 'triggered'
       ? 'Richiede attenzione immediata'
       : normalizedState === 'disarmed'
         ? 'Sistema non inserito'
+        : isUnavailable
+          ? 'Connessione al sistema non disponibile'
         : isTransitioning
-          ? 'Cambio modalita in corso'
+          ? 'Cambio modalità in corso'
+          : activeMode
+          ? ALARM_MODE_DESCRIPTIONS[activeMode.id]
           : 'Protezione in corso';
+
+  useEffect(() => {
+    setSelectedModeId((current) => {
+      if (activeMode?.id) {
+        return activeMode.id;
+      }
+      if (current && supportedModes.some((mode) => mode.id === current)) {
+        return current;
+      }
+      return defaultArmMode?.id;
+    });
+  }, [activeMode?.id, alarm.name, defaultArmMode?.id, normalizedState, supportedModes]);
+
   const modeActions = useMemo<PendingAlarmAction[]>(
     () => [
       {
@@ -299,16 +447,58 @@ export function AlarmControls({
         : null,
     [onTrigger, triggerSupported],
   );
-  const displayedModeActions = triggerAction ? [...modeActions, triggerAction] : modeActions;
-  const primaryShieldAction = normalizedState === 'disarmed'
-    ? modeActions.find((mode) => mode.id === 'away') ?? modeActions.find((mode) => mode.id !== 'disarm') ?? modeActions[0]
-    : modeActions.find((mode) => mode.id === 'disarm') ?? modeActions[0];
-  const shieldActionDisabled = !primaryShieldAction || normalizedState === primaryShieldAction.state;
-  const primaryShieldHint = primaryShieldAction
-    ? normalizedState === 'disarmed'
-      ? `Tocca per inserire ${primaryShieldAction.label.toLowerCase()}`
-      : 'Tocca per disinserire'
-    : 'Nessuna azione disponibile';
+  const disarmAction = modeActions.find((mode) => mode.id === 'disarm');
+  const selectedArmAction = selectedMode ? modeActions.find((mode) => mode.id === selectedMode.id) : undefined;
+  const selectedIsActive = Boolean(selectedMode && selectedMode.state === normalizedState);
+  const primaryAction =
+    normalizedState === 'triggered'
+      ? disarmAction
+      : normalizedState === 'disarmed'
+        ? selectedArmAction
+        : selectedIsActive
+          ? disarmAction
+          : selectedArmAction;
+  const primaryActionLabel =
+    isTransitioning
+      ? 'Comando in corso'
+      : isUnavailable || !primaryAction
+        ? 'Non disponibile'
+        : normalizedState === 'triggered'
+          ? 'Disattiva allarme'
+          : normalizedState === 'disarmed'
+            ? `Inserisci ${selectedMode?.label ?? 'sistema'}`
+            : selectedIsActive
+              ? 'Disinserisci'
+              : `Passa a ${selectedMode?.label ?? 'modalità'}`;
+  const primaryActionCaption =
+    isTransitioning
+      ? 'Attendi il completamento dello stato corrente.'
+      : isUnavailable
+        ? 'Il sistema non è raggiungibile.'
+        : normalizedState === 'disarmed'
+          ? 'Conferma la modalità selezionata.'
+          : selectedIsActive
+            ? 'Rimuove la protezione attiva.'
+            : 'Cambia modalità senza passare dal disinserimento.';
+  const primaryActionEyebrow =
+    isTransitioning
+      ? 'Operazione'
+      : isUnavailable
+        ? 'Stato sistema'
+        : normalizedState === 'triggered'
+          ? 'Allarme attivo'
+          : selectedIsActive && selectedMode
+            ? `${selectedMode.label} attiva`
+            : normalizedState === 'disarmed'
+              ? 'Modalita selezionata'
+              : 'Cambio modalita';
+  const primaryActionDescription =
+    selectedIsActive && selectedMode && normalizedState !== 'triggered'
+      ? `${ALARM_MODE_DESCRIPTIONS[selectedMode.id]} · Tocca per disinserire.`
+      : selectedMode
+        ? ALARM_MODE_DESCRIPTIONS[selectedMode.id]
+        : primaryActionCaption;
+  const primaryActionDisabled = isTransitioning || isUnavailable || !primaryAction;
   const activityUnavailableMessage = useMemo(() => {
     const historyHours = Math.max(1, Math.round(Number(alarm.activityLogHours) || 24));
     if (alarm.activityTimelineStatus === 'loading') {
@@ -342,15 +532,16 @@ export function AlarmControls({
     }
     setPendingAction(null);
     setAuthCode('');
+    setAuthSubmissionError('');
   };
 
-  const runAlarmAction = async (action: PendingAlarmAction, code?: string) => {
+  const runAlarmAction = async (action: PendingAlarmAction, code?: string, options?: AlarmActionAuthOptions) => {
     if (isAuthBusy) {
       return;
     }
     setIsAuthBusy(true);
     try {
-      const didRun = await action.onPress(code);
+      const didRun = await action.onPress(code, options);
       if (didRun === false) {
         return;
       }
@@ -359,50 +550,110 @@ export function AlarmControls({
       }
       setPendingAction(null);
       setAuthCode('');
+      setAuthSubmissionError('');
     } finally {
       setIsAuthBusy(false);
     }
   };
 
   const openActionDialog = (action: PendingAlarmAction) => {
-    if (!codeRequired && !unlockCodeActive) {
+    const requirement = resolveAlarmSecurityRequirement({
+      action: ALARM_ACTION_KIND_BY_ID[action.id],
+      codeArmRequired: codeRequired,
+      codeFormat,
+      storedHaPinConfigured: storedHaPinActive,
+      localExtraPinConfigured: localExtraCodeActive,
+      deviceAuthEnabled: alarm.requireAuthToDisarm,
+    });
+    if (!requirement.needsCodeInput) {
+      if (requirement.allowsDeviceAuth && onAuthorizeDeviceAuth) {
+        setPendingAction(action);
+        setAuthCode('');
+        setAuthSubmissionError('');
+        return;
+      }
       void runAlarmAction(action);
       return;
     }
     setPendingAction(action);
     setAuthCode('');
+    setAuthSubmissionError('');
+  };
+
+  const confirmPendingDeviceAuth = async () => {
+    if (!pendingAction || !pendingSecurityRequirement?.allowsDeviceAuth || !onAuthorizeDeviceAuth) {
+      return false;
+    }
+
+    const verified = await onAuthorizeDeviceAuth(pendingAction.label);
+    if (!verified) {
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Autenticazione dispositivo allarme non riuscita.',
+        context: alarm.name || 'Allarme',
+      });
+      return false;
+    }
+
+    if (pendingSecurityRequirement.needsCodeInput && !storedHaPinActive) {
+      return false;
+    }
+
+    appendSecurityAuditEvent({
+      tone: 'success',
+      message: 'Comando allarme autorizzato con autenticazione dispositivo.',
+      context: alarm.name || 'Allarme',
+    });
+    await runAlarmAction(
+      pendingAction,
+      pendingSecurityRequirement.needsCodeInput ? storedHaPin : undefined,
+      { deviceAuthVerified: true },
+    );
+    return true;
   };
 
   const confirmPendingAction = async () => {
     if (!pendingAction || isAuthBusy) {
       return;
     }
+    if (!pendingSecurityRequirement?.needsCodeInput) {
+      await runAlarmAction(pendingAction);
+      return;
+    }
     if (rateLimitStatus.isLocked) {
       appendSecurityAuditEvent({
         tone: 'warning',
-        message: 'Fallback codice locale allarme bloccato temporaneamente.',
+        message: 'Conferma allarme bloccata temporaneamente.',
         context: alarm.name || 'Allarme',
       });
       return;
     }
-    if (codeMissing) {
+    const manualCodeSubmission = resolveAlarmManualCodeSubmission({
+      inputCode: authCode,
+      localExtraCode,
+      requiresCode: pendingSecurityRequirement.needsCodeInput,
+    });
+    if (manualCodeSubmission.ok === false && manualCodeSubmission.reason === 'missing') {
+      setAuthSubmissionError(`Inserisci ${alarmCodeTypeLabel.toLowerCase()} per confermare.`);
       return;
     }
-    if (codeMismatch) {
+    if (manualCodeSubmission.ok === false) {
+      setAuthSubmissionError('Impossibile autorizzare il comando.');
       setAuthAttemptState(recordAuthFailure(authAttemptState));
       appendSecurityAuditEvent({
         tone: 'warning',
-        message: 'Tentativo codice locale allarme non valido.',
+        message: 'Tentativo PIN allarme non valido.',
         context: alarm.name || 'Allarme',
       });
       return;
     }
-    const code = pendingNeedsCode && trimmedCode.length ? trimmedCode : undefined;
-    if (unlockCodeActive) {
+    setAuthSubmissionError('');
+    const code = manualCodeSubmission.haCode;
+    if (pendingSecurityRequirement.needsCodeInput) {
       setAuthAttemptState(recordAuthSuccess());
       appendSecurityAuditEvent({
         tone: 'success',
-        message: 'Fallback codice locale allarme verificato.',
+        message: 'PIN allarme verificato.',
         context: alarm.name || 'Allarme',
       });
     }
@@ -413,145 +664,172 @@ export function AlarmControls({
     if (trimmedCode.length >= codeLengthLimit) {
       return;
     }
+    setAuthSubmissionError('');
     setAuthCode((current) => `${current}${digit}`.slice(0, codeLengthLimit));
   };
 
   const popCodeDigit = () => {
+    setAuthSubmissionError('');
     setAuthCode((current) => current.slice(0, -1));
   };
 
   const clearCode = () => {
+    setAuthSubmissionError('');
     setAuthCode('');
+  };
+
+  const scrollModesWithWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const rail = event.currentTarget;
+    const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
+    if (maxScrollLeft <= 0) {
+      return;
+    }
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (delta === 0) {
+      return;
+    }
+
+    const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, rail.scrollLeft + delta));
+    if (nextScrollLeft !== rail.scrollLeft) {
+      event.preventDefault();
+      rail.scrollLeft = nextScrollLeft;
+    }
   };
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-light uppercase tracking-[0.22em] text-white/55">Alarm Control</p>
-            <h2 className="mt-2 truncate text-[1.45rem] font-semibold leading-tight text-white">{alarm.name}</h2>
-            <p className="mt-1 truncate text-sm font-medium text-white/62">{translatedState}</p>
-          </div>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/78">
-            <Shield size={17} />
-          </span>
-        </div>
-      </div>
+      <ContextPanelHeader
+        title={alarm.name}
+        subtitle={translatedState}
+        icon={<HeaderIcon className={isTransitioning ? 'animate-spin' : ''} size={21} />}
+        iconClassName={stateVisual.icon}
+        fallbackTitle="Allarme"
+      />
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex justify-center py-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (primaryShieldAction) {
-                openActionDialog(primaryShieldAction);
-              }
-            }}
-            disabled={shieldActionDisabled}
-            className={`relative flex h-[clamp(10.5rem,54vw,15rem)] w-[clamp(10.5rem,54vw,15rem)] min-h-[10.5rem] min-w-[10.5rem] items-center justify-center rounded-full border bg-gradient-to-br ${headerAccent} shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-200 ${
-              shieldActionDisabled ? 'cursor-default opacity-90' : 'active:scale-[0.985]'
-            }`}
-            aria-label={primaryShieldHint}
-            title={primaryShieldHint}
-          >
-            <span className="pointer-events-none absolute -inset-4 rounded-full border border-white/8 bg-white/[0.015]" />
-            <span
-              className={`pointer-events-none absolute -inset-1 rounded-full ${
-                normalizedState === 'triggered'
-                  ? 'animate-pulse border border-rose-200/35 shadow-[0_0_34px_rgba(255,59,48,0.32)]'
-                  : 'border border-white/10 shadow-[0_0_28px_rgba(255,255,255,0.08)]'
-              }`}
-            />
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <span className="inline-flex rounded-full border border-white/15 bg-white/[0.06] p-4 text-white">
-                <HeaderIcon className={isTransitioning ? 'animate-spin' : ''} size={44} />
-              </span>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/88">{currentModeLabel}</p>
-              <p className="mt-2 max-w-[11rem] text-xs leading-snug text-white/62">{currentModeCaption}</p>
-              <span className="mt-3 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/74">
-                {activeBadgeLabel}
-              </span>
-            </div>
-          </button>
-        </div>
-      </div>
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} relative mb-1 overflow-hidden`}>
+        <div className="relative z-10 flex flex-col items-center">
+          <div className={`relative flex aspect-square w-[clamp(12rem,58vw,15.5rem)] items-center justify-center rounded-full border border-white/[0.14] ${stateVisual.surface} shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_22px_55px_rgba(0,0,0,0.22)] backdrop-blur-2xl`}>
+            {isProtected ? (
+              <div className={`pointer-events-none absolute -inset-2 rounded-full ${stateVisual.glow} opacity-20 animate-[alarm-orb-breathe_3.8s_ease-in-out_infinite]`} />
+            ) : null}
+            <div className={`pointer-events-none absolute -inset-2 rounded-full border ${normalizedState === 'armed_custom_bypass' ? 'border-dashed' : 'border-solid'} border-white/[0.09]`} />
+            <div className={`pointer-events-none absolute inset-[7%] rounded-full border ${normalizedState === 'triggered' ? 'animate-pulse border-rose-200/32 shadow-[0_0_34px_rgba(244,63,94,0.28)]' : 'border-white/[0.10]'}`} />
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Modalita</p>
-            <p className="mt-1 text-xs text-white/45">Scegli lo stato operativo dell'allarme.</p>
-          </div>
-          <span className="shrink-0 rounded-full border border-white/12 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/62">
-            {displayedModeActions.length}
-          </span>
-        </div>
-
-        <div className="glass-scrollbar mt-4 flex snap-x items-stretch gap-2.5 overflow-x-auto overscroll-contain pr-1 [scrollbar-width:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch]">
-          {displayedModeActions.map((mode) => {
-            const isActive = normalizedState === mode.state;
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                onClick={() => openActionDialog(mode)}
-                disabled={isActive}
-                title={mode.label}
-                className={`group flex min-h-[5rem] w-[5.35rem] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border px-2.5 py-3 text-center transition-colors min-[420px]:w-[6.25rem] ${
-                  isActive
-                    ? 'cursor-default border-white/24 bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
-                    : mode.variant === 'danger'
-                      ? 'border-rose-300/30 bg-rose-500/12 text-rose-100 hover:bg-rose-500/20'
-                      : mode.variant === 'safe'
-                      ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/20'
-                    : 'border-white/10 bg-white/[0.045] text-white/82 hover:bg-white/[0.08]'
-                }`}
-              >
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
-                    isActive
-                      ? 'border-white/24 bg-white/16 text-white'
-                      : mode.variant === 'danger'
-                        ? 'border-rose-200/28 bg-rose-400/14 text-rose-100'
-                        : mode.variant === 'safe'
-                          ? 'border-emerald-200/28 bg-emerald-400/14 text-emerald-100'
-                          : 'border-white/12 bg-white/[0.06] text-white/78 group-hover:text-white'
-                  }`}
-                >
-                  {mode.icon}
+            <div className="relative z-10 flex max-w-[76%] flex-col items-center text-center">
+              <span className="relative flex h-16 w-16 items-center justify-center">
+                <span className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full border border-white/[0.20] bg-white/[0.13] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_12px_30px_rgba(0,0,0,0.18)]">
+                  <HeaderIcon className={isTransitioning ? 'animate-spin' : ''} size={29} strokeWidth={1.85} />
                 </span>
-                <span className="max-w-full truncate text-xs font-semibold leading-tight">{mode.label}</span>
-                {isActive ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-white/75 shadow-[0_0_8px_rgba(255,255,255,0.45)]" />
-                ) : null}
-              </button>
-            );
-          })}
+              </span>
+              <h3 className="mt-4 max-w-full truncate text-[clamp(1.15rem,5.2vw,1.7rem)] font-semibold leading-none tracking-[-0.05em] text-white">
+                {translatedState}
+              </h3>
+              <p className="mt-2 line-clamp-2 text-xs font-medium leading-snug text-white/54">{currentModeCaption}</p>
+            </div>
+          </div>
+
         </div>
       </div>
+
+      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
+        <div className="mb-2 flex items-center justify-between gap-3 px-1">
+          <span className="min-w-0 truncate text-xs font-semibold text-white/48">Modalità</span>
+          <span className="ml-auto max-w-[9rem] truncate text-xs font-semibold text-white/78">
+            {selectedMode?.label ?? currentModeLabel}
+          </span>
+        </div>
+
+        <div className="liquid-segmented-control">
+          <div
+            className="grid w-full grid-flow-col gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            style={{ gridAutoColumns: 'minmax(2.75rem, 1fr)' }}
+            onWheel={scrollModesWithWheel}
+          >
+            {supportedModes.map((mode) => {
+              const isSelected = selectedMode?.id === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setSelectedModeId(mode.id)}
+                  disabled={isTransitioning || isUnavailable}
+                  title={mode.label}
+                  className={`group flex h-9 w-full min-w-0 items-center justify-center rounded-full px-2 transition-all active:scale-[0.95] disabled:cursor-default disabled:opacity-45 sm:h-10 ${
+                    isSelected
+                      ? 'liquid-segmented-option-active'
+                      : 'liquid-segmented-option-inactive'
+                  }`}
+                  aria-pressed={isSelected}
+                  aria-label={`Seleziona ${mode.label}`}
+                >
+                  <span className="shrink-0">{mode.icon}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (primaryAction) {
+              openActionDialog(primaryAction);
+            }
+          }}
+          disabled={primaryActionDisabled}
+          className={`mt-3 flex min-h-[4.6rem] w-full items-center justify-between gap-3 rounded-[1.35rem] border px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl transition active:scale-[0.985] disabled:cursor-default disabled:opacity-45 ${stateVisual.cta}`}
+          aria-label={primaryActionLabel}
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-[0.58rem] font-bold uppercase tracking-[0.16em] opacity-52">
+              {primaryActionEyebrow}
+            </span>
+            <span className="mt-1 block truncate text-sm font-bold">{primaryActionLabel}</span>
+            <span className="mt-1 block text-[0.69rem] font-medium leading-snug opacity-62">
+              {primaryActionDescription}
+            </span>
+          </span>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.16] bg-white/[0.10]">
+            {normalizedState === 'triggered' || selectedIsActive ? <LockOpen size={16} /> : selectedMode?.icon ?? <Shield size={16} />}
+          </span>
+        </button>
+      </div>
+
+      {triggerAction ? (
+        <button
+          type="button"
+          onClick={() => openActionDialog(triggerAction)}
+          disabled={normalizedState === 'triggered' || isTransitioning || isUnavailable}
+          className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 flex min-h-[4.75rem] w-full items-center justify-center text-center text-sm font-bold uppercase tracking-[0.14em] text-rose-100 transition hover:border-white/[0.12] hover:text-rose-50 active:scale-[0.99] disabled:cursor-default disabled:opacity-45`}
+          aria-label="Attiva SOS emergenza"
+        >
+          SOS Emergenza
+        </button>
+      ) : null}
 
       <SecurityAuthModal
         isOpen={Boolean(pendingAction)}
         pendingAlarmState={pendingAction?.state ?? null}
         pendingStateRequiresCode={pendingNeedsCode}
-        description={
-          unlockCodeActive
-            ? `${alarmCodeTypeLabel} locale dashboard richiesto per autorizzare l'azione.`
-            : `${alarmCodeTypeLabel} richiesto dall'entita Home Assistant e inviato al servizio.`
-        }
+        title={pendingSecurityRequirement?.title}
+        description={pendingSecurityRequirement?.description}
         authError={authError}
         isAuthBusy={isAuthBusy}
         isAlarmCodeNumeric={numericCodeMode}
         alarmCodeTypeLabel={alarmCodeTypeLabel}
         authPinInput={authCode}
-        onPinInputChange={(value) =>
+        preferDeviceAuth={pendingPrefersDeviceAuth}
+        deviceAuthLabel="Verifica dispositivo"
+        onVerifyWithDevice={pendingPrefersDeviceAuth ? confirmPendingDeviceAuth : undefined}
+        onPinInputChange={(value) => {
+          setAuthSubmissionError('');
           setAuthCode(
             numericCodeMode
               ? value.replace(/[^\d]/g, '').slice(0, codeLengthLimit)
               : value.slice(0, codeLengthLimit),
-          )
-        }
+          );
+        }}
         onVerifyWithPin={confirmPendingAction}
         onPushPinDigit={pushCodeDigit}
         onPopPinDigit={popCodeDigit}
@@ -562,7 +840,10 @@ export function AlarmControls({
 
       <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Log</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Attività recente</p>
+            <p className="mt-1 text-xs text-white/38">Eventi reali Home Assistant quando disponibili.</p>
+          </div>
           <span className="text-[11px] font-medium text-white/38">{timeline.length}/{maxTimelineEntries}</span>
         </div>
         <div className="mt-3 space-y-2.5">

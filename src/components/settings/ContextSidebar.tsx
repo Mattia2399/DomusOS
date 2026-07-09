@@ -12,7 +12,9 @@ import { AlarmControls } from './AlarmControls';
 import { VacuumControls } from './VacuumControls';
 import { LockControls } from './LockControls';
 import { CoverControls } from './CoverControls';
+import { SwitchControls } from './SwitchControls';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
 import { StatusGlow } from '../widgets/micro/StatusGlow';
 import { ValuePill } from '../widgets/micro/ValuePill';
 import { MiniRing } from '../widgets/micro/MiniRing';
@@ -24,6 +26,7 @@ import { MicroSlider } from '../widgets/micro/MicroSlider';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import type { DashboardTheme } from '../../hooks/useProfileSettings';
 import type { MockEntityStateMap } from '../../types/ha';
+import type { AlarmActionAuthOptions } from '../../utils/alarmSecurityPolicy';
 
 type MediaRepeatMode = 'off' | 'all' | 'one';
 type MediaOutputKind = 'speaker' | 'tv' | 'cast';
@@ -55,6 +58,14 @@ interface ContextSidebarProps {
     supportsBrightness?: boolean;
     supportsColorTemp?: boolean;
     supportsColor?: boolean;
+    supportsWhite?: boolean;
+    supportsEffects?: boolean;
+    supportsFlash?: boolean;
+    supportsTransition?: boolean;
+    minColorTempKelvin?: number;
+    maxColorTempKelvin?: number;
+    effect?: string;
+    effectList?: string[];
   };
   climate: {
     name: string;
@@ -72,6 +83,28 @@ interface ContextSidebarProps {
     hvacAction?: string;
     fanMode?: string;
     fanModes?: string[];
+    supportedFeatures?: number;
+    precision?: number;
+    currentHumidity?: number;
+    targetHumidity?: number;
+    minHumidity?: number;
+    maxHumidity?: number;
+    targetHumidityStep?: number;
+    presetMode?: string;
+    presetModes?: string[];
+    swingMode?: string;
+    swingModes?: string[];
+    swingHorizontalMode?: string;
+    swingHorizontalModes?: string[];
+    supportsTargetTemperature?: boolean;
+    supportsTargetTemperatureRange?: boolean;
+    supportsTargetHumidity?: boolean;
+    supportsFanMode?: boolean;
+    supportsPresetMode?: boolean;
+    supportsSwingMode?: boolean;
+    supportsSwingHorizontalMode?: boolean;
+    supportsTurnOn?: boolean;
+    supportsTurnOff?: boolean;
     temperatureUnit?: string;
     rawAttributes?: Record<string, unknown>;
   };
@@ -159,6 +192,7 @@ interface ContextSidebarProps {
     status?: string;
     codeArmRequired?: boolean;
     unlockCode?: string;
+    localExtraCode?: string;
     requireAuthToDisarm?: boolean;
     changedBy?: string;
     activityLogLimit?: number;
@@ -184,6 +218,7 @@ interface ContextSidebarProps {
     }>;
     activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
+    batteryLevel?: number;
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
   };
@@ -213,11 +248,16 @@ interface ContextSidebarProps {
   onToggleMicroWidget?: (entityId: string, nextActive: boolean) => void;
   onSetMicroSliderValue?: (entityId: string, value: number) => void;
   onNavigateMicroWidgetPage?: (path: string) => void;
+  onAuthorizeAlarmDeviceAuth?: (label: string) => Promise<boolean>;
   actions: {
     toggleLamp: () => void;
-    setLampBrightness: (value: number) => void;
-    setLampColorTemp: (kelvin: number) => void;
-    setLampHsColor: (hs: [number, number]) => void;
+    toggleSwitch: () => void;
+    setLampBrightness: (value: number, options?: { transition?: number }) => void;
+    setLampColorTemp: (kelvin: number, options?: { transition?: number }) => void;
+    setLampHsColor: (hs: [number, number], options?: { transition?: number }) => void;
+    setLampWhite: (value: number, options?: { transition?: number }) => void;
+    setLampEffect: (effect: string, options?: { transition?: number }) => void;
+    flashLamp: (mode: 'short' | 'long') => void;
     toggleClimatePower: () => void;
     decreaseClimateTarget: () => void;
     increaseClimateTarget: () => void;
@@ -227,6 +267,10 @@ interface ContextSidebarProps {
     setClimateTargetRange?: (low: number, high: number) => void;
     setClimateMode?: (mode: string) => void;
     setClimateFanMode?: (mode: string) => void;
+    setClimateTargetHumidity?: (value: number) => void;
+    setClimatePresetMode?: (mode: string) => void;
+    setClimateSwingMode?: (mode: string) => void;
+    setClimateSwingHorizontalMode?: (mode: string) => void;
     toggleSpeakerPlayback: () => void;
     toggleSpeakerPower: () => void;
     previousSpeakerTrack: () => void;
@@ -238,13 +282,13 @@ interface ContextSidebarProps {
     cycleSpeakerRepeatMode: () => void;
     selectSpeakerOutputDevice: (deviceId: string) => void;
     toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
-    disarmAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
-    armAlarmHome: (code?: string) => boolean | void | Promise<boolean | void>;
-    armAlarmAway: (code?: string) => boolean | void | Promise<boolean | void>;
-    armAlarmNight: (code?: string) => boolean | void | Promise<boolean | void>;
-    armAlarmVacation: (code?: string) => boolean | void | Promise<boolean | void>;
-    armAlarmCustomBypass: (code?: string) => boolean | void | Promise<boolean | void>;
-    triggerAlarm: (code?: string) => boolean | void | Promise<boolean | void>;
+    disarmAlarm: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    armAlarmHome: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    armAlarmAway: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    armAlarmNight: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    armAlarmVacation: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    armAlarmCustomBypass: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
+    triggerAlarm: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
     startVacuum: () => void;
     pauseVacuum: () => void;
     stopVacuum: () => void;
@@ -346,6 +390,7 @@ export function ContextSidebar({
   onToggleMicroWidget,
   onSetMicroSliderValue,
   onNavigateMicroWidgetPage,
+  onAuthorizeAlarmDeviceAuth,
   actions,
 }: ContextSidebarProps) {
   const activeDeviceLayoutClass = externalScrollContainer
@@ -436,6 +481,10 @@ export function ContextSidebar({
           onSetTargetRange={actions.setClimateTargetRange}
           onSetMode={actions.setClimateMode}
           onSetFanMode={actions.setClimateFanMode}
+          onSetTargetHumidity={actions.setClimateTargetHumidity}
+          onSetPresetMode={actions.setClimatePresetMode}
+          onSetSwingMode={actions.setClimateSwingMode}
+          onSetSwingHorizontalMode={actions.setClimateSwingHorizontalMode}
         />
       ) : null}
 
@@ -446,6 +495,27 @@ export function ContextSidebar({
           onBrightnessChange={actions.setLampBrightness}
           onColorTempChange={actions.setLampColorTemp}
           onColorChange={actions.setLampHsColor}
+          onWhiteChange={actions.setLampWhite}
+          onEffectChange={actions.setLampEffect}
+          onFlash={actions.flashLamp}
+        />
+      ) : null}
+
+      {activeDevice?.type === 'switch' ? (
+        <SwitchControls
+          name={activeDevice.name}
+          entityId={activeDevice.switchEntityId}
+          fallbackStatus={activeDevice.status}
+          entity={resolveEntityStateById(haStates, activeDevice.switchEntityId)}
+          consumptionEntityId={activeDevice.switchConsumptionEntityId}
+          consumptionEntity={resolveEntityStateById(haStates, activeDevice.switchConsumptionEntityId)}
+          consumptionHistory={
+            activeDevice.switchConsumptionEntityId
+              ? microChartHistoryByEntity[activeDevice.switchConsumptionEntityId.trim()] ??
+                microChartHistoryByEntity[activeDevice.switchConsumptionEntityId.trim().toLowerCase()]
+              : undefined
+          }
+          onToggle={actions.toggleSwitch}
         />
       ) : null}
 
@@ -511,8 +581,9 @@ export function ContextSidebar({
         <SensorControls
           name={activeDevice.name}
           status={activeDevice.status}
-          value={activeDevice.sensorValue ?? 0}
-          unit={activeDevice.sensorUnit ?? '%'}
+          value={activeDevice.sensorValue}
+          unit={activeDevice.sensorUnit}
+          displayPrecision={activeDevice.sensorDisplayPrecision}
           entityId={activeDevice.sensorEntityId}
           deviceClass={activeDevice.sensorDeviceClass}
           history={activeDevice.sensorHistory}
@@ -538,6 +609,7 @@ export function ContextSidebar({
       {activeDevice?.type === 'alarm' ? (
         <AlarmControls
           alarm={{ ...alarm, name: activeDevice.name }}
+          onAuthorizeDeviceAuth={onAuthorizeAlarmDeviceAuth}
           onDisarm={actions.disarmAlarm}
           onArmHome={actions.armAlarmHome}
           onArmAway={actions.armAlarmAway}
@@ -586,19 +658,13 @@ export function ContextSidebar({
 
       {activeDevice?.type === 'members' ? (
         <div className={CONTEXT_PANEL_LAYOUT.shell}>
-          <div className="liquid-glass-panel mb-1 p-[clamp(0.9rem,3vw,1.6rem)]">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-300/35 bg-cyan-500/15 text-cyan-100">
-                <Users size={18} />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-lg font-semibold text-white/95">{activeDevice.name || 'Members'}</p>
-                <p className="text-xs text-white/60">
-                  {membersMapPoints.length} posizione{membersMapPoints.length === 1 ? '' : 'i'} disponibili
-                </p>
-              </div>
-            </div>
-          </div>
+          <ContextPanelHeader
+            title={activeDevice.name}
+            subtitle={`${membersMapPoints.length} posizione${membersMapPoints.length === 1 ? '' : 'i'} disponibili`}
+            icon={<Users size={21} />}
+            fallbackTitle="Members"
+            iconClassName="border-cyan-300/25 bg-cyan-500/12 text-cyan-100"
+          />
 
           <div className="liquid-glass-panel mb-1 p-[clamp(0.9rem,3vw,1.6rem)]">
             <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Mappa Presenze</p>

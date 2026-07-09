@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Droplets, Flame, Minus, Plus, Power, Snowflake, Sparkles, Wind } from 'lucide-react';
+import { Droplets, Fan, Flame, Minus, Plus, Power, Snowflake, Sparkles, Wind, X } from 'lucide-react';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
-import { ROOT_CANVAS_ROW_UNITS, type Widget } from '../../types/dashboardModels';
+import { useObservedElementSize } from '../../hooks/useObservedElementSize';
+import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
-import { useCardSize } from './useCardSize';
+import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
+import {
+  CLIMATE_FEATURE_TARGET_HUMIDITY,
+  climateFeatureEnabled,
+  resolveClimatePrimaryControl,
+} from './climateCardModel';
+import {
+  resolveClimatePixelDisplayVariant,
+  resolveWidgetDisplayVariant,
+  type WidgetDisplayMetrics,
+  type WidgetDisplayVariant,
+} from './widgetDisplayVariant';
 
 type ClimateCardProps = {
   widget: Widget;
@@ -14,12 +26,21 @@ type ClimateCardProps = {
   liveEntity?: MockEntityState;
   onTemperatureChange?: (nextTemp: number) => void;
   onTargetRangeChange?: (low: number, high: number) => void;
+  onTargetHumidityChange?: (nextHumidity: number) => void;
+  onPowerToggle?: () => void;
   onModeChange?: (nextMode: string) => void;
   onFanModeChange?: (nextMode: string) => void;
+  onPresetModeChange?: (nextMode: string) => void;
+  onSwingModeChange?: (nextMode: string) => void;
+  onSwingHorizontalModeChange?: (nextMode: string) => void;
+  gridBreakpoint?: GridEngineBreakpoint;
+  displayVariant?: WidgetDisplayVariant;
+  onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
 const CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY = '__dashboard_pending_climate_target';
 const CLIMATE_PENDING_FAN_ATTRIBUTE_KEY = '__dashboard_pending_climate_fan';
+const CLIMATE_PENDING_HUMIDITY_ATTRIBUTE_KEY = '__dashboard_pending_climate_humidity';
 
 type ClimateSurface = {
   gradient: string;
@@ -131,6 +152,20 @@ function formatFanModeLabel(mode: string) {
   return mode.length ? mode.toUpperCase() : '--';
 }
 
+function formatClimateOptionLabel(mode: string) {
+  const normalized = normalizeMode(mode).replace(/[_-]+/g, ' ');
+  if (!normalized) return '--';
+  if (normalized === 'none') return 'Nessuno';
+  if (normalized === 'off') return 'Fermo';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function resolveNextClimateOption(modes: string[], currentMode: string) {
+  if (modes.length === 0) return '';
+  const currentIndex = modes.findIndex((mode) => normalizeMode(mode) === normalizeMode(currentMode));
+  return modes[(currentIndex + 1 + modes.length) % modes.length] ?? modes[0] ?? '';
+}
+
 function toCanonicalClimateMode(value: string | undefined) {
   const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
   if (!normalized) {
@@ -174,14 +209,15 @@ function isEquivalentMode(currentMode: string, candidateMode: string) {
 }
 
 function resolveActiveMode(entity: MockEntityState | undefined, widget: Widget, state: DashboardStateShape) {
+  const isDemoClimate = !entity && widget.entityId === 'climate.air_conditioner';
   const fallbackFromState =
-    widget.id === 'climate.air_conditioner'
+    isDemoClimate
       ? toCanonicalClimateMode(state.climate.mode)
       : '';
   const fallbackFromWidget = toCanonicalClimateMode(widget.status);
 
   // Demo widget: mode selection in builder should immediately drive the card surface.
-  if (widget.id === 'climate.air_conditioner' && fallbackFromState) {
+  if (isDemoClimate && fallbackFromState) {
     return fallbackFromState;
   }
 
@@ -415,16 +451,32 @@ export function ClimateCard({
   liveEntity,
   onTemperatureChange,
   onTargetRangeChange,
+  onTargetHumidityChange,
+  onPowerToggle,
   onModeChange,
   onFanModeChange,
+  onPresetModeChange,
+  onSwingModeChange,
+  onSwingHorizontalModeChange,
+  gridBreakpoint,
+  displayVariant,
+  onDisplayMetricsChange,
 }: ClimateCardProps) {
-  const { ref: cardRef, width: cardWidth, height: cardHeight, density: cardDensity, hasSize: hasCardSize } = useCardSize({
-    tinyWidth: 250,
-    tinyHeight: 168,
-    compactWidth: 340,
-    compactHeight: 220,
+  const fallbackVariant = displayVariant ?? resolveWidgetDisplayVariant({
+    kind: 'climate',
+    breakpoint: gridBreakpoint,
+    layout: widget.layout,
+    parentSectionId: widget.parentSectionId,
   });
-  const isDemoClimate = widget.id === 'climate.air_conditioner';
+  const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
+  const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
+  const layoutVariant = measuredSize
+    ? resolveClimatePixelDisplayVariant({ width: measuredSize.width, height: measuredSize.height })
+    : fallbackVariant;
+  const cardWidth = measuredSize?.width ?? 0;
+  const cardHeight = measuredSize?.height ?? 0;
+  const hasCardSize = measuredSize !== null;
+  const isDemoClimate = !liveEntity && widget.entityId === 'climate.air_conditioner';
   const rawAttributes = liveEntity?.rawAttributes;
   const activeMode = resolveActiveMode(liveEntity, widget, state);
   const fallbackStatus = modeToLabel(activeMode);
@@ -467,6 +519,35 @@ export function ClimateCard({
     toFiniteNumber(rawAttributes?.target_temp_step) ??
     (isDemoClimate ? toFiniteNumber(state.climate.targetTempStep) : undefined) ??
     0.5;
+  const supportedFeatures =
+    toFiniteNumber(liveEntity?.supportedFeatures) ??
+    toFiniteNumber(rawAttributes?.supported_features);
+  const currentHumidity =
+    toFiniteNumber(liveEntity?.currentHumidity) ??
+    toFiniteNumber(rawAttributes?.current_humidity) ??
+    (isDemoClimate ? toFiniteNumber(state.climate.currentHumidity) : undefined);
+  const targetHumidity =
+    toFiniteNumber(liveEntity?.targetHumidity) ??
+    toFiniteNumber(rawAttributes?.humidity) ??
+    (isDemoClimate ? toFiniteNumber(state.climate.targetHumidity) : undefined);
+  const minHumidity =
+    toFiniteNumber(liveEntity?.minHumidity) ??
+    toFiniteNumber(rawAttributes?.min_humidity) ??
+    (isDemoClimate ? toFiniteNumber(state.climate.minHumidity) : undefined) ??
+    30;
+  const maxHumidity =
+    toFiniteNumber(liveEntity?.maxHumidity) ??
+    toFiniteNumber(rawAttributes?.max_humidity) ??
+    (isDemoClimate ? toFiniteNumber(state.climate.maxHumidity) : undefined) ??
+    99;
+  const targetHumidityStep =
+    toFiniteNumber(liveEntity?.targetHumidityStep) ??
+    toFiniteNumber(rawAttributes?.target_humidity_step) ??
+    (isDemoClimate ? toFiniteNumber(state.climate.targetHumidityStep) : undefined) ??
+    1;
+  const supportsTargetHumidity =
+    climateFeatureEnabled(supportedFeatures, CLIMATE_FEATURE_TARGET_HUMIDITY) ??
+    targetHumidity !== undefined;
   const hasRangeTarget = targetTempLow !== undefined && targetTempHigh !== undefined;
   const hvacModesFromAttributes = toStringArray(rawAttributes?.hvac_modes);
   const hvacModesSource =
@@ -500,12 +581,64 @@ export function ClimateCard({
       (isDemoClimate ? toTrimmedString(state.climate.fanMode) : undefined) ??
       fanModes[0],
   );
+  const presetModesFromAttributes = toStringArray(rawAttributes?.preset_modes);
+  const presetModes = normalizeModes(
+    Array.isArray(liveEntity?.presetModes) && liveEntity.presetModes.length > 0
+      ? liveEntity.presetModes
+      : presetModesFromAttributes.length > 0
+        ? presetModesFromAttributes
+        : isDemoClimate
+          ? (state.climate.presetModes ?? [])
+          : [],
+  );
+  const activePresetMode = normalizeMode(
+    toTrimmedString(liveEntity?.presetMode) ??
+      toTrimmedString(rawAttributes?.preset_mode) ??
+      (isDemoClimate ? toTrimmedString(state.climate.presetMode) : undefined) ??
+      presetModes[0],
+  );
+  const swingModesFromAttributes = toStringArray(rawAttributes?.swing_modes);
+  const swingModes = normalizeModes(
+    Array.isArray(liveEntity?.swingModes) && liveEntity.swingModes.length > 0
+      ? liveEntity.swingModes
+      : swingModesFromAttributes.length > 0
+        ? swingModesFromAttributes
+        : isDemoClimate
+          ? (state.climate.swingModes ?? [])
+          : [],
+  );
+  const activeSwingMode = normalizeMode(
+    toTrimmedString(liveEntity?.swingMode) ??
+      toTrimmedString(rawAttributes?.swing_mode) ??
+      (isDemoClimate ? toTrimmedString(state.climate.swingMode) : undefined) ??
+      swingModes[0],
+  );
+  const swingHorizontalModesFromAttributes = toStringArray(rawAttributes?.swing_horizontal_modes);
+  const swingHorizontalModes = normalizeModes(
+    Array.isArray(liveEntity?.swingHorizontalModes) && liveEntity.swingHorizontalModes.length > 0
+      ? liveEntity.swingHorizontalModes
+      : swingHorizontalModesFromAttributes.length > 0
+        ? swingHorizontalModesFromAttributes
+        : isDemoClimate
+          ? (state.climate.swingHorizontalModes ?? [])
+          : [],
+  );
+  const activeSwingHorizontalMode = normalizeMode(
+    toTrimmedString(liveEntity?.swingHorizontalMode) ??
+      toTrimmedString(rawAttributes?.swing_horizontal_mode) ??
+      (isDemoClimate ? toTrimmedString(state.climate.swingHorizontalMode) : undefined) ??
+      swingHorizontalModes[0],
+  );
 
   const [localTarget, setLocalTarget] = useState<number | undefined>(targetTemp);
   const [localRange, setLocalRange] = useState<{ low: number; high: number } | null>(
     hasRangeTarget ? { low: targetTempLow, high: targetTempHigh } : null,
   );
   const [localFanMode, setLocalFanMode] = useState(activeFanMode);
+  const [localHumidity, setLocalHumidity] = useState<number | undefined>(targetHumidity);
+  const [localPresetMode, setLocalPresetMode] = useState(activePresetMode);
+  const [localSwingMode, setLocalSwingMode] = useState(activeSwingMode);
+  const [localSwingHorizontalMode, setLocalSwingHorizontalMode] = useState(activeSwingHorizontalMode);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -524,12 +657,52 @@ export function ClimateCard({
     setLocalFanMode(activeFanMode);
   }, [activeFanMode]);
 
+  useEffect(() => {
+    setLocalHumidity(targetHumidity);
+  }, [targetHumidity]);
+
+  useEffect(() => {
+    setLocalPresetMode(activePresetMode);
+  }, [activePresetMode]);
+
+  useEffect(() => {
+    setLocalSwingMode(activeSwingMode);
+  }, [activeSwingMode]);
+
+  useEffect(() => {
+    setLocalSwingHorizontalMode(activeSwingHorizontalMode);
+  }, [activeSwingHorizontalMode]);
+
+  useEffect(() => {
+    if (!measuredSize || !onDisplayMetricsChange) return;
+    onDisplayMetricsChange({
+      widgetId: widget.id,
+      width: measuredSize.width,
+      height: measuredSize.height,
+      variant: layoutVariant,
+    });
+  }, [layoutVariant, measuredSize, onDisplayMetricsChange, widget.id]);
+
+  useEffect(() => {
+    if (isEditMode) setIsModeMenuOpen(false);
+  }, [isEditMode]);
+
   const safeMin = minTemp ?? Number.NEGATIVE_INFINITY;
   const safeMax = maxTemp ?? Number.POSITIVE_INFINITY;
   const safeStep = targetStep > 0 ? targetStep : 0.5;
   const surface = modeToSurface(activeMode);
   const targetPending = rawAttributes?.[CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY] === true;
   const fanPending = rawAttributes?.[CLIMATE_PENDING_FAN_ATTRIBUTE_KEY] === true;
+  const humidityPending = rawAttributes?.[CLIMATE_PENDING_HUMIDITY_ATTRIBUTE_KEY] === true;
+  const primaryControl = resolveClimatePrimaryControl(activeMode, supportsTargetHumidity);
+  const humidityMin = Math.min(minHumidity, maxHumidity);
+  const humidityMax = Math.max(minHumidity, maxHumidity);
+  const humidityStep = targetHumidityStep > 0 ? targetHumidityStep : 1;
+  const humidityValue = clamp(
+    localHumidity ?? targetHumidity ?? currentHumidity ?? humidityMin,
+    humidityMin,
+    humidityMax,
+  );
   const setToLabel = localRange
     ? formatRangeTarget(localRange.low, localRange.high)
     : formatSingleTarget(localTarget);
@@ -542,20 +715,32 @@ export function ClimateCard({
   const currentTempLabel =
     currentTemp !== undefined ? `${currentTemp.toFixed(1)}${temperatureUnit}` : `--${temperatureUnit}`;
   const subtitleLine = `${statusLine} \u2022 ${currentTempLabel}`;
-  const isLayoutDense = widget.layout.w <= 1 || widget.layout.h <= ROOT_CANVAS_ROW_UNITS;
-  const isLayoutCompact = widget.layout.w <= 2 || widget.layout.h <= ROOT_CANVAS_ROW_UNITS + 1;
-  const isDenseCard = cardDensity === 'tiny' || isLayoutDense;
-  const isCompactClimateCard = isDenseCard || cardDensity === 'compact' || isLayoutCompact;
+  const isDenseCard = layoutVariant === 'compact';
+  const isCompactClimateCard = layoutVariant !== 'full';
+  const showFullDetails = layoutVariant === 'full' && primaryControl !== 'off';
+  const fullDetailSwingModes = swingModes.length > 0 ? swingModes : swingHorizontalModes;
+  const fullDetailSwingMode = swingModes.length > 0 ? localSwingMode : localSwingHorizontalMode;
+  const setFullDetailSwingMode = swingModes.length > 0
+    ? (nextMode: string) => {
+        setLocalSwingMode(nextMode);
+        onSwingModeChange?.(nextMode);
+      }
+    : (nextMode: string) => {
+        setLocalSwingHorizontalMode(nextMode);
+        onSwingHorizontalModeChange?.(nextMode);
+      };
   const normalizedTitle = widget.title.trim();
   const isLongTitle = normalizedTitle.length >= (isDenseCard ? 12 : isCompactClimateCard ? 16 : 22);
-  const fanModeMinHeight = ROOT_CANVAS_ROW_UNITS + 1;
   const hasFanModeControlSpace =
-    widget.layout.w >= 2 &&
-    widget.layout.h >= fanModeMinHeight &&
+    layoutVariant !== 'compact' &&
     (!hasCardSize || (cardWidth >= 200 && cardHeight >= 148));
   const showFanModeControl = fanModes.length > 0 && hasFanModeControlSpace && Boolean(onFanModeChange);
   const showHvacModeControl = hvacModes.length > 1 && Boolean(onModeChange);
-  const cardRadiusClass = isDenseCard ? 'rounded-[1.55rem]' : 'rounded-[1.9rem]';
+  const cardRadiusClass = isDenseCard
+    ? 'rounded-[1.7rem]'
+    : isCompactClimateCard
+      ? 'rounded-[1.85rem]'
+      : 'rounded-[2rem]';
   const cardPaddingClass = isDenseCard ? 'px-3 py-2.5' : isCompactClimateCard ? 'px-3.5 py-3' : 'px-4 py-4';
   const headerGapClass = isDenseCard ? 'gap-2.5' : isCompactClimateCard ? 'gap-2.5' : 'gap-3';
   const controlsGapClass = isDenseCard ? 'gap-2' : 'gap-2.5';
@@ -650,7 +835,7 @@ export function ClimateCard({
               <button
                 type="button"
                 className={`inline-flex max-w-[7.75rem] items-center justify-center gap-1.5 rounded-full border border-white/[0.14] bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl transition-all hover:bg-white/[0.17] active:scale-95 ${
-                  isDenseCard ? 'h-8 px-2.5 text-[0.68rem]' : 'h-9 px-3 text-[0.72rem]'
+                  isDenseCard ? 'h-8 w-8 p-0' : 'h-9 px-3 text-[0.72rem]'
                 }`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -660,103 +845,148 @@ export function ClimateCard({
                 title={`Modalita clima: ${modeToLabel(selectedHvacMode)}`}
               >
                 {modeControlIcon(selectedHvacMode, isDenseCard ? 14 : 15)}
-                <span className="min-w-0 truncate font-semibold leading-none">{modeChipLabel(selectedHvacMode)}</span>
+                {!isDenseCard ? (
+                  <span className="min-w-0 truncate font-semibold leading-none">{modeChipLabel(selectedHvacMode)}</span>
+                ) : null}
               </button>
-              {isModeMenuOpen ? (
-                <div
-                  className="absolute right-0 top-[calc(100%+0.45rem)] z-30 min-w-[8.75rem] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#1C1C1E]/82 p-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {hvacModes.map((mode) => {
-                    const active = isEquivalentMode(selectedHvacMode, mode);
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs font-semibold transition-colors ${
-                          active ? 'bg-white text-zinc-950' : 'text-white/78 hover:bg-white/[0.08] hover:text-white'
-                        }`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setIsModeMenuOpen(false);
-                          onModeChange?.(mode);
-                        }}
-                      >
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                          {modeControlIcon(mode, 13)}
-                        </span>
-                        <span className="min-w-0 truncate">{modeChipLabel(mode)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
             </div>
           ) : null}
         </div>
 
-        <div className={`relative mt-auto flex items-center justify-between ${controlsGapClass} ${isEditMode ? 'pointer-events-none' : ''}`}>
-          <button
-            type="button"
-            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (localRange && onTargetRangeChange) {
-                const nextLow = clamp(localRange.low - safeStep, safeMin, safeMax);
-                const nextHigh = clamp(localRange.high - safeStep, safeMin, safeMax);
-                const low = Math.min(nextLow, nextHigh);
-                const high = Math.max(nextLow, nextHigh);
-                setLocalRange({ low, high });
-                onTargetRangeChange(low, high);
-                return;
-              }
-              if (localTarget !== undefined && onTemperatureChange) {
-                const next = clamp(localTarget - safeStep, safeMin, safeMax);
-                setLocalTarget(next);
-                onTemperatureChange(next);
-              }
-            }}
-            aria-label="Diminuisci temperatura target"
-          >
-            <Minus size={controlIconSize} />
-          </button>
+        {primaryControl === 'temperature' ? (
+          <div className={`relative mt-auto flex items-center justify-between ${controlsGapClass} ${isEditMode ? 'pointer-events-none' : ''}`}>
+            <button
+              type="button"
+              className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (localRange && onTargetRangeChange) {
+                  const nextLow = clamp(localRange.low - safeStep, safeMin, safeMax);
+                  const nextHigh = clamp(localRange.high - safeStep, safeMin, safeMax);
+                  const low = Math.min(nextLow, nextHigh);
+                  const high = Math.max(nextLow, nextHigh);
+                  setLocalRange({ low, high });
+                  onTargetRangeChange(low, high);
+                  return;
+                }
+                if (localTarget !== undefined && onTemperatureChange) {
+                  const next = clamp(localTarget - safeStep, safeMin, safeMax);
+                  setLocalTarget(next);
+                  onTemperatureChange(next);
+                }
+              }}
+              aria-label="Diminuisci temperatura target"
+            >
+              <Minus size={controlIconSize} />
+            </button>
 
-          <div className="min-w-0 flex-1 text-center">
-            <p className={setPointClass}>
-              {setToLabel}
-            </p>
-            <p className={unitClass}>
-              {temperatureUnit}
+            <div className="min-w-0 flex-1 text-center">
+              <p className={setPointClass}>{setToLabel}</p>
+              <p className={unitClass}>{temperatureUnit}</p>
+            </div>
+
+            <button
+              type="button"
+              className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (localRange && onTargetRangeChange) {
+                  const nextLow = clamp(localRange.low + safeStep, safeMin, safeMax);
+                  const nextHigh = clamp(localRange.high + safeStep, safeMin, safeMax);
+                  const low = Math.min(nextLow, nextHigh);
+                  const high = Math.max(nextLow, nextHigh);
+                  setLocalRange({ low, high });
+                  onTargetRangeChange(low, high);
+                  return;
+                }
+                if (localTarget !== undefined && onTemperatureChange) {
+                  const next = clamp(localTarget + safeStep, safeMin, safeMax);
+                  setLocalTarget(next);
+                  onTemperatureChange(next);
+                }
+              }}
+              aria-label="Aumenta temperatura target"
+            >
+              <Plus size={controlIconSize} />
+            </button>
+          </div>
+        ) : null}
+
+        {primaryControl === 'humidity' ? (
+          <div className={`relative mt-auto flex items-center justify-between ${controlsGapClass} ${isEditMode ? 'pointer-events-none' : ''}`}>
+            <button
+              type="button"
+              className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(100,210,255,0.12)] transition-all active:scale-95`}
+              onClick={(event) => {
+                event.stopPropagation();
+                const next = clamp(humidityValue - humidityStep, humidityMin, humidityMax);
+                setLocalHumidity(next);
+                onTargetHumidityChange?.(next);
+              }}
+              aria-label="Diminuisci umidita target"
+            >
+              <Minus size={controlIconSize} />
+            </button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className={`${setPointClass} ${humidityPending ? 'opacity-70' : ''}`}>{Math.round(humidityValue)}</p>
+              <p className={unitClass}>%</p>
+            </div>
+            <button
+              type="button"
+              className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(100,210,255,0.12)] transition-all active:scale-95`}
+              onClick={(event) => {
+                event.stopPropagation();
+                const next = clamp(humidityValue + humidityStep, humidityMin, humidityMax);
+                setLocalHumidity(next);
+                onTargetHumidityChange?.(next);
+              }}
+              aria-label="Aumenta umidita target"
+            >
+              <Plus size={controlIconSize} />
+            </button>
+          </div>
+        ) : null}
+
+        {primaryControl === 'dry-status' ? (
+          <div className="relative mt-auto flex min-w-0 flex-col items-center justify-center text-center">
+            <Droplets className="mb-1.5 h-7 w-7 text-[#64D2FF]/85" strokeWidth={1.7} />
+            <p className="truncate text-sm font-semibold text-white/88">Deumidifica</p>
+            <p className="mt-0.5 truncate text-[0.68rem] text-white/58">
+              {currentHumidity !== undefined ? `Umidita ${Math.round(currentHumidity)}%` : 'Target non regolabile'}
             </p>
           </div>
+        ) : null}
 
-          <button
-            type="button"
-            className={`${controlsClass} rounded-full ${surface.controlSurface} flex items-center justify-center shadow-[0_0_16px_rgba(255,255,255,0.08)] transition-all active:scale-95`}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (localRange && onTargetRangeChange) {
-                const nextLow = clamp(localRange.low + safeStep, safeMin, safeMax);
-                const nextHigh = clamp(localRange.high + safeStep, safeMin, safeMax);
-                const low = Math.min(nextLow, nextHigh);
-                const high = Math.max(nextLow, nextHigh);
-                setLocalRange({ low, high });
-                onTargetRangeChange(low, high);
-                return;
-              }
-              if (localTarget !== undefined && onTemperatureChange) {
-                const next = clamp(localTarget + safeStep, safeMin, safeMax);
-                setLocalTarget(next);
-                onTemperatureChange(next);
-              }
-            }}
-            aria-label="Aumenta temperatura target"
-          >
-            <Plus size={controlIconSize} />
-          </button>
-        </div>
+        {primaryControl === 'fan' ? (
+          <div className="relative mt-auto flex min-w-0 flex-col items-center justify-center text-center">
+            <Fan className={`mb-1.5 h-7 w-7 text-white/88 ${fanPending ? 'animate-pulse' : ''}`} strokeWidth={1.7} />
+            <p className="max-w-full truncate text-sm font-semibold text-white/90">
+              {localFanMode ? formatFanModeLabel(localFanMode) : 'Ventola'}
+            </p>
+            <p className="mt-0.5 text-[0.68rem] text-white/56">Velocita ventola</p>
+          </div>
+        ) : null}
 
-        {showFanModeControl ? (
+        {primaryControl === 'off' ? (
+          <div className="relative mt-auto flex min-w-0 flex-col items-center justify-center text-center">
+            <button
+              type="button"
+              className={`${isDenseCard ? 'h-10 w-10' : 'h-12 w-12'} flex items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.08] text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all hover:bg-white/[0.14] hover:text-white active:scale-95`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPowerToggle?.();
+              }}
+              aria-label="Accendi clima"
+            >
+              <Power size={isDenseCard ? 17 : 20} />
+            </button>
+            <p className="mt-1.5 text-[0.68rem] text-white/54">
+              {currentTemp !== undefined ? `Ambiente ${currentTemp.toFixed(1)}${temperatureUnit}` : 'Clima spento'}
+            </p>
+          </div>
+        ) : null}
+
+        {showFanModeControl && primaryControl !== 'off' ? (
           <div className={`relative ${isEditMode ? 'pointer-events-none' : ''}`}>
             <div className={fanTrackClass} style={fanTrackStyle}>
               <div className={fanItemsClass} style={fanItemsStyle}>
@@ -808,6 +1038,113 @@ export function ClimateCard({
                   );
                 })}
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showFullDetails ? (
+          <div className={`relative mt-2 grid min-w-0 grid-cols-3 gap-1.5 ${isEditMode ? 'pointer-events-none' : ''}`}>
+            {presetModes.length > 0 ? (
+              <button
+                type="button"
+                className="flex min-w-0 items-center justify-center gap-1 rounded-xl border border-white/[0.10] bg-white/[0.065] px-1.5 py-1.5 text-white/76 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl transition hover:bg-white/[0.11] hover:text-white active:scale-[0.97]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextMode = resolveNextClimateOption(presetModes, localPresetMode);
+                  if (!nextMode) return;
+                  setLocalPresetMode(nextMode);
+                  onPresetModeChange?.(nextMode);
+                }}
+                aria-label={`Cambia preset, attuale ${formatClimateOptionLabel(localPresetMode)}`}
+              >
+                <Sparkles size={12} className="shrink-0 text-white/58" />
+                <span className="min-w-0 truncate text-[0.62rem] font-semibold">
+                  {formatClimateOptionLabel(localPresetMode)}
+                </span>
+              </button>
+            ) : <span />}
+
+            {fullDetailSwingModes.length > 0 ? (
+              <button
+                type="button"
+                className="flex min-w-0 items-center justify-center gap-1 rounded-xl border border-white/[0.10] bg-white/[0.065] px-1.5 py-1.5 text-white/76 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl transition hover:bg-white/[0.11] hover:text-white active:scale-[0.97]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextMode = resolveNextClimateOption(fullDetailSwingModes, fullDetailSwingMode);
+                  if (!nextMode) return;
+                  setFullDetailSwingMode(nextMode);
+                }}
+                aria-label={`Cambia swing, attuale ${formatClimateOptionLabel(fullDetailSwingMode)}`}
+              >
+                <Wind size={12} className="shrink-0 text-white/58" />
+                <span className="min-w-0 truncate text-[0.62rem] font-semibold">
+                  {formatClimateOptionLabel(fullDetailSwingMode)}
+                </span>
+              </button>
+            ) : <span />}
+
+            <div className="flex min-w-0 items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.045] px-1.5 py-1.5 text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+              <Droplets size={12} className="shrink-0 text-white/50" />
+              <span className="min-w-0 truncate text-[0.62rem] font-semibold">
+                {currentHumidity !== undefined ? `${Math.round(currentHumidity)}%` : '--%'}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {isModeMenuOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Scegli la funzionalita"
+            tabIndex={-1}
+            className={`absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden ${cardRadiusClass} border border-white/[0.24] bg-[#0b101a]/28 bg-[linear-gradient(145deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.055)_38%,rgba(8,13,22,0.60)_100%)] ${isDenseCard ? 'p-2' : 'p-3'} shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_18px_44px_rgba(4,8,18,0.30)] backdrop-blur-[30px] backdrop-saturate-[1.45]`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setIsModeMenuOpen(false);
+            }}
+          >
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_68%_at_12%_0%,rgba(255,255,255,0.24),transparent_58%),radial-gradient(70%_72%_at_100%_100%,rgba(255,255,255,0.08),transparent_66%)]" />
+            <div aria-hidden="true" className="pointer-events-none absolute -left-[12%] -top-[34%] h-[62%] w-[72%] rotate-[-10deg] rounded-[50%] border border-white/[0.10] bg-white/[0.08] blur-[1px]" />
+            <div className={`${isDenseCard ? 'mb-1.5' : 'mb-2.5'} relative z-10 flex items-center justify-between gap-3`}>
+              <p className={`min-w-0 truncate font-semibold tracking-[-0.01em] text-white/94 ${isDenseCard ? 'text-xs' : 'text-sm'}`}>Scegli la funzionalità:</p>
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.22] bg-white/[0.11] text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_5px_16px_rgba(0,0,0,0.12)] backdrop-blur-xl transition hover:bg-white/[0.18] hover:text-white active:scale-95"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsModeMenuOpen(false);
+                }}
+                aria-label="Chiudi selezione modalita"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className={`relative z-10 grid min-h-0 flex-1 auto-rows-min ${isDenseCard ? 'grid-cols-2 gap-1.5' : 'grid-cols-3 gap-2'} overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
+              {hvacModes.map((mode) => {
+                const active = isEquivalentMode(selectedHvacMode, mode);
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border px-2 text-center transition-all active:scale-[0.96] ${isDenseCard ? 'min-h-[2.6rem] py-1' : 'min-h-[3.25rem] py-2'} ${
+                      active
+                        ? 'border-white/40 bg-white/[0.22] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)] backdrop-blur-2xl'
+                        : 'border-white/[0.14] bg-white/[0.075] text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl hover:border-white/[0.24] hover:bg-white/[0.13] hover:text-white'
+                    }`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsModeMenuOpen(false);
+                      onModeChange?.(mode);
+                    }}
+                    aria-pressed={active}
+                    aria-label={`Imposta modalita ${modeToLabel(mode)}`}
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center">{modeControlIcon(mode, 17)}</span>
+                    <span className="max-w-full truncate text-[0.64rem] font-semibold">{modeChipLabel(mode)}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ) : null}

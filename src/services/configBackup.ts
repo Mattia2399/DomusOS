@@ -1,3 +1,5 @@
+import { WIDGET_SECRETS_STORAGE_KEY } from './widgetSecrets';
+
 const BACKUP_SCHEMA = 'ha-dashboard-builder-backup';
 const BACKUP_VERSION = 1;
 const HA_LIVE_STORAGE_KEY = 'ha-external-dashboard:ha-live:v1';
@@ -12,9 +14,11 @@ const MANAGED_STORAGE_KEYS = [HA_LIVE_STORAGE_KEY, HA_OAUTH_TOKENS_STORAGE_KEY];
 const BACKUP_EXCLUDED_STORAGE_KEYS = new Set([
   SECURITY_ALARM_PIN_STORAGE_KEY,
   LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY,
+  HA_OAUTH_TOKENS_STORAGE_KEY,
+  WIDGET_SECRETS_STORAGE_KEY,
 ]);
 const BACKUP_EXCLUDED_STORAGE_PREFIXES = [DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX];
-const SENSITIVE_WIDGET_FIELDS = ['alarmUnlockCode', 'lockCode'] as const;
+const SENSITIVE_WIDGET_FIELDS = ['alarmUnlockCode', 'alarmLocalExtraCode', 'lockCode'] as const;
 
 export type DashboardBackupPayload = {
   schema: typeof BACKUP_SCHEMA;

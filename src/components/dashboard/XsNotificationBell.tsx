@@ -43,11 +43,11 @@ export function XsNotificationBell() {
       <button
         type="button"
         onClick={() => setIsNotificationsOpen(true)}
-        className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
         aria-label="Apri notifiche"
         aria-expanded={isNotificationsOpen}
       >
-        <Bell size={18} />
+        <Bell size={17} />
         {unreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 min-w-[1.15rem] rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-[1.15rem] text-white shadow-[0_0_0_2px_rgba(11,13,18,0.9)]">
             {badgeValue}

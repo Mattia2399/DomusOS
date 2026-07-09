@@ -1,0 +1,476 @@
+.switch-card {
+  --switch-accent-rgb: 52 199 89;
+  container-name: switch-card;
+  container-type: size;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.switch-card[data-switch-variant='compact'] {
+  border-radius: 1.2rem;
+}
+
+.switch-card[data-switch-variant='standard'] {
+  border-radius: 1.55rem;
+}
+
+.switch-card[data-switch-variant='full'] {
+  border-radius: 2rem;
+}
+
+.switch-card__surface {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'icon meta state';
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.075), rgb(255 255 255 / 0.025));
+  transition: background 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+}
+
+.switch-card__surface[role='switch'] {
+  cursor: pointer;
+}
+
+.switch-card__surface[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.switch-card__surface:focus-visible {
+  outline: 2px solid rgb(var(--profile-sheet-accent-rgb, 126 167 255) / 0.9);
+  outline-offset: -3px;
+}
+
+.switch-card[data-switch-state='on'] .switch-card__surface {
+  border-color: rgb(var(--switch-accent-rgb) / 0.22);
+  background:
+    radial-gradient(circle at 12% 12%, rgb(var(--switch-accent-rgb) / 0.28), transparent 46%),
+    linear-gradient(145deg, rgb(var(--switch-accent-rgb) / 0.2), rgb(var(--switch-accent-rgb) / 0.075));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 22px rgb(var(--switch-accent-rgb) / 0.14);
+}
+
+.switch-card[data-switch-state='unavailable'] .switch-card__surface {
+  opacity: 0.56;
+}
+
+.switch-card__icon-shell {
+  grid-area: icon;
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 34% 24%, rgb(255 255 255 / 0.16), transparent 48%),
+    rgb(255 255 255 / 0.075);
+  color: rgb(255 255 255 / 0.64);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 -4px 10px rgb(0 0 0 / 0.08),
+    0 5px 12px rgb(0 0 0 / 0.12);
+  transition: background 200ms ease, color 200ms ease, box-shadow 200ms ease, transform 180ms ease;
+}
+
+.switch-card[data-switch-state='on'] .switch-card__icon-shell {
+  border-color: rgb(var(--switch-accent-rgb) / 0.52);
+  background:
+    radial-gradient(circle at 34% 24%, rgb(255 255 255 / 0.3), transparent 44%),
+    linear-gradient(145deg, rgb(var(--switch-accent-rgb) / 0.78), rgb(var(--switch-accent-rgb) / 0.38));
+  color: rgb(238 255 243 / 0.98);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    inset 0 -5px 12px rgb(0 80 28 / 0.1),
+    0 0 18px rgb(var(--switch-accent-rgb) / 0.4),
+    0 6px 14px rgb(0 0 0 / 0.14);
+}
+
+.switch-card__surface[role='switch']:hover .switch-card__icon-shell {
+  transform: scale(1.04);
+}
+
+.switch-card__surface[role='switch']:active .switch-card__icon-shell {
+  transform: scale(0.94);
+}
+
+.switch-card__icon-shell--pending::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid rgb(255 255 255 / 0.2);
+  border-top-color: rgb(255 255 255 / 0.88);
+  border-radius: inherit;
+  animation: switch-card-pending 850ms linear infinite;
+}
+
+.switch-card__icon {
+  width: 0.82rem;
+  height: 0.82rem;
+}
+
+.switch-card__meta {
+  grid-area: meta;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.switch-card__title,
+.switch-card__status {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card__title {
+  color: rgb(255 255 255 / 0.92);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.05;
+}
+
+.switch-card__status {
+  margin-top: 0.14rem;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 0.5rem;
+  font-weight: 520;
+  line-height: 1;
+}
+
+.switch-card[data-switch-state='on'] .switch-card__status {
+  color: rgb(225 255 234 / 0.74);
+}
+
+.switch-card__status--compact {
+  display: none;
+}
+
+.switch-card__state-indicator {
+  grid-area: state;
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  width: 0.9rem;
+  height: 0.9rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.switch-card__state-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.26);
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.045);
+}
+
+.switch-card[data-switch-state='on'] .switch-card__state-dot {
+  background: rgb(var(--switch-accent-rgb));
+  box-shadow: 0 0 10px rgb(var(--switch-accent-rgb) / 0.65), 0 0 0 3px rgb(var(--switch-accent-rgb) / 0.12);
+}
+
+.switch-card[data-switch-state='unavailable'] .switch-card__state-dot {
+  background: #8f96aa;
+}
+
+.switch-card__consumption {
+  display: none;
+}
+
+.switch-card__consumption {
+  grid-area: consumption;
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  overflow: hidden;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.055);
+}
+
+.switch-card__consumption small {
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.4);
+  font-size: 0.48rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card__consumption-value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.2rem;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.78);
+}
+
+.switch-card__consumption-value strong {
+  overflow: hidden;
+  font-weight: 680;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card__consumption-value span {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 0.48);
+  font-weight: 560;
+}
+
+.switch-card__consumption-helper {
+  display: block;
+  min-width: 0;
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.34);
+  font-size: 0.43rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card__edit-handle {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  border-radius: inherit;
+}
+
+@container switch-card (min-width: 132px) and (min-height: 44px) {
+  .switch-card[data-switch-variant='compact'] .switch-card__surface {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'icon meta';
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.3rem 0.7rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__icon-shell {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__icon {
+    width: 0.98rem;
+    height: 0.98rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__title {
+    font-size: clamp(0.73rem, 4.8cqi, 0.86rem);
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status {
+    font-size: clamp(0.54rem, 3.5cqi, 0.64rem);
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status--base,
+  .switch-card[data-switch-variant='compact'] .switch-card__state-indicator {
+    display: none;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status--compact {
+    display: block;
+  }
+}
+
+@container switch-card (min-width: 88px) and (min-height: 96px) {
+  .switch-card[data-switch-variant='compact'] .switch-card__surface {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'icon .'
+      'meta meta';
+    align-items: start;
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__icon-shell {
+    width: 2.05rem;
+    height: 2.05rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__meta {
+    align-self: end;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__title {
+    font-size: 0.78rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status {
+    font-size: 0.6rem;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status--base,
+  .switch-card[data-switch-variant='compact'] .switch-card__state-indicator {
+    display: none;
+  }
+
+  .switch-card[data-switch-variant='compact'] .switch-card__status--compact {
+    display: block;
+  }
+}
+
+@container switch-card (min-width: 170px) and (min-height: 104px) {
+  .switch-card[data-switch-variant='standard'] .switch-card__surface,
+  .switch-card[data-switch-variant='full'] .switch-card__surface {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'icon meta state'
+      'icon consumption consumption';
+    gap: 0.65rem 0.75rem;
+    padding: 0.72rem 0.82rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__icon-shell,
+  .switch-card[data-switch-variant='full'] .switch-card__icon-shell {
+    align-self: center;
+    width: 2.7rem;
+    height: 2.7rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__icon,
+  .switch-card[data-switch-variant='full'] .switch-card__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__title,
+  .switch-card[data-switch-variant='full'] .switch-card__title {
+    font-size: 0.82rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__status,
+  .switch-card[data-switch-variant='full'] .switch-card__status {
+    font-size: 0.62rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__consumption,
+  .switch-card[data-switch-variant='full'] .switch-card__consumption {
+    align-self: stretch;
+    display: flex;
+    min-width: 4.6rem;
+    padding: 0.38rem 0.5rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__consumption-value strong,
+  .switch-card[data-switch-variant='full'] .switch-card__consumption-value strong {
+    font-size: 0.95rem;
+  }
+
+  .switch-card[data-switch-variant='standard'] .switch-card__consumption-value span,
+  .switch-card[data-switch-variant='full'] .switch-card__consumption-value span {
+    font-size: 0.52rem;
+  }
+
+}
+
+@container switch-card (min-width: 260px) and (min-height: 104px) {
+  .switch-card[data-switch-variant='full'] .switch-card__surface {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'icon meta state'
+      'icon consumption consumption';
+    gap: 0.65rem 0.9rem;
+    padding: 0.72rem 0.92rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__consumption {
+    padding-inline: 0.65rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__consumption-value strong {
+    font-size: 1.1rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__icon-shell {
+    width: 3.15rem;
+    height: 3.15rem;
+    align-self: center;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__icon {
+    width: 1.45rem;
+    height: 1.45rem;
+  }
+}
+
+@container switch-card (min-width: 176px) and (min-height: 160px) {
+  .switch-card[data-switch-variant='full'] .switch-card__surface {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'meta state'
+      'icon icon'
+      'consumption consumption';
+    gap: 0.75rem;
+    padding: 0.9rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__icon-shell {
+    width: 3.6rem;
+    height: 3.6rem;
+    align-self: center;
+    justify-self: center;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__icon {
+    width: 1.65rem;
+    height: 1.65rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__consumption {
+    min-height: 2.7rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  .switch-card[data-switch-variant='full'] .switch-card__consumption-value strong {
+    font-size: 1.15rem;
+  }
+}
+
+@keyframes switch-card-pending {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-card__surface,
+  .switch-card__icon-shell {
+    transition: none;
+  }
+
+  .switch-card__icon-shell--pending::after {
+    animation: none;
+  }
+}

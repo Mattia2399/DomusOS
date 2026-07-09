@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import type { ConsumptionCardId, ConsumptionEntityConfig } from '../../hooks/useConsumptionConfig';
+import GlassCombobox from '../ui/GlassCombobox';
 
 type ConsumptionEditorSidebarProps = {
   selectedCardId: ConsumptionCardId | null;
@@ -70,19 +71,27 @@ function renderField(
   item: ConfigField,
   value: string,
   onUpdate: (field: keyof ConsumptionEntityConfig, value: string) => void,
-  datalistId: string,
+  entitySuggestions: string[],
 ) {
   const isEntityField = item.kind === 'entity';
   return (
     <label key={item.field} className="block">
       <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">{item.label}</p>
-      <input
-        list={isEntityField ? datalistId : undefined}
-        value={value}
-        onChange={(event) => onUpdate(item.field, event.target.value)}
-        placeholder={item.placeholder}
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
-      />
+      {isEntityField ? (
+        <GlassCombobox
+          value={value}
+          options={entitySuggestions}
+          onChange={(nextValue) => onUpdate(item.field, nextValue)}
+          placeholder={item.placeholder}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onUpdate(item.field, event.target.value)}
+          placeholder={item.placeholder}
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+        />
+      )}
     </label>
   );
 }
@@ -98,7 +107,6 @@ export function ConsumptionEditorSidebar({
   variant = 'sidebar',
   onClose,
 }: ConsumptionEditorSidebarProps) {
-  const datalistId = 'consumi-entity-options';
   const entitySuggestions = haEntityIds.filter(
     (entityId) =>
       entityId.startsWith('sensor.') ||
@@ -177,15 +185,15 @@ export function ConsumptionEditorSidebar({
 
       <div className="mt-5 flex h-[calc(100%-9.5rem)] min-h-0 flex-col">
         <div className="glass-scrollbar space-y-5 overflow-y-auto pr-1">
-          <div className="liquid-glass-card space-y-4 p-4">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Scheda</p>
-            {cardMetaFields.map((item) => renderField(item, config[item.field], onUpdateConfigField, datalistId))}
-          </div>
+            <div className="liquid-glass-card space-y-4 p-4">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Scheda</p>
+            {cardMetaFields.map((item) => renderField(item, config[item.field], onUpdateConfigField, entitySuggestions))}
+            </div>
 
           {fields.length > 0 ? (
             <div className="liquid-glass-card space-y-4 p-4">
               <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Sorgenti dati</p>
-              {fields.map((item) => renderField(item, config[item.field], onUpdateConfigField, datalistId))}
+              {fields.map((item) => renderField(item, config[item.field], onUpdateConfigField, entitySuggestions))}
             </div>
           ) : (
             <div className="liquid-glass-card rounded-2xl border-dashed p-4">
@@ -195,12 +203,6 @@ export function ConsumptionEditorSidebar({
             </div>
           )}
         </div>
-
-        <datalist id={datalistId}>
-          {entitySuggestions.map((entityId) => (
-            <option key={entityId} value={entityId} />
-          ))}
-        </datalist>
 
         <p className="mt-4 text-[11px] text-white/45">
           {haConnected && entitySuggestions.length > 0

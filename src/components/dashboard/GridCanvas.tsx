@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy';
 import { LayoutGrid, MoreHorizontal, Plus, X } from 'lucide-react';
 import { SectionCardRenderer, WidgetCardRenderer } from '../widgets/CardRenderer';
+import type { WidgetDisplayMetrics } from '../widgets/widgetDisplayVariant';
 import { SCENES_CATALOG } from '../widgets/ScenesCard';
 import {
   GRID_ENGINE_BREAKPOINTS,
@@ -21,7 +22,11 @@ import type {
   WidgetKind,
   SceneKey,
 } from '../../types/dashboardModels';
-import type { WidgetTypeLayoutOverrides } from '../../types/widgetTypeLayout';
+import type {
+  DashboardResponsiveLayouts,
+  WidgetLayoutOverrides,
+  WidgetTypeLayoutOverrides,
+} from '../../types/widgetTypeLayout';
 import {
   FAVORITES_GRID_TITLE,
   ROOT_CANVAS_COLS,
@@ -80,6 +85,8 @@ type GridCanvasProps = {
   selectedSectionId: string | null;
   isCatalogOpen: boolean;
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
+  widgetLayoutOverrides: WidgetLayoutOverrides;
+  responsiveLayouts: DashboardResponsiveLayouts;
   onOpenCatalog: () => void;
   onCloseCatalog: () => void;
   onSelectWidget: (id: string | null) => void;
@@ -90,10 +97,16 @@ type GridCanvasProps = {
   onWidgetLightToggle: (widget: Widget) => void;
   onWidgetSwitchToggle: (widget: Widget) => void;
   onWidgetBrightnessChange: (widget: Widget, value: number) => void;
+  onWidgetLightColorChange: (widget: Widget, hs: [number, number]) => void;
   onWidgetClimateTargetTempChange: (widget: Widget, value: number) => void;
   onWidgetClimateTargetRangeChange: (widget: Widget, low: number, high: number) => void;
+  onWidgetClimateTargetHumidityChange: (widget: Widget, value: number) => void;
+  onWidgetClimatePowerToggle: (widget: Widget) => void;
   onWidgetClimateModeChange: (widget: Widget, mode: string) => void;
   onWidgetClimateFanModeChange: (widget: Widget, mode: string) => void;
+  onWidgetClimatePresetModeChange: (widget: Widget, mode: string) => void;
+  onWidgetClimateSwingModeChange: (widget: Widget, mode: string) => void;
+  onWidgetClimateSwingHorizontalModeChange: (widget: Widget, mode: string) => void;
   onWidgetMediaToggle: (widget: Widget) => void;
   onWidgetMediaPrevious: (widget: Widget) => void;
   onWidgetMediaNext: (widget: Widget) => void;
@@ -108,6 +121,8 @@ type GridCanvasProps = {
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onSectionsLayoutChange: (next: GridItem[]) => void;
+  onRootBreakpointLayoutChange: (breakpoint: GridBreakpoint, next: GridItem[]) => void;
+  onStackBreakpointLayoutChange: (sectionId: string, breakpoint: GridBreakpoint, next: GridItem[]) => void;
   onAddWidget: (kind: WidgetKind) => void;
   onAddSection: (kind: SectionKind) => void;
   onRemoveSection: (id: string) => void;
@@ -116,12 +131,13 @@ type GridCanvasProps = {
   haStates: MockEntityStateMap;
   sensorHistoryByEntity?: Record<string, number[]>;
   houseMembers?: HouseMemberCardItem[];
+  onWidgetDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
 const SECTION_LABELS: Record<SectionKind, string> = {
   greeting: 'Titolo',
   weather: 'Meteo',
-  scenes: 'Scenes',
+  scenes: 'Scenari',
   'stack-vertical': 'Vertical Stack',
   'stack-horizontal': 'Horizontal Stack',
   'stack-grid': 'Grid Stack',
@@ -148,6 +164,49 @@ const GRID_ENGINE_CONTAINER_PADDING: Record<GridBreakpoint, [number, number]> = 
 };
 const XS_CONTEXT_OPEN_LONG_PRESS_MS = 420;
 const XS_CONTEXT_OPEN_MOVE_TOLERANCE_PX = 14;
+const COMPACT_DRAG_AUTOSCROLL_EDGE_PX = 192;
+const COMPACT_DRAG_AUTOSCROLL_MAX_PX = 7;
+const COMPACT_DRAG_LONG_PRESS_MS = 650;
+const COMPACT_DRAG_HOLD_MOVE_TOLERANCE_PX = 10;
+
+type CompactTouchSnapshot = {
+  identifier: number;
+  clientX: number;
+  clientY: number;
+  screenX: number;
+  screenY: number;
+  pageX: number;
+  pageY: number;
+  radiusX?: number;
+  radiusY?: number;
+  rotationAngle?: number;
+  force?: number;
+};
+
+type CompactDragHoldStart =
+  | {
+      itemId: string;
+      element: HTMLElement;
+      x: number;
+      y: number;
+      input: {
+        kind: 'mouse';
+        clientX: number;
+        clientY: number;
+        screenX: number;
+        screenY: number;
+      };
+    }
+  | {
+      itemId: string;
+      element: HTMLElement;
+      x: number;
+      y: number;
+      input: {
+        kind: 'touch';
+        touch: CompactTouchSnapshot;
+      };
+    };
 
 function getViewportWidth() {
   if (typeof window === 'undefined') {
@@ -170,6 +229,77 @@ function resolveActiveBreakpoint(viewportWidth: number): GridBreakpoint {
     return 'md';
   }
   return viewportWidth >= GRID_ENGINE_BREAKPOINTS.sm ? 'sm' : 'xs';
+}
+
+function getDragEventClientY(event: Event | null | undefined) {
+  if (!event) {
+    return null;
+  }
+  if ('touches' in event) {
+    const touches = (event as TouchEvent).touches;
+    if (touches.length > 0) {
+      return touches[0]?.clientY ?? null;
+    }
+  }
+  if ('changedTouches' in event) {
+    const changedTouches = (event as TouchEvent).changedTouches;
+    if (changedTouches.length > 0) {
+      return changedTouches[0]?.clientY ?? null;
+    }
+  }
+  if ('clientY' in event && typeof event.clientY === 'number') {
+    return event.clientY;
+  }
+  return null;
+}
+
+function dispatchCompactDragStartEvent(hold: CompactDragHoldStart) {
+  const view = hold.element.ownerDocument.defaultView ?? window;
+  if (hold.input.kind === 'mouse') {
+    hold.element.dispatchEvent(
+      new view.MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        clientX: hold.input.clientX,
+        clientY: hold.input.clientY,
+        screenX: hold.input.screenX,
+        screenY: hold.input.screenY,
+      }),
+    );
+    return;
+  }
+
+  if (typeof view.Touch !== 'function' || typeof view.TouchEvent !== 'function') {
+    return;
+  }
+
+  const sourceTouch = hold.input.touch;
+  const syntheticTouch = new view.Touch({
+    identifier: sourceTouch.identifier,
+    target: hold.element,
+    clientX: sourceTouch.clientX,
+    clientY: sourceTouch.clientY,
+    screenX: sourceTouch.screenX,
+    screenY: sourceTouch.screenY,
+    pageX: sourceTouch.pageX,
+    pageY: sourceTouch.pageY,
+    radiusX: sourceTouch.radiusX ?? 1,
+    radiusY: sourceTouch.radiusY ?? 1,
+    rotationAngle: sourceTouch.rotationAngle ?? 0,
+    force: sourceTouch.force ?? 0.5,
+  });
+
+  hold.element.dispatchEvent(
+    new view.TouchEvent('touchstart', {
+      bubbles: true,
+      cancelable: true,
+      touches: [syntheticTouch],
+      targetTouches: [syntheticTouch],
+      changedTouches: [syntheticTouch],
+    }),
+  );
 }
 
 function toGridLayouts(layouts: ResponsiveLayouts<GridBreakpoint>): GridLayouts {
@@ -244,15 +374,16 @@ function enforceLightWidgetSpan(
         : Math.min(safeCols, currentW);
       const currentH = Math.max(1, Math.round(item.h));
       const configuredH = Math.max(1, Math.round(lightIsOn ? span.hOn : span.hOff));
+      const autoExpand = span.autoExpand ?? true;
       const forcedH = useExplicitLightSpan
-        ? lightIsOn && configuredH <= 1
+        ? autoExpand && lightIsOn && configuredH <= 1
           ? Math.max(2, Math.round(span.hOn))
           : configuredH
-        : lightIsOn
+        : autoExpand && lightIsOn
         ? currentH <= 1
           ? Math.max(2, Math.round(span.hOn))
           : currentH
-        : currentH <= 2
+        : autoExpand && currentH <= 2
           ? Math.max(1, Math.round(span.hOff))
           : currentH;
       return {
@@ -548,6 +679,51 @@ function enforceLockWidgetSpan(
   );
 }
 
+function enforceWidgetLayoutOverrides(
+  layouts: GridItem[],
+  breakpoint: GridBreakpoint,
+  cols: number,
+  widgetLayoutOverrides: WidgetLayoutOverrides,
+  lightWidgetStateById: ReadonlyMap<string, boolean>,
+): GridItem[] {
+  if (!widgetLayoutOverrides || Object.keys(widgetLayoutOverrides).length === 0) {
+    return normalizeRuntimeLayout(layouts, cols);
+  }
+  const safeCols = Math.max(1, Math.round(cols));
+  return normalizeRuntimeLayout(
+    layouts.map((item) => {
+      const override = widgetLayoutOverrides[item.i]?.[breakpoint];
+      if (!override) {
+        return item;
+      }
+      const lightIsOn = lightWidgetStateById.get(item.i);
+      const autoExpand = override.autoExpand ?? true;
+      const rawH =
+        lightIsOn === undefined
+          ? override.h ?? override.hOn ?? override.hOff
+          : !autoExpand
+            ? override.h ?? override.hOff ?? override.hOn
+            : lightIsOn
+            ? override.hOn ?? override.h
+            : override.hOff ?? override.h;
+      const nextW = override.w
+        ? Math.min(safeCols, Math.max(1, Math.round(override.w)))
+        : Math.min(safeCols, Math.max(1, Math.round(item.w)));
+      const nextH = rawH
+        ? autoExpand && lightIsOn && rawH <= 1
+          ? Math.max(2, Math.round(rawH))
+          : Math.max(1, Math.round(rawH))
+        : Math.max(1, Math.round(item.h));
+      return {
+        ...item,
+        w: nextW,
+        h: nextH,
+      };
+    }),
+    safeCols,
+  );
+}
+
 function enforceRootWidgetSpans(
   layouts: GridItem[],
   breakpoint: GridBreakpoint,
@@ -556,6 +732,7 @@ function enforceRootWidgetSpans(
   lightWidgetStateById: ReadonlyMap<string, boolean>,
   useExplicitLightSpan: boolean,
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  widgetLayoutOverrides: WidgetLayoutOverrides,
   switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
   cameraWidgetIds: ReadonlySet<string>,
@@ -673,7 +850,7 @@ function enforceRootWidgetSpans(
     widgetTypeLayoutOverrides,
     Boolean(widgetTypeLayoutOverrides.lock?.[breakpoint]),
   );
-  return enforceSimpleWidgetKindSpan(
+  const withCover = enforceSimpleWidgetKindSpan(
     withLock,
     'cover',
     breakpoint,
@@ -681,6 +858,13 @@ function enforceRootWidgetSpans(
     coverWidgetIds,
     widgetTypeLayoutOverrides,
     Boolean(widgetTypeLayoutOverrides.cover?.[breakpoint]),
+  );
+  return enforceWidgetLayoutOverrides(
+    withCover,
+    breakpoint,
+    cols,
+    widgetLayoutOverrides,
+    lightWidgetStateById,
   );
 }
 
@@ -729,6 +913,8 @@ function buildResponsiveLayoutsFromDesktop(
   desktopLayout: GridItem[],
   scenesSectionIds: ReadonlySet<string>,
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides,
+  widgetLayoutOverrides: WidgetLayoutOverrides,
+  explicitRootLayouts: GridLayouts | undefined,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
   switchWidgetIds: ReadonlySet<string>,
   climateWidgetIds: ReadonlySet<string>,
@@ -741,166 +927,103 @@ function buildResponsiveLayoutsFromDesktop(
   lockWidgetIds: ReadonlySet<string>,
   coverWidgetIds: ReadonlySet<string>,
 ): GridLayouts {
-  const xl = compactLayoutUp(
-    enforceRootWidgetSpans(
-      normalizeRuntimeLayout(desktopLayout, GRID_ENGINE_XL_COLS),
-      'xl',
-      GRID_ENGINE_XL_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.xl),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
+  const normalizeForBreakpoint = (layouts: GridItem[], breakpoint: GridBreakpoint, cols: number) =>
+    packLayoutDense(
+      enforceRootWidgetSpans(
+        normalizeRuntimeLayout(layouts, cols),
+        breakpoint,
+        cols,
+        scenesSectionIds,
+        lightWidgetStateById,
+        Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
+        widgetTypeLayoutOverrides,
+        widgetLayoutOverrides,
+        switchWidgetIds,
+        climateWidgetIds,
+        cameraWidgetIds,
+        mediaWidgetIds,
+        sensorWidgetIds,
+        membersWidgetIds,
+        alarmWidgetIds,
+        vacuumWidgetIds,
+        lockWidgetIds,
+        coverWidgetIds,
+      ),
+      cols,
+    );
+  const mergeExplicitWithFallback = (explicit: GridItem[] | undefined, fallback: GridItem[]) => {
+    if (!explicit || explicit.length === 0) {
+      return fallback;
+    }
+    const explicitById = new Map(explicit.map((item) => [item.i, item]));
+    return fallback.map((fallbackItem) => explicitById.get(fallbackItem.i) ?? fallbackItem);
+  };
+  const deriveFrom = (
+    source: GridItem[],
+    sourceBreakpoint: GridBreakpoint,
+    targetBreakpoint: GridBreakpoint,
+  ) => {
+    const sourceCols = GRID_ENGINE_COLS[sourceBreakpoint];
+    const targetCols = GRID_ENGINE_COLS[targetBreakpoint];
+    const isMobile = targetBreakpoint === 'sm' || targetBreakpoint === 'xs';
+    if (isMobile) {
+      const compactMobileIds = resolveRootMobileCompactIds(
+        targetBreakpoint,
+        targetCols,
+        lightWidgetStateById,
+        switchWidgetIds,
+        climateWidgetIds,
+        cameraWidgetIds,
+        mediaWidgetIds,
+        sensorWidgetIds,
+        membersWidgetIds,
+        alarmWidgetIds,
+        vacuumWidgetIds,
+        lockWidgetIds,
+        coverWidgetIds,
+      );
+      return adaptToMobileColumns(source, sourceCols, targetCols, compactMobileIds);
+    }
+    return packLayoutDense(
+      source.map((item) => scaleLayoutColumns(item, sourceCols, targetCols)),
+      targetCols,
+    );
+  };
+
+  const xlFallback = normalizeForBreakpoint(desktopLayout, 'xl', GRID_ENGINE_XL_COLS);
+  const xl = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.xl, xlFallback),
+    'xl',
     GRID_ENGINE_XL_COLS,
   );
-  const twoXl = packLayoutDense(
-    enforceRootWidgetSpans(
-      xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_2XL_COLS)),
-      '2xl',
-      GRID_ENGINE_2XL_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.['2xl']),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
+  const twoXlFallback = deriveFrom(xl, 'xl', '2xl');
+  const twoXl = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.['2xl'], twoXlFallback),
+    '2xl',
     GRID_ENGINE_2XL_COLS,
   );
-  const lg = packLayoutDense(
-    enforceRootWidgetSpans(
-      xl.map((item) => scaleLayoutColumns(item, GRID_ENGINE_XL_COLS, GRID_ENGINE_LG_COLS)),
-      'lg',
-      GRID_ENGINE_LG_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.lg),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
+  const lgFallback = deriveFrom(xl, 'xl', 'lg');
+  const lg = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.lg, lgFallback),
+    'lg',
     GRID_ENGINE_LG_COLS,
   );
-  const md = packLayoutDense(
-    enforceRootWidgetSpans(
-      lg.map((item) => scaleLayoutColumns(item, GRID_ENGINE_LG_COLS, GRID_ENGINE_MD_COLS)),
-      'md',
-      GRID_ENGINE_MD_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.md),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
+  const mdFallback = deriveFrom(lg, 'lg', 'md');
+  const md = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.md, mdFallback),
+    'md',
     GRID_ENGINE_MD_COLS,
   );
-  const smCompactIds = resolveRootMobileCompactIds(
+  const smFallback = deriveFrom(md, 'md', 'sm');
+  const sm = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.sm, smFallback),
     'sm',
     GRID_ENGINE_SM_COLS,
-    lightWidgetStateById,
-    switchWidgetIds,
-    climateWidgetIds,
-    cameraWidgetIds,
-    mediaWidgetIds,
-    sensorWidgetIds,
-    membersWidgetIds,
-    alarmWidgetIds,
-    vacuumWidgetIds,
-    lockWidgetIds,
-    coverWidgetIds,
   );
-  const sm = packLayoutDense(
-    enforceRootWidgetSpans(
-      adaptToMobileColumns(lg, GRID_ENGINE_LG_COLS, GRID_ENGINE_SM_COLS, smCompactIds),
-      'sm',
-      GRID_ENGINE_SM_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.sm),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
-    GRID_ENGINE_SM_COLS,
-  );
-  const xsCompactIds = resolveRootMobileCompactIds(
+  const xsFallback = deriveFrom(sm, 'sm', 'xs');
+  const xs = normalizeForBreakpoint(
+    mergeExplicitWithFallback(explicitRootLayouts?.xs, xsFallback),
     'xs',
-    GRID_ENGINE_XS_COLS,
-    lightWidgetStateById,
-    switchWidgetIds,
-    climateWidgetIds,
-    cameraWidgetIds,
-    mediaWidgetIds,
-    sensorWidgetIds,
-    membersWidgetIds,
-    alarmWidgetIds,
-    vacuumWidgetIds,
-    lockWidgetIds,
-    coverWidgetIds,
-  );
-  const xs = packLayoutDense(
-    enforceRootWidgetSpans(
-      adaptToMobileColumns(sm, GRID_ENGINE_SM_COLS, GRID_ENGINE_XS_COLS, xsCompactIds),
-      'xs',
-      GRID_ENGINE_XS_COLS,
-      scenesSectionIds,
-      lightWidgetStateById,
-      Boolean(widgetTypeLayoutOverrides.light?.xs),
-      widgetTypeLayoutOverrides,
-      switchWidgetIds,
-      climateWidgetIds,
-      cameraWidgetIds,
-      mediaWidgetIds,
-      sensorWidgetIds,
-      membersWidgetIds,
-      alarmWidgetIds,
-      vacuumWidgetIds,
-      lockWidgetIds,
-      coverWidgetIds,
-    ),
     GRID_ENGINE_XS_COLS,
   );
   return { '2xl': twoXl, xl, lg, md, sm, xs };
@@ -920,6 +1043,8 @@ export function GridCanvas({
   selectedSectionId,
   isCatalogOpen,
   widgetTypeLayoutOverrides,
+  widgetLayoutOverrides,
+  responsiveLayouts,
   onOpenCatalog,
   onCloseCatalog,
   onSelectWidget,
@@ -930,10 +1055,16 @@ export function GridCanvas({
   onWidgetLightToggle,
   onWidgetSwitchToggle,
   onWidgetBrightnessChange,
+  onWidgetLightColorChange,
   onWidgetClimateTargetTempChange,
   onWidgetClimateTargetRangeChange,
+  onWidgetClimateTargetHumidityChange,
+  onWidgetClimatePowerToggle,
   onWidgetClimateModeChange,
   onWidgetClimateFanModeChange,
+  onWidgetClimatePresetModeChange,
+  onWidgetClimateSwingModeChange,
+  onWidgetClimateSwingHorizontalModeChange,
   onWidgetMediaToggle,
   onWidgetMediaPrevious,
   onWidgetMediaNext,
@@ -948,6 +1079,8 @@ export function GridCanvas({
   onOpenMembersPanel,
   onWidgetLayoutChange,
   onSectionsLayoutChange,
+  onRootBreakpointLayoutChange,
+  onStackBreakpointLayoutChange,
   onAddWidget,
   onAddSection,
   onUpdateSection,
@@ -955,6 +1088,7 @@ export function GridCanvas({
   haStates,
   sensorHistoryByEntity = {},
   houseMembers = [],
+  onWidgetDisplayMetricsChange,
 }: GridCanvasProps) {
   const isCanvasInteractingRef = useRef(false);
   const xsLongPressTimerRef = useRef<number | null>(null);
@@ -963,12 +1097,20 @@ export function GridCanvas({
   const xsLongPressTriggeredRef = useRef(false);
   const xsSuppressNextCardClickRef = useRef(false);
   const runtimeGridHostRef = useRef<HTMLDivElement | null>(null);
+  const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const canvasDragStartItemRef = useRef<GridItem | null>(null);
+  const canvasAutoScrollFrameRef = useRef<number | null>(null);
+  const canvasAutoScrollVelocityRef = useRef(0);
+  const compactDragHoldTimerRef = useRef<number | null>(null);
+  const compactDragHoldStartRef = useRef<CompactDragHoldStart | null>(null);
+  const compactDragArmedElementRef = useRef<HTMLElement | null>(null);
   const hasCanvasDragMovedRef = useRef(false);
   const stableRuntimeGridWidthRef = useRef(0);
   const lastLiveGridEngineLayoutsRef = useRef<GridLayouts>({});
   const [isMounted, setIsMounted] = useState(false);
   const [runtimeGridWidth, setRuntimeGridWidth] = useState(0);
+  const [isCanvasTouchLocked, setIsCanvasTouchLocked] = useState(false);
+  const [compactDragArmedItemId, setCompactDragArmedItemId] = useState<string | null>(null);
   const [gridEngineActiveBreakpoint, setGridEngineActiveBreakpoint] = useState<GridBreakpoint>(() =>
     resolveActiveBreakpoint(getViewportWidth()),
   );
@@ -994,6 +1136,243 @@ export function GridCanvas({
   const isXsLongPressMode = !isEditMode && isXsViewport;
   const isCompactEditCardMenuMode =
     isEditMode && (gridEngineActiveBreakpoint === 'xs' || gridEngineActiveBreakpoint === 'sm');
+  const clearCompactDragHoldTimer = useCallback(() => {
+    if (compactDragHoldTimerRef.current !== null) {
+      window.clearTimeout(compactDragHoldTimerRef.current);
+      compactDragHoldTimerRef.current = null;
+    }
+  }, []);
+  const disarmCompactDragHandle = useCallback(() => {
+    compactDragArmedElementRef.current?.classList.remove('compact-edit-drag-handle');
+    compactDragArmedElementRef.current = null;
+    setCompactDragArmedItemId(null);
+  }, []);
+  const resetCompactDragHold = useCallback(
+    (options?: { keepArmed?: boolean }) => {
+      clearCompactDragHoldTimer();
+      compactDragHoldStartRef.current = null;
+      if (!options?.keepArmed) {
+        disarmCompactDragHandle();
+      }
+    },
+    [clearCompactDragHoldTimer, disarmCompactDragHandle],
+  );
+  const startCompactDragHold = useCallback(
+    (hold: CompactDragHoldStart) => {
+      if (!isCompactEditCardMenuMode) {
+        return;
+      }
+
+      resetCompactDragHold();
+      compactDragHoldStartRef.current = hold;
+      compactDragHoldTimerRef.current = window.setTimeout(() => {
+        const activeHold = compactDragHoldStartRef.current;
+        if (!activeHold || activeHold !== hold) {
+          return;
+        }
+
+        activeHold.element.classList.add('compact-edit-drag-handle');
+        activeHold.element.classList.add('compact-drag-arm-feedback');
+        compactDragArmedElementRef.current = activeHold.element;
+        setCompactDragArmedItemId(activeHold.itemId);
+        compactDragHoldTimerRef.current = null;
+        window.setTimeout(() => {
+          activeHold.element.classList.remove('compact-drag-arm-feedback');
+        }, 260);
+        window.requestAnimationFrame(() => {
+          if (compactDragHoldStartRef.current === activeHold) {
+            dispatchCompactDragStartEvent(activeHold);
+          }
+        });
+      }, COMPACT_DRAG_LONG_PRESS_MS);
+    },
+    [isCompactEditCardMenuMode, resetCompactDragHold],
+  );
+  const cancelCompactDragHoldIfMoved = useCallback(
+    (clientX: number, clientY: number) => {
+      if (compactDragArmedElementRef.current) {
+        return;
+      }
+
+      const hold = compactDragHoldStartRef.current;
+      if (!hold) {
+        return;
+      }
+
+      const distance = Math.hypot(clientX - hold.x, clientY - hold.y);
+      if (distance > COMPACT_DRAG_HOLD_MOVE_TOLERANCE_PX) {
+        resetCompactDragHold();
+      }
+    },
+    [resetCompactDragHold],
+  );
+  const isCompactDragHoldBlockedTarget = useCallback((target: EventTarget | null) => {
+    const targetNode = target as Element | null;
+    return Boolean(
+      targetNode?.closest(
+        'button,input,select,textarea,a,[contenteditable="true"],.widget-action,.section-action,.builder-grid,.react-resizable-handle',
+      ),
+    );
+  }, []);
+  const handleCompactDragTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>, itemId: string) => {
+      if (!isCompactEditCardMenuMode || !event.nativeEvent.isTrusted || event.touches.length !== 1) {
+        return;
+      }
+      if (isCompactDragHoldBlockedTarget(event.target)) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!touch) {
+        return;
+      }
+
+      startCompactDragHold({
+        itemId,
+        element: event.currentTarget,
+        x: touch.clientX,
+        y: touch.clientY,
+        input: {
+          kind: 'touch',
+          touch: {
+            identifier: touch.identifier,
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            screenX: touch.screenX,
+            screenY: touch.screenY,
+            pageX: touch.pageX,
+            pageY: touch.pageY,
+          },
+        },
+      });
+    },
+    [isCompactDragHoldBlockedTarget, isCompactEditCardMenuMode, startCompactDragHold],
+  );
+  const handleCompactDragTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (!isCompactEditCardMenuMode || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (touch) {
+        cancelCompactDragHoldIfMoved(touch.clientX, touch.clientY);
+      }
+    },
+    [cancelCompactDragHoldIfMoved, isCompactEditCardMenuMode],
+  );
+  const handleCompactDragMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, itemId: string) => {
+      if (!isCompactEditCardMenuMode || !event.nativeEvent.isTrusted || event.button !== 0) {
+        return;
+      }
+      if (isCompactDragHoldBlockedTarget(event.target)) {
+        return;
+      }
+
+      startCompactDragHold({
+        itemId,
+        element: event.currentTarget,
+        x: event.clientX,
+        y: event.clientY,
+        input: {
+          kind: 'mouse',
+          clientX: event.clientX,
+          clientY: event.clientY,
+          screenX: event.screenX,
+          screenY: event.screenY,
+        },
+      });
+    },
+    [isCompactDragHoldBlockedTarget, isCompactEditCardMenuMode, startCompactDragHold],
+  );
+  const handleCompactDragMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isCompactEditCardMenuMode) {
+        return;
+      }
+      cancelCompactDragHoldIfMoved(event.clientX, event.clientY);
+    },
+    [cancelCompactDragHoldIfMoved, isCompactEditCardMenuMode],
+  );
+  const handleCompactDragHoldEnd = useCallback(() => {
+    if (isCanvasInteractingRef.current) {
+      return;
+    }
+    resetCompactDragHold();
+  }, [resetCompactDragHold]);
+  const stopCanvasAutoScroll = useCallback(() => {
+    canvasAutoScrollVelocityRef.current = 0;
+    if (canvasAutoScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(canvasAutoScrollFrameRef.current);
+      canvasAutoScrollFrameRef.current = null;
+    }
+  }, []);
+  const runCanvasAutoScroll = useCallback(() => {
+    const scrollNode = canvasScrollRef.current;
+    const velocity = canvasAutoScrollVelocityRef.current;
+    if (!scrollNode || velocity === 0) {
+      canvasAutoScrollFrameRef.current = null;
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, scrollNode.scrollHeight - scrollNode.clientHeight);
+    const nextScrollTop = Math.min(maxScrollTop, Math.max(0, scrollNode.scrollTop + velocity));
+    if (nextScrollTop === scrollNode.scrollTop) {
+      stopCanvasAutoScroll();
+      return;
+    }
+
+    scrollNode.scrollTop = nextScrollTop;
+    canvasAutoScrollFrameRef.current = window.requestAnimationFrame(runCanvasAutoScroll);
+  }, [stopCanvasAutoScroll]);
+  const updateCanvasAutoScroll = useCallback(
+    (clientY: number | null) => {
+      if (!isCompactEditCardMenuMode || clientY === null) {
+        stopCanvasAutoScroll();
+        return;
+      }
+
+      const scrollNode = canvasScrollRef.current;
+      if (!scrollNode) {
+        stopCanvasAutoScroll();
+        return;
+      }
+
+      const rect = scrollNode.getBoundingClientRect();
+      const topDistance = clientY - rect.top;
+      const bottomDistance = rect.bottom - clientY;
+      let nextVelocity = 0;
+
+      if (topDistance < COMPACT_DRAG_AUTOSCROLL_EDGE_PX) {
+        const intensity = Math.max(0, 1 - topDistance / COMPACT_DRAG_AUTOSCROLL_EDGE_PX);
+        nextVelocity = -Math.max(0.75, intensity * COMPACT_DRAG_AUTOSCROLL_MAX_PX);
+      } else if (bottomDistance < COMPACT_DRAG_AUTOSCROLL_EDGE_PX) {
+        const intensity = Math.max(0, 1 - bottomDistance / COMPACT_DRAG_AUTOSCROLL_EDGE_PX);
+        nextVelocity = Math.max(0.75, intensity * COMPACT_DRAG_AUTOSCROLL_MAX_PX);
+      }
+
+      if (nextVelocity === 0) {
+        stopCanvasAutoScroll();
+        return;
+      }
+
+      canvasAutoScrollVelocityRef.current = nextVelocity;
+      if (canvasAutoScrollFrameRef.current === null) {
+        canvasAutoScrollFrameRef.current = window.requestAnimationFrame(runCanvasAutoScroll);
+      }
+    },
+    [isCompactEditCardMenuMode, runCanvasAutoScroll, stopCanvasAutoScroll],
+  );
+  useEffect(() => {
+    if (isCompactEditCardMenuMode) {
+      return;
+    }
+    resetCompactDragHold();
+    setIsCanvasTouchLocked(false);
+    stopCanvasAutoScroll();
+  }, [isCompactEditCardMenuMode, resetCompactDragHold, stopCanvasAutoScroll]);
   const handleXsLongPressStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, widget: Widget) => {
       if (!isXsLongPressMode) {
@@ -1059,8 +1438,10 @@ export function GridCanvas({
   useEffect(() => {
     return () => {
       resetXsLongPressState();
+      resetCompactDragHold();
+      stopCanvasAutoScroll();
     };
-  }, [resetXsLongPressState]);
+  }, [resetCompactDragHold, resetXsLongPressState, stopCanvasAutoScroll]);
   useEffect(() => {
     if (!isXsLongPressMode) {
       resetXsLongPressState();
@@ -1249,6 +1630,8 @@ export function GridCanvas({
         desktopLayout,
         rootScenesSectionIds,
         widgetTypeLayoutOverrides,
+        widgetLayoutOverrides,
+        responsiveLayouts.root,
         rootLightWidgetStateById,
         rootSwitchWidgetIds,
         rootClimateWidgetIds,
@@ -1264,6 +1647,8 @@ export function GridCanvas({
     [
       desktopLayout,
       widgetTypeLayoutOverrides,
+      widgetLayoutOverrides,
+      responsiveLayouts.root,
       rootScenesSectionIds,
       rootLightWidgetStateById,
       rootSwitchWidgetIds,
@@ -1304,6 +1689,7 @@ export function GridCanvas({
           rootLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
           widgetTypeLayoutOverrides,
+          widgetLayoutOverrides,
           rootSwitchWidgetIds,
           rootClimateWidgetIds,
           rootCameraWidgetIds,
@@ -1321,6 +1707,7 @@ export function GridCanvas({
       rootLightWidgetStateById,
       rootSwitchWidgetIds,
       widgetTypeLayoutOverrides,
+      widgetLayoutOverrides,
       rootScenesSectionIds,
       rootClimateWidgetIds,
       rootCameraWidgetIds,
@@ -1432,35 +1819,21 @@ export function GridCanvas({
   const commitGridEngineLayouts = useCallback(
     (layouts: GridLayouts, activeLayout?: GridItem[]) => {
       const activeCols = GRID_ENGINE_COLS[gridEngineActiveBreakpoint];
-      const activeAsCanonical = normalizeRuntimeLayout(activeLayout ?? [], activeCols).map((item) =>
-        scaleLayoutColumns(item, activeCols, GRID_ENGINE_CANONICAL_COLS),
+      const activeSource =
+        activeLayout && activeLayout.length > 0
+          ? activeLayout
+          : layouts[gridEngineActiveBreakpoint] ?? [];
+      const normalizedActive = normalizeRootLayoutForBreakpoint(
+        activeSource,
+        gridEngineActiveBreakpoint,
+        activeCols,
       );
-      const desktop = layouts[GRID_ENGINE_CANONICAL_BREAKPOINT] ?? layouts['2xl'] ?? [];
-      const source = activeAsCanonical.length > 0 ? activeAsCanonical : desktop;
-      const normalizedDesktop = compactLayoutUp(
-        enforceRootWidgetSpans(
-          source,
-          GRID_ENGINE_CANONICAL_BREAKPOINT,
-          GRID_ENGINE_CANONICAL_COLS,
-          rootScenesSectionIds,
-          rootLightWidgetStateById,
-          Boolean(widgetTypeLayoutOverrides.light?.[GRID_ENGINE_CANONICAL_BREAKPOINT]),
-          widgetTypeLayoutOverrides,
-          rootSwitchWidgetIds,
-          rootClimateWidgetIds,
-          rootCameraWidgetIds,
-          rootMediaWidgetIds,
-          rootSensorWidgetIds,
-          rootMembersWidgetIds,
-          rootAlarmWidgetIds,
-          rootVacuumWidgetIds,
-          rootLockWidgetIds,
-          rootCoverWidgetIds,
-        ),
-        GRID_ENGINE_CANONICAL_COLS,
-      );
+      onRootBreakpointLayoutChange(gridEngineActiveBreakpoint, normalizedActive);
+      if (gridEngineActiveBreakpoint !== GRID_ENGINE_CANONICAL_BREAKPOINT) {
+        return;
+      }
       onSectionsLayoutChange(
-        normalizedDesktop.map((item) =>
+        normalizedActive.map((item) =>
           scaleLayoutColumns(
             {
               i: item.i,
@@ -1469,7 +1842,7 @@ export function GridCanvas({
               w: Math.max(1, Math.round(item.w)),
               h: Math.max(1, Math.round(item.h)),
             },
-            GRID_ENGINE_CANONICAL_COLS,
+            activeCols,
             ROOT_CANVAS_COLS,
           ),
         ),
@@ -1477,20 +1850,9 @@ export function GridCanvas({
     },
     [
       gridEngineActiveBreakpoint,
+      normalizeRootLayoutForBreakpoint,
+      onRootBreakpointLayoutChange,
       onSectionsLayoutChange,
-      rootScenesSectionIds,
-      rootClimateWidgetIds,
-      rootCameraWidgetIds,
-      rootMediaWidgetIds,
-      rootSensorWidgetIds,
-      rootMembersWidgetIds,
-      rootAlarmWidgetIds,
-      rootVacuumWidgetIds,
-      rootLockWidgetIds,
-      rootCoverWidgetIds,
-      rootLightWidgetStateById,
-      rootSwitchWidgetIds,
-      widgetTypeLayoutOverrides,
     ],
   );
   const updateGridEngineLayouts = useCallback(
@@ -1561,6 +1923,7 @@ export function GridCanvas({
               rootLightWidgetStateById,
               Boolean(widgetTypeLayoutOverrides.light?.[gridEngineActiveBreakpoint]),
               widgetTypeLayoutOverrides,
+              widgetLayoutOverrides,
               rootSwitchWidgetIds,
               rootClimateWidgetIds,
               rootCameraWidgetIds,
@@ -1598,6 +1961,7 @@ export function GridCanvas({
       rootSwitchWidgetIds,
       rootVacuumWidgetIds,
       widgetTypeLayoutOverrides,
+      widgetLayoutOverrides,
     ],
   );
   const handleGridStackUsedRowsChange = useCallback(
@@ -1668,6 +2032,29 @@ export function GridCanvas({
     },
     [isCompactEditCardMenuMode, onSelectSection, onSelectWidget, rootWidgetIdSet, sectionIdSet],
   );
+  const handleStackCompactDragStart = useCallback(
+    (event: Event | null | undefined) => {
+      if (!isCompactEditCardMenuMode) {
+        return;
+      }
+      setIsCanvasTouchLocked(true);
+      updateCanvasAutoScroll(getDragEventClientY(event));
+    },
+    [isCompactEditCardMenuMode, updateCanvasAutoScroll],
+  );
+  const handleStackCompactDragMove = useCallback(
+    (event: Event | null | undefined) => {
+      if (!isCompactEditCardMenuMode) {
+        return;
+      }
+      updateCanvasAutoScroll(getDragEventClientY(event));
+    },
+    [isCompactEditCardMenuMode, updateCanvasAutoScroll],
+  );
+  const handleStackCompactDragStop = useCallback(() => {
+    setIsCanvasTouchLocked(false);
+    stopCanvasAutoScroll();
+  }, [stopCanvasAutoScroll]);
   const renderSectionCard = useCallback(
     (
       section: DashboardSection,
@@ -1681,6 +2068,9 @@ export function GridCanvas({
     ) => {
       const isTransparentSection = section.kind === 'greeting' || section.kind === 'weather';
       const isStack = isStackSection(section);
+      const isGreetingSection = section.kind === 'greeting';
+      const isWeatherSection = section.kind === 'weather';
+      const isScenesSection = section.kind === 'scenes';
       const sectionTitle =
         section.kind === 'stack-grid' && (section.stackUseFavoritesGrid ?? false)
           ? FAVORITES_GRID_TITLE
@@ -1700,11 +2090,14 @@ export function GridCanvas({
       const backgroundClass = showBackground ? 'bg-white/5' : 'bg-transparent';
       const borderClass = showBorder ? 'border border-white/10' : 'border border-transparent';
       const isWeatherClickable = !isEditMode && section.kind === 'weather';
-      const isGreetingSection = section.kind === 'greeting';
-      const isWeatherSection = section.kind === 'weather';
-      const isScenesSection = section.kind === 'scenes';
       const isCompactWeatherSection = isWeatherSection && sectionSpanH <= ROOT_CANVAS_ROW_UNITS;
-      const isSingleRowScenesSection = isScenesSection && sectionSpanH <= ROOT_CANVAS_ROW_UNITS;
+      const stackHeaderVisible =
+        isStack &&
+        section.stackShowHeader !== false &&
+        typeof sectionTitle === 'string' &&
+        sectionTitle.trim().length > 0;
+      const showCompactSectionMenu = isCompactEditCardMenuMode && (isScenesSection || isStack);
+      const compactSectionMenuLabel = sectionTitle || SECTION_LABELS[section.kind] || 'sezione';
       const hideEditModeBadges =
         section.kind === 'greeting' || section.kind === 'weather' || section.kind === 'scenes' || isStack;
       const sectionPaddingClass = isStack
@@ -1716,13 +2109,7 @@ export function GridCanvas({
             ? 'px-3 py-2 sm:px-4 sm:py-2.5'
             : 'px-4 py-2 sm:px-5 sm:py-2.5'
           : isScenesSection
-            ? isSingleRowScenesSection
-              ? isTabletCanvas
-                ? 'px-2 py-1 sm:px-2.5 sm:py-1.5'
-                : 'px-2.5 py-1.5 sm:px-3 sm:py-1.5'
-              : isTabletCanvas
-                ? 'px-2.5 py-1.5 sm:px-3 sm:py-2'
-                : 'px-3 py-2 sm:px-3.5 sm:py-2.5'
+            ? 'p-0'
             : isTabletCanvas
               ? 'p-3'
               : 'p-4';
@@ -1737,11 +2124,14 @@ export function GridCanvas({
 
       return (
         <div
-          className={`h-full w-full min-h-0 min-w-0 ${sectionRadiusClass} ${sectionPaddingClass} ${sectionOverflowClass} transition-colors ${backgroundClass} ${borderClass} ${
+          className={`relative h-full w-full min-h-0 min-w-0 ${sectionRadiusClass} ${sectionPaddingClass} ${sectionOverflowClass} transition-colors ${backgroundClass} ${borderClass} ${
             isEditMode && selectedSectionId === section.id ? 'selection-corners' : ''
           } ${isWeatherClickable ? 'cursor-pointer hover:opacity-90' : ''}`}
           onPointerDown={(event) => {
             if (!isEditMode) {
+              return;
+            }
+            if (showCompactSectionMenu) {
               return;
             }
             const targetNode = event.target as Element | null;
@@ -1755,6 +2145,9 @@ export function GridCanvas({
           }}
           onClick={(event) => {
             if (isEditMode) {
+              if (showCompactSectionMenu) {
+                return;
+              }
               if (!isStack) {
                 event.stopPropagation();
                 onSelectSection(section.id);
@@ -1790,7 +2183,7 @@ export function GridCanvas({
               section={section}
               state={state}
               compact={sectionCompactPreview}
-              isEditMode={false}
+              isEditMode={isScenesSection && isEditMode}
               onWeatherClick={onWeatherClick}
               runningSceneId={runningSceneBySectionId[section.id]?.sceneId ?? null}
               runningSceneStartedAt={runningSceneBySectionId[section.id]?.startedAt ?? null}
@@ -1819,16 +2212,36 @@ export function GridCanvas({
             />
           ) : (
             <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
-              {section.stackShowHeader !== false && sectionTitle ? (
+              {stackHeaderVisible ? (
                 <div className="mb-3 px-3 pt-3 sm:px-4 sm:pt-4 flex items-center justify-between">
                   <p className="text-base font-semibold text-white/70 tracking-tight">
                     {sectionTitle}
                   </p>
-                  {isEditMode && selectedSectionId === section.id ? (
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-blue-200/80 border border-blue-300/30 bg-blue-500/15 px-2 py-1 rounded-full">
-                      Stack attivo
-                    </span>
-                  ) : null}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {isEditMode && selectedSectionId === section.id && !showCompactSectionMenu ? (
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-blue-200/80 border border-blue-300/30 bg-blue-500/15 px-2 py-1 rounded-full">
+                        Stack attivo
+                      </span>
+                    ) : null}
+                    {showCompactSectionMenu ? (
+                      <button
+                        type="button"
+                        className="widget-action inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelectSection(section.id);
+                          onSelectWidget(null);
+                        }}
+                        aria-label={`Configura ${compactSectionMenuLabel}`}
+                        title="Configura sezione"
+                      >
+                        <MoreHorizontal size={18} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               <StackGrid
@@ -1840,6 +2253,8 @@ export function GridCanvas({
                 section={section}
                 gridBreakpoint={gridEngineActiveBreakpoint}
                 widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
+                widgetLayoutOverrides={widgetLayoutOverrides}
+                responsiveLayouts={responsiveLayouts.stacks?.[section.id]}
                 sectionCanvasCols={sectionCanvasCols}
                 stackWidgets={stackWidgets}
                 isSelected={isEditMode && selectedSectionId === section.id}
@@ -1847,16 +2262,23 @@ export function GridCanvas({
                 rootRowHeight={stackRowHeight}
                 rootMargin={stackMargin}
                 selectedWidgetId={selectedWidgetId}
+                onWidgetDisplayMetricsChange={onWidgetDisplayMetricsChange}
                 onSelectWidget={onSelectWidget}
                 onSelectSection={onSelectSection}
                 onWidgetClick={onWidgetClick}
                 onWidgetLightToggle={onWidgetLightToggle}
                 onWidgetSwitchToggle={onWidgetSwitchToggle}
                 onWidgetBrightnessChange={onWidgetBrightnessChange}
+                onWidgetLightColorChange={onWidgetLightColorChange}
                 onWidgetClimateTargetTempChange={onWidgetClimateTargetTempChange}
                 onWidgetClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
+                onWidgetClimateTargetHumidityChange={onWidgetClimateTargetHumidityChange}
+                onWidgetClimatePowerToggle={onWidgetClimatePowerToggle}
                 onWidgetClimateModeChange={onWidgetClimateModeChange}
                 onWidgetClimateFanModeChange={onWidgetClimateFanModeChange}
+                onWidgetClimatePresetModeChange={onWidgetClimatePresetModeChange}
+                onWidgetClimateSwingModeChange={onWidgetClimateSwingModeChange}
+                onWidgetClimateSwingHorizontalModeChange={onWidgetClimateSwingHorizontalModeChange}
                 onWidgetMediaToggle={onWidgetMediaToggle}
                 onWidgetMediaPrevious={onWidgetMediaPrevious}
                 onWidgetMediaNext={onWidgetMediaNext}
@@ -1870,13 +2292,35 @@ export function GridCanvas({
                 onWidgetLockOpen={onWidgetLockOpen}
                 onOpenMembersPanel={onOpenMembersPanel}
                 onWidgetLayoutChange={onWidgetLayoutChange}
+                onStackBreakpointLayoutChange={onStackBreakpointLayoutChange}
                 haConnected={haConnected}
                 haStates={haStates}
                 sensorHistoryByEntity={sensorHistoryByEntity}
                 onGridStackUsedRowsChange={handleGridStackUsedRowsChange}
+                onCompactDragStart={handleStackCompactDragStart}
+                onCompactDragMove={handleStackCompactDragMove}
+                onCompactDragStop={handleStackCompactDragStop}
               />
             </div>
           )}
+          {showCompactSectionMenu && (!isStack || !stackHeaderVisible) ? (
+            <button
+              type="button"
+              className="widget-action absolute right-2 top-2 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectSection(section.id);
+                onSelectWidget(null);
+              }}
+              aria-label={`Configura ${compactSectionMenuLabel}`}
+              title="Configura sezione"
+            >
+              <MoreHorizontal size={18} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       );
     },
@@ -1886,6 +2330,7 @@ export function GridCanvas({
       sensorHistoryByEntity,
       gridEngineActiveBreakpoint,
       houseMembers,
+      isCompactEditCardMenuMode,
       isEditMode,
       isStackSection,
       isTabletCanvas,
@@ -1896,14 +2341,21 @@ export function GridCanvas({
       onWidgetAlarmArm,
       onWidgetAlarmDisarm,
       onWidgetBrightnessChange,
+      onWidgetLightColorChange,
       onWidgetClick,
       onWidgetLightToggle,
       onWidgetSwitchToggle,
       onWidgetClimateFanModeChange,
       onWidgetClimateModeChange,
+      onWidgetClimatePresetModeChange,
+      onWidgetClimatePowerToggle,
+      onWidgetClimateSwingHorizontalModeChange,
+      onWidgetClimateSwingModeChange,
+      onWidgetClimateTargetHumidityChange,
       onWidgetClimateTargetRangeChange,
       onWidgetClimateTargetTempChange,
       onWidgetLayoutChange,
+      onStackBreakpointLayoutChange,
       onWidgetLockOpen,
       onWidgetLockToggle,
       onOpenMembersPanel,
@@ -1921,13 +2373,24 @@ export function GridCanvas({
       selectedSectionId,
       selectedWidgetId,
       state,
+      responsiveLayouts.stacks,
+      widgetLayoutOverrides,
+      widgetTypeLayoutOverrides,
+      handleStackCompactDragMove,
+      handleStackCompactDragStart,
+      handleStackCompactDragStop,
       widgets,
     ],
   );
 
   return (
     <div className="relative flex-1 min-w-0 h-full min-h-0">
-      <div className="h-full overflow-y-scroll pb-[calc(env(safe-area-inset-bottom)+8.25rem)] sm:pb-10 [scroll-padding-bottom:calc(env(safe-area-inset-bottom)+8.25rem)] sm:[scroll-padding-bottom:2.5rem] glass-scrollbar">
+      <div
+        ref={canvasScrollRef}
+        className={`h-full pb-[calc(env(safe-area-inset-bottom)+8.25rem)] sm:pb-10 [scroll-padding-bottom:calc(env(safe-area-inset-bottom)+8.25rem)] sm:[scroll-padding-bottom:2.5rem] glass-scrollbar ${
+          isCompactEditCardMenuMode && isCanvasTouchLocked ? 'overflow-hidden [touch-action:none]' : 'overflow-y-scroll'
+        }`}
+      >
         <div
           ref={runtimeGridHostRef}
           className={`relative behance-canvas-shell rounded-[2rem] pt-0.5 pb-4 md:pt-2 min-h-[48rem] ${
@@ -1950,7 +2413,9 @@ export function GridCanvas({
 
           <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
             <ResponsiveGridLayout
-              className={`sections-grid behance-grid relative ${isEditMode ? 'is-editing' : ''}`}
+              className={`sections-grid behance-grid relative ${isEditMode ? 'is-editing' : ''} ${
+                isCompactEditCardMenuMode ? 'is-compact-editing' : ''
+              }`}
               measureBeforeMount={true}
               breakpoints={GRID_ENGINE_BREAKPOINTS}
               cols={GRID_ENGINE_COLS}
@@ -1963,25 +2428,36 @@ export function GridCanvas({
               preventCollision={false}
               isDraggable={isEditMode}
               isResizable={isEditMode}
+              draggableHandle={isCompactEditCardMenuMode ? '.compact-edit-drag-handle' : undefined}
               draggableCancel=".builder-grid,.widget-action,.section-action,.react-resizable-handle"
               onBreakpointChange={(nextBreakpoint) => {
                 setGridEngineActiveBreakpoint(nextBreakpoint as GridBreakpoint);
               }}
-              onDragStart={(_, __, newItem) => {
+              onDragStart={(_, __, newItem, ___, event) => {
                 if (!isEditMode) {
                   return;
                 }
                 isCanvasInteractingRef.current = true;
+                if (isCompactEditCardMenuMode) {
+                  clearCompactDragHoldTimer();
+                  compactDragHoldStartRef.current = null;
+                  if (newItem?.i) {
+                    setCompactDragArmedItemId(newItem.i);
+                  }
+                  setIsCanvasTouchLocked(true);
+                  updateCanvasAutoScroll(getDragEventClientY(event));
+                }
                 canvasDragStartItemRef.current = newItem ? ({ ...(newItem as GridItem) }) : null;
                 hasCanvasDragMovedRef.current = false;
                 if (newItem?.i) {
                   focusCanvasOverlayItem(newItem.i);
                 }
               }}
-              onDrag={(_, __, newItem) => {
+              onDrag={(_, __, newItem, ___, event) => {
                 if (!isEditMode) {
                   return;
                 }
+                updateCanvasAutoScroll(getDragEventClientY(event));
                 if (hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined)) {
                   hasCanvasDragMovedRef.current = true;
                 }
@@ -1994,6 +2470,9 @@ export function GridCanvas({
                   hasCanvasDragMovedRef.current ||
                   hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined);
                 isCanvasInteractingRef.current = false;
+                setIsCanvasTouchLocked(false);
+                stopCanvasAutoScroll();
+                resetCompactDragHold();
                 canvasDragStartItemRef.current = null;
                 hasCanvasDragMovedRef.current = false;
                 if (!hasMoved) {
@@ -2005,21 +2484,26 @@ export function GridCanvas({
                 });
                 commitGridEngineLayouts(committed, layout as GridItem[]);
               }}
-              onResizeStart={(_, __, newItem) => {
+              onResizeStart={(_, __, newItem, ___, event) => {
                 if (!isEditMode) {
                   return;
                 }
                 isCanvasInteractingRef.current = true;
+                if (isCompactEditCardMenuMode) {
+                  setIsCanvasTouchLocked(true);
+                  updateCanvasAutoScroll(getDragEventClientY(event));
+                }
                 canvasDragStartItemRef.current = newItem ? ({ ...(newItem as GridItem) }) : null;
                 hasCanvasDragMovedRef.current = false;
                 if (newItem?.i) {
                   focusCanvasOverlayItem(newItem.i);
                 }
               }}
-              onResize={(_, __, newItem) => {
+              onResize={(_, __, newItem, ___, event) => {
                 if (!isEditMode) {
                   return;
                 }
+                updateCanvasAutoScroll(getDragEventClientY(event));
                 if (hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined)) {
                   hasCanvasDragMovedRef.current = true;
                 }
@@ -2032,6 +2516,9 @@ export function GridCanvas({
                   hasCanvasDragMovedRef.current ||
                   hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined);
                 isCanvasInteractingRef.current = false;
+                setIsCanvasTouchLocked(false);
+                stopCanvasAutoScroll();
+                resetCompactDragHold();
                 canvasDragStartItemRef.current = null;
                 hasCanvasDragMovedRef.current = false;
                 if (!hasMoved) {
@@ -2062,7 +2549,20 @@ export function GridCanvas({
                   ),
                 );
                 return (
-                  <div key={section.id} className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
+                  <div
+                    key={section.id}
+                    className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${
+                      isCompactEditCardMenuMode ? 'compact-edit-hold-target' : ''
+                    } ${compactDragArmedItemId === section.id ? 'compact-edit-drag-handle' : ''}`}
+                    onTouchStart={(event) => handleCompactDragTouchStart(event, section.id)}
+                    onTouchMove={handleCompactDragTouchMove}
+                    onTouchEnd={handleCompactDragHoldEnd}
+                    onTouchCancel={handleCompactDragHoldEnd}
+                    onMouseDown={(event) => handleCompactDragMouseDown(event, section.id)}
+                    onMouseMove={handleCompactDragMouseMove}
+                    onMouseUp={handleCompactDragHoldEnd}
+                    onMouseLeave={handleCompactDragHoldEnd}
+                  >
                     {renderSectionCard(
                       section,
                       sectionSpanW,
@@ -2078,8 +2578,10 @@ export function GridCanvas({
               })}
               {rootWidgets.map((widget) => {
                 const value =
-                  widget.entityId === 'sensor.nest_wifi_download'
-                    ? state.wifiDownloadMbps
+                  widget.kind === 'sensor'
+                    ? haConnected
+                      ? haStates[widget.entityId]?.numericValue
+                      : undefined
                     : widget.value ?? 0;
                 const runtimeLayoutItem = liveGridEngineLayoutMap.get(widget.id);
                 const runtimeWidget = runtimeLayoutItem
@@ -2098,7 +2600,9 @@ export function GridCanvas({
                 return (
                   <div
                     key={widget.id}
-                    className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
+                    className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${
+                      isCompactEditCardMenuMode ? 'compact-edit-hold-target' : ''
+                    } ${compactDragArmedItemId === widget.id ? 'compact-edit-drag-handle' : ''}`}
                     style={
                       isXsLongPressMode
                         ? {
@@ -2107,6 +2611,14 @@ export function GridCanvas({
                           }
                         : undefined
                     }
+                    onTouchStart={(event) => handleCompactDragTouchStart(event, widget.id)}
+                    onTouchMove={handleCompactDragTouchMove}
+                    onTouchEnd={handleCompactDragHoldEnd}
+                    onTouchCancel={handleCompactDragHoldEnd}
+                    onMouseDown={(event) => handleCompactDragMouseDown(event, widget.id)}
+                    onMouseMove={handleCompactDragMouseMove}
+                    onMouseUp={handleCompactDragHoldEnd}
+                    onMouseLeave={handleCompactDragHoldEnd}
                     onClick={(event) => {
                       event.stopPropagation();
                       if (isEditMode && !isCompactEditCardMenuMode) {
@@ -2177,11 +2689,17 @@ export function GridCanvas({
                         onWidgetClick(widget);
                       }}
                       onLightBrightnessChange={onWidgetBrightnessChange}
+                      onLightColorChange={onWidgetLightColorChange}
                       onSwitchToggle={onWidgetSwitchToggle}
                       onClimateTargetTempChange={onWidgetClimateTargetTempChange}
                       onClimateTargetRangeChange={onWidgetClimateTargetRangeChange}
+                      onClimateTargetHumidityChange={onWidgetClimateTargetHumidityChange}
+                      onClimatePowerToggle={onWidgetClimatePowerToggle}
                       onClimateModeChange={onWidgetClimateModeChange}
                       onClimateFanModeChange={onWidgetClimateFanModeChange}
+                      onClimatePresetModeChange={onWidgetClimatePresetModeChange}
+                      onClimateSwingModeChange={onWidgetClimateSwingModeChange}
+                      onClimateSwingHorizontalModeChange={onWidgetClimateSwingHorizontalModeChange}
                       onMediaToggle={onWidgetMediaToggle}
                       onMediaPrevious={onWidgetMediaPrevious}
                       onMediaNext={onWidgetMediaNext}
@@ -2194,12 +2712,21 @@ export function GridCanvas({
                       onLockToggle={onWidgetLockToggle}
                       onLockOpen={onWidgetLockOpen}
                       onMembersOpenPanel={() => onOpenMembersPanel()}
-                      liveEntity={haConnected ? haStates[widget.entityId] : undefined}
+                      liveEntity={haStates[widget.entityId]}
+                      switchConsumptionEntity={
+                        haConnected && widget.kind === 'switch' && widget.switchConsumptionEntityId
+                          ? haStates[widget.switchConsumptionEntityId] ??
+                            haStates[widget.switchConsumptionEntityId.toLowerCase()]
+                          : undefined
+                      }
                       sensorBatteryEntity={
                         haConnected && widget.sensorBatteryEntityId ? haStates[widget.sensorBatteryEntityId] : undefined
                       }
                       sensorHistory={sensorHistoryByEntity[widget.entityId]}
                       houseMembers={houseMembers}
+                      onDisplayMetricsChange={
+                        selectedWidgetId === widget.id ? onWidgetDisplayMetricsChange : undefined
+                      }
                     />
                     {isCompactEditCardMenuMode ? (
                       <button
@@ -2231,12 +2758,12 @@ export function GridCanvas({
         <button
           type="button"
           onClick={onOpenCatalog}
-          className={`absolute right-6 sm:right-8 z-20 w-16 h-16 rounded-full bg-white/15 border border-blue-300/35 backdrop-blur-2xl text-blue-200 shadow-[0_0_0_1px_rgba(147,197,253,0.3),0_16px_45px_rgba(56,189,248,0.35)] hover:scale-105 hover:bg-blue-500/20 transition-all ${
-            isXsViewport ? 'bottom-[calc(env(safe-area-inset-bottom)+6rem)]' : 'bottom-8'
-          }`}
+          className="absolute bottom-8 right-6 z-20 hidden h-16 w-16 rounded-full border border-blue-300/35 bg-white/15 text-blue-200 shadow-[0_0_0_1px_rgba(147,197,253,0.3),0_16px_45px_rgba(56,189,248,0.35)] backdrop-blur-2xl transition-all hover:scale-105 hover:bg-blue-500/20 md:block sm:right-8"
           aria-label="Apri catalogo componenti"
+          aria-expanded={isCatalogOpen}
+          title="Aggiungi componenti"
         >
-          <Plus size={30} className="mx-auto" />
+          <Plus size={30} className="mx-auto" aria-hidden="true" />
         </button>
       ) : null}
 
@@ -2381,6 +2908,21 @@ export function GridCanvas({
               transition-timing-function: cubic-bezier(0.22, 0.9, 0.25, 1);
             }
 
+            @media (hover: none) and (pointer: coarse) {
+              .sections-grid.is-compact-editing .react-grid-item,
+              .sections-grid.is-compact-editing .react-grid-item > div {
+                touch-action: pan-y;
+              }
+
+              .sections-grid.is-compact-editing .compact-edit-drag-handle {
+                touch-action: none;
+              }
+
+              .sections-grid.is-compact-editing .react-resizable-handle {
+                touch-action: none;
+              }
+            }
+
             .builder-grid.horizontal-stack {
               height: 100% !important;
             }
@@ -2408,43 +2950,6 @@ export function GridCanvas({
               pointer-events: auto !important;
             }
 
-            .dashboard-light-card .light-card-ui {
-              display: flex;
-              height: 100%;
-              min-height: 0;
-              align-self: stretch;
-            }
-
-            .dashboard-light-card .light-card-ui__surface {
-              height: 100%;
-              min-height: 0;
-              flex: 1 1 auto;
-              justify-content: space-between;
-            }
-
-            .dashboard-light-card .light-card-ui__slider {
-              background: linear-gradient(
-                90deg,
-                #f8fbff 0%,
-                #f8fbff var(--light-slider-fill, 50%),
-                rgba(255, 255, 255, 0.35) var(--light-slider-fill, 50%),
-                rgba(255, 255, 255, 0.35) 100%
-              );
-            }
-
-            .dashboard-light-card .light-card-ui__icon-shell {
-              background: rgba(255, 255, 255, 0.2);
-            }
-
-            .dashboard-light-card .light-card-ui__expand {
-              max-height: 64px;
-            }
-
-            .dashboard-light-card .light-card-ui--off .light-card-ui__expand,
-            .dashboard-light-card .light-card-ui--unavailable .light-card-ui__expand {
-              max-height: 0;
-              opacity: 0;
-            }
           `,
         }}
       />

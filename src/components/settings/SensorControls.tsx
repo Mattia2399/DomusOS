@@ -1,13 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import { Clock3, Droplets } from 'lucide-react';
 import type { SensorConnectionState } from './types';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
+import { formatSensorNumericValue } from '../../utils/sensorValue';
+import { resolveSensorVisualGroup, type SensorVisualGroup } from '../../utils/sensorPresentation';
+import { SensorHeroVisual } from './SensorHeroVisual';
 
 interface SensorControlsProps {
   name: string;
   status?: string;
-  value: number;
-  unit: string;
+  value?: number;
+  unit?: string;
+  displayPrecision?: number;
   entityId?: string;
   deviceClass?: string;
   history?: number[];
@@ -17,6 +23,8 @@ interface SensorControlsProps {
 }
 
 type SensorChartKind = 'line' | 'bar';
+
+const SENSOR_HISTORY_WINDOWS = [3, 6, 12, 24] as const;
 
 const BAR_DEVICE_CLASSES = new Set([
   'water',
@@ -63,7 +71,7 @@ function resolveSensorChartKind({
   entityId,
   deviceClass,
 }: {
-  unit: string;
+  unit?: string;
   name: string;
   entityId?: string;
   deviceClass?: string;
@@ -226,6 +234,37 @@ function TrendBars({ values }: { values: number[] }) {
   );
 }
 
+function resolveSensorChartAccent(group: SensorVisualGroup) {
+  if (group === 'energy') {
+    return {
+      stroke: 'rgba(255,214,10,0.86)',
+      fill: 'rgba(255,214,10,0.10)',
+    };
+  }
+  if (group === 'environment') {
+    return {
+      stroke: 'rgba(143,242,207,0.86)',
+      fill: 'rgba(52,211,153,0.10)',
+    };
+  }
+  if (group === 'fluid') {
+    return {
+      stroke: 'rgba(125,211,252,0.86)',
+      fill: 'rgba(14,165,233,0.10)',
+    };
+  }
+  if (group === 'measurement') {
+    return {
+      stroke: 'rgba(196,181,253,0.86)',
+      fill: 'rgba(167,139,250,0.10)',
+    };
+  }
+  return {
+    stroke: 'rgba(148,163,184,0.86)',
+    fill: 'rgba(148,163,184,0.10)',
+  };
+}
+
 function MetadataCard({
   icon,
   label,
@@ -261,6 +300,7 @@ export function SensorControlsPanel({
   status,
   value,
   unit,
+  displayPrecision = 0,
   entityId,
   deviceClass,
   history,
@@ -268,77 +308,126 @@ export function SensorControlsPanel({
   connection,
   connectionState,
 }: SensorControlsProps) {
-  const sensorValue = Math.round(value);
-  const chartValues = (history ?? []).filter((entry) => Number.isFinite(entry));
-  const chartKind = useMemo(
-    () =>
-      resolveSensorChartKind({
-        unit,
-        name,
-        entityId,
-        deviceClass,
-      }),
-    [deviceClass, entityId, name, unit],
-  );
+  const sensorValue = formatSensorNumericValue(value, displayPrecision) ?? '—';
+  const [historyHours, setHistoryHours] = useState<(typeof SENSOR_HISTORY_WINDOWS)[number]>(24);
+  const hasSensorValue = typeof value === 'number' && Number.isFinite(value);
+  const visualGroup = resolveSensorVisualGroup(deviceClass);
+  const chartAccent = resolveSensorChartAccent(visualGroup);
+  const chartData = useMemo(() => {
+    const historyValues = (history ?? []).filter((entry) => Number.isFinite(entry));
+    if (historyValues.length < 2) {
+      return [];
+    }
+    const visiblePoints = Math.max(2, Math.ceil((historyValues.length * historyHours) / 24));
+    const values = historyValues.slice(-visiblePoints);
+    return values.map((entry, index) => ({ index, value: entry }));
+  }, [history, historyHours]);
   const average =
-    chartValues.length > 0
-      ? Math.round(chartValues.reduce((sum, item) => sum + item, 0) / chartValues.length)
+    chartData.length > 0
+      ? chartData.reduce((sum, item) => sum + item.value, 0) / chartData.length
       : null;
   const averageLabel =
     average !== null
-      ? `Media: ${average}${unit && unit.trim().length > 0 ? ` ${unit}` : ''}`
-      : 'Media: N/D';
+      ? `Media ${formatSensorNumericValue(average, displayPrecision)}${unit && unit.trim().length > 0 ? ` ${unit}` : ''}`
+      : 'Media --';
   const batteryValue = battery && battery.trim().length > 0 ? battery : 'N/D';
-  const resolvedConnectionState = connectionState === 'offline' ? 'offline' : 'online';
+  const resolvedConnectionState = connectionState ?? 'unknown';
   const connectionLabel =
     connection && connection.trim().length > 0
       ? connection.trim()
       : resolvedConnectionState === 'offline'
         ? 'Disconnesso'
-        : 'Connesso';
-  const connectionSubtitleClass = resolvedConnectionState === 'offline' ? 'text-rose-200/90' : 'text-emerald-200/90';
+        : resolvedConnectionState === 'online'
+          ? 'Connesso'
+          : 'Stato sconosciuto';
+  const connectionSubtitleClass =
+    resolvedConnectionState === 'offline'
+      ? 'text-rose-200/90'
+      : resolvedConnectionState === 'online'
+        ? 'text-emerald-200/90'
+        : 'text-white/55';
   const connectionValue = connectionLabel;
   const batteryPercent = parseBatteryPercentage(batteryValue);
-  void status;
-
   return (
     <div className={`${CONTEXT_PANEL_LAYOUT.shell} gap-[clamp(0.7rem,2.4vw,1rem)]`}>
+      <ContextPanelHeader
+        title={name}
+        subtitle={connectionLabel}
+        icon={<Droplets size={22} />}
+        fallbackTitle="Sensore"
+        iconClassName="text-cyan-200"
+        subtitleClassName={connectionSubtitleClass}
+      />
+
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="flex min-w-0 items-center gap-[clamp(0.65rem,2.2vw,1rem)] pr-11">
-          <div className="flex min-w-0 flex-1 items-center gap-[clamp(0.65rem,2.2vw,1rem)]">
-            <span className="h-[clamp(2.6rem,6.2vw,3.2rem)] w-[clamp(2.6rem,6.2vw,3.2rem)] rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-cyan-200 shrink-0">
-              <Droplets size={22} className="h-[clamp(1.05rem,3.1vw,1.35rem)] w-[clamp(1.05rem,3.1vw,1.35rem)]" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[clamp(0.98rem,2.8vw,1.3rem)] leading-[1.12] font-medium tracking-[-0.01em] text-white whitespace-normal break-words [overflow-wrap:anywhere] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">
-                {name || 'Sensore'}
-              </h2>
-              <p className={`mt-1 truncate text-xs ${connectionSubtitleClass}`}>{connectionLabel}</p>
+        <div className="aspect-square w-full max-w-[clamp(13rem,62vw,17.5rem)] mx-auto">
+          <SensorHeroVisual
+            group={visualGroup}
+            value={sensorValue}
+            numericValue={hasSensorValue ? value : undefined}
+            unit={hasSensorValue ? unit : undefined}
+            deviceClass={deviceClass}
+            history={history}
+            status={status}
+          />
+        </div>
+      </div>
+
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
+        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-white/48">
+            <Clock3 size={14} />
+            Andamento
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-white/52">{averageLabel}</span>
+        </div>
+
+        <div className="liquid-segmented-control">
+          <div className="grid grid-cols-4 gap-1">
+            {SENSOR_HISTORY_WINDOWS.map((hours) => {
+              const active = historyHours === hours;
+              return (
+                <button
+                  key={hours}
+                  type="button"
+                  onClick={() => setHistoryHours(hours)}
+                  className={`flex h-9 min-w-0 items-center justify-center rounded-full text-xs font-semibold transition-all active:scale-[0.96] ${
+                    active
+                      ? 'liquid-segmented-option-active'
+                      : 'liquid-segmented-option-inactive'
+                  }`}
+                  aria-pressed={active}
+                  aria-label={`Mostra ultime ${hours} ore`}
+                >
+                  {hours}h
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 h-36 overflow-hidden rounded-[1.55rem] border border-white/[0.07] bg-black/[0.14] px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]">
+          {chartData.length >= 2 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 8, right: 4, left: 4, bottom: 4 }}>
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke={chartAccent.stroke}
+                  strokeWidth={2.2}
+                  fill={chartAccent.fill}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center px-4 text-center text-xs text-white/42">
+              Nessun dato storico disponibile
             </div>
-          </div>
+          )}
         </div>
-      </div>
-
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="aspect-square w-full max-w-[clamp(12rem,58vw,15.75rem)] mx-auto rounded-full bg-white/5 backdrop-blur-md border border-white/10 shadow-[0_0_50px_rgba(59,130,246,0.2)] flex flex-col items-center justify-center px-3 text-center">
-          <div className="flex items-start">
-            <span className="text-[clamp(2.85rem,12vw,4.4rem)] font-thin leading-none text-white">{sensorValue}</span>
-            <span className="text-[clamp(1.3rem,5.4vw,1.95rem)] font-light text-gray-200 mt-[clamp(0.35rem,1.6vw,0.55rem)]">
-              {unit || '%'}
-            </span>
-          </div>
-          <p className="mt-[clamp(0.45rem,1.8vw,0.72rem)] text-[clamp(0.72rem,2.1vw,0.94rem)] leading-tight tracking-[0.01em] text-blue-400">
-            Valore attuale
-          </p>
-        </div>
-      </div>
-
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="flex items-center justify-between mb-[clamp(0.55rem,1.9vw,0.9rem)]">
-          <p className="text-[clamp(0.78rem,2vw,0.92rem)] text-white font-medium">Trend di oggi</p>
-          <p className="text-[clamp(0.74rem,1.95vw,0.9rem)] text-gray-400">{averageLabel}</p>
-        </div>
-        {chartKind === 'bar' ? <TrendBars values={chartValues} /> : <TrendLine values={chartValues} />}
       </div>
 
       <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-[clamp(0.55rem,1.9vw,0.8rem)] mt-auto">

@@ -1,0 +1,142 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Widget } from '../../types/dashboardModels';
+import { SensorCard } from './SensorCard';
+import type { WidgetDisplayVariant } from './widgetDisplayVariant';
+
+const widget: Widget = {
+  id: 'sensor-card-test',
+  kind: 'sensor',
+  title: 'Qualità aria',
+  entityId: 'sensor.air_quality',
+  status: 'online',
+  isOn: true,
+  value: 37,
+  unit: '%',
+  layout: {
+    i: 'sensor-card-test',
+    x: 0,
+    y: 0,
+    w: 2,
+    h: 2,
+  },
+};
+
+function renderVariant(variant: WidgetDisplayVariant, hasValue = true) {
+  const value = hasValue ? 37 : undefined;
+  return renderToStaticMarkup(
+    <SensorCard
+      widget={{ ...widget, value }}
+      isSelected={false}
+      value={value}
+      sensorHistory={[28, 31, 35, 37]}
+      isEditMode={false}
+      onClick={() => undefined}
+      displayVariant={variant}
+      liveEntity={
+        hasValue
+          ? { state: '37', numericValue: 37, unit: '%', rawAttributes: { device_class: 'humidity' } }
+          : { state: 'unavailable', unit: '%', rawAttributes: { device_class: 'humidity' } }
+      }
+    />,
+  );
+}
+
+describe('SensorCard view contract', () => {
+  it.each(['mini', 'compact', 'standard', 'full'] as const)('reports the fallback %s layout before measurement', (variant) => {
+    expect(renderVariant(variant)).toContain(`data-sensor-variant="${variant}"`);
+  });
+
+  it('always renders the fixed slots used by container queries', () => {
+    const markup = renderVariant('mini');
+    expect(markup).toContain('sensor-card__title');
+    expect(markup).toContain('sensor-card__value');
+    expect(markup).toContain('sensor-card__trend');
+    expect(markup).toContain('sensor-card__visual');
+    expect(markup).toContain('sensor-card__stats');
+    expect(markup).toContain('data-sensor-group="environment"');
+  });
+
+  it('marks unavailable sensors so CSS can remove trend, visual and stats', () => {
+    const markup = renderVariant('standard', false);
+    expect(markup).toContain('data-sensor-available="false"');
+    expect(markup).toContain('aria-label="—"');
+  });
+});
+
+describe('SensorCard pixel reporting', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('reports the layout associated with the measured border box', async () => {
+    let resizeCallback: ResizeObserverCallback | null = null;
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    const onDisplayMetricsChange = vi.fn();
+
+    const { container } = render(
+      <SensorCard
+        widget={widget}
+        isSelected={false}
+        value={37}
+        sensorHistory={[28, 31, 35, 37]}
+        isEditMode={false}
+        onClick={() => undefined}
+        displayVariant="mini"
+        onDisplayMetricsChange={onDisplayMetricsChange}
+      />,
+    );
+
+    const resizeTo = (width: number, height: number) => {
+      act(() => {
+        const callback = resizeCallback as ResizeObserverCallback | null;
+        if (!callback) throw new Error('ResizeObserver callback not registered');
+        callback(
+          [
+            {
+              borderBoxSize: [{ inlineSize: width, blockSize: height }],
+              contentRect: { width, height },
+            } as unknown as ResizeObserverEntry,
+          ],
+          {} as ResizeObserver,
+        );
+      });
+    };
+
+    resizeTo(104, 48);
+    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('mini'));
+
+    resizeTo(104, 112);
+    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('compact'));
+
+    resizeTo(192, 112);
+    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('standard'));
+
+    resizeTo(296, 112);
+    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('full'));
+    await waitFor(() =>
+      expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
+        widgetId: widget.id,
+        width: 296,
+        height: 112,
+        variant: 'full',
+      }),
+    );
+  });
+});

@@ -1,3 +1,20 @@
+.ha-light-spectrum-swatch {
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.82) 0 8%, transparent 18%),
+    conic-gradient(
+      from 20deg,
+      #ff453a,
+      #ff9f0a,
+      #ffd60a,
+      #32d74b,
+      #64d2ff,
+      #0a84ff,
+      #bf5af2,
+      #ff2d55,
+      #ff453a
+    );
+}
+
 .ha-light-color-picker .react-colorful {
   width: 100%;
   height: 176px;
@@ -52,4 +69,50 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 6px 14px rgba(2, 6, 23, 0.28);
+}
+
+.ha-light-range {
+  width: 100%;
+  height: 28px;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
+}
+
+.ha-light-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ha-light-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.ha-light-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ha-light-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }

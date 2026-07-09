@@ -12,6 +12,7 @@ import {
   resolveCoverTiltPosition,
   translateCoverState,
 } from '../../utils/coverUtils';
+import { ContextPanelHeader } from './ContextPanelHeader';
 
 type CoverControlsProps = {
   cover: {
@@ -115,19 +116,7 @@ export function CoverControls({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex items-start gap-3 pr-11">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-full border border-white/10 bg-white/10 flex items-center justify-center text-white">
-              <Blinds size={20} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-[1.2rem] font-semibold tracking-tight text-white truncate">{cover.name || 'Tapparella Salotto'}</h3>
-              <p className="mt-1 text-sm text-white/60 truncate">{displayStatus}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ContextPanelHeader title={cover.name} subtitle={displayStatus} icon={<Blinds size={21} />} fallbackTitle="Tapparella" />
 
       <div className={CONTEXT_PANEL_LAYOUT.section}>
         <div className="mt-6 flex justify-center">

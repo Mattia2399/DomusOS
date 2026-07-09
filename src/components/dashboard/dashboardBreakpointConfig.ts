@@ -10,7 +10,7 @@ export type GridEngineBreakpoint = keyof typeof GRID_ENGINE_BREAKPOINTS;
 export type BreakpointCardDensity = 'tiny' | 'compact' | 'regular';
 
 type WidgetSpan = { w: number; h: number };
-type LightWidgetSpan = { w: number; hOff: number; hOn: number };
+type LightWidgetSpan = { w: number; hOff: number; hOn: number; autoExpand?: boolean };
 type SectionSpan = { w: number; h: number };
 
 const WIDGET_KIND_ORDER: WidgetKind[] = [
@@ -38,7 +38,8 @@ function toPositiveInt(value: unknown) {
 }
 
 function resolveLockMinimumHeight(breakpoint: GridEngineBreakpoint) {
-  return breakpoint === 'xs' || breakpoint === 'sm' ? 1 : 2;
+  void breakpoint;
+  return 1;
 }
 
 function clampLockHeight(height: number | undefined, breakpoint: GridEngineBreakpoint) {
@@ -56,7 +57,8 @@ function normalizeBreakpointOverride(raw: WidgetTypeBreakpointLayoutOverride | u
   const h = toPositiveInt(raw.h);
   const hOn = toPositiveInt(raw.hOn);
   const hOff = toPositiveInt(raw.hOff);
-  if (!w && !h && !hOn && !hOff) {
+  const autoExpand = typeof raw.autoExpand === 'boolean' ? raw.autoExpand : undefined;
+  if (!w && !h && !hOn && !hOff && autoExpand === undefined) {
     return undefined;
   }
   return {
@@ -64,6 +66,7 @@ function normalizeBreakpointOverride(raw: WidgetTypeBreakpointLayoutOverride | u
     ...(h ? { h } : null),
     ...(hOn ? { hOn } : null),
     ...(hOff ? { hOff } : null),
+    ...(autoExpand !== undefined ? { autoExpand } : null),
   };
 }
 
@@ -239,12 +242,12 @@ const DEFAULT_LOCK_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, Widge
 };
 
 const DEFAULT_ALARM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 2 },
-  xl: { w: 2, h: 2 },
-  lg: { w: 2, h: 2 },
-  md: { w: 2, h: 2 },
-  sm: { w: 1, h: 2 },
-  xs: { w: 2, h: 2 }, // AGGIORNATO: Tastierino allarme largo per usabilità
+  '2xl': { w: 3, h: 3 },
+  xl: { w: 3, h: 3 },
+  lg: { w: 3, h: 3 },
+  md: { w: 3, h: 3 },
+  sm: { w: 2, h: 3 },
+  xs: { w: 2, h: 3 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -288,10 +291,13 @@ function resolveLightWidgetSpanWithOverrides(breakpoint: GridEngineBreakpoint) {
     return base;
   }
   const fallbackHeight = toPositiveInt(override.h);
+  const autoExpand = override.autoExpand ?? true;
+  const fixedHeight = fallbackHeight ?? toPositiveInt(override.hOff) ?? toPositiveInt(override.hOn) ?? base.hOff;
   return {
     w: toPositiveInt(override.w) ?? base.w,
-    hOn: toPositiveInt(override.hOn) ?? fallbackHeight ?? base.hOn,
-    hOff: toPositiveInt(override.hOff) ?? fallbackHeight ?? base.hOff,
+    hOn: autoExpand ? toPositiveInt(override.hOn) ?? fallbackHeight ?? base.hOn : fixedHeight,
+    hOff: autoExpand ? toPositiveInt(override.hOff) ?? fallbackHeight ?? base.hOff : fixedHeight,
+    autoExpand,
   };
 }
 
@@ -322,18 +328,21 @@ export function resolveWidgetTypeLayoutSpan(
   kind: WidgetKind,
   breakpoint: GridEngineBreakpoint,
   overrides: WidgetTypeLayoutOverrides | undefined = activeWidgetTypeLayoutOverrides,
-): { w: number; h: number; hOn?: number; hOff?: number } {
+): { w: number; h: number; hOn?: number; hOff?: number; autoExpand?: boolean } {
   if (kind === 'light') {
     const base = DEFAULT_LIGHT_WIDGET_SPAN_BY_BREAKPOINT[breakpoint];
     const override = overrides?.light?.[breakpoint];
     const fallbackHeight = toPositiveInt(override?.h);
-    const hOn = toPositiveInt(override?.hOn) ?? fallbackHeight ?? base.hOn;
-    const hOff = toPositiveInt(override?.hOff) ?? fallbackHeight ?? base.hOff;
+    const autoExpand = override?.autoExpand ?? true;
+    const fixedHeight = fallbackHeight ?? toPositiveInt(override?.hOff) ?? toPositiveInt(override?.hOn) ?? base.hOff;
+    const hOn = autoExpand ? toPositiveInt(override?.hOn) ?? fallbackHeight ?? base.hOn : fixedHeight;
+    const hOff = autoExpand ? toPositiveInt(override?.hOff) ?? fallbackHeight ?? base.hOff : fixedHeight;
     return {
       w: toPositiveInt(override?.w) ?? base.w,
       h: Math.max(hOn, hOff),
       hOn,
       hOff,
+      autoExpand,
     };
   }
   const base = DEFAULT_WIDGET_SPANS_BY_KIND[kind][breakpoint];

@@ -216,15 +216,15 @@ export function BuilderPanel({
             ) : (
               <motion.div key="condition" layout className="flex w-full flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex rounded-full border border-white/10 bg-white/5 p-1">
+                  <div className="liquid-segmented-control segmented-options min-w-[9rem] flex-1">
                     <button
                       type="button"
                       onClick={() => onConditionLogicChange('and')}
                       className={cn(
-                        'rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
+                        'w-full min-w-0 rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
                         conditionLogic === 'and'
-                          ? 'bg-emerald-400/18 text-emerald-100'
-                          : 'text-white/60 hover:text-white',
+                          ? 'liquid-segmented-option-active'
+                          : 'liquid-segmented-option-inactive',
                       )}
                     >
                       AND
@@ -233,10 +233,10 @@ export function BuilderPanel({
                       type="button"
                       onClick={() => onConditionLogicChange('or')}
                       className={cn(
-                        'rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
+                        'w-full min-w-0 rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
                         conditionLogic === 'or'
-                          ? 'bg-emerald-400/18 text-emerald-100'
-                          : 'text-white/60 hover:text-white',
+                          ? 'liquid-segmented-option-active'
+                          : 'liquid-segmented-option-inactive',
                       )}
                     >
                       OR

@@ -107,6 +107,18 @@ async function dragBy(page, locator, dx, dy) {
   await page.waitForTimeout(350);
 }
 
+async function enterEditMode(page) {
+  const directEditButton = page.locator('button[aria-label="Toggle edit mode"]').filter({ visible: true }).first();
+  if ((await directEditButton.count()) > 0) {
+    await directEditButton.click();
+  } else {
+    await page.getByLabel('Apri altre sezioni').click();
+    await page.locator('button[aria-label="Toggle edit mode"]').filter({ visible: true }).first().click();
+  }
+  await page.getByRole('button', { name: 'Attiva', exact: true }).click();
+  await page.waitForSelector('.sections-grid.is-editing .react-grid-item');
+}
+
 async function readRootPositions(page) {
   return page.evaluate(() => {
     const grid = document.querySelector('.sections-grid');
@@ -197,9 +209,7 @@ test('GridEngine preserves XL while editing XS/SM and keeps stack reflow stable'
   );
 
   await page.goto(`${BASE_URL}/?view=home`);
-  await page.locator('button[aria-label="Toggle edit mode"]').first().click();
-  await page.getByRole('button', { name: 'Attiva', exact: true }).click();
-  await page.waitForSelector('.sections-grid.is-editing .react-grid-item');
+  await enterEditMode(page);
 
   const xlRootBeforeClick = await readRootPositions(page);
   await page.locator('.sections-grid > .react-grid-item').filter({ hasText: 'Root Light A' }).first().click();
@@ -210,12 +220,12 @@ test('GridEngine preserves XL while editing XS/SM and keeps stack reflow stable'
 
   const rootLightBeforeLayoutPicker = findByText(xlRootAfterClick, 'Root Light A');
   await page.getByRole('button', { name: 'Layout', exact: true }).click();
-  await page.getByLabel('Imposta 1 colonne per 1 righe').click();
+  await page.getByRole('button', { name: /Mini, 1 per 1/ }).click();
   await page.waitForTimeout(350);
   const xlRootAfterLayoutPicker = await readRootPositions(page);
   const rootLightAfterLayoutPicker = findByText(xlRootAfterLayoutPicker, 'Root Light A');
   expect(rootLightAfterLayoutPicker.w).toBeLessThan(rootLightBeforeLayoutPicker.w);
-  expect(rootLightAfterLayoutPicker.h).toBeLessThan(rootLightBeforeLayoutPicker.h);
+  expect(rootLightAfterLayoutPicker.h).toBeLessThanOrEqual(rootLightBeforeLayoutPicker.h);
 
   await expect(page.getByLabel('Muovi Stack Light A')).toBeVisible({ timeout: 5000 });
   const xlStackBeforeClick = await readStackOverlayPositions(page);

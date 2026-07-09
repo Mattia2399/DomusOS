@@ -24,16 +24,18 @@ type SceneItem = {
   id: SceneKey;
   label: string;
   color: string;
+  accentRgb: string;
   defaultIcon: SceneIconKey;
 };
 
 export const SCENES_CATALOG: SceneItem[] = [
-  { id: 'music', label: 'Music', color: 'from-pink-500 to-rose-500', defaultIcon: 'music' },
-  { id: 'going-out', label: 'Going out', color: 'from-blue-400 to-blue-600', defaultIcon: 'person' },
-  { id: 'night', label: 'Night', color: 'from-indigo-600 to-blue-900', defaultIcon: 'moon' },
-  { id: 'movie', label: 'Movie', color: 'from-red-500 to-red-700', defaultIcon: 'film' },
-  { id: 'arrive', label: 'Arrive', color: 'from-emerald-400 to-emerald-600', defaultIcon: 'car' },
-  { id: 'morning', label: 'Morning', color: 'from-orange-400 to-orange-600', defaultIcon: 'sun' },
+  { id: 'music', label: 'Music', color: 'from-pink-500 to-rose-500', accentRgb: '236,72,153', defaultIcon: 'music' },
+  { id: 'going-out', label: 'Going out', color: 'from-blue-400 to-blue-600', accentRgb: '96,165,250', defaultIcon: 'person' },
+  { id: 'night', label: 'Night', color: 'from-indigo-600 to-blue-900', accentRgb: '79,70,229', defaultIcon: 'moon' },
+  { id: 'movie', label: 'Movie', color: 'from-emerald-400 to-green-600', accentRgb: '52,211,153', defaultIcon: 'film' },
+  { id: 'sleep', label: 'Sleep', color: 'from-amber-400 to-orange-500', accentRgb: '245,158,11', defaultIcon: 'bed' },
+  { id: 'arrive', label: 'Arrive', color: 'from-blue-500 to-indigo-600', accentRgb: '59,130,246', defaultIcon: 'home' },
+  { id: 'morning', label: 'Morning', color: 'from-orange-400 to-orange-600', accentRgb: '249,115,22', defaultIcon: 'sun' },
 ];
 
 export const SCENE_ICON_OPTIONS: Array<{ id: SceneIconKey; label: string }> = [
@@ -366,119 +368,93 @@ export function ScenesCard({
 
   const selectedScenes = scenes;
   const isTinyCard = hasCardSize && cardDensity === 'tiny';
-  const isDenseLayout = compact || (hasCardSize && cardDensity !== 'regular');
-  const isSingleLineLayout =
-    hasCardSize &&
-    (cardHeight <= 126 || (compact && cardHeight <= 152) || (cardDensity === 'tiny' && cardHeight <= 154));
-  const useCompactLayout = (compact || isTinyCard || isSingleLineLayout) && !isEditMode;
+  const isShortCard = hasCardSize ? cardHeight <= 132 : compact;
   const displayedScenes = selectedScenes;
   const availableScenes = SCENES_CATALOG.filter((scene) => !selectedScenes.includes(scene.id));
-  const addSlots = useCompactLayout ? availableScenes.slice(0, isTinyCard ? 1 : 2) : availableScenes;
-  const visibleItemsCount = Math.max(1, displayedScenes.length + (isEditMode ? addSlots.length : 0));
-  const iconSize = isSingleLineLayout ? (isTinyCard ? 14 : 15) : isTinyCard ? 17 : isDenseLayout ? 19 : 21;
-  const sceneItemGapClass = isSingleLineLayout ? 'gap-1.5' : isTinyCard ? 'gap-1' : isDenseLayout ? 'gap-1.5' : 'gap-2';
-  const sceneCellPaddingClass = isSingleLineLayout ? 'px-1 py-0.5' : isTinyCard ? 'px-1 py-0.5' : 'px-1.5 py-1';
-  const sceneButtonSizeClass = isSingleLineLayout ? (isTinyCard ? 'w-8 h-8' : 'w-9 h-9') : isTinyCard ? 'w-11 h-11' : isDenseLayout ? 'w-12 h-12' : 'w-15 h-15';
-  const sceneLabelClass = isSingleLineLayout
-    ? isTinyCard
-      ? 'text-[10px] leading-none whitespace-nowrap'
-      : 'text-[11px] leading-none whitespace-nowrap'
-    : isTinyCard
-      ? 'text-[10px] leading-[1.05] whitespace-nowrap'
-      : isDenseLayout
-        ? 'text-[11px] leading-[1.08] whitespace-nowrap'
-        : 'text-xs leading-[1.1] whitespace-nowrap';
-  const sceneLabelMinHeightClass = isSingleLineLayout
-    ? ''
-    : isTinyCard
-      ? 'min-h-[0.8rem]'
-      : isDenseLayout
-        ? 'min-h-[0.92rem]'
-        : 'min-h-[1.02rem]';
-  const titleClass = isSingleLineLayout
-    ? isTinyCard
-      ? 'text-[0.74rem] font-semibold text-white/62 tracking-tight truncate'
-      : 'text-[0.82rem] font-semibold text-white/64 tracking-tight truncate'
-    : isDenseLayout
-      ? isTinyCard
-        ? 'text-[0.86rem] font-semibold text-white/70 tracking-tight'
-        : 'text-[0.95rem] font-semibold text-white/70 tracking-tight'
-      : 'text-base font-semibold text-white/70 tracking-tight';
-  const addLabelClass = isSingleLineLayout
-    ? isTinyCard
-      ? 'text-[10px] text-white/52 font-medium truncate'
-      : 'text-[11px] text-white/52 font-medium truncate'
-    : isTinyCard
-      ? 'text-[9px] text-white/50 font-medium'
-      : isDenseLayout
-        ? 'text-[10px] text-white/50 font-medium'
-        : 'text-[11px] text-white/50 font-medium';
-  const rowGapClass = isSingleLineLayout ? (isTinyCard ? 'gap-x-1.5' : 'gap-x-2') : isTinyCard ? 'gap-x-1.5 gap-y-1' : 'gap-x-2 gap-y-1.5';
-  const titleMarginClass = isSingleLineLayout ? 'mb-0.5' : isTinyCard ? 'mb-1' : isDenseLayout ? 'mb-1.5' : 'mb-3';
+  const addSlots = isEditMode ? availableScenes : [];
+  const iconSize = isShortCard ? 14 : isTinyCard || compact ? 15 : 16;
+  const titleLabel = title?.trim() || 'Scenari';
+  const headerClass = isShortCard
+    ? 'mb-1.5 flex items-center justify-between px-3 pt-2'
+    : 'mb-3 flex items-center justify-between px-3 pt-3 sm:px-4 sm:pt-4';
+  const titleClass = isShortCard
+    ? 'text-[0.92rem] font-semibold text-white/70 tracking-tight'
+    : 'text-base font-semibold text-white/70 tracking-tight';
+  const carouselClass = isShortCard
+    ? 'flex min-w-0 gap-2 overflow-x-auto overscroll-x-contain pl-3 pr-3 pb-2 snap-x snap-mandatory scroll-pl-3 [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden'
+    : 'flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pl-3 pr-4 pb-3 snap-x snap-mandatory scroll-pl-3 [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:px-4 sm:pb-4 sm:scroll-pl-4';
+  const tileClass = isShortCard
+    ? 'w-[4.15rem] gap-1.5 rounded-[1.15rem] p-2'
+    : 'w-[4.75rem] gap-2 rounded-2xl p-2.5';
+  const iconShellClass = isShortCard ? 'w-7 h-7' : 'w-8 h-8';
+  const labelClass = isShortCard
+    ? 'text-[0.76rem] font-semibold text-white/90 truncate leading-none'
+    : 'text-[0.85rem] font-semibold text-white/90 truncate leading-tight';
 
   return (
-    <div ref={cardRef} className="h-full w-full min-h-0 min-w-0 overflow-hidden flex flex-col">
-      {title ? (
-        <div className={`${titleMarginClass} flex items-center justify-between px-0`}>
-          <p className={titleClass}>{title}</p>
+    <div
+      ref={cardRef}
+      className="flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden"
+    >
+      <div className={headerClass}>
+        <p className={titleClass}>{titleLabel}</p>
+      </div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className={carouselClass}>
+          {displayedScenes.map((sceneId) => {
+            const scene = SCENES_CATALOG.find((item) => item.id === sceneId);
+            if (!scene) {
+              return null;
+            }
+            const configuredLabel = sceneLabels?.[scene.id]?.trim();
+            const displayLabel = configuredLabel && configuredLabel.length > 0 ? configuredLabel : scene.label;
+            const iconKey = sceneIcons?.[scene.id] ?? scene.defaultIcon;
+            const isRunning = !isEditMode && runningSceneId === scene.id;
+            const isCompleting = !isEditMode && !isRunning && completedSceneId === scene.id;
+            const isConfirmed = !isEditMode && !isRunning && confirmedSceneId === scene.id;
+            const ringProgress = isRunning ? runningProgress : isCompleting ? completedProgress : null;
+            return (
+              <SceneButton
+                key={scene.id}
+                icon={getSceneIconNode(iconKey, iconSize)}
+                label={displayLabel}
+                color={scene.color}
+                accentRgb={scene.accentRgb}
+                iconKey={iconKey}
+                isRunning={isRunning}
+                isCompleting={isCompleting}
+                isConfirmed={isConfirmed}
+                ringProgress={ringProgress}
+                statusIconSize={Math.max(14, iconSize)}
+                tileClass={tileClass}
+                iconShellClass={iconShellClass}
+                labelClass={labelClass}
+                isShortCard={isShortCard}
+                onClick={() => {
+                  if (isEditMode || isRunning) {
+                    return;
+                  }
+                  onSceneTrigger?.(scene.id);
+                }}
+              />
+            );
+          })}
+          {addSlots.map((scene) => (
+            <button
+              key={`add-${scene.id}`}
+              type="button"
+              onClick={() => onAddScene?.(scene.id)}
+              className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.08] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden ${tileClass}`}
+            >
+              <span className={`relative flex-shrink-0 rounded-full bg-white/10 flex items-center justify-center overflow-hidden text-white/80 group-hover:text-white transition-colors ${iconShellClass}`}>
+                <Plus size={iconSize} />
+              </span>
+              <span className={`w-full min-w-0 text-center ${labelClass}`}>
+                Aggiungi
+              </span>
+            </button>
+          ))}
         </div>
-      ) : null}
-      <div
-        className={`grid min-h-0 min-w-0 flex-1 items-center ${rowGapClass} ${isSingleLineLayout ? 'py-0' : 'pt-0.5 pb-1.5'}`}
-        style={{ gridTemplateColumns: `repeat(${visibleItemsCount}, minmax(0, 1fr))` }}
-      >
-        {displayedScenes.map((sceneId) => {
-          const scene = SCENES_CATALOG.find((item) => item.id === sceneId);
-          if (!scene) {
-            return null;
-          }
-          const configuredLabel = sceneLabels?.[scene.id]?.trim();
-          const displayLabel = configuredLabel && configuredLabel.length > 0 ? configuredLabel : scene.label;
-          const iconKey = sceneIcons?.[scene.id] ?? scene.defaultIcon;
-          const isRunning = !isEditMode && runningSceneId === scene.id;
-          const isCompleting = !isEditMode && !isRunning && completedSceneId === scene.id;
-          const isConfirmed = !isEditMode && !isRunning && confirmedSceneId === scene.id;
-          const ringProgress = isRunning ? runningProgress : isCompleting ? completedProgress : null;
-          return (
-            <SceneButton
-              key={scene.id}
-              icon={getSceneIconNode(iconKey, iconSize)}
-              label={displayLabel}
-              color={scene.color}
-              iconKey={iconKey}
-              isRunning={isRunning}
-              isCompleting={isCompleting}
-              isConfirmed={isConfirmed}
-              ringProgress={ringProgress}
-              itemGapClass={sceneItemGapClass}
-              cellPaddingClass={sceneCellPaddingClass}
-              buttonSizeClass={sceneButtonSizeClass}
-              labelClass={sceneLabelClass}
-              labelMinHeightClass={sceneLabelMinHeightClass}
-              onClick={() => {
-                if (isEditMode || isRunning) {
-                  return;
-                }
-                onSceneTrigger?.(scene.id);
-              }}
-            />
-          );
-        })}
-        {isEditMode
-          ? addSlots.map((scene) => (
-              <button
-                key={`add-${scene.id}`}
-                type="button"
-                onClick={() => onAddScene?.(scene.id)}
-                className={`widget-action flex w-full min-w-0 flex-col items-center justify-center ${sceneCellPaddingClass} ${sceneItemGapClass} group`}
-              >
-                <div className={`${sceneButtonSizeClass} rounded-full border border-white/20 border-dashed bg-white/5 flex items-center justify-center text-white/65 transition-colors group-hover:text-white group-hover:border-white/40 group-hover:bg-white/10`}>
-                  <Plus size={isSingleLineLayout ? (isTinyCard ? 13 : 14) : isTinyCard ? 16 : isDenseLayout ? 18 : 20} />
-                </div>
-                <span className={`${addLabelClass} max-w-full text-center`}>Aggiungi</span>
-              </button>
-            ))
-          : null}
       </div>
     </div>
   );
@@ -488,85 +464,104 @@ function SceneButton({
   icon,
   label,
   color,
+  accentRgb,
   iconKey,
   isRunning,
   isCompleting,
   isConfirmed,
   ringProgress,
-  itemGapClass,
-  cellPaddingClass,
-  buttonSizeClass,
+  statusIconSize,
+  tileClass,
+  iconShellClass,
   labelClass,
-  labelMinHeightClass,
+  isShortCard,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   color: string;
+  accentRgb: string;
   iconKey: SceneIconKey;
   isRunning: boolean;
   isCompleting: boolean;
   isConfirmed: boolean;
   ringProgress: number | null;
-  itemGapClass: string;
-  cellPaddingClass: string;
-  buttonSizeClass: string;
+  statusIconSize: number;
+  tileClass: string;
+  iconShellClass: string;
   labelClass: string;
-  labelMinHeightClass: string;
+  isShortCard: boolean;
   onClick?: () => void;
 }) {
   const iconVariants = SCENE_ICON_MOTION_VARIANTS[iconKey] ?? SCENE_ICON_MOTION_VARIANTS.music;
-  const normalizedLabel = label.trim();
-  const labelLength = normalizedLabel.length;
-  const longLabelClass =
-    labelLength >= 16
-      ? 'text-[9px] sm:text-[10px] leading-[1.02]'
-      : labelLength >= 12
-        ? 'text-[10px] sm:text-[11px] leading-[1.05]'
-        : '';
+  const tileStyle: React.CSSProperties = {
+    '--scene-accent': accentRgb,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 24px rgba(${accentRgb}, 0.055)`,
+  } as React.CSSProperties;
+
+  if (isRunning || isCompleting) {
+    tileStyle.borderColor = `rgba(${accentRgb}, 0.34)`;
+    tileStyle.background = `rgba(${accentRgb}, 0.075)`;
+  }
+  const hasActiveBorder = ringProgress !== null || isConfirmed;
+  const activeBorderProgress = ringProgress !== null ? Math.max(0.08, Math.min(1, ringProgress)) : 1;
+  const activeBorderStyle = {
+    borderRadius: 'inherit',
+    padding: isShortCard ? '1.35px' : '1.75px',
+    background: `conic-gradient(from -90deg, rgba(${accentRgb}, 0.95) 0deg ${activeBorderProgress * 360}deg, rgba(${accentRgb}, 0.16) ${activeBorderProgress * 360}deg 360deg)`,
+    boxShadow: `0 0 ${isShortCard ? 16 : 22}px rgba(${accentRgb}, 0.18)`,
+    WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+    WebkitMaskComposite: 'xor',
+    maskComposite: 'exclude',
+  } as React.CSSProperties;
 
   return (
-    <div
-      className={`flex w-full min-w-0 flex-col items-center justify-center ${cellPaddingClass} ${itemGapClass} pb-0.5`}
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={isRunning}
+      aria-busy={isRunning}
+      whileTap={{ scale: 0.96 }}
+      style={tileStyle}
+      className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-white/[0.04] bg-white/[0.03] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden hover:bg-white/[0.065] ${tileClass} ${
+        isRunning ? 'cursor-wait' : ''
+      }`}
     >
-      <motion.button
-        type="button"
-        onClick={onClick}
-        disabled={isRunning}
-        aria-busy={isRunning}
-        whileTap={{ scale: 0.94 }}
-        className={`widget-action relative ${buttonSizeClass} rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white shadow-lg transition-shadow hover:shadow-xl ${
-          isRunning ? 'scale-[1.02]' : ''
+      <span
+        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full bg-[rgb(var(--scene-accent))]/18 blur-xl transition-opacity duration-200 group-hover:opacity-90 ${
+          isShortCard ? 'top-1.5 h-10 w-10' : 'top-2 h-12 w-12'
         }`}
-      >
-        {ringProgress !== null ? (
-          <span
-            className="pointer-events-none absolute inset-0 z-10 rounded-full transition-opacity duration-300"
-            style={{
-              opacity: isConfirmed ? 0 : 1,
-              background: `conic-gradient(rgba(255,255,255,0.88) ${Math.max(
-                0,
-                Math.min(1, ringProgress),
-              ) * 360}deg, rgba(255,255,255,0.14) 0deg)`,
-              WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-              mask: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-              transform: 'rotate(-90deg)',
-              filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.25))',
-            }}
-          />
-        ) : null}
+        aria-hidden="true"
+      />
+      {hasActiveBorder ? (
+        <motion.span
+          className="pointer-events-none absolute inset-0"
+          style={activeBorderStyle}
+          initial={{ opacity: 0 }}
+          animate={
+            isRunning
+              ? { opacity: [0.58, 1, 0.58] }
+              : isConfirmed
+                ? { opacity: [1, 0.55, 0] }
+                : { opacity: 1 }
+          }
+          transition={
+            isRunning
+              ? { duration: 1.15, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: isConfirmed ? 0.9 : 0.22, ease: 'easeOut' }
+          }
+        />
+      ) : null}
 
-        <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden rounded-full">
-          <motion.span
-            className="flex h-full w-full items-center justify-center leading-none"
-            variants={iconVariants}
-            initial="idle"
-            animate={isRunning ? 'running' : isCompleting ? 'completing' : 'idle'}
-          >
-            {icon}
-          </motion.span>
-        </span>
-
+      <span className={`relative flex-shrink-0 rounded-full bg-gradient-to-br ${color} flex items-center justify-center overflow-hidden text-white shadow-[0_8px_18px_rgba(0,0,0,0.22)] ring-1 ring-white/15 transition-transform duration-200 group-hover:scale-105 ${iconShellClass}`}>
+        <motion.span
+          className="flex items-center justify-center leading-none"
+          variants={iconVariants}
+          initial="idle"
+          animate={isRunning ? 'running' : isCompleting ? 'completing' : 'idle'}
+        >
+          {icon}
+        </motion.span>
         <AnimatePresence>
           {isConfirmed && (
             <motion.span
@@ -574,19 +569,16 @@ function SceneButton({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.2 }}
               transition={{ duration: 0.3, type: 'spring', bounce: 0.4 }}
-              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-full border border-emerald-100/45 bg-emerald-500/80"
+              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-full border border-white/30 bg-white/[0.18] backdrop-blur-md"
             >
-              <CheckCircle2 size={20} className="text-emerald-50 drop-shadow-[0_1px_4px_rgba(16,185,129,0.5)]" />
+              <CheckCircle2 size={statusIconSize} className="text-white drop-shadow-[0_1px_4px_rgba(255,255,255,0.35)]" />
             </motion.span>
           )}
         </AnimatePresence>
-      </motion.button>
-
-      <span
-        className={`${labelClass} ${longLabelClass} ${labelMinHeightClass} inline-flex max-w-full items-center justify-center text-center text-white/70 font-medium`}
-      >
+      </span>
+      <span className={`w-full min-w-0 text-center ${labelClass}`}>
         {label}
       </span>
-    </div>
+    </motion.button>
   );
 }

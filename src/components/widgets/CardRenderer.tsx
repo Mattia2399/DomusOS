@@ -14,7 +14,7 @@ import { GreetingCard } from './GreetingCard';
 import { GreetingWeatherCard } from './GreetingWeatherCard';
 import { WeatherCard } from './WeatherCard';
 import { ScenesCard, SCENES_CATALOG } from './ScenesCard';
-import { resolveCardVariant } from './cardVariant';
+import { resolveWidgetDisplayVariant, type WidgetDisplayMetrics } from './widgetDisplayVariant';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { ROOT_CANVAS_ROW_UNITS, type DashboardSection, type SceneKey, type Widget } from '../../types/dashboardModels';
 import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
@@ -33,16 +33,23 @@ type WidgetCardRendererProps = {
   dashboardState: DashboardStateShape;
   isEditMode: boolean;
   isSelected: boolean;
-  value: number;
+  value?: number;
   sensorHistory?: number[];
   sensorBatteryEntity?: MockEntityState;
+  switchConsumptionEntity?: MockEntityState;
   onClick: () => void;
   onLightBrightnessChange?: (widget: Widget, value: number) => void;
+  onLightColorChange?: (widget: Widget, hs: [number, number]) => void;
   onSwitchToggle?: (widget: Widget) => void;
   onClimateTargetTempChange?: (widget: Widget, value: number) => void;
   onClimateTargetRangeChange?: (widget: Widget, low: number, high: number) => void;
+  onClimateTargetHumidityChange?: (widget: Widget, value: number) => void;
+  onClimatePowerToggle?: (widget: Widget) => void;
   onClimateModeChange?: (widget: Widget, mode: string) => void;
   onClimateFanModeChange?: (widget: Widget, mode: string) => void;
+  onClimatePresetModeChange?: (widget: Widget, mode: string) => void;
+  onClimateSwingModeChange?: (widget: Widget, mode: string) => void;
+  onClimateSwingHorizontalModeChange?: (widget: Widget, mode: string) => void;
   onMediaToggle?: (widget: Widget) => void;
   onMediaPrevious?: (widget: Widget) => void;
   onMediaNext?: (widget: Widget) => void;
@@ -61,6 +68,7 @@ type WidgetCardRendererProps = {
   liveEntity?: MockEntityState;
   gridBreakpoint?: GridEngineBreakpoint;
   houseMembers?: HouseMemberCardItem[];
+  onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
 function WidgetCardRendererComponent({
@@ -71,13 +79,20 @@ function WidgetCardRendererComponent({
   value,
   sensorHistory,
   sensorBatteryEntity,
+  switchConsumptionEntity,
   onClick,
   onLightBrightnessChange,
+  onLightColorChange,
   onSwitchToggle,
   onClimateTargetTempChange,
   onClimateTargetRangeChange,
+  onClimateTargetHumidityChange,
+  onClimatePowerToggle,
   onClimateModeChange,
   onClimateFanModeChange,
+  onClimatePresetModeChange,
+  onClimateSwingModeChange,
+  onClimateSwingHorizontalModeChange,
   onMediaToggle,
   onMediaPrevious,
   onMediaNext,
@@ -96,8 +111,14 @@ function WidgetCardRendererComponent({
   liveEntity,
   gridBreakpoint,
   houseMembers,
+  onDisplayMetricsChange,
 }: WidgetCardRendererProps) {
-  const cardVariant = resolveCardVariant(widget);
+  const displayVariant = resolveWidgetDisplayVariant({
+    kind: widget.kind,
+    breakpoint: gridBreakpoint,
+    layout: widget.layout,
+    parentSectionId: widget.parentSectionId,
+  });
 
   if (widget.kind === 'climate') {
     return (
@@ -110,8 +131,16 @@ function WidgetCardRendererComponent({
         liveEntity={liveEntity}
         onTemperatureChange={(nextValue) => onClimateTargetTempChange?.(widget, nextValue)}
         onTargetRangeChange={(low, high) => onClimateTargetRangeChange?.(widget, low, high)}
+        onTargetHumidityChange={(nextValue) => onClimateTargetHumidityChange?.(widget, nextValue)}
+        onPowerToggle={() => onClimatePowerToggle?.(widget)}
         onModeChange={(mode) => onClimateModeChange?.(widget, mode)}
         onFanModeChange={(mode) => onClimateFanModeChange?.(widget, mode)}
+        onPresetModeChange={(mode) => onClimatePresetModeChange?.(widget, mode)}
+        onSwingModeChange={(mode) => onClimateSwingModeChange?.(widget, mode)}
+        onSwingHorizontalModeChange={(mode) => onClimateSwingHorizontalModeChange?.(widget, mode)}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -125,7 +154,11 @@ function WidgetCardRendererComponent({
         isEditMode={isEditMode}
         onClick={onClick}
         onBrightnessChange={(nextValue) => onLightBrightnessChange?.(widget, nextValue)}
+        onColorChange={(nextHs) => onLightColorChange?.(widget, nextHs)}
         liveLightState={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -139,6 +172,10 @@ function WidgetCardRendererComponent({
         onClick={onClick}
         onToggleSwitch={onSwitchToggle ? () => onSwitchToggle(widget) : undefined}
         liveEntity={liveEntity}
+        consumptionEntity={switchConsumptionEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -185,6 +222,9 @@ function WidgetCardRendererComponent({
         onQuickDisarm={() => onAlarmDisarm?.(widget)}
         onQuickArm={(mode) => onAlarmArm?.(widget, mode)}
         liveEntity={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -214,7 +254,8 @@ function WidgetCardRendererComponent({
         onOpenDoor={() => onLockOpen?.(widget)}
         liveEntity={liveEntity}
         gridBreakpoint={gridBreakpoint}
-        variant={cardVariant}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -256,7 +297,8 @@ function WidgetCardRendererComponent({
       onClick={onClick}
       liveEntity={liveEntity}
       gridBreakpoint={gridBreakpoint}
-      variant={cardVariant}
+      displayVariant={displayVariant}
+      onDisplayMetricsChange={onDisplayMetricsChange}
     />
   );
 }
@@ -284,6 +326,9 @@ function areWidgetEntitiesEqual(prevEntity: MockEntityState | undefined, nextEnt
     prevEntity.mediaMuted === nextEntity.mediaMuted &&
     prevEntity.hvacMode === nextEntity.hvacMode &&
     prevEntity.fanMode === nextEntity.fanMode &&
+    prevEntity.presetMode === nextEntity.presetMode &&
+    prevEntity.swingMode === nextEntity.swingMode &&
+    prevEntity.swingHorizontalMode === nextEntity.swingHorizontalMode &&
     prevEntity.rawAttributes === nextEntity.rawAttributes
   );
 }
@@ -299,6 +344,12 @@ function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nex
     return false;
   }
   if (prevProps.gridBreakpoint !== nextProps.gridBreakpoint) {
+    return false;
+  }
+  if (prevProps.onDisplayMetricsChange !== nextProps.onDisplayMetricsChange) {
+    return false;
+  }
+  if (prevProps.onLightColorChange !== nextProps.onLightColorChange) {
     return false;
   }
   if (!areWidgetEntitiesEqual(prevProps.liveEntity, nextProps.liveEntity)) {
@@ -319,6 +370,9 @@ function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nex
     if (prevProps.sensorHistory !== nextProps.sensorHistory) {
       return false;
     }
+  }
+  if (kind === 'switch' && !areWidgetEntitiesEqual(prevProps.switchConsumptionEntity, nextProps.switchConsumptionEntity)) {
+    return false;
   }
   if (kind === 'members' && prevProps.houseMembers !== nextProps.houseMembers) {
     return false;
@@ -413,7 +467,7 @@ export function SectionCardRenderer({
 
   return (
     <ScenesCard
-      title={section.title ?? 'Scenes'}
+      title={section.title ?? 'Scenari'}
       scenes={section.scenes ?? SCENES_CATALOG.slice(0, 4).map((scene) => scene.id)}
       sceneLabels={section.sceneLabels}
       sceneIcons={section.sceneIcons}

@@ -7,8 +7,10 @@ import {
   Home,
   LayoutGrid,
   Lightbulb,
+  MoreHorizontal,
   Music2,
   MonitorSmartphone,
+  PencilLine,
   Rocket,
   Settings,
   ShieldCheck,
@@ -30,7 +32,9 @@ type LeftSidebarProps = {
   quickPaths: SidebarQuickPath[];
   selectedPathId?: string | null;
   isSettingsActive?: boolean;
+  canToggleEditMode: boolean;
   onPathClick: (entry: SidebarQuickPath) => void;
+  onToggleEditMode: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
 };
@@ -61,6 +65,76 @@ const NOTIFICATION_FILTERS: Array<{ id: NotificationFilter; label: string }> = [
   { id: 'alert', label: 'Alert' },
 ];
 
+const COMPACT_PRIMARY_PATH_KEYS = ['home', 'rooms', 'security', 'consumi'] as const;
+type CompactPrimaryPathKey = (typeof COMPACT_PRIMARY_PATH_KEYS)[number];
+const COMPACT_SIDEBAR_MIN_WIDTH_PX = 768;
+const COMPACT_SIDEBAR_MAX_WIDTH_PX = 1535;
+const COMPACT_SIDEBAR_MAX_HEIGHT_PX = 760;
+const COMPACT_PRIMARY_PATHS: Record<CompactPrimaryPathKey, SidebarQuickPath> = {
+  home: { id: 'compact-home', label: 'Home', path: '/home', icon: 'home' },
+  rooms: { id: 'compact-rooms', label: 'Stanze', path: '/rooms', icon: 'rooms' },
+  security: { id: 'compact-security', label: 'Sicurezza', path: '/security', icon: 'security' },
+  consumi: { id: 'compact-consumi', label: 'Consumi', path: '/consumi', icon: 'chart' },
+};
+
+function resolveCompactPathKey(entry: SidebarQuickPath): CompactPrimaryPathKey | null {
+  const path = entry.path.trim().toLowerCase();
+  const identity = `${entry.id} ${entry.label}`.trim().toLowerCase();
+
+  if (
+    path.includes('/home') ||
+    path.includes('#home') ||
+    path.includes('view=home') ||
+    identity.includes('home')
+  ) {
+    return 'home';
+  }
+
+  if (
+    path.includes('/rooms') ||
+    path.includes('#rooms') ||
+    path.includes('view=rooms') ||
+    identity.includes('rooms') ||
+    identity.includes('stanze')
+  ) {
+    return 'rooms';
+  }
+
+  if (
+    path.includes('/security') ||
+    path.includes('#security') ||
+    path.includes('view=security') ||
+    identity.includes('security') ||
+    identity.includes('sicurezza')
+  ) {
+    return 'security';
+  }
+
+  if (
+    path.includes('/consumi') ||
+    path.includes('#consumi') ||
+    path.includes('view=consumi') ||
+    identity.includes('consumi')
+  ) {
+    return 'consumi';
+  }
+
+  return null;
+}
+
+function resolveCompactQuickPathGroups(paths: SidebarQuickPath[]) {
+  return {
+    visibleQuickPaths: COMPACT_PRIMARY_PATH_KEYS.map((key) => {
+      const savedEntry = paths.find((entry) => resolveCompactPathKey(entry) === key);
+      return {
+        ...COMPACT_PRIMARY_PATHS[key],
+        id: savedEntry?.id ?? COMPACT_PRIMARY_PATHS[key].id,
+      };
+    }),
+    hiddenQuickPaths: paths.filter((entry) => resolveCompactPathKey(entry) === null),
+  };
+}
+
 export function LeftSidebar({
   isEditMode,
   userAvatarUrl,
@@ -69,7 +143,9 @@ export function LeftSidebar({
   quickPaths,
   selectedPathId = null,
   isSettingsActive = false,
+  canToggleEditMode,
   onPathClick,
+  onToggleEditMode,
   onOpenProfile,
   onOpenSettings,
 }: LeftSidebarProps) {
@@ -83,6 +159,8 @@ export function LeftSidebar({
           : 'bg-white/45 shadow-[0_0_0_2px_rgba(255,255,255,0.14)]';
   const [profileAvatarSrc, setProfileAvatarSrc] = React.useState(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+  const [isCompactSidebar, setIsCompactSidebar] = React.useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
   const [notificationFilter, setNotificationFilter] = React.useState<NotificationFilter>('all');
   const {
     notifications,
@@ -98,19 +176,39 @@ export function LeftSidebar({
   }, [userAvatarUrl]);
 
   React.useEffect(() => {
-    if (!isNotificationsOpen) {
+    const updateSidebarDensity = () => {
+      setIsCompactSidebar(
+        window.innerWidth >= COMPACT_SIDEBAR_MIN_WIDTH_PX &&
+          (window.innerWidth <= COMPACT_SIDEBAR_MAX_WIDTH_PX || window.innerHeight <= COMPACT_SIDEBAR_MAX_HEIGHT_PX),
+      );
+    };
+
+    updateSidebarDensity();
+    window.addEventListener('resize', updateSidebarDensity);
+    return () => window.removeEventListener('resize', updateSidebarDensity);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isNotificationsOpen && !isMoreMenuOpen) {
       return;
     }
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsNotificationsOpen(false);
+        setIsMoreMenuOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isNotificationsOpen]);
+  }, [isMoreMenuOpen, isNotificationsOpen]);
+
+  React.useEffect(() => {
+    if (!isCompactSidebar) {
+      setIsMoreMenuOpen(false);
+    }
+  }, [isCompactSidebar]);
 
   const badgeValue = unreadCount > 99 ? '99+' : `${unreadCount}`;
   const alertCount = notifications.filter((notification) => notification.type === 'alert').length;
@@ -131,9 +229,35 @@ export function LeftSidebar({
         : notificationFilter === 'alert'
           ? 'Nessun alert da mostrare.'
           : 'Nessuna notifica per questo filtro.';
+  const { visibleQuickPaths, hiddenQuickPaths } = isCompactSidebar
+    ? resolveCompactQuickPathGroups(quickPaths)
+    : { visibleQuickPaths: quickPaths, hiddenQuickPaths: [] };
+  const isPathEntryActive = (entry: SidebarQuickPath) =>
+    isEditMode ? selectedPathId === entry.id : isPathActiveForCurrentLocation(entry.path);
+  const moreMenuActionCount = hiddenQuickPaths.length + (isCompactSidebar ? 1 : 0);
+  const shouldShowMoreMenu = isCompactSidebar && moreMenuActionCount > 0;
+  const isMoreActive = hiddenQuickPaths.some(isPathEntryActive) || (isCompactSidebar && isEditMode);
+  const sidebarWidthClass = isCompactSidebar ? 'w-14 sm:w-[3.75rem] lg:w-[4.25rem]' : 'w-14 sm:w-16 lg:w-20';
+  const sidebarPaddingClass = isCompactSidebar ? 'py-4 sm:py-5' : 'py-5 sm:py-7';
+  const profileMarginClass = isCompactSidebar ? 'mb-5 sm:mb-6' : 'mb-8 sm:mb-10';
+  const navGapClass = isCompactSidebar ? 'gap-2 sm:gap-3' : 'gap-4 sm:gap-6';
+  const navButtonSizeClass = isCompactSidebar
+    ? 'w-10 h-10 sm:w-11 sm:h-11 rounded-xl'
+    : 'w-11 h-11 sm:w-12 sm:h-12 rounded-2xl';
+  const iconSize = isCompactSidebar ? 19 : 21;
+  const utilityIconSize = isCompactSidebar ? 18 : 20;
 
   return (
     <>
+      {isMoreMenuOpen ? (
+        <button
+          type="button"
+          onClick={() => setIsMoreMenuOpen(false)}
+          aria-label="Chiudi menu altre sezioni"
+          className="fixed inset-0 z-[45] bg-transparent"
+        />
+      ) : null}
+
       {isNotificationsOpen ? (
         <button
           type="button"
@@ -190,7 +314,7 @@ export function LeftSidebar({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] p-1">
+            <div className="liquid-segmented-control mt-4 grid grid-cols-3 gap-1">
               {NOTIFICATION_FILTERS.map((filter) => {
                 const active = notificationFilter === filter.id;
                 return (
@@ -198,10 +322,10 @@ export function LeftSidebar({
                     key={filter.id}
                     type="button"
                     onClick={() => setNotificationFilter(filter.id)}
-                    className={`rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                    className={`rounded-full px-3 py-2 text-xs font-bold transition-all active:scale-[0.96] ${
                       active
-                        ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.22)] text-[color:var(--profile-sheet-title)]'
-                        : 'text-[color:var(--profile-sheet-muted)] hover:bg-[color:var(--profile-sheet-surface-strong)] hover:text-[color:var(--profile-sheet-title)]'
+                        ? 'liquid-segmented-option-active'
+                        : 'liquid-segmented-option-inactive'
                     }`}
                   >
                     {filter.label}
@@ -235,12 +359,70 @@ export function LeftSidebar({
         </aside>
       ) : null}
 
-      <aside className="liquid-glass-panel relative z-50 w-14 sm:w-16 lg:w-20 h-full min-h-0">
-      <div className="relative z-10 h-full min-h-0 flex flex-col items-center py-5 sm:py-7">
+      <aside className={`liquid-glass-panel relative z-50 ${sidebarWidthClass} h-full min-h-0`}>
+      {isMoreMenuOpen && shouldShowMoreMenu ? (
+        <div className="absolute left-[calc(100%+0.7rem)] top-1/2 z-[70] w-56 -translate-y-1/2 rounded-2xl border border-white/12 bg-[#10131c]/92 p-2 shadow-[0_22px_60px_rgba(0,0,0,0.36)] backdrop-blur-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              setIsMoreMenuOpen(false);
+              onToggleEditMode();
+            }}
+            disabled={!canToggleEditMode}
+            aria-label="Toggle edit mode"
+            aria-pressed={isEditMode}
+            title={
+              canToggleEditMode
+                ? isEditMode
+                  ? 'Esci da modifica'
+                  : 'Modalita modifica'
+                : 'Modifica disponibile su Home, Consumi, App Gallery e Sicurezza'
+            }
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+              isEditMode
+                ? 'bg-blue-500/20 text-blue-100'
+                : 'text-white/68 hover:bg-white/[0.08] hover:text-white'
+            }`}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+              <PencilLine size={17} />
+            </span>
+            <span className="min-w-0 flex-1 truncate">Edit</span>
+          </button>
+          {hiddenQuickPaths.length > 0 ? <div className="my-1.5 h-px bg-white/10" /> : null}
+          {hiddenQuickPaths.map((entry) => {
+            const Icon = PATH_ICONS[entry.icon] ?? LayoutGrid;
+            const active = isPathEntryActive(entry);
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  onPathClick(entry);
+                }}
+                title={`${entry.label} (${entry.path})`}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+                  active
+                    ? 'bg-blue-500/20 text-blue-100'
+                    : 'text-white/68 hover:bg-white/[0.08] hover:text-white'
+                }`}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                  <Icon size={17} strokeWidth={active ? 1.85 : 2} fill={active ? 'currentColor' : 'none'} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className={`relative z-10 h-full min-h-0 flex flex-col items-center ${sidebarPaddingClass}`}>
         <button
           type="button"
           onClick={onOpenProfile}
-          className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-visible mb-8 sm:mb-10 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+          className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-visible ${profileMarginClass} border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400/60`}
           aria-label="Apri profilo"
           title={`Home Assistant: ${haStatus}`}
         >
@@ -256,19 +438,17 @@ export function LeftSidebar({
           />
         </button>
 
-        <nav className="flex flex-col gap-4 sm:gap-6 flex-1 overflow-y-auto hide-scrollbar">
-          {quickPaths.map((entry) => {
+        <nav className={`flex flex-col ${navGapClass} flex-1 overflow-y-auto hide-scrollbar`}>
+          {visibleQuickPaths.map((entry) => {
             const Icon = PATH_ICONS[entry.icon] ?? LayoutGrid;
-            const active = isEditMode
-              ? selectedPathId === entry.id
-              : isPathActiveForCurrentLocation(entry.path);
+            const active = isPathEntryActive(entry);
             return (
               <button
                 key={entry.id}
                 type="button"
                 onClick={() => onPathClick(entry)}
                 title={`${entry.label} (${entry.path})`}
-                className={`group w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-colors ${
+                className={`group ${navButtonSizeClass} flex items-center justify-center transition-colors ${
                   active
                     ? 'text-white'
                     : 'text-white/50 hover:text-white hover:bg-white/5'
@@ -276,7 +456,7 @@ export function LeftSidebar({
                 aria-label={`Apri ${entry.label}`}
               >
                 <Icon
-                  size={21}
+                  size={iconSize}
                   strokeWidth={active ? 1.85 : 2}
                   fill={active ? 'currentColor' : 'none'}
                   className={active ? '' : 'group-hover:scale-105 transition-transform'}
@@ -284,20 +464,71 @@ export function LeftSidebar({
               </button>
             );
           })}
+          {shouldShowMoreMenu ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotificationsOpen(false);
+                setIsMoreMenuOpen((prev) => !prev);
+              }}
+              aria-label="Apri altre sezioni"
+              aria-expanded={isMoreMenuOpen}
+              title="Altre sezioni"
+              className={`group relative ${navButtonSizeClass} flex items-center justify-center transition-colors ${
+                isMoreActive || isMoreMenuOpen
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <MoreHorizontal size={utilityIconSize} />
+              <span className="absolute -right-1 -top-1 min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-white/[0.12] text-[9px] font-semibold leading-[1.05rem] text-white/80 text-center shadow-[0_0_0_2px_rgba(11,13,18,0.88)]">
+                {moreMenuActionCount}
+              </span>
+            </button>
+          ) : null}
         </nav>
 
-        <div className="relative mb-4">
+        {!isCompactSidebar ? (
+          <div className="relative mb-3">
+            <button
+              type="button"
+              onClick={onToggleEditMode}
+              disabled={!canToggleEditMode}
+              aria-label="Toggle edit mode"
+              aria-pressed={isEditMode}
+              title={
+                canToggleEditMode
+                  ? isEditMode
+                    ? 'Esci da modifica'
+                    : 'Modalita modifica'
+                  : 'Modifica disponibile su Home, Consumi, App Gallery e Sicurezza'
+              }
+              className={`${navButtonSizeClass} flex items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+                isEditMode
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <PencilLine size={utilityIconSize} />
+            </button>
+          </div>
+        ) : null}
+
+        <div className={`relative ${isCompactSidebar ? 'mb-2' : 'mb-4'}`}>
           <button
             type="button"
-            onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-colors ${
+            onClick={() => {
+              setIsMoreMenuOpen(false);
+              setIsNotificationsOpen((prev) => !prev);
+            }}
+            className={`relative ${navButtonSizeClass} flex items-center justify-center transition-colors ${
               isNotificationsOpen
                 ? 'bg-blue-500/20 text-blue-300'
                 : 'text-white/50 hover:text-white hover:bg-white/5'
             }`}
             aria-label="Apri notifiche"
           >
-            <Bell size={20} />
+            <Bell size={utilityIconSize} />
             {unreadCount > 0 ? (
               <span className="absolute -right-1 -top-1 min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-red-500 text-[10px] font-semibold leading-[1.15rem] text-white text-center shadow-[0_0_0_2px_rgba(11,13,18,0.9)]">
                 {badgeValue}
@@ -309,7 +540,7 @@ export function LeftSidebar({
         <button
           type="button"
           onClick={onOpenSettings}
-          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-colors ${
+          className={`${navButtonSizeClass} flex items-center justify-center transition-colors ${
             isSettingsActive
               ? 'bg-blue-500/20 text-blue-300'
               : 'text-white/50 hover:text-white hover:bg-white/5'
@@ -317,7 +548,7 @@ export function LeftSidebar({
           aria-label="Apri impostazioni"
           title="Impostazioni"
         >
-          <Settings size={20} />
+          <Settings size={utilityIconSize} />
         </button>
 
       </div>

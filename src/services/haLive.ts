@@ -499,6 +499,41 @@ function toNumberTuple3(value: unknown): [number, number, number] | undefined {
   return [first, second, third];
 }
 
+function toNumberTuple4(value: unknown): [number, number, number, number] | undefined {
+  if (!Array.isArray(value) || value.length < 4) {
+    return undefined;
+  }
+  const first = toNumberOrUndefined(value[0]);
+  const second = toNumberOrUndefined(value[1]);
+  const third = toNumberOrUndefined(value[2]);
+  const fourth = toNumberOrUndefined(value[3]);
+  if (first === undefined || second === undefined || third === undefined || fourth === undefined) {
+    return undefined;
+  }
+  return [first, second, third, fourth];
+}
+
+function toNumberTuple5(value: unknown): [number, number, number, number, number] | undefined {
+  if (!Array.isArray(value) || value.length < 5) {
+    return undefined;
+  }
+  const first = toNumberOrUndefined(value[0]);
+  const second = toNumberOrUndefined(value[1]);
+  const third = toNumberOrUndefined(value[2]);
+  const fourth = toNumberOrUndefined(value[3]);
+  const fifth = toNumberOrUndefined(value[4]);
+  if (
+    first === undefined ||
+    second === undefined ||
+    third === undefined ||
+    fourth === undefined ||
+    fifth === undefined
+  ) {
+    return undefined;
+  }
+  return [first, second, third, fourth, fifth];
+}
+
 function toTimestampMsOrUndefined(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.round(value > 1e12 ? value : value * 1000);
@@ -596,15 +631,35 @@ export function mapHassEntitiesToMock(
     const targetTempStep = toNumberOrUndefined(attributes.target_temp_step);
     const targetTempLow = toNumberOrUndefined(attributes.target_temp_low);
     const targetTempHigh = toNumberOrUndefined(attributes.target_temp_high);
+    const precision = toNumberOrUndefined(attributes.precision);
+    const currentHumidity = toNumberOrUndefined(attributes.current_humidity);
+    const targetHumidity = toNumberOrUndefined(attributes.humidity);
+    const minHumidity = toNumberOrUndefined(attributes.min_humidity);
+    const maxHumidity = toNumberOrUndefined(attributes.max_humidity);
+    const targetHumidityStep = toNumberOrUndefined(attributes.target_humidity_step);
+    const presetMode = toStringOrUndefined(attributes.preset_mode);
+    const presetModes = toStringArrayOrUndefined(attributes.preset_modes);
+    const swingMode = toStringOrUndefined(attributes.swing_mode);
+    const swingModes = toStringArrayOrUndefined(attributes.swing_modes);
+    const swingHorizontalMode = toStringOrUndefined(attributes.swing_horizontal_mode);
+    const swingHorizontalModes = toStringArrayOrUndefined(attributes.swing_horizontal_modes);
     const fanMode = toStringOrUndefined(attributes.fan_mode);
     const fanModes = toStringArrayOrUndefined(attributes.fan_modes);
     const volumeLevel = toPercentFromUnitRange(attributes.volume_level);
     const mediaMuted = typeof attributes.is_volume_muted === 'boolean' ? attributes.is_volume_muted : undefined;
     const supportedFeatures = toNumberOrUndefined(attributes.supported_features);
     const colorMode = toStringOrUndefined(attributes.color_mode);
+    const supportedColorModes = toStringArrayOrUndefined(attributes.supported_color_modes);
     const hsColor = toNumberTuple2(attributes.hs_color);
     const rgbColor = toNumberTuple3(attributes.rgb_color);
+    const rgbwColor = toNumberTuple4(attributes.rgbw_color);
+    const rgbwwColor = toNumberTuple5(attributes.rgbww_color);
+    const xyColor = toNumberTuple2(attributes.xy_color);
     const colorTempKelvin = toNumberOrUndefined(attributes.color_temp_kelvin);
+    const minColorTempKelvin = toNumberOrUndefined(attributes.min_color_temp_kelvin);
+    const maxColorTempKelvin = toNumberOrUndefined(attributes.max_color_temp_kelvin);
+    const effect = toStringOrUndefined(attributes.effect);
+    const effectList = toStringArrayOrUndefined(attributes.effect_list);
     const progress =
       mediaPosition !== undefined && mediaDuration !== undefined && mediaDuration > 0
         ? Math.max(0, Math.min(100, Math.round((mediaPosition / mediaDuration) * 100)))
@@ -649,18 +704,45 @@ export function mapHassEntitiesToMock(
       targetTempStep,
       targetTempLow,
       targetTempHigh,
+      precision,
+      currentHumidity,
+      targetHumidity,
+      minHumidity,
+      maxHumidity,
+      targetHumidityStep,
+      presetMode,
+      presetModes,
+      swingMode,
+      swingModes,
+      swingHorizontalMode,
+      swingHorizontalModes,
       fanMode,
       fanModes,
       volumeLevel,
       mediaMuted,
       colorMode,
+      supportedColorModes,
       hsColor,
       rgbColor,
+      rgbwColor,
+      rgbwwColor,
+      xyColor,
       colorTempKelvin,
+      minColorTempKelvin,
+      maxColorTempKelvin,
+      effect,
+      effectList,
       color_mode: colorMode,
+      supported_color_modes: supportedColorModes,
       hs_color: hsColor,
       rgb_color: rgbColor,
+      rgbw_color: rgbwColor,
+      rgbww_color: rgbwwColor,
+      xy_color: xyColor,
       color_temp_kelvin: colorTempKelvin,
+      min_color_temp_kelvin: minColorTempKelvin,
+      max_color_temp_kelvin: maxColorTempKelvin,
+      effect_list: effectList,
     };
   });
 

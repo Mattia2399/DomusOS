@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "vitest run",
+    "audit:release": "npm audit --omit=dev --audit-level=moderate",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test:unit && npm run test:e2e",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -38,6 +42,7 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@types/js-yaml": "^4.0.9",

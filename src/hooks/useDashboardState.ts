@@ -85,6 +85,19 @@ export interface DashboardStateShape {
     hvacAction?: string;
     fanMode?: string;
     fanModes?: string[];
+    supportedFeatures?: number;
+    precision?: number;
+    currentHumidity?: number;
+    targetHumidity?: number;
+    minHumidity?: number;
+    maxHumidity?: number;
+    targetHumidityStep?: number;
+    presetMode?: string;
+    presetModes?: string[];
+    swingMode?: string;
+    swingModes?: string[];
+    swingHorizontalMode?: string;
+    swingHorizontalModes?: string[];
     temperatureUnit?: string;
     rawAttributes?: Record<string, unknown>;
   };
@@ -194,11 +207,15 @@ const SPEAKER_MULTIROOM_SEED = [
 const CLIMATE_DEMO_MIN_TEMP = 16;
 const CLIMATE_DEMO_MAX_TEMP = 30;
 const CLIMATE_DEMO_TARGET_STEP = 0.5;
-const CLIMATE_DEMO_SUPPORTED_FEATURES = 511;
+const CLIMATE_DEMO_MIN_HUMIDITY = 30;
+const CLIMATE_DEMO_MAX_HUMIDITY = 99;
+const CLIMATE_DEMO_TARGET_HUMIDITY_STEP = 1;
+const CLIMATE_DEMO_SUPPORTED_FEATURES = 1023;
 const CLIMATE_DEMO_HVAC_MODES = ['off', 'heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'] as const;
 const CLIMATE_DEMO_FAN_MODES = ['auto', '1', '2', '3', '4', '5', 'quiet', 'turbo'] as const;
 const CLIMATE_DEMO_PRESET_MODES = ['none', 'eco', 'comfort', 'away', 'sleep', 'boost'] as const;
 const CLIMATE_DEMO_SWING_MODES = ['off', 'vertical', 'horizontal', 'both'] as const;
+const CLIMATE_DEMO_SWING_HORIZONTAL_MODES = ['off', 'on'] as const;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -533,6 +550,10 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
   const [climateTargetTemp, setClimateTargetTemp] = useState(26.5);
   const [climateMode, setClimateModeState] = useState<string>('auto');
   const [climateFanMode, setClimateFanModeState] = useState<string>('auto');
+  const [climateTargetHumidity, setClimateTargetHumidityState] = useState(45);
+  const [climatePresetMode, setClimatePresetModeState] = useState<string>('none');
+  const [climateSwingMode, setClimateSwingModeState] = useState<string>('off');
+  const [climateSwingHorizontalMode, setClimateSwingHorizontalModeState] = useState<string>('off');
   const [climateTargetRange, setClimateTargetRangeState] = useState<{ low: number; high: number }>({
     low: 23,
     high: 27,
@@ -711,6 +732,36 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
         ? normalized
         : fallback;
     setClimateFanModeState(next);
+  };
+
+  const setClimateTargetHumidity = (value: number) => {
+    const next = clamp(
+      Math.round(value / CLIMATE_DEMO_TARGET_HUMIDITY_STEP) * CLIMATE_DEMO_TARGET_HUMIDITY_STEP,
+      CLIMATE_DEMO_MIN_HUMIDITY,
+      CLIMATE_DEMO_MAX_HUMIDITY,
+    );
+    setClimateTargetHumidityState(next);
+  };
+
+  const setClimatePresetMode = (mode: string) => {
+    const normalized = mode.trim().toLowerCase();
+    if ((CLIMATE_DEMO_PRESET_MODES as readonly string[]).includes(normalized)) {
+      setClimatePresetModeState(normalized);
+    }
+  };
+
+  const setClimateSwingMode = (mode: string) => {
+    const normalized = mode.trim().toLowerCase();
+    if ((CLIMATE_DEMO_SWING_MODES as readonly string[]).includes(normalized)) {
+      setClimateSwingModeState(normalized);
+    }
+  };
+
+  const setClimateSwingHorizontalMode = (mode: string) => {
+    const normalized = mode.trim().toLowerCase();
+    if ((CLIMATE_DEMO_SWING_HORIZONTAL_MODES as readonly string[]).includes(normalized)) {
+      setClimateSwingHorizontalModeState(normalized);
+    }
   };
 
   const setClimateTargetRange = (low: number, high: number) => {
@@ -1004,6 +1055,68 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
               (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
             )
           : [...CLIMATE_DEMO_FAN_MODES];
+    const climateSupportedFeatures =
+      typeof liveClimate?.supportedFeatures === 'number'
+        ? liveClimate.supportedFeatures
+        : toNumberOrUndefined(rawClimateAttributes?.supported_features) ?? CLIMATE_DEMO_SUPPORTED_FEATURES;
+    const climateCurrentHumidity =
+      typeof liveClimate?.currentHumidity === 'number'
+        ? liveClimate.currentHumidity
+        : toNumberOrUndefined(rawClimateAttributes?.current_humidity) ?? 48;
+    const climateTargetHumidityValue =
+      typeof liveClimate?.targetHumidity === 'number'
+        ? liveClimate.targetHumidity
+        : toNumberOrUndefined(rawClimateAttributes?.humidity) ?? climateTargetHumidity;
+    const climateMinHumidity =
+      typeof liveClimate?.minHumidity === 'number'
+        ? liveClimate.minHumidity
+        : toNumberOrUndefined(rawClimateAttributes?.min_humidity) ?? CLIMATE_DEMO_MIN_HUMIDITY;
+    const climateMaxHumidity =
+      typeof liveClimate?.maxHumidity === 'number'
+        ? liveClimate.maxHumidity
+        : toNumberOrUndefined(rawClimateAttributes?.max_humidity) ?? CLIMATE_DEMO_MAX_HUMIDITY;
+    const climateTargetHumidityStep =
+      typeof liveClimate?.targetHumidityStep === 'number'
+        ? liveClimate.targetHumidityStep
+        : toNumberOrUndefined(rawClimateAttributes?.target_humidity_step) ?? CLIMATE_DEMO_TARGET_HUMIDITY_STEP;
+    const climatePresetModeValue =
+      liveClimate?.presetMode ??
+      (typeof rawClimateAttributes?.preset_mode === 'string' ? rawClimateAttributes.preset_mode : undefined) ??
+      climatePresetMode;
+    const climatePresetModes =
+      Array.isArray(liveClimate?.presetModes) && liveClimate.presetModes.length > 0
+        ? liveClimate.presetModes
+        : Array.isArray(rawClimateAttributes?.preset_modes)
+          ? rawClimateAttributes.preset_modes.filter(
+              (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+            )
+          : [...CLIMATE_DEMO_PRESET_MODES];
+    const climateSwingModeValue =
+      liveClimate?.swingMode ??
+      (typeof rawClimateAttributes?.swing_mode === 'string' ? rawClimateAttributes.swing_mode : undefined) ??
+      climateSwingMode;
+    const climateSwingModes =
+      Array.isArray(liveClimate?.swingModes) && liveClimate.swingModes.length > 0
+        ? liveClimate.swingModes
+        : Array.isArray(rawClimateAttributes?.swing_modes)
+          ? rawClimateAttributes.swing_modes.filter(
+              (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+            )
+          : [...CLIMATE_DEMO_SWING_MODES];
+    const climateSwingHorizontalModeValue =
+      liveClimate?.swingHorizontalMode ??
+      (typeof rawClimateAttributes?.swing_horizontal_mode === 'string'
+        ? rawClimateAttributes.swing_horizontal_mode
+        : undefined) ??
+      climateSwingHorizontalMode;
+    const climateSwingHorizontalModes =
+      Array.isArray(liveClimate?.swingHorizontalModes) && liveClimate.swingHorizontalModes.length > 0
+        ? liveClimate.swingHorizontalModes
+        : Array.isArray(rawClimateAttributes?.swing_horizontal_modes)
+          ? rawClimateAttributes.swing_horizontal_modes.filter(
+              (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+            )
+          : [...CLIMATE_DEMO_SWING_HORIZONTAL_MODES];
     const climateRawAttributes = rawClimateAttributes ?? {
       friendly_name: 'Air Conditioner',
       hvac_mode: climateModeValue,
@@ -1011,10 +1124,12 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
       hvac_modes: [...CLIMATE_DEMO_HVAC_MODES],
       fan_mode: climateFanModeValue,
       fan_modes: [...CLIMATE_DEMO_FAN_MODES],
-      preset_mode: 'none',
-      preset_modes: [...CLIMATE_DEMO_PRESET_MODES],
-      swing_mode: 'off',
-      swing_modes: [...CLIMATE_DEMO_SWING_MODES],
+      preset_mode: climatePresetModeValue,
+      preset_modes: climatePresetModes,
+      swing_mode: climateSwingModeValue,
+      swing_modes: climateSwingModes,
+      swing_horizontal_mode: climateSwingHorizontalModeValue,
+      swing_horizontal_modes: climateSwingHorizontalModes,
       current_temperature: climateCurrentValue,
       temperature: climateTargetValue,
       target_temp_low: climateTargetTempLow,
@@ -1023,10 +1138,13 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
       min_temp: climateMinValue,
       max_temp: climateMaxValue,
       temperature_unit: '\u00B0C',
-      current_humidity: 48,
-      target_humidity: 45,
+      current_humidity: climateCurrentHumidity,
+      humidity: climateTargetHumidityValue,
+      min_humidity: climateMinHumidity,
+      max_humidity: climateMaxHumidity,
+      target_humidity_step: climateTargetHumidityStep,
       aux_heat: false,
-      supported_features: CLIMATE_DEMO_SUPPORTED_FEATURES,
+      supported_features: climateSupportedFeatures,
     };
     const wifiValue =
       typeof liveWifi?.numericValue === 'number' ? liveWifi.numericValue : 97;
@@ -1282,6 +1400,22 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
         hvacAction: climateHvacAction,
         fanMode: climateFanModeValue,
         fanModes: climateFanModes,
+        supportedFeatures: climateSupportedFeatures,
+        precision:
+          typeof liveClimate?.precision === 'number'
+            ? liveClimate.precision
+            : toNumberOrUndefined(climateRawAttributes?.precision),
+        currentHumidity: climateCurrentHumidity,
+        targetHumidity: climateTargetHumidityValue,
+        minHumidity: climateMinHumidity,
+        maxHumidity: climateMaxHumidity,
+        targetHumidityStep: climateTargetHumidityStep,
+        presetMode: climatePresetModeValue,
+        presetModes: climatePresetModes,
+        swingMode: climateSwingModeValue,
+        swingModes: climateSwingModes,
+        swingHorizontalMode: climateSwingHorizontalModeValue,
+        swingHorizontalModes: climateSwingHorizontalModes,
         temperatureUnit:
           liveClimate?.unit ??
           (typeof climateRawAttributes?.temperature_unit === 'string'
@@ -1321,7 +1455,11 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
     climateFanMode,
     climateMode,
     climateOn,
+    climatePresetMode,
+    climateSwingHorizontalMode,
+    climateSwingMode,
     climateTargetRange,
+    climateTargetHumidity,
     climateTargetTemp,
     haConnected,
     haStates,
@@ -1363,7 +1501,11 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
       setUserName,
       setClimateFanMode,
       setClimateMode,
+      setClimatePresetMode,
+      setClimateSwingHorizontalMode,
+      setClimateSwingMode,
       setClimateTarget,
+      setClimateTargetHumidity,
       setClimateTargetRange,
       toggleClimatePower,
       toggleFavoritePower,

@@ -1,0 +1,503 @@
+.sensor-card {
+  --sensor-accent: #57c7ff;
+  --sensor-accent-strong: #2f9ee8;
+  --sensor-accent-soft: rgb(87 199 255 / 0.18);
+  container-name: sensor-card;
+  container-type: size;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 1.55rem;
+}
+
+.sensor-card[data-sensor-group='environment'] {
+  --sensor-accent: #53ddb0;
+  --sensor-accent-strong: #23b98c;
+  --sensor-accent-soft: rgb(83 221 176 / 0.18);
+}
+
+.sensor-card[data-sensor-group='fluid'] {
+  --sensor-accent: #52c7ff;
+  --sensor-accent-strong: #2d8ee9;
+  --sensor-accent-soft: rgb(82 199 255 / 0.18);
+}
+
+.sensor-card[data-sensor-group='measurement'] {
+  --sensor-accent: #a89bff;
+  --sensor-accent-strong: #7468e8;
+  --sensor-accent-soft: rgb(168 155 255 / 0.18);
+}
+
+.sensor-card[data-sensor-group='energy'] {
+  --sensor-accent: #ffc34d;
+  --sensor-accent-strong: #f08a24;
+  --sensor-accent-soft: rgb(255 195 77 / 0.18);
+}
+
+.sensor-card__surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'value status'
+    'title title';
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  gap: 0.15rem 0.3rem;
+  padding: 0.35rem 0.5rem;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.sensor-card__title {
+  grid-area: title;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.58);
+  font-size: 0.48rem;
+  font-weight: 500;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sensor-card__status {
+  grid-area: status;
+  align-self: start;
+  width: 1rem;
+  height: 1rem;
+  color: var(--sensor-accent);
+}
+
+.sensor-card__status-glyph {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sensor-card__value {
+  grid-area: value;
+  align-self: end;
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 0.2rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sensor-card__value-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: white;
+  font-size: clamp(1rem, 30cqi, 1.45rem);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.9;
+  text-overflow: ellipsis;
+}
+
+.sensor-card__value-text--full {
+  display: none;
+}
+
+.sensor-card__unit {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 34%;
+  margin-top: 0.25em;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 0.45rem;
+  font-weight: 500;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sensor-card__trend,
+.sensor-card__visual,
+.sensor-card__stats {
+  display: none;
+}
+
+.sensor-card__handle {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.sensor-card[data-sensor-available='false'] .sensor-card__status {
+  color: #8f96aa;
+}
+
+@container sensor-card (min-width: 132px) and (min-height: 44px) {
+  .sensor-card__surface {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'title status'
+      'value trend';
+    gap: 0.15rem 0.45rem;
+    padding: 0.45rem 0.7rem;
+  }
+
+  .sensor-card__title {
+    font-size: clamp(0.62rem, 4.8cqi, 0.76rem);
+    line-height: 1.05;
+  }
+
+  .sensor-card__value-text {
+    font-size: clamp(1.15rem, 12cqi, 1.75rem);
+  }
+
+  .sensor-card__unit {
+    max-width: 42%;
+    font-size: clamp(0.48rem, 3.8cqi, 0.64rem);
+  }
+
+  .sensor-card__trend {
+    grid-area: trend;
+    align-self: end;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    color: var(--sensor-accent);
+    font-size: 0.66rem;
+    font-weight: 650;
+    line-height: 1;
+  }
+
+  .sensor-card__trend-label,
+  .sensor-card__trend-delta {
+    display: none;
+  }
+}
+
+@container sensor-card (min-width: 88px) and (min-height: 96px) {
+  .sensor-card__surface {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title status'
+      'value value'
+      'trend trend';
+    gap: 0.25rem 0.35rem;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .sensor-card__title {
+    font-size: 0.66rem;
+  }
+
+  .sensor-card__value {
+    align-self: center;
+  }
+
+  .sensor-card__value-text {
+    font-size: clamp(1.35rem, 24cqi, 1.8rem);
+  }
+
+  .sensor-card__unit {
+    max-width: 38%;
+    font-size: 0.52rem;
+  }
+
+  .sensor-card__trend {
+    grid-area: trend;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.2rem;
+    overflow: hidden;
+    color: var(--sensor-accent);
+    font-size: 0.58rem;
+    font-weight: 650;
+    line-height: 1;
+  }
+
+  .sensor-card__trend-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sensor-card__trend-delta {
+    display: none;
+  }
+}
+
+@container sensor-card (min-width: 170px) and (min-height: 104px) {
+  .sensor-card__surface {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title status'
+      'value trend'
+      'visual visual';
+    gap: 0.3rem 0.55rem;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .sensor-card__title {
+    font-size: clamp(0.68rem, 4.4cqi, 0.82rem);
+  }
+
+  .sensor-card__status {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .sensor-card__value-text--compact {
+    display: none;
+  }
+
+  .sensor-card__value-text--full {
+    display: inline;
+  }
+
+  .sensor-card__value-text {
+    font-size: clamp(1.65rem, 15cqi, 2.35rem);
+  }
+
+  .sensor-card__unit {
+    font-size: clamp(0.54rem, 3.6cqi, 0.7rem);
+  }
+
+  .sensor-card__trend {
+    align-self: center;
+    gap: 0.25rem;
+    font-size: clamp(0.58rem, 3.4cqi, 0.7rem);
+  }
+
+  .sensor-card__trend-label {
+    display: inline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sensor-card__visual {
+    grid-area: visual;
+    align-self: end;
+    display: block;
+    min-width: 0;
+  }
+
+  .sensor-card__visual-labels {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+    color: rgb(255 255 255 / 0.42);
+    font-size: clamp(0.5rem, 3cqi, 0.62rem);
+    font-weight: 550;
+    line-height: 1;
+  }
+
+  .sensor-card__visual-plot {
+    position: relative;
+    height: clamp(0.7rem, 10cqb, 1.15rem);
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 999px;
+    background: var(--sensor-accent-soft);
+  }
+
+  .sensor-card__range-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--sensor-level-position);
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--sensor-accent), var(--sensor-accent-strong));
+  }
+
+  .sensor-card__current-marker {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    left: var(--sensor-level-position);
+    width: 3px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: white;
+    box-shadow: 0 0 10px rgb(255 255 255 / 0.5);
+  }
+
+  .sensor-card__sparkline {
+    display: block;
+    width: 100%;
+    height: 100%;
+    color: var(--sensor-accent);
+  }
+
+  .sensor-card__sparkline polyline {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .sensor-card__visual[data-visualization='sparkline'] .sensor-card__current-marker {
+    display: none;
+  }
+}
+
+@container sensor-card (min-width: 260px) and (min-height: 104px) {
+  .sensor-card {
+    border-radius: 2rem;
+  }
+
+  .sensor-card__surface {
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title status'
+      'value visual'
+      'trend stats';
+    gap: 0.35rem 0.85rem;
+    padding: 0.65rem 0.85rem;
+  }
+
+  .sensor-card__value {
+    align-self: center;
+  }
+
+  .sensor-card__value-text {
+    font-size: clamp(1.8rem, 11cqi, 2.6rem);
+  }
+
+  .sensor-card__trend {
+    align-self: end;
+    justify-content: flex-start;
+  }
+
+  .sensor-card__trend-delta {
+    display: inline;
+    color: rgb(255 255 255 / 0.48);
+  }
+
+  .sensor-card__visual {
+    align-self: stretch;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    justify-content: end;
+  }
+
+  .sensor-card__visual-plot {
+    height: clamp(1.25rem, 24cqb, 2.5rem);
+  }
+
+  .sensor-card__stats {
+    grid-area: stats;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+
+  .sensor-card__stats > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    color: rgb(255 255 255 / 0.7);
+    font-size: 0.6rem;
+    line-height: 1.05;
+  }
+
+  .sensor-card__stats small {
+    color: rgb(255 255 255 / 0.36);
+    font-size: 0.48rem;
+    font-weight: 550;
+  }
+
+  .sensor-card__stats strong {
+    overflow: hidden;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@container sensor-card (min-width: 176px) and (min-height: 160px) {
+  .sensor-card {
+    border-radius: 2rem;
+  }
+
+  .sensor-card__surface {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title status'
+      'value trend'
+      'visual visual'
+      'stats stats';
+    gap: 0.45rem 0.65rem;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .sensor-card__value-text {
+    font-size: clamp(2rem, 15cqi, 2.8rem);
+  }
+
+  .sensor-card__trend-delta {
+    display: inline;
+    color: rgb(255 255 255 / 0.48);
+  }
+
+  .sensor-card__visual {
+    align-self: stretch;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .sensor-card__visual-plot {
+    height: clamp(2rem, 30cqb, 4rem);
+  }
+
+  .sensor-card__stats {
+    grid-area: stats;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .sensor-card__stats > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    color: rgb(255 255 255 / 0.74);
+    font-size: 0.7rem;
+  }
+
+  .sensor-card__stats small {
+    color: rgb(255 255 255 / 0.36);
+    font-size: 0.52rem;
+  }
+
+  .sensor-card__stats strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.sensor-card[data-sensor-available='false'] .sensor-card__trend,
+.sensor-card[data-sensor-available='false'] .sensor-card__visual,
+.sensor-card[data-sensor-available='false'] .sensor-card__stats {
+  display: none;
+}

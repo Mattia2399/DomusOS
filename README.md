@@ -10,6 +10,11 @@ Project focused on two views:
 - Consumi dashboard + detail pages
 - Live data mapping from Home Assistant entities (WebSocket)
 
+## Beta roadmap
+
+- Release/security/go-to-market plan: [`docs/beta-roadmap.md`](docs/beta-roadmap.md)
+- Security beta checklist: [`docs/security-beta-checklist.md`](docs/security-beta-checklist.md)
+
 ## Tech stack
 
 - React + TypeScript

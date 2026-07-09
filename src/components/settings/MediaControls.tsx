@@ -17,6 +17,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import { ContextPanelHeader } from './ContextPanelHeader';
 
 interface MediaOutputDevice {
   id: string;
@@ -509,17 +510,7 @@ export function MediaControlsPanel({
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
-        <div className="flex items-center gap-4 min-w-0 pr-11">
-            <span className="w-14 h-14 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
-              <Speaker size={22} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-[1.3rem] font-medium text-white truncate">{name}</h2>
-              <p className="mt-0.5 text-sm text-white/60 truncate">{status}</p>
-            </div>
-        </div>
-      </div>
+      <ContextPanelHeader title={name} subtitle={status} icon={<Speaker size={22} />} fallbackTitle="Speaker" />
 
       <div className={`relative overflow-hidden ${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
         <div
