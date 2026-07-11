@@ -36,7 +36,17 @@ type ResolveAlarmPixelDisplayVariantInput = {
   height: number;
 };
 
+type ResolveMediaPixelDisplayVariantInput = {
+  width: number;
+  height: number;
+};
+
 type ResolveLockPixelDisplayVariantInput = {
+  width: number;
+  height: number;
+};
+
+type ResolveCoverPixelDisplayVariantInput = {
   width: number;
   height: number;
 };
@@ -174,6 +184,18 @@ export function resolveAlarmPixelDisplayVariant({
   return 'compact';
 }
 
+export function resolveMediaPixelDisplayVariant({
+  width,
+  height,
+}: ResolveMediaPixelDisplayVariantInput): WidgetDisplayVariant {
+  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
+  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
+  if (safeWidth >= 270 && safeHeight >= 212) return 'full';
+  if (safeWidth >= 220 && safeHeight >= 148) return 'standard';
+  if ((safeWidth >= 150 && safeHeight >= 92) || (safeWidth >= 210 && safeHeight >= 72)) return 'compact';
+  return 'mini';
+}
+
 export function resolveLockPixelDisplayVariant({
   width,
   height,
@@ -187,6 +209,24 @@ export function resolveLockPixelDisplayVariant({
     return 'standard';
   }
   if (safeWidth >= 132 && safeHeight >= 44) {
+    return 'compact';
+  }
+  return 'mini';
+}
+
+export function resolveCoverPixelDisplayVariant({
+  width,
+  height,
+}: ResolveCoverPixelDisplayVariantInput): WidgetDisplayVariant {
+  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
+  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
+  if ((safeWidth >= 350 && safeHeight >= 160) || (safeWidth >= 176 && safeHeight >= 212)) {
+    return 'full';
+  }
+  if (safeWidth >= 170 && safeHeight >= 148) {
+    return 'standard';
+  }
+  if ((safeWidth >= 132 && safeHeight >= 72) || (safeWidth >= 88 && safeHeight >= 112)) {
     return 'compact';
   }
   return 'mini';
@@ -231,6 +271,13 @@ export function resolveWidgetDisplayVariant({
     return 'compact';
   }
 
+  if (kind === 'media') {
+    if (width >= 2 && height >= 4) return 'full';
+    if (width >= 2 && height >= 3) return 'standard';
+    if (width <= 1 && height <= 1) return 'mini';
+    return 'compact';
+  }
+
   if (kind === 'lock') {
     if ((width >= 2 && height >= 4) || (width >= 3 && height >= 2 && !isInsideStack)) {
       return 'full';
@@ -239,6 +286,22 @@ export function resolveWidgetDisplayVariant({
       return 'standard';
     }
     if (width <= 1 && height <= 2) {
+      return 'mini';
+    }
+    if (width >= 2 && height >= 2) {
+      return 'compact';
+    }
+    return 'compact';
+  }
+
+  if (kind === 'cover') {
+    if ((width >= 2 && height >= 4) || (width >= 3 && height >= 3 && !isInsideStack)) {
+      return 'full';
+    }
+    if (width >= 2 && height >= 3) {
+      return 'standard';
+    }
+    if (width <= 1 && height <= 1) {
       return 'mini';
     }
     if (width >= 2 && height >= 2) {

@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useObservedElementSize } from '../../hooks/useObservedElementSize';
 import { HaMediaCard } from './HaMediaCard';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
+import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
+import { buildMediaCardModel } from './mediaCardModel';
+import {
+  resolveMediaPixelDisplayVariant,
+  resolveWidgetDisplayVariant,
+  type WidgetDisplayMetrics,
+  type WidgetDisplayVariant,
+} from './widgetDisplayVariant';
 
 type MediaCardProps = {
   widget: Widget;
@@ -17,70 +26,10 @@ type MediaCardProps = {
   onSelectSource?: (source: string) => void;
   hideHeader?: boolean;
   liveEntity?: MockEntityState;
+  gridBreakpoint?: GridEngineBreakpoint;
+  displayVariant?: WidgetDisplayVariant;
+  onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
-
-type MediaCardState = 'playing' | 'paused' | 'idle' | 'unavailable';
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function resolveLiveMediaPosition(
-  basePosition: number,
-  duration: number,
-  state: string | undefined,
-  updatedAt: number | undefined,
-  nowMs: number,
-) {
-  if (!(duration > 0)) {
-    return 0;
-  }
-  const safeBase = clamp(Math.round(basePosition || 0), 0, duration);
-  const mediaState = (state ?? '').trim().toLowerCase();
-  if (mediaState !== 'playing' || !updatedAt || nowMs <= updatedAt) {
-    return safeBase;
-  }
-  const elapsedSeconds = Math.floor((nowMs - updatedAt) / 1000);
-  if (elapsedSeconds <= 0) {
-    return safeBase;
-  }
-  return clamp(safeBase + elapsedSeconds, 0, duration);
-}
-
-function resolveMediaCardState(status: string | undefined, isOn: boolean): MediaCardState {
-  const normalized = (status ?? '').trim().toLowerCase();
-  if (normalized.includes('unavailable') || normalized.includes('offline')) {
-    return 'unavailable';
-  }
-  if (normalized.includes('play') || normalized === 'on' || normalized === 'opening') {
-    return 'playing';
-  }
-  if (normalized.includes('pause')) {
-    return 'paused';
-  }
-  if (normalized.includes('idle') || normalized === 'off' || normalized === 'closed') {
-    return 'idle';
-  }
-  return isOn ? 'playing' : 'idle';
-}
-
-function toStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function toTrimmedString(value: unknown) {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
 
 export function MediaCard({
   widget,
@@ -96,53 +45,33 @@ export function MediaCard({
   onSelectSource,
   hideHeader = false,
   liveEntity,
+  gridBreakpoint,
+  displayVariant,
+  onDisplayMetricsChange,
 }: MediaCardProps) {
-  const mediaState = resolveMediaCardState(liveEntity?.stateLabel ?? liveEntity?.state ?? widget.status, widget.isOn);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const mediaTitle = liveEntity?.mediaTitle?.trim() || liveEntity?.nowPlaying?.trim();
-  const mediaArtist = liveEntity?.mediaArtist?.trim();
-  const hasLiveDuration = typeof liveEntity?.mediaDuration === 'number' && Number.isFinite(liveEntity.mediaDuration);
-  const hasLivePosition = typeof liveEntity?.mediaPosition === 'number' && Number.isFinite(liveEntity.mediaPosition);
-  const hasLiveProgress = typeof liveEntity?.progress === 'number' && Number.isFinite(liveEntity.progress);
-  const mediaDuration = hasLiveDuration ? Math.max(1, Math.round(liveEntity!.mediaDuration!)) : 100;
-  const progressPercent = hasLiveProgress ? clamp(Math.round(liveEntity!.progress!), 0, 100) : 0;
-  const mediaBasePosition = hasLivePosition
-    ? clamp(Math.round(liveEntity!.mediaPosition!), 0, Math.max(0, mediaDuration))
-    : mediaDuration > 0
-      ? clamp(Math.round((progressPercent / 100) * mediaDuration), 0, mediaDuration)
-      : 0;
-  const mediaPositionUpdatedAt =
-    typeof liveEntity?.mediaPositionUpdatedAt === 'number' && Number.isFinite(liveEntity.mediaPositionUpdatedAt)
-      ? liveEntity.mediaPositionUpdatedAt
-      : undefined;
-  const mediaPosition = resolveLiveMediaPosition(
-    mediaBasePosition,
-    mediaDuration,
-    liveEntity?.stateLabel ?? liveEntity?.state ?? widget.status,
-    mediaPositionUpdatedAt,
-    nowMs,
+  const fallbackVariant = displayVariant ?? resolveWidgetDisplayVariant({
+    kind: 'media',
+    breakpoint: gridBreakpoint,
+    layout: widget.layout,
+    parentSectionId: widget.parentSectionId,
+  });
+  const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
+  const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
+  const layoutVariant = measuredSize
+    ? resolveMediaPixelDisplayVariant({ width: measuredSize.width, height: measuredSize.height })
+    : fallbackVariant;
+  const model = useMemo(
+    () => buildMediaCardModel({ widget, liveEntity, nowMs }),
+    [liveEntity, nowMs, widget],
   );
-  const coverUrl = liveEntity?.imageUrl;
-  const rawAttributes = liveEntity?.rawAttributes;
-  const shuffleEnabled =
-    liveEntity?.shuffleEnabled ??
-    (typeof rawAttributes?.shuffle === 'boolean'
-      ? rawAttributes.shuffle
-      : typeof rawAttributes?.shuffle_enabled === 'boolean'
-        ? rawAttributes.shuffle_enabled
-        : false);
-  const repeatMode =
-    liveEntity?.repeatMode ??
-    (typeof rawAttributes?.repeat === 'string'
-      ? rawAttributes.repeat
-      : typeof rawAttributes?.repeat_mode === 'string'
-        ? rawAttributes.repeat_mode
-        : 'off');
-  const source = toTrimmedString(rawAttributes?.source) ?? toTrimmedString(rawAttributes?.source_name);
-  const sourceList = toStringArray(rawAttributes?.source_list);
+  const canToggleMedia =
+    model.capabilities.canTogglePlayback ||
+    model.capabilities.canTurnOn ||
+    model.capabilities.canTurnOff;
 
   useEffect(() => {
-    if (mediaState !== 'playing' || mediaDuration <= 0) {
+    if (model.displayState !== 'playing' || (model.metadata.duration ?? 0) <= 0) {
       return;
     }
     const timerId = window.setInterval(() => {
@@ -151,14 +80,25 @@ export function MediaCard({
     return () => {
       window.clearInterval(timerId);
     };
-  }, [mediaDuration, mediaState]);
+  }, [model.displayState, model.metadata.duration]);
 
   useEffect(() => {
     setNowMs(Date.now());
   }, [liveEntity?.mediaPositionUpdatedAt, liveEntity?.mediaPosition, liveEntity?.state, liveEntity?.stateLabel]);
 
+  useEffect(() => {
+    if (!measuredSize || !onDisplayMetricsChange) return;
+    onDisplayMetricsChange({
+      widgetId: widget.id,
+      width: measuredSize.width,
+      height: measuredSize.height,
+      variant: layoutVariant,
+    });
+  }, [layoutVariant, measuredSize, onDisplayMetricsChange, widget.id]);
+
   return (
     <div
+      ref={cardRef}
       className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl ${isSelected ? 'selection-corners' : ''} ${
         isEditMode ? '' : 'cursor-pointer'
       }`}
@@ -172,27 +112,54 @@ export function MediaCard({
     >
       <div className={`flex h-full w-full min-h-0 min-w-0 flex-col ${isEditMode ? 'pointer-events-none' : ''}`}>
         <HaMediaCard
-          entityId={widget.entityId}
-          name={widget.title}
-          state={mediaState}
+          entityId={model.entityId}
+          name={model.name}
+          state={model.displayState}
+          layoutVariant={layoutVariant}
+          capabilities={model.capabilities}
           attributes={{
-            media_title: mediaTitle,
-            media_artist: mediaArtist,
-            entity_picture: coverUrl,
-            media_duration: mediaDuration,
-            media_position: mediaPosition,
-            shuffle: shuffleEnabled,
-            repeat: repeatMode,
-            source,
-            source_list: sourceList,
+            state_label: model.stateLabel,
+            app_id: model.metadata.appId,
+            app_name: model.metadata.appName,
+            device_class: model.metadata.deviceClass,
+            entity_picture: model.metadata.imageUrl,
+            entity_picture_local: model.metadata.imageLocalUrl,
+            group_members: model.metadata.groupMembers,
+            is_volume_muted: model.metadata.volumeMuted,
+            media_album_artist: model.metadata.albumArtist,
+            media_album_name: model.metadata.albumName,
+            media_artist: model.metadata.artist,
+            media_channel: model.metadata.channel,
+            media_content_id: model.metadata.contentId,
+            media_content_type: model.metadata.contentType,
+            media_duration: model.metadata.duration,
+            media_episode: model.metadata.episode,
+            media_image_hash: model.metadata.imageHash,
+            media_image_remotely_accessible: model.metadata.imageRemotelyAccessible,
+            media_image_url: model.metadata.imageUrl,
+            media_playlist: model.metadata.playlist,
+            media_position: model.metadata.position,
+            media_position_updated_at: model.metadata.positionUpdatedAt,
+            media_season: model.metadata.season,
+            media_series_title: model.metadata.seriesTitle,
+            media_title: model.metadata.title,
+            media_track: model.metadata.track,
+            repeat: model.repeatMode,
+            shuffle: model.shuffleEnabled,
+            sound_mode: model.metadata.soundMode,
+            sound_mode_list: model.metadata.soundModeList,
+            source: model.metadata.source,
+            source_list: model.metadata.sourceList,
+            volume_level: model.metadata.volumeLevel,
+            volume_step: model.metadata.volumeStep,
           }}
-          onTogglePlay={!isEditMode ? onTogglePlayback : undefined}
-          onPreviousTrack={!isEditMode ? onPreviousTrack : undefined}
-          onNextTrack={!isEditMode ? onNextTrack : undefined}
-          onSeek={!isEditMode ? onSeek : undefined}
-          onShuffle={!isEditMode ? onShuffle : undefined}
-          onRepeat={!isEditMode ? onRepeat : undefined}
-          onSelectSource={!isEditMode ? onSelectSource : undefined}
+          onTogglePlay={!isEditMode && canToggleMedia ? onTogglePlayback : undefined}
+          onPreviousTrack={!isEditMode && model.capabilities.canPreviousTrack ? onPreviousTrack : undefined}
+          onNextTrack={!isEditMode && model.capabilities.canNextTrack ? onNextTrack : undefined}
+          onSeek={!isEditMode && model.capabilities.canSeek ? onSeek : undefined}
+          onShuffle={!isEditMode && model.capabilities.canShuffle ? onShuffle : undefined}
+          onRepeat={!isEditMode && model.capabilities.canRepeat ? onRepeat : undefined}
+          onSelectSource={!isEditMode && model.capabilities.canSelectSource ? onSelectSource : undefined}
           hideHeader={hideHeader}
         />
       </div>

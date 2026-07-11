@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { ContextSidebar } from '../settings/ContextSidebar';
+import type { MediaPlayRequest } from '../settings/MediaControls';
 import { translateClimateStatus } from '../settings/ClimateControls';
 import { SensorDisplayVariantSkeleton } from '../settings/SensorDisplayVariantSkeleton';
 import { LightDisplayVariantSkeleton } from '../settings/LightDisplayVariantSkeleton';
@@ -29,6 +30,8 @@ import { SwitchDisplayVariantSkeleton } from '../settings/SwitchDisplayVariantSk
 import { ClimateDisplayVariantSkeleton } from '../settings/ClimateDisplayVariantSkeleton';
 import { AlarmDisplayVariantSkeleton } from '../settings/AlarmDisplayVariantSkeleton';
 import { LockDisplayVariantSkeleton } from '../settings/LockDisplayVariantSkeleton';
+import { CoverDisplayVariantSkeleton } from '../settings/CoverDisplayVariantSkeleton';
+import { MediaDisplayVariantSkeleton } from '../settings/MediaDisplayVariantSkeleton';
 import GlassCombobox from '../ui/GlassCombobox';
 import GlassDropdown, { type GlassDropdownOption } from '../ui/GlassDropdown';
 import { WidgetCardRenderer } from '../widgets/CardRenderer';
@@ -111,6 +114,10 @@ type ContextSidebarActions = {
   toggleSpeakerMute: () => void;
   toggleSpeakerShuffle: () => void;
   cycleSpeakerRepeatMode: () => void;
+  stopSpeakerPlayback?: () => void;
+  clearSpeakerPlaylist?: () => void;
+  selectSpeakerSoundMode?: (soundMode: string) => void;
+  playSpeakerMedia?: (request: MediaPlayRequest) => void;
   selectSpeakerOutputDevice: (deviceId: string) => void;
   toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
   disarmAlarm: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
@@ -136,6 +143,9 @@ type ContextSidebarActions = {
   closeCover: () => void;
   stopCover: () => void;
   setCoverPosition: (position: number) => void;
+  openCoverTilt: () => void;
+  closeCoverTilt: () => void;
+  stopCoverTilt: () => void;
   setCoverTiltPosition: (position: number) => void;
   moveCameraPtz: (direction: CameraPtzDirection) => void;
   stopCameraPtz: () => void;
@@ -268,6 +278,28 @@ const LOCK_DISPLAY_VARIANT_OPTIONS: Array<{
   { id: 'full', label: 'Completa', description: 'Dettagli e scrocco' },
 ];
 
+const COVER_DISPLAY_VARIANT_OPTIONS: Array<{
+  id: WidgetDisplayVariant;
+  label: string;
+  description: string;
+}> = [
+  { id: 'mini', label: 'Mini', description: 'Titolo, stato e posizione' },
+  { id: 'compact', label: 'Compatta', description: 'Header e anteprima' },
+  { id: 'standard', label: 'Standard', description: 'Posizione e inclinazione' },
+  { id: 'full', label: 'Completa', description: 'Dettagli e capability' },
+];
+
+const MEDIA_DISPLAY_VARIANT_OPTIONS: Array<{
+  id: WidgetDisplayVariant;
+  label: string;
+  description: string;
+}> = [
+  { id: 'mini', label: 'Mini', description: 'Titolo e play rapido' },
+  { id: 'compact', label: 'Compatta', description: 'Header e controlli' },
+  { id: 'standard', label: 'Standard', description: 'Controlli e avanzamento' },
+  { id: 'full', label: 'Completa', description: 'Uscite audio e dettagli' },
+];
+
 function resolveSensorDisplayVariantTarget(
   variant: WidgetDisplayVariant,
   cols: number,
@@ -349,6 +381,34 @@ function resolveLockDisplayVariantTarget(
   if (variant === 'standard') return { w: Math.min(safeCols, 2), h: 3 };
   if (!isInsideStack && !isMobile && safeCols >= 3) return { w: 3, h: 2 };
   return { w: Math.min(safeCols, 2), h: 3 };
+}
+
+function resolveMediaDisplayVariantTarget(
+  variant: WidgetDisplayVariant,
+  cols: number,
+  breakpoint: DashboardGridBreakpoint,
+): { w: number; h: number } {
+  const safeCols = Math.max(1, Math.round(cols));
+  const isMobile = breakpoint === 'sm' || breakpoint === 'xs';
+  if (variant === 'mini') return { w: 1, h: 1 };
+  if (variant === 'compact') return { w: Math.min(safeCols, 2), h: isMobile ? 2 : 2 };
+  if (variant === 'standard') return { w: Math.min(safeCols, isMobile ? 2 : 3), h: 3 };
+  return { w: Math.min(safeCols, isMobile ? 2 : 3), h: 4 };
+}
+
+function resolveCoverDisplayVariantTarget(
+  variant: WidgetDisplayVariant,
+  cols: number,
+  breakpoint: DashboardGridBreakpoint,
+  isInsideStack: boolean,
+): { w: number; h: number } {
+  const safeCols = Math.max(1, Math.round(cols));
+  const isMobile = breakpoint === 'sm' || breakpoint === 'xs';
+  if (variant === 'mini') return { w: 1, h: 1 };
+  if (variant === 'compact') return { w: Math.min(safeCols, 2), h: isMobile ? 2 : 2 };
+  if (variant === 'standard') return { w: Math.min(safeCols, 2), h: 3 };
+  if (!isInsideStack && !isMobile && safeCols >= 3) return { w: 3, h: 3 };
+  return { w: Math.min(safeCols, 2), h: 4 };
 }
 
 function clampActivityLogHours(value: number) {
@@ -638,7 +698,10 @@ type RightSidebarManagerProps = {
     supportsClose?: boolean;
     supportsStop?: boolean;
     supportsSetPosition?: boolean;
+    supportsOpenTilt?: boolean;
+    supportsCloseTilt?: boolean;
     supportsSetTiltPosition?: boolean;
+    supportsStopTilt?: boolean;
     rawAttributes?: Record<string, unknown>;
   };
   vacuumAreas?: Array<{
@@ -654,6 +717,7 @@ type RightSidebarManagerProps = {
   onUpdateUserName: (name: string) => void;
   selectedWidget: Widget | null;
   selectedWidgetDisplayMetrics?: WidgetDisplayMetrics | null;
+  selectedWidgetActiveLayout?: { w: number; h: number } | null;
   selectedSection: DashboardSection | null;
   selectedSidebarPath: SidebarQuickPath | null;
   sidebarPaths?: SidebarQuickPath[];
@@ -985,6 +1049,7 @@ export function RightSidebarManager({
   onUpdateUserName,
   selectedWidget,
   selectedWidgetDisplayMetrics = null,
+  selectedWidgetActiveLayout = null,
   selectedSection,
   selectedSidebarPath,
   sidebarPaths = [],
@@ -1478,6 +1543,12 @@ export function RightSidebarManager({
   const selectedWidgetLayoutOverride = selectedWidget
     ? widgetLayoutOverrides[selectedWidget.id]?.[activeGridBreakpoint]
     : undefined;
+  const selectedWidgetCurrentLayoutSpan = selectedWidget
+    ? {
+        w: selectedWidgetActiveLayout?.w ?? selectedWidget.layout.w,
+        h: selectedWidgetActiveLayout?.h ?? selectedWidget.layout.h,
+      }
+    : null;
   const selectedWidgetOverrideHeight =
     selectedWidget && selectedWidgetLayoutOverride
       ? selectedWidget.kind === 'light'
@@ -1491,17 +1562,19 @@ export function RightSidebarManager({
       ? {
           w:
             selectedWidgetLayoutOverride.w ??
+            selectedWidgetCurrentLayoutSpan?.w ??
             selectedWidgetTypeStateLayoutSpan?.w ??
             selectedWidget.layout.w,
           h:
             selectedWidgetOverrideHeight ??
+            selectedWidgetCurrentLayoutSpan?.h ??
             selectedWidgetTypeStateLayoutSpan?.h ??
             selectedWidget.layout.h,
         }
       : null;
   const selectedWidgetLayoutSpan =
     selectedWidget && layoutApplyScope === 'widget'
-      ? selectedWidgetOverrideLayoutSpan ?? selectedWidgetTypeStateLayoutSpan
+      ? selectedWidgetOverrideLayoutSpan ?? selectedWidgetCurrentLayoutSpan ?? selectedWidgetTypeStateLayoutSpan
       : selectedWidgetTypeStateLayoutSpan;
   const layoutPickerWidth = clampGridSpan(selectedWidgetLayoutSpan?.w ?? 1, layoutEditorCols);
   const layoutPickerHeight = clampGridSpan(selectedWidgetLayoutSpan?.h ?? 1, GRID_LAYOUT_PREVIEW_MAX_ROWS);
@@ -1746,6 +1819,53 @@ export function RightSidebarManager({
           };
         })
       : [];
+  const coverDisplayVariantOptions =
+    selectedWidget?.kind === 'cover'
+      ? COVER_DISPLAY_VARIANT_OPTIONS.map((option) => {
+          const target = resolveCoverDisplayVariantTarget(
+            option.id,
+            layoutEditorCols,
+            activeGridBreakpoint,
+            Boolean(selectedWidget.parentSectionId),
+          );
+          const targetW = clampGridSpan(target.w, layoutEditorCols);
+          const targetH = clampGridSpan(target.h, GRID_LAYOUT_PREVIEW_MAX_ROWS);
+          const resolvedTargetVariant = resolveWidgetDisplayVariant({
+            kind: 'cover',
+            breakpoint: activeGridBreakpoint,
+            layout: { w: targetW, h: targetH },
+            parentSectionId: selectedWidget.parentSectionId,
+          });
+          return {
+            ...option,
+            targetW,
+            targetH,
+            isActive: selectedWidgetDisplayVariant === option.id,
+            isAvailable: resolvedTargetVariant === option.id,
+          };
+        })
+      : [];
+  const mediaDisplayVariantOptions =
+    selectedWidget?.kind === 'media'
+      ? MEDIA_DISPLAY_VARIANT_OPTIONS.map((option) => {
+          const target = resolveMediaDisplayVariantTarget(option.id, layoutEditorCols, activeGridBreakpoint);
+          const targetW = clampGridSpan(target.w, layoutEditorCols);
+          const targetH = clampGridSpan(target.h, GRID_LAYOUT_PREVIEW_MAX_ROWS);
+          const resolvedTargetVariant = resolveWidgetDisplayVariant({
+            kind: 'media',
+            breakpoint: activeGridBreakpoint,
+            layout: { w: targetW, h: targetH },
+            parentSectionId: selectedWidget.parentSectionId,
+          });
+          return {
+            ...option,
+            targetW,
+            targetH,
+            isActive: selectedWidgetDisplayVariant === option.id,
+            isAvailable: resolvedTargetVariant === option.id,
+          };
+        })
+      : [];
   const selectedDisplayVariantOptions = selectedWidget?.kind === 'sensor'
     ? sensorDisplayVariantOptions
     : selectedWidget?.kind === 'light'
@@ -1758,7 +1878,11 @@ export function RightSidebarManager({
             ? alarmDisplayVariantOptions
             : selectedWidget?.kind === 'lock'
               ? lockDisplayVariantOptions
-              : [];
+              : selectedWidget?.kind === 'cover'
+                ? coverDisplayVariantOptions
+                : selectedWidget?.kind === 'media'
+                  ? mediaDisplayVariantOptions
+                  : [];
   const isCompactLayoutEditor = activeGridBreakpoint === 'sm' || activeGridBreakpoint === 'xs';
   const layoutGridCompactCellPx = 38;
   const layoutGridCompactMaxWidth = isCompactLayoutEditor
@@ -1794,8 +1918,17 @@ export function RightSidebarManager({
       layoutPickerHeight * layoutPreviewCellHeightPx + Math.max(0, layoutPickerHeight - 1) * layoutPreviewCardGapPx,
     ),
   );
+  const selectedWidgetSupportsDisplayMetrics =
+    selectedWidget?.kind === 'sensor' ||
+    selectedWidget?.kind === 'light' ||
+    selectedWidget?.kind === 'switch' ||
+    selectedWidget?.kind === 'climate' ||
+    selectedWidget?.kind === 'alarm' ||
+    selectedWidget?.kind === 'lock' ||
+    selectedWidget?.kind === 'media';
   const selectedWidgetCanvasMetrics =
-    (selectedWidget?.kind === 'sensor' || selectedWidget?.kind === 'light' || selectedWidget?.kind === 'switch' || selectedWidget?.kind === 'climate' || selectedWidget?.kind === 'alarm') &&
+    selectedWidget &&
+    selectedWidgetSupportsDisplayMetrics &&
     selectedWidgetDisplayMetrics?.widgetId === selectedWidget.id
       ? selectedWidgetDisplayMetrics
       : null;
@@ -1826,11 +1959,7 @@ export function RightSidebarManager({
       : !selectedWidgetLayoutOverride;
   const canResetLayout = !layoutIsUsingAuto;
   const activeLayoutLabel =
-    selectedWidget?.kind === 'sensor' ||
-    selectedWidget?.kind === 'light' ||
-    selectedWidget?.kind === 'switch' ||
-    selectedWidget?.kind === 'climate' ||
-    selectedWidget?.kind === 'alarm'
+    selectedWidgetSupportsDisplayMetrics
       ? selectedWidgetCanvasMetrics?.variant ?? selectedWidgetDisplayVariant ?? `${layoutPickerWidth}×${layoutPickerHeight}`
       : `${layoutPickerWidth}×${layoutPickerHeight}`;
 
@@ -3284,7 +3413,7 @@ export function RightSidebarManager({
                     La dimensione decide automaticamente quali elementi mostrare.
                   </p>
                 </div>
-                {(selectedWidget.kind === 'sensor' || selectedWidget.kind === 'light' || selectedWidget.kind === 'switch' || selectedWidget.kind === 'climate' || selectedWidget.kind === 'alarm' || selectedWidget.kind === 'lock') && selectedDisplayVariantOptions.length > 0 ? (
+                {(selectedWidget.kind === 'sensor' || selectedWidget.kind === 'light' || selectedWidget.kind === 'switch' || selectedWidget.kind === 'climate' || selectedWidget.kind === 'alarm' || selectedWidget.kind === 'lock' || selectedWidget.kind === 'cover' || selectedWidget.kind === 'media') && selectedDisplayVariantOptions.length > 0 ? (
                   <div className="grid grid-cols-2 gap-2">
                     {selectedDisplayVariantOptions.map((option) => (
                       <button
@@ -3295,7 +3424,7 @@ export function RightSidebarManager({
                           : applyWidgetTypeLayoutSelection(option.targetW, option.targetH)}
                         disabled={!option.isAvailable}
                         className={`min-w-0 rounded-2xl border p-2 text-left transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${
-                          (selectedWidget.kind === 'climate' || selectedWidget.kind === 'alarm' || selectedWidget.kind === 'lock') && option.id === 'full' ? 'col-span-2' : ''
+                          (selectedWidget.kind === 'climate' || selectedWidget.kind === 'alarm' || selectedWidget.kind === 'lock' || selectedWidget.kind === 'cover' || selectedWidget.kind === 'media') && option.id === 'full' ? 'col-span-2' : ''
                         } ${
                           option.isActive
                             ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.58)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.12)] shadow-[0_12px_26px_rgba(0,0,0,0.18)]'
@@ -3330,6 +3459,18 @@ export function RightSidebarManager({
                           />
                         ) : selectedWidget.kind === 'lock' ? (
                           <LockDisplayVariantSkeleton
+                            variant={option.id}
+                            active={option.isActive}
+                            disabled={!option.isAvailable}
+                          />
+                        ) : selectedWidget.kind === 'cover' ? (
+                          <CoverDisplayVariantSkeleton
+                            variant={option.id}
+                            active={option.isActive}
+                            disabled={!option.isAvailable}
+                          />
+                        ) : selectedWidget.kind === 'media' ? (
+                          <MediaDisplayVariantSkeleton
                             variant={option.id}
                             active={option.isActive}
                             disabled={!option.isAvailable}

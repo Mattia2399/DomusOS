@@ -9,6 +9,15 @@ export const COVER_FEATURE_CLOSE_TILT = 32;
 export const COVER_FEATURE_STOP_TILT = 64;
 export const COVER_FEATURE_SET_TILT_POSITION = 128;
 
+export type NormalizedCoverState =
+  | 'open'
+  | 'closed'
+  | 'opening'
+  | 'closing'
+  | 'stopped'
+  | 'unavailable'
+  | 'unknown';
+
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -24,28 +33,37 @@ export function clampPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-export function normalizeCoverState(value: string | undefined) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+export function normalizeCoverState(value: string | undefined): NormalizedCoverState {
+  const normalized = (value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
   if (!normalized) {
     return 'unknown';
   }
-  if (normalized === 'opening') {
+  if (normalized === 'opening' || normalized === 'in apertura' || normalized === 'apertura') {
     return 'opening';
   }
-  if (normalized === 'closing') {
+  if (normalized === 'closing' || normalized === 'in chiusura' || normalized === 'chiusura') {
     return 'closing';
   }
-  if (normalized === 'open') {
+  if (normalized === 'open' || normalized === 'opened' || normalized === 'aperta' || normalized === 'aperto') {
     return 'open';
   }
-  if (normalized === 'closed') {
+  if (normalized === 'closed' || normalized === 'close' || normalized === 'chiusa' || normalized === 'chiuso') {
     return 'closed';
   }
-  if (normalized === 'stopped') {
+  if (normalized === 'stopped' || normalized === 'stop' || normalized === 'ferma' || normalized === 'fermata' || normalized === 'fermato') {
     return 'stopped';
   }
-  if (normalized === 'unavailable') {
+  if (normalized === 'unavailable' || normalized === 'offline' || normalized === 'not available' || normalized === 'non disponibile') {
     return 'unavailable';
+  }
+  if (normalized === 'unknown' || normalized === 'sconosciuta' || normalized === 'sconosciuto') {
+    return 'unknown';
   }
   return 'unknown';
 }
@@ -99,12 +117,36 @@ export function resolveCoverTiltPosition(rawTilt: unknown, fallback = 50) {
   return clampPercent(fallback);
 }
 
+export function resolveCoverPositionAttribute(rawAttributes: Record<string, unknown> | undefined) {
+  return rawAttributes?.current_position ?? rawAttributes?.position ?? rawAttributes?.current_cover_position;
+}
+
+export function resolveCoverTiltAttribute(rawAttributes: Record<string, unknown> | undefined) {
+  return rawAttributes?.current_tilt_position ?? rawAttributes?.tilt_position ?? rawAttributes?.current_cover_tilt_position;
+}
+
 export function resolveCoverSupportedFeatures(entity: MockEntityState | undefined) {
   const rawFeatures = toFiniteNumber(entity?.rawAttributes?.supported_features);
   if (typeof entity?.supportedFeatures === 'number') {
     return Math.round(entity.supportedFeatures);
   }
   return rawFeatures !== undefined ? Math.round(rawFeatures) : undefined;
+}
+
+export function coverSupportsOpen(supportedFeatures: number | undefined) {
+  return (
+    supportedFeatures === undefined ||
+    supportedFeatures === 0 ||
+    (supportedFeatures & COVER_FEATURE_OPEN) !== 0
+  );
+}
+
+export function coverSupportsClose(supportedFeatures: number | undefined) {
+  return (
+    supportedFeatures === undefined ||
+    supportedFeatures === 0 ||
+    (supportedFeatures & COVER_FEATURE_CLOSE) !== 0
+  );
 }
 
 export function coverSupportsSetPosition(supportedFeatures: number | undefined) {
@@ -123,14 +165,33 @@ export function coverSupportsStop(supportedFeatures: number | undefined) {
   );
 }
 
+export function coverSupportsOpenTilt(supportedFeatures: number | undefined) {
+  return typeof supportedFeatures === 'number' && (supportedFeatures & COVER_FEATURE_OPEN_TILT) !== 0;
+}
+
+export function coverSupportsCloseTilt(supportedFeatures: number | undefined) {
+  return typeof supportedFeatures === 'number' && (supportedFeatures & COVER_FEATURE_CLOSE_TILT) !== 0;
+}
+
+export function coverSupportsSetTiltPosition(supportedFeatures: number | undefined) {
+  return typeof supportedFeatures === 'number' && (supportedFeatures & COVER_FEATURE_SET_TILT_POSITION) !== 0;
+}
+
+export function coverSupportsStopTilt(supportedFeatures: number | undefined) {
+  return typeof supportedFeatures === 'number' && (supportedFeatures & COVER_FEATURE_STOP_TILT) !== 0;
+}
+
 export function coverSupportsTilt(
   supportedFeatures: number | undefined,
   rawAttributes: Record<string, unknown> | undefined,
 ) {
-  if (typeof rawAttributes?.current_tilt_position === 'number') {
+  if (toFiniteNumber(rawAttributes?.current_tilt_position) !== undefined) {
     return true;
   }
-  if (typeof rawAttributes?.tilt_position === 'number') {
+  if (toFiniteNumber(rawAttributes?.tilt_position) !== undefined) {
+    return true;
+  }
+  if (toFiniteNumber(rawAttributes?.current_cover_tilt_position) !== undefined) {
     return true;
   }
   if (supportedFeatures === undefined) {

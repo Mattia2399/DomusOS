@@ -1,137 +1,439 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Lightbulb, Lock, Thermometer, ShieldAlert, Zap } from 'lucide-react';
-import { GlassCard } from './ui';
+import { Camera, Lightbulb, Lock, Power, ShieldAlert, Thermometer, Zap } from 'lucide-react';
+import { useDashboardState } from '../../hooks/useDashboardState';
+import type { Widget } from '../../types/dashboardModels';
+import type { MockEntityState } from '../../types/ha';
+import { WidgetCardRenderer } from '../widgets/CardRenderer';
 
-export const InteractiveDemo = () => {
-  const [lightOn, setLightOn] = useState(false);
-  const [locked, setLocked] = useState(true);
-  const [temp, setTemp] = useState(21.5);
-  const [alarmArmed, setAlarmArmed] = useState(true);
+type DemoCardId = 'climate' | 'light' | 'switch' | 'sensor' | 'alarm' | 'camera' | 'lock';
+
+type DemoFrameProps = {
+  id: DemoCardId;
+  title: string;
+  variant: string;
+  icon: ReactNode;
+  className: string;
+  activeCard: DemoCardId;
+  children: ReactNode;
+};
+
+const DEMO_WIDGETS = {
+  climate: {
+    id: 'climate.air_conditioner',
+    kind: 'climate',
+    title: 'Clima soggiorno',
+    entityId: 'climate.air_conditioner',
+    status: 'heat',
+    isOn: true,
+    value: 22.5,
+    unit: 'C',
+    layout: { i: 'climate.air_conditioner', x: 0, y: 0, w: 2, h: 4 },
+  },
+  light: {
+    id: 'light.living_room_lamp',
+    kind: 'light',
+    title: 'Luce salotto',
+    entityId: 'light.living_room_lamp',
+    status: 'on',
+    isOn: true,
+    value: 68,
+    unit: '%',
+    layout: { i: 'light.living_room_lamp', x: 2, y: 0, w: 3, h: 3 },
+  },
+  switch: {
+    id: 'landing.switch.compact',
+    kind: 'switch',
+    title: 'Presa cucina',
+    entityId: 'switch.kitchen_outlet',
+    status: 'on',
+    isOn: true,
+    switchConsumptionEntityId: 'sensor.kitchen_outlet_power',
+    layout: { i: 'landing.switch.compact', x: 5, y: 0, w: 2, h: 1 },
+  },
+  sensor: {
+    id: 'landing.sensor.standard',
+    kind: 'sensor',
+    title: 'Energia',
+    entityId: 'sensor.living_room_power',
+    status: 'tracking',
+    isOn: true,
+    value: 420,
+    unit: 'W',
+    sensorDisplayPrecision: 0,
+    layout: { i: 'landing.sensor.standard', x: 7, y: 0, w: 2, h: 2 },
+  },
+  alarm: {
+    id: 'landing.alarm.standard',
+    kind: 'alarm',
+    title: 'Allarme Casa',
+    entityId: 'alarm_control_panel.home_alarm',
+    status: 'armed_home',
+    isOn: true,
+    alarmRequireAuthToDisarm: true,
+    layout: { i: 'landing.alarm.standard', x: 0, y: 4, w: 2, h: 3 },
+  },
+  camera: {
+    id: 'landing.camera',
+    kind: 'camera',
+    title: 'Camera ingresso',
+    entityId: 'camera.front_door',
+    status: 'streaming',
+    isOn: true,
+    layout: { i: 'landing.camera', x: 2, y: 4, w: 3, h: 3 },
+  },
+  lock: {
+    id: 'landing.lock.compact',
+    kind: 'lock',
+    title: 'Porta ingresso',
+    entityId: 'lock.front_door',
+    status: 'unlocked',
+    isOn: true,
+    lockRequireAuthToUnlock: true,
+    layout: { i: 'landing.lock.compact', x: 5, y: 4, w: 2, h: 2 },
+  },
+} satisfies Record<DemoCardId, Widget>;
+
+const SENSOR_HISTORY = [320, 348, 336, 392, 410, 384, 420];
+
+function DemoFrame({
+  id,
+  title,
+  variant,
+  icon,
+  className,
+  activeCard,
+  children,
+}: DemoFrameProps) {
+  const isActive = activeCard === id;
 
   return (
-    <section id="demo" className="py-24 px-4 md:px-8 relative z-10 border-t border-white/5 bg-gradient-to-b from-transparent to-blue-900/5">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-semibold mb-6">Tocca con mano l'esperienza</h2>
-          <p className="text-lg text-white/50 max-w-2xl mx-auto">
-            Interagisci con le card qui sotto per farti un'idea della fluidità e della reattività della dashboard. Prova a cliccare o passare il cursore sopra gli elementi.
+    <motion.div
+      layout
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className={`min-w-0 ${className}`}
+    >
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-cyan-200">
+            {icon}
+          </span>
+          <span className="truncate text-sm font-medium text-white/82">{title}</span>
+        </div>
+        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-white/45">
+          {variant}
+        </span>
+      </div>
+
+      <div
+        className={`relative h-[calc(100%-2.25rem)] min-h-0 min-w-0 rounded-[2rem] transition ${
+          isActive ? 'ring-1 ring-cyan-200/50 ring-offset-2 ring-offset-[#05070d]' : ''
+        }`}
+      >
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+export const InteractiveDemo = () => {
+  const { state, actions } = useDashboardState();
+  const [activeCard, setActiveCard] = useState<DemoCardId>('climate');
+  const [switchOn, setSwitchOn] = useState(true);
+  const [sensorValue, setSensorValue] = useState(420);
+  const [sensorHistory, setSensorHistory] = useState(SENSOR_HISTORY);
+  const [alarmState, setAlarmState] = useState('armed_home');
+  const [cameraLive, setCameraLive] = useState(true);
+  const [lockState, setLockState] = useState<'locked' | 'unlocked' | 'open'>('unlocked');
+
+  const selectCard = (id: DemoCardId) => setActiveCard(id);
+
+  const switchConsumption = switchOn ? 128 : 0;
+  const switchEntity: MockEntityState = {
+    state: switchOn ? 'on' : 'off',
+    toggleOn: switchOn,
+    rawAttributes: {
+      device_class: 'outlet',
+      friendly_name: 'Presa cucina',
+      power: switchConsumption,
+      power_unit: 'W',
+    },
+  };
+  const switchConsumptionEntity: MockEntityState = {
+    state: String(switchConsumption),
+    numericValue: switchConsumption,
+    unit: 'W',
+  };
+  const sensorEntity: MockEntityState = {
+    state: String(sensorValue),
+    numericValue: sensorValue,
+    unit: 'W',
+    rawAttributes: {
+      device_class: 'power',
+      min: 0,
+      max: 900,
+    },
+  };
+  const alarmEntity: MockEntityState = {
+    state: alarmState,
+    supportedFeatures: 63,
+    rawAttributes: {
+      changed_by: 'Mattia',
+      code_arm_required: false,
+    },
+  };
+  const cameraEntity: MockEntityState = {
+    state: cameraLive ? 'streaming' : 'offline',
+    imageUrl: '/wallpapers/apple-home-hub.webp',
+    rawAttributes: {
+      friendly_name: 'Camera ingresso',
+      entity_picture: '/wallpapers/apple-home-hub.webp',
+    },
+  };
+  const lockEntity: MockEntityState = {
+    state: lockState,
+    supportedFeatures: 1,
+    rawAttributes: {
+      battery_level: 84,
+      changed_by: lockState === 'locked' ? 'Auto-lock' : 'Mattia',
+    },
+  };
+
+  const toggleSwitch = () => {
+    selectCard('switch');
+    setSwitchOn((current) => !current);
+  };
+
+  const updateSensor = () => {
+    selectCard('sensor');
+    const nextValue = sensorValue >= 760 ? 410 : sensorValue + 38;
+    setSensorValue(nextValue);
+    setSensorHistory((current) => [...current.slice(-7), nextValue]);
+  };
+
+  const toggleAlarm = () => {
+    selectCard('alarm');
+    setAlarmState((current) => (current === 'disarmed' ? 'armed_home' : 'disarmed'));
+  };
+
+  const toggleLock = () => {
+    selectCard('lock');
+    setLockState((current) => (current === 'locked' ? 'unlocked' : 'locked'));
+    return true;
+  };
+
+  return (
+    <section id="demo" className="relative z-10 border-t border-white/5 bg-gradient-to-b from-transparent to-blue-900/5 px-4 py-24 md:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-14 max-w-3xl">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300/70">
+            Demo card
+          </p>
+          <h2 className="text-3xl font-semibold text-white md:text-5xl">Card reali, varianti reali.</h2>
+          <p className="mt-5 text-lg leading-relaxed text-white/54">
+            La preview usa gli stessi componenti della dashboard: controlli, stati live e layout responsive in un unico punto.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-          
-          {/* Light Interactive Card */}
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="col-span-2 md:col-span-1 cursor-pointer">
-            <GlassCard className={`p-5 h-full transition-all duration-500 relative overflow-hidden ${lightOn ? 'border-yellow-500/50 bg-yellow-500/10' : 'hover:border-white/20'}`} >
-              <div 
-                className="absolute inset-0 z-10" 
-                onClick={() => setLightOn(!lightOn)}
-              />
-              <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-10 -mt-10 transition-all duration-700 pointer-events-none ${lightOn ? 'bg-yellow-500/20 scale-150' : 'bg-transparent scale-100'}`}></div>
-              
-              <div className="flex justify-between items-start mb-6 relative z-0">
-                <div className={`p-3 rounded-xl transition-colors duration-300 ${lightOn ? 'bg-yellow-500/20 text-yellow-400' : 'bg-white/5 text-white/50'}`}>
-                  <Lightbulb size={24} />
-                </div>
-              </div>
-              <div className="relative z-0">
-                <p className="font-medium text-white/90">Luce Salotto</p>
-                <p className={`text-sm transition-colors duration-300 ${lightOn ? 'text-yellow-400' : 'text-white/40'}`}>
-                  {lightOn ? 'Accesa • 100%' : 'Spenta'}
-                </p>
-              </div>
-            </GlassCard>
-          </motion.div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-6 lg:grid-cols-12">
+          <DemoFrame
+            id="climate"
+            title="Climate"
+            variant="completa"
+            icon={<Thermometer size={15} />}
+            className="h-[18.5rem] md:col-span-3 lg:col-span-4"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.climate}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={() => selectCard('climate')}
+              onClimatePowerToggle={() => {
+                selectCard('climate');
+                actions.toggleClimatePower();
+              }}
+              onClimateTargetTempChange={(_, value) => {
+                selectCard('climate');
+                actions.setClimateTarget(value);
+              }}
+              onClimateTargetRangeChange={(_, low, high) => {
+                selectCard('climate');
+                actions.setClimateTargetRange(low, high);
+              }}
+              onClimateTargetHumidityChange={(_, value) => {
+                selectCard('climate');
+                actions.setClimateTargetHumidity(value);
+              }}
+              onClimateModeChange={(_, mode) => {
+                selectCard('climate');
+                actions.setClimateMode(mode);
+              }}
+              onClimateFanModeChange={(_, mode) => {
+                selectCard('climate');
+                actions.setClimateFanMode(mode);
+              }}
+              onClimatePresetModeChange={(_, mode) => {
+                selectCard('climate');
+                actions.setClimatePresetMode(mode);
+              }}
+              onClimateSwingModeChange={(_, mode) => {
+                selectCard('climate');
+                actions.setClimateSwingMode(mode);
+              }}
+              onClimateSwingHorizontalModeChange={(_, mode) => {
+                selectCard('climate');
+                actions.setClimateSwingHorizontalMode(mode);
+              }}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
 
-          {/* Lock Interactive Card */}
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="col-span-2 md:col-span-1 cursor-pointer">
-            <GlassCard className={`p-5 h-full transition-all duration-500 relative overflow-hidden ${!locked ? 'border-amber-500/50 bg-amber-500/10' : 'hover:border-white/20'}`}>
-              <div 
-                className="absolute inset-0 z-10" 
-                onClick={() => setLocked(!locked)}
-              />
-              <div className="flex justify-between items-start mb-6 relative z-0">
-                <div className={`p-3 rounded-xl transition-colors duration-300 ${locked ? 'bg-white/5 text-white/50' : 'bg-amber-500/20 text-amber-400'}`}>
-                  <Lock size={24} />
-                </div>
-              </div>
-              <div className="relative z-0">
-                <p className="font-medium text-white/90">Porta Ingresso</p>
-                <p className={`text-sm transition-colors duration-300 ${locked ? 'text-white/40' : 'text-amber-400'}`}>
-                  {locked ? 'Bloccata' : 'Sbloccata'}
-                </p>
-              </div>
-            </GlassCard>
-          </motion.div>
+          <DemoFrame
+            id="light"
+            title="Light"
+            variant="espandibile"
+            icon={<Lightbulb size={15} />}
+            className="h-[14rem] md:col-span-3 lg:col-span-4"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.light}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={() => {
+                selectCard('light');
+                actions.toggleLamp();
+              }}
+              onLightBrightnessChange={(_, value) => {
+                selectCard('light');
+                actions.setLampBrightness(value);
+              }}
+              onLightColorChange={(_, hs) => {
+                selectCard('light');
+                actions.setLampHsColor(hs);
+              }}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
 
-          {/* Climate Interactive Card */}
-          <motion.div className="col-span-2">
-            <GlassCard className="p-5 h-full hover:border-white/20 transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-orange-500/20 text-orange-400">
-                    <Thermometer size={20} />
-                  </div>
-                  <span className="font-medium text-white/90">Termostato</span>
-                </div>
-                <span className="text-xs font-medium px-2 py-1 rounded-md bg-orange-500/20 text-orange-400">Riscaldamento</span>
-              </div>
-              <div className="flex items-center justify-between mt-6">
-                <button 
-                  onClick={() => setTemp(prev => prev - 0.5)}
-                  className="w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 transition-colors"
-                >
-                  -
-                </button>
-                <div className="text-center">
-                  <span className="text-4xl font-light text-white">{temp.toFixed(1)}°</span>
-                  <p className="text-white/40 text-xs mt-1">Obiettivo</p>
-                </div>
-                <button 
-                  onClick={() => setTemp(prev => prev + 0.5)}
-                  className="w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 transition-colors"
-                >
-                  +
-                </button>
-              </div>
-            </GlassCard>
-          </motion.div>
+          <DemoFrame
+            id="camera"
+            title="Camera"
+            variant="contestuale"
+            icon={<Camera size={15} />}
+            className="h-[18.5rem] md:col-span-6 lg:col-span-4"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.camera}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={() => {
+                selectCard('camera');
+                setCameraLive((current) => !current);
+              }}
+              liveEntity={cameraEntity}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
 
-          {/* Alarm Interactive Card */}
-          <motion.div className="col-span-2 md:col-span-4">
-             <GlassCard className={`p-6 transition-all duration-500 ${alarmArmed ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-4 rounded-2xl ${alarmArmed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                      <ShieldAlert size={28} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-white">Allarme Casa</h3>
-                      <p className={`text-sm ${alarmArmed ? 'text-green-400' : 'text-red-400'}`}>
-                        {alarmArmed ? 'Inserito Totale - Nessuna anomalia' : 'Disinserito - Sistema in standby'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={() => setAlarmArmed(false)}
-                      className={`px-6 py-3 rounded-xl font-medium transition-colors text-sm ${!alarmArmed ? 'bg-white/10 text-white' : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'}`}
-                    >
-                      Disinserisci
-                    </button>
-                    <button 
-                      onClick={() => setAlarmArmed(true)}
-                      className={`px-6 py-3 rounded-xl font-medium transition-colors text-sm ${alarmArmed ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'}`}
-                    >
-                      Inserisci
-                    </button>
-                  </div>
-                </div>
-             </GlassCard>
-          </motion.div>
+          <DemoFrame
+            id="alarm"
+            title="Alarm"
+            variant="standard"
+            icon={<ShieldAlert size={15} />}
+            className="h-[13.25rem] md:col-span-3 lg:col-span-4"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.alarm}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={toggleAlarm}
+              onAlarmDisarm={() => {
+                selectCard('alarm');
+                setAlarmState('disarmed');
+              }}
+              onAlarmArm={(_, mode) => {
+                selectCard('alarm');
+                setAlarmState(mode === 'home' ? 'armed_home' : `armed_${mode}`);
+              }}
+              liveEntity={alarmEntity}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
 
+          <DemoFrame
+            id="sensor"
+            title="Sensor"
+            variant="standard"
+            icon={<Zap size={15} />}
+            className="mx-auto h-[10.5rem] w-full max-w-[15rem] md:col-span-3 lg:col-span-2"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.sensor}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              value={sensorValue}
+              sensorHistory={sensorHistory}
+              onClick={updateSensor}
+              liveEntity={sensorEntity}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
+
+          <DemoFrame
+            id="switch"
+            title="Switch"
+            variant="compact"
+            icon={<Power size={15} />}
+            className="h-[7rem] md:col-span-3 lg:col-span-3"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.switch}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={() => selectCard('switch')}
+              onSwitchToggle={toggleSwitch}
+              liveEntity={switchEntity}
+              switchConsumptionEntity={switchConsumptionEntity}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
+
+          <DemoFrame
+            id="lock"
+            title="Lock"
+            variant="compact"
+            icon={<Lock size={15} />}
+            className="h-[8.5rem] md:col-span-3 lg:col-span-3"
+            activeCard={activeCard}
+          >
+            <WidgetCardRenderer
+              widget={DEMO_WIDGETS.lock}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={toggleLock}
+              onLockToggle={toggleLock}
+              onLockOpen={() => {
+                selectCard('lock');
+                setLockState('open');
+              }}
+              liveEntity={lockEntity}
+              gridBreakpoint="lg"
+            />
+          </DemoFrame>
         </div>
       </div>
     </section>

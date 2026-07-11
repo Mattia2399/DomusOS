@@ -605,6 +605,7 @@ body {
   isolation: isolate;
   --profile-sheet-overlay: rgb(2 6 23 / 0.66);
   --profile-sheet-bg: linear-gradient(168deg, rgb(11 18 30 / 0.93) 0%, rgb(17 24 39 / 0.9) 100%);
+  --profile-sheet-page-bg: linear-gradient(168deg, rgb(8 13 24 / 0.985) 0%, rgb(16 23 36 / 0.98) 100%);
   --profile-sheet-border: rgb(255 255 255 / 0.14);
   --profile-sheet-border-strong: rgb(255 255 255 / 0.22);
   --profile-sheet-surface: rgb(255 255 255 / 0.08);
@@ -631,6 +632,7 @@ body {
 .dashboard-theme-light {
   --profile-sheet-overlay: rgb(15 23 42 / 0.36);
   --profile-sheet-bg: linear-gradient(166deg, rgb(255 255 255 / 0.95) 0%, rgb(242 247 255 / 0.93) 100%);
+  --profile-sheet-page-bg: linear-gradient(166deg, rgb(255 255 255 / 0.99) 0%, rgb(244 248 255 / 0.98) 100%);
   --profile-sheet-border: rgb(148 163 184 / 0.34);
   --profile-sheet-border-strong: rgb(148 163 184 / 0.5);
   --profile-sheet-surface: rgb(255 255 255 / 0.72);

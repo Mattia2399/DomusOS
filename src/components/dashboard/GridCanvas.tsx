@@ -111,6 +111,8 @@ type GridCanvasProps = {
   onWidgetMediaPrevious: (widget: Widget) => void;
   onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
+  onWidgetMediaShuffle: (widget: Widget) => void;
+  onWidgetMediaRepeat: (widget: Widget) => void;
   onWidgetMediaSelectSource: (widget: Widget, source: string) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -118,6 +120,8 @@ type GridCanvasProps = {
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => boolean | void;
   onWidgetLockOpen: (widget: Widget) => void;
+  onWidgetCoverPositionChange: (widget: Widget, position: number) => void;
+  onWidgetCoverTiltPositionChange: (widget: Widget, position: number) => void;
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onSectionsLayoutChange: (next: GridItem[]) => void;
@@ -1069,6 +1073,8 @@ export function GridCanvas({
   onWidgetMediaPrevious,
   onWidgetMediaNext,
   onWidgetMediaSeek,
+  onWidgetMediaShuffle,
+  onWidgetMediaRepeat,
   onWidgetMediaSelectSource,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
@@ -1076,6 +1082,8 @@ export function GridCanvas({
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
+  onWidgetCoverPositionChange,
+  onWidgetCoverTiltPositionChange,
   onOpenMembersPanel,
   onWidgetLayoutChange,
   onSectionsLayoutChange,
@@ -2283,6 +2291,8 @@ export function GridCanvas({
                 onWidgetMediaPrevious={onWidgetMediaPrevious}
                 onWidgetMediaNext={onWidgetMediaNext}
                 onWidgetMediaSeek={onWidgetMediaSeek}
+                onWidgetMediaShuffle={onWidgetMediaShuffle}
+                onWidgetMediaRepeat={onWidgetMediaRepeat}
                 onWidgetMediaSelectSource={onWidgetMediaSelectSource}
                 onWidgetAlarmDisarm={onWidgetAlarmDisarm}
                 onWidgetAlarmArm={onWidgetAlarmArm}
@@ -2290,6 +2300,8 @@ export function GridCanvas({
                 onWidgetVacuumReturnToBase={onWidgetVacuumReturnToBase}
                 onWidgetLockToggle={onWidgetLockToggle}
                 onWidgetLockOpen={onWidgetLockOpen}
+                onWidgetCoverPositionChange={onWidgetCoverPositionChange}
+                onWidgetCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
                 onOpenMembersPanel={onOpenMembersPanel}
                 onWidgetLayoutChange={onWidgetLayoutChange}
                 onStackBreakpointLayoutChange={onStackBreakpointLayoutChange}
@@ -2354,6 +2366,8 @@ export function GridCanvas({
       onWidgetClimateTargetHumidityChange,
       onWidgetClimateTargetRangeChange,
       onWidgetClimateTargetTempChange,
+      onWidgetCoverPositionChange,
+      onWidgetCoverTiltPositionChange,
       onWidgetLayoutChange,
       onStackBreakpointLayoutChange,
       onWidgetLockOpen,
@@ -2361,7 +2375,9 @@ export function GridCanvas({
       onOpenMembersPanel,
       onWidgetMediaPrevious,
       onWidgetMediaNext,
+      onWidgetMediaRepeat,
       onWidgetMediaSeek,
+      onWidgetMediaShuffle,
       onWidgetMediaSelectSource,
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
@@ -2704,6 +2720,8 @@ export function GridCanvas({
                       onMediaPrevious={onWidgetMediaPrevious}
                       onMediaNext={onWidgetMediaNext}
                       onMediaSeek={onWidgetMediaSeek}
+                      onMediaShuffle={onWidgetMediaShuffle}
+                      onMediaRepeat={onWidgetMediaRepeat}
                       onMediaSelectSource={onWidgetMediaSelectSource}
                       onAlarmDisarm={onWidgetAlarmDisarm}
                       onAlarmArm={onWidgetAlarmArm}
@@ -2711,6 +2729,8 @@ export function GridCanvas({
                       onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                       onLockToggle={onWidgetLockToggle}
                       onLockOpen={onWidgetLockOpen}
+                      onCoverPositionChange={onWidgetCoverPositionChange}
+                      onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
                       onMembersOpenPanel={() => onOpenMembersPanel()}
                       liveEntity={haStates[widget.entityId]}
                       switchConsumptionEntity={

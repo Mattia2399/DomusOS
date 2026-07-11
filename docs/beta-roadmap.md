@@ -1,6 +1,6 @@
 ﻿# Beta roadmap e go-to-market
 
-Aggiornata: 2026-07-08
+Aggiornata: 2026-07-10
 
 Obiettivo: arrivare a una beta vendibile di HA Dashboard Builder senza inseguire tutte le card subito. La priorita e' distribuire un nucleo stabile, bello e sicuro, raccogliere feedback reali e iniziare a validare il prezzo.
 
@@ -28,14 +28,14 @@ La prima beta non deve promettere "supporto perfetto per tutto". Deve promettere
 | Climate | Buono per beta | Overlay modalita, controlli supportati, skeleton. |
 | Alarm | Buono ma security-critical | Card e pannello molto avanzati; richiede test manuale accurato. |
 | Lock | Buono ma security-critical | Card premium, slider/button, batteria, pannello aggiornato. |
+| Media | Buono per beta | Compatibilita media player estesa, varianti mini/compact/standard/full, skeleton, mock multi-stato, pannello contestuale e multiroom aggiornati. |
+| Cover | Buono per beta | Stati/device class/capability HA, varianti mini/compact/standard/full, skeleton, mock multi-stato, pannello con posizione e tilt completo. |
 | Grid/layout | Quasi beta | Struttura responsive buona; serve pipeline test pulita. |
 
 ### Card ancora fuori dal nuovo standard
 
 | Area | Priorita | Motivo |
 | --- | --- | --- |
-| Cover | Alta dopo beta base | Simile a Lock/Climate; molto utile in smart home. |
-| Media | Media-alta | Alto valore percepito, ma complessa. |
 | Camera | Media-alta | Molto vendibile, ma impatta privacy e performance. |
 | Vacuum | Media | Bella feature, meno universale. |
 | Weather | Media | Utile, ma non blocca la monetizzazione iniziale. |
@@ -213,14 +213,12 @@ Scelta consigliata:
 
 Ordine consigliato:
 
-1. Cover
-2. Media
-3. Camera
-4. Vacuum
-5. Weather
-6. Scenes
-7. Members
-8. Greeting/GreetingWeather
+1. Camera
+2. Vacuum
+3. Weather
+4. Scenes
+5. Members
+6. Greeting/GreetingWeather
 
 Regola: ogni card nuova deve seguire il modello delle ultime card:
 
@@ -282,7 +280,7 @@ Promessa:
 - comoda da modificare;
 - pronta per desktop/tablet/mobile;
 - integrata con Home Assistant;
-- beta focalizzata su Sensor, Light, Switch, Climate, Alarm e Lock.
+- beta focalizzata su Sensor, Light, Switch, Climate, Alarm, Lock, Media e Cover.
 
 Non promettere:
 
@@ -320,7 +318,7 @@ Struttura consigliata:
    - integrazione HA.
 
 4. Card supportate
-   - Sensor, Light, Switch, Climate, Alarm, Lock.
+   - Sensor, Light, Switch, Climate, Alarm, Lock, Media, Cover.
 
 5. Sicurezza e privacy
    - app beta;

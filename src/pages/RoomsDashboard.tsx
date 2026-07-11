@@ -58,6 +58,7 @@ import { useDashboardState } from '../hooks/useDashboardState';
 import type { HaArea } from '../hooks/useHaLiveConnection';
 import type { DashboardSection, SceneKey, Widget, WidgetKind } from '../types/dashboardModels';
 import type { MockEntityState, MockEntityStateMap } from '../types/ha';
+import { translateMediaPlayerState } from '../utils/mediaPlayerState';
 
 const CUSTOM_ROOMS_STORAGE_KEY = 'ha.dashboard.rooms.customRooms.v1';
 const ACTIVE_ROOM_STORAGE_KEY = 'ha.dashboard.rooms.activeRoomId.v1';
@@ -90,6 +91,14 @@ const ROOM_SWIPER_WHEEL_LOCK_MS = 360;
 const ROOM_SWIPER_SCROLLER_CLASS =
   'flex cursor-grab snap-x snap-mandatory select-none overflow-x-auto overscroll-x-contain [scrollbar-width:none] [touch-action:pan-y] active:cursor-grabbing [&::-webkit-scrollbar]:hidden';
 const ROOM_SECTION_PREVIEW_LIMIT = 4;
+const ROOM_SENSOR_PREVIEW_LIMIT_BY_BREAKPOINT: Record<GridEngineBreakpoint, number> = {
+  '2xl': 6,
+  xl: 6,
+  lg: 4,
+  md: 4,
+  sm: 4,
+  xs: 3,
+};
 const ROOM_ACCESSORY_PREVIEW_LIMIT = 8;
 const ROOM_LIGHT_OPTIMISTIC_TTL_MS = 5000;
 const ROOM_QUICK_SLIDER_DRAFT_TTL_MS = 2500;
@@ -346,6 +355,7 @@ type HiddenRoomEntitiesByRoom = Record<string, string[]>;
 type RoomsDashboardProps = {
   suppressBrowserNavigation?: boolean;
   navigationRoute?: string;
+  isLoading?: boolean;
   haConnected: boolean;
   canManageRooms?: boolean;
   haAreas: HaArea[];
@@ -833,11 +843,8 @@ function translateEntityStateValue(domain: string, value: string) {
     if (normalized === 'off') return 'Spenta';
   }
   if (domain === 'media_player') {
-    if (normalized === 'playing') return 'In riproduzione';
-    if (normalized === 'paused') return 'In pausa';
-    if (normalized === 'idle') return 'Inattivo';
-    if (normalized === 'standby') return 'Standby';
-    if (normalized === 'off') return 'Spento';
+    const label = translateMediaPlayerState(value, normalized === 'unknown' ? 'Sconosciuto' : '');
+    return label || null;
   }
   if (domain === 'cover') {
     if (normalized === 'open') return 'Aperta';
@@ -1011,6 +1018,16 @@ type RoomWidgetGridOptions = {
 };
 
 function resolveRoomSectionGridCols(sectionId: string | undefined, breakpoint: GridEngineBreakpoint, fallbackCols: number) {
+  if (sectionId === 'sensors') {
+    if (breakpoint === 'xs' || breakpoint === 'sm') {
+      return 2;
+    }
+    if (breakpoint === 'md' || breakpoint === 'lg') {
+      return 4;
+    }
+    return 6;
+  }
+
   if (sectionId === 'lights' || sectionId === 'switches') {
     if (breakpoint === 'xs' || breakpoint === 'sm') {
       return 2;
@@ -1029,6 +1046,19 @@ function resolveRoomSectionGridCols(sectionId: string | undefined, breakpoint: G
 }
 
 function resolveRoomSectionGridOptions(sectionId: string | undefined, breakpoint: GridEngineBreakpoint): RoomWidgetGridOptions | undefined {
+  if (sectionId === 'sensors') {
+    return {
+      resolveSpan: (widget, span) =>
+        widget.kind === 'sensor'
+          ? {
+              ...span,
+              w: 2,
+              h: 2,
+            }
+          : span,
+    };
+  }
+
   if (sectionId === 'switches' && (breakpoint === 'xs' || breakpoint === 'sm')) {
     return {
       resolveSpan: (widget, span) => (widget.kind === 'switch' ? { ...span, w: 1 } : span),
@@ -1042,6 +1072,10 @@ function resolveRoomSectionGridOptions(sectionId: string | undefined, breakpoint
   }
 
   return undefined;
+}
+
+function resolveRoomSensorPreviewLimit(breakpoint: GridEngineBreakpoint) {
+  return ROOM_SENSOR_PREVIEW_LIMIT_BY_BREAKPOINT[breakpoint] ?? ROOM_SECTION_PREVIEW_LIMIT;
 }
 
 function resolveRoomWidgetGridSpan(
@@ -1732,6 +1766,7 @@ function ClimateAction({
 }
 
 export function RoomsDashboard({
+  isLoading = false,
   haConnected,
   canManageRooms = false,
   haAreas,
@@ -1786,6 +1821,8 @@ export function RoomsDashboard({
   const [isCreatingFloor, setIsCreatingFloor] = React.useState(false);
   const [floorCreateError, setFloorCreateError] = React.useState<string | null>(null);
   const [isLoadingAreaMetadata, setIsLoadingAreaMetadata] = React.useState(false);
+  const [hasLoadedRegistryMetadata, setHasLoadedRegistryMetadata] = React.useState(false);
+  const [hasLoadedFloorMetadata, setHasLoadedFloorMetadata] = React.useState(false);
   const [entityAreaByEntityId, setEntityAreaByEntityId] = React.useState<Record<string, string>>({});
   const [registryEntityEntries, setRegistryEntityEntries] = React.useState<HaRegistryEntityEntry[]>([]);
   const [registryDeviceEntries, setRegistryDeviceEntries] = React.useState<HaRegistryDeviceEntry[]>([]);
@@ -2073,19 +2110,34 @@ export function RoomsDashboard({
       setEntityAreaByEntityId({});
       setRegistryEntityEntries([]);
       setRegistryDeviceEntries([]);
+      setHasLoadedRegistryMetadata(true);
       return;
     }
     let cancelled = false;
+    setHasLoadedRegistryMetadata(false);
 
     const load = async () => {
-      const snapshot = await fetchRegistrySnapshot(onCallApi);
-      if (cancelled) {
-        return;
+      try {
+        const snapshot = await fetchRegistrySnapshot(onCallApi);
+        if (cancelled) {
+          return;
+        }
+        setEntityAreaByEntityId(snapshot.entityAreaByEntityId);
+        setRegistryEntityEntries(snapshot.registryEntities);
+        setRegistryDeviceEntries(snapshot.registryDevices);
+        setRegistryLoadAt(Date.now());
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        setEntityAreaByEntityId({});
+        setRegistryEntityEntries([]);
+        setRegistryDeviceEntries([]);
+      } finally {
+        if (!cancelled) {
+          setHasLoadedRegistryMetadata(true);
+        }
       }
-      setEntityAreaByEntityId(snapshot.entityAreaByEntityId);
-      setRegistryEntityEntries(snapshot.registryEntities);
-      setRegistryDeviceEntries(snapshot.registryDevices);
-      setRegistryLoadAt(Date.now());
     };
 
     void load();
@@ -2110,11 +2162,13 @@ export function RoomsDashboard({
     if (!haConnected || !onCallApi) {
       setHaFloors([]);
       setIsLoadingAreaMetadata(false);
+      setHasLoadedFloorMetadata(true);
       return;
     }
 
     let cancelled = false;
     setIsLoadingAreaMetadata(true);
+    setHasLoadedFloorMetadata(false);
 
     const load = async () => {
       const floorPayload = await onCallApi({ type: 'config/floor_registry/list' }, { reportError: false });
@@ -2123,12 +2177,14 @@ export function RoomsDashboard({
       }
       setHaFloors(parseHaFloorList(floorPayload));
       setIsLoadingAreaMetadata(false);
+      setHasLoadedFloorMetadata(true);
     };
 
     void load().catch(() => {
       if (!cancelled) {
         setHaFloors([]);
         setIsLoadingAreaMetadata(false);
+        setHasLoadedFloorMetadata(true);
       }
     });
 
@@ -4443,38 +4499,47 @@ export function RoomsDashboard({
       <section
         key={gridArea}
         className={cn(
-          'rooms-surface flex min-h-[10rem] min-w-0 flex-col justify-between p-4',
+          'rooms-surface flex min-h-[12rem] min-w-0 flex-col p-3 sm:p-4',
           isMobileOutsideGrid && 'gap-4',
           className,
         )}
-        style={isMobileOutsideGrid ? undefined : { gridArea }}
+        style={isMobileOutsideGrid ? undefined : { gridArea, alignSelf: 'start' }}
       >
-        <div>
-          {editTarget ? (
-            <div className="mb-4">
-              {renderRoomSectionHeader(editTarget.label, 0, {
-                onOpen: canOpenActiveHaRoomSection ? () => startEditRoomSection(editTarget) : undefined,
-              })}
-            </div>
-          ) : (
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/38">Non configurato</p>
-          )}
-          <h2 className="text-sm font-semibold leading-snug text-white/82">{title}</h2>
-          <p className="mt-2 text-xs leading-relaxed text-white/42">{description}</p>
-        </div>
         {editTarget ? (
-          <button
-            type="button"
-            onClick={() => openSectionDeviceAddSheet(editTarget)}
-            disabled={!canOpenEmptySection}
-            className="mt-5 inline-flex w-fit items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.06] px-3.5 py-2 text-xs font-semibold text-white/72 shadow-sm transition-all hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
-            title="Aggiungi dispositivi"
-          >
-            Aggiungi dispositivi
-          </button>
+          <div className="mb-3">
+            {renderRoomSectionHeader(editTarget.label, 0, {
+              onOpen: canOpenActiveHaRoomSection ? () => startEditRoomSection(editTarget) : undefined,
+            })}
+          </div>
         ) : (
-          <div className="mt-6 h-1.5 w-14 rounded-full bg-white/[0.06]" />
+          <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/38">Non configurato</p>
         )}
+        <div className="relative flex min-h-[8.5rem] flex-1 items-center justify-center overflow-hidden rounded-[1.25rem] border border-white/[0.035] bg-white/[0.018] px-4 py-5 text-center">
+          <div aria-hidden="true" className="absolute inset-0 opacity-45">
+            <div className="absolute left-4 right-4 top-4 h-8 rounded-2xl border border-white/[0.035] bg-white/[0.025]" />
+            <div className="absolute left-4 top-16 h-12 w-[34%] rounded-2xl border border-white/[0.03] bg-white/[0.018]" />
+            <div className="absolute left-[40%] right-4 top-16 h-12 rounded-2xl border border-white/[0.03] bg-white/[0.016]" />
+            <div className="absolute bottom-4 left-6 h-2 w-20 rounded-full bg-white/[0.035]" />
+            <div className="absolute bottom-4 right-6 h-2 w-14 rounded-full bg-white/[0.025]" />
+          </div>
+          <div className="relative z-10 flex max-w-xs flex-col items-center">
+            <h2 className="text-sm font-semibold leading-snug text-white/82">{title}</h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-white/38">{description}</p>
+            {editTarget ? (
+              <button
+                type="button"
+                onClick={() => openSectionDeviceAddSheet(editTarget)}
+                disabled={!canOpenEmptySection}
+                className="mt-4 inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.075] px-3.5 py-2 text-xs font-semibold text-white/76 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+                title="Aggiungi dispositivi"
+              >
+                Aggiungi dispositivi
+              </button>
+            ) : (
+              <div className="mt-4 h-1.5 w-14 rounded-full bg-white/[0.06]" />
+            )}
+          </div>
+        </div>
       </section>
     );
   };
@@ -6490,6 +6555,29 @@ export function RoomsDashboard({
     );
   };
 
+  const isRoomsInitialLoading =
+    isLoading || (haConnected && Boolean(onCallApi) && (!hasLoadedRegistryMetadata || !hasLoadedFloorMetadata));
+
+  if (isRoomsInitialLoading) {
+    return (
+      <div className="rooms-dashboard dashboard-page-scroll" aria-busy="true">
+        <div className="dashboard-page-content dashboard-page-content-wide flex min-h-[calc(100dvh-5rem)] items-center justify-center">
+          <div className="flex min-w-0 flex-col items-center gap-4 text-center">
+            <div className="relative h-16 w-16">
+              <div className="absolute inset-0 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-2xl" />
+              <div className="absolute inset-3 rounded-full border-2 border-white/12 border-t-white/70 animate-spin" />
+              <House className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-white/82" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white/82">Carico stanze</p>
+              <p className="mt-1 text-xs text-white/42">Sincronizzo aree e dispositivi</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rooms-dashboard dashboard-page-scroll">
       <div
@@ -6742,7 +6830,7 @@ export function RoomsDashboard({
               'clima',
               'Nessun clima configurato per questa stanza',
               'Associa un termostato, una stufa o un climatizzatore alla stanza per controllarlo da qui.',
-              'min-h-[540px] xl:min-h-[600px]',
+              undefined,
               {
                 kind: 'widgets',
                 id: 'clima',
@@ -6759,6 +6847,7 @@ export function RoomsDashboard({
           gridArea: 'sensors',
           emptyTitle: 'Nessun sensore configurato per questa stanza',
           emptyDescription: 'Temperatura, umidita e altri sensori ambientali appariranno in questa area.',
+          previewLimit: resolveRoomSensorPreviewLimit(roomsGridBreakpoint),
         })}
 
         {renderWidgetCluster(securityCluster, {

@@ -1028,7 +1028,7 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
             : widget.kind === 'vacuum'
               ? 3
               : widget.kind === 'cover'
-                ? 2
+                ? 1
                 : widget.kind === 'members'
                   ? 2
               : 1;

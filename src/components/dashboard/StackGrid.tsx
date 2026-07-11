@@ -731,6 +731,8 @@ type StackGridProps = {
   onWidgetMediaPrevious: (widget: Widget) => void;
   onWidgetMediaNext: (widget: Widget) => void;
   onWidgetMediaSeek: (widget: Widget, position: number) => void;
+  onWidgetMediaShuffle: (widget: Widget) => void;
+  onWidgetMediaRepeat: (widget: Widget) => void;
   onWidgetMediaSelectSource: (widget: Widget, source: string) => void;
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
@@ -738,6 +740,8 @@ type StackGridProps = {
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => boolean | void;
   onWidgetLockOpen: (widget: Widget) => void;
+  onWidgetCoverPositionChange: (widget: Widget, position: number) => void;
+  onWidgetCoverTiltPositionChange: (widget: Widget, position: number) => void;
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onStackBreakpointLayoutChange: (sectionId: string, breakpoint: GridEngineBreakpoint, next: GridItem[]) => void;
@@ -789,6 +793,8 @@ function StackGridComponent({
   onWidgetMediaPrevious,
   onWidgetMediaNext,
   onWidgetMediaSeek,
+  onWidgetMediaShuffle,
+  onWidgetMediaRepeat,
   onWidgetMediaSelectSource,
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
@@ -796,6 +802,8 @@ function StackGridComponent({
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
+  onWidgetCoverPositionChange,
+  onWidgetCoverTiltPositionChange,
   onOpenMembersPanel,
   onWidgetLayoutChange,
   onStackBreakpointLayoutChange,
@@ -1870,6 +1878,8 @@ function StackGridComponent({
                         onMediaPrevious={onWidgetMediaPrevious}
                         onMediaNext={onWidgetMediaNext}
                         onMediaSeek={onWidgetMediaSeek}
+                        onMediaShuffle={onWidgetMediaShuffle}
+                        onMediaRepeat={onWidgetMediaRepeat}
                         onMediaSelectSource={onWidgetMediaSelectSource}
                         onAlarmDisarm={onWidgetAlarmDisarm}
                         onAlarmArm={onWidgetAlarmArm}
@@ -1877,6 +1887,8 @@ function StackGridComponent({
                         onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                         onLockToggle={onWidgetLockToggle}
                         onLockOpen={onWidgetLockOpen}
+                        onCoverPositionChange={onWidgetCoverPositionChange}
+                        onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
                         onMembersOpenPanel={() => onOpenMembersPanel()}
                         liveEntity={haStates[widget.entityId]}
                         switchConsumptionEntity={
@@ -2021,6 +2033,8 @@ function StackGridComponent({
                             onMediaPrevious={onWidgetMediaPrevious}
                             onMediaNext={onWidgetMediaNext}
                             onMediaSeek={onWidgetMediaSeek}
+                            onMediaShuffle={onWidgetMediaShuffle}
+                            onMediaRepeat={onWidgetMediaRepeat}
                             onMediaSelectSource={onWidgetMediaSelectSource}
                             onAlarmDisarm={onWidgetAlarmDisarm}
                             onAlarmArm={onWidgetAlarmArm}
@@ -2028,6 +2042,8 @@ function StackGridComponent({
                             onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                             onLockToggle={onWidgetLockToggle}
                             onLockOpen={onWidgetLockOpen}
+                            onCoverPositionChange={onWidgetCoverPositionChange}
+                            onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
                             onMembersOpenPanel={() => onOpenMembersPanel()}
                             liveEntity={haStates[overlayRuntimeWidget.entityId]}
                             switchConsumptionEntity={

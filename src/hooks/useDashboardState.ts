@@ -115,6 +115,7 @@ export interface DashboardStateShape {
     supportsSeek?: boolean;
     supportsVolume?: boolean;
     supportsMute?: boolean;
+    supportsVolumeStep?: boolean;
     supportsNextTrack?: boolean;
     supportsPreviousTrack?: boolean;
     supportsPower?: boolean;
@@ -122,8 +123,20 @@ export interface DashboardStateShape {
     supportsRepeat?: boolean;
     supportsSelectSource?: boolean;
     supportsGrouping?: boolean;
+    supportsStop?: boolean;
+    supportsClearPlaylist?: boolean;
+    supportsSelectSoundMode?: boolean;
+    supportsPlayMedia?: boolean;
+    supportsBrowseMedia?: boolean;
+    supportsSearchMedia?: boolean;
+    supportsAnnounce?: boolean;
+    supportsEnqueue?: boolean;
     shuffleEnabled?: boolean;
     repeatMode?: 'off' | 'all' | 'one';
+    soundMode?: string;
+    soundModeList?: string[];
+    volumeStep?: number;
+    rawAttributes?: Record<string, unknown>;
     outputDevices?: Array<{
       id: string;
       name: string;
@@ -193,15 +206,15 @@ const FAVORITES_SEED: FavoriteDevice[] = [
 ];
 
 const SPEAKER_OUTPUT_DEVICES_SEED = [
-  { id: 'living_room_speaker', name: 'Living Room Speaker', subtitle: 'Wi-Fi', kind: 'speaker' as const },
-  { id: 'kitchen_speaker', name: 'Kitchen Speaker', subtitle: 'AirPlay', kind: 'speaker' as const },
-  { id: 'bedroom_tv', name: 'Bedroom TV', subtitle: 'HDMI ARC', kind: 'tv' as const },
+  { id: 'living_room_speaker', name: 'Diffusore soggiorno', subtitle: 'Wi-Fi', kind: 'speaker' as const },
+  { id: 'kitchen_speaker', name: 'Diffusore cucina', subtitle: 'AirPlay', kind: 'speaker' as const },
+  { id: 'bedroom_tv', name: 'TV camera', subtitle: 'HDMI ARC', kind: 'tv' as const },
 ];
 
 const SPEAKER_MULTIROOM_SEED = [
-  { id: 'media_player.kitchen_speaker', name: 'Kitchen Speaker', subtitle: 'Cucina', kind: 'speaker' as const, grouped: false },
-  { id: 'media_player.bedroom_speaker', name: 'Bedroom Speaker', subtitle: 'Camera', kind: 'speaker' as const, grouped: false },
-  { id: 'media_player.living_room_tv', name: 'Living Room TV', subtitle: 'Soggiorno', kind: 'tv' as const, grouped: false },
+  { id: 'media_player.kitchen_speaker', name: 'Diffusore cucina', subtitle: 'Cucina', kind: 'speaker' as const, grouped: false },
+  { id: 'media_player.bedroom_speaker', name: 'Diffusore camera', subtitle: 'Camera', kind: 'speaker' as const, grouped: false },
+  { id: 'media_player.living_room_tv', name: 'TV soggiorno', subtitle: 'Soggiorno', kind: 'tv' as const, grouped: false },
 ];
 
 const CLIMATE_DEMO_MIN_TEMP = 16;
@@ -1434,6 +1447,7 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
         supportsSeek: true,
         supportsVolume: true,
         supportsMute: true,
+        supportsVolumeStep: true,
         supportsNextTrack: true,
         supportsPreviousTrack: true,
         supportsPower: true,
@@ -1441,8 +1455,45 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
         supportsRepeat: true,
         supportsSelectSource: true,
         supportsGrouping: true,
+        supportsStop: true,
+        supportsClearPlaylist: true,
+        supportsSelectSoundMode: true,
+        supportsPlayMedia: true,
+        supportsBrowseMedia: true,
+        supportsSearchMedia: true,
+        supportsAnnounce: true,
+        supportsEnqueue: true,
         shuffleEnabled: speakerShuffleEnabled,
         repeatMode: speakerRepeatMode,
+        soundMode: 'Musica',
+        soundModeList: ['Musica', 'Film', 'Notte', 'Voce'],
+        volumeStep: 0.05,
+        rawAttributes: {
+          media_content_id: 'mock://media/lofi-focus-session',
+          media_content_type: 'music',
+          media_title: 'Sessione focus lo-fi',
+          media_artist: 'Dashboard Studio',
+          media_album_name: 'Album demo',
+          app_name: 'Music Assistant',
+          source: speakerSelectedOutputDeviceId,
+          sound_mode: 'Musica',
+          sound_mode_list: ['Musica', 'Film', 'Notte', 'Voce'],
+          volume_step: 0.05,
+          media_library: [
+            {
+              title: 'Sessione focus lo-fi',
+              subtitle: 'Dashboard Studio',
+              media_content_id: 'mock://media/lofi-focus-session',
+              media_content_type: 'music',
+            },
+            {
+              title: 'Playlist serale',
+              subtitle: 'Playlist',
+              media_content_id: 'mock://playlist/evening',
+              media_content_type: 'playlist',
+            },
+          ],
+        },
         outputDevices: speakerOutputDevices,
         selectedOutputDeviceId: speakerSelectedOutputDeviceId,
         multiroomDevices: speakerMultiroomDevices,

@@ -5,7 +5,7 @@ import { ActiveDevice } from './types';
 import { ClimateControls } from './ClimateControls';
 import { LightControls } from './LightControls';
 import { CameraControls, type CameraPtzDirection } from './CameraControls';
-import { MediaControls } from './MediaControls';
+import { MediaControls, type MediaPlayRequest } from './MediaControls';
 import { SensorControls } from './SensorControls';
 import { WeatherControls } from './WeatherControls';
 import { AlarmControls } from './AlarmControls';
@@ -132,6 +132,7 @@ interface ContextSidebarProps {
     supportsSeek?: boolean;
     supportsVolume?: boolean;
     supportsMute?: boolean;
+    supportsVolumeStep?: boolean;
     supportsNextTrack?: boolean;
     supportsPreviousTrack?: boolean;
     supportsPower?: boolean;
@@ -139,8 +140,19 @@ interface ContextSidebarProps {
     supportsRepeat?: boolean;
     supportsSelectSource?: boolean;
     supportsGrouping?: boolean;
+    supportsStop?: boolean;
+    supportsClearPlaylist?: boolean;
+    supportsSelectSoundMode?: boolean;
+    supportsPlayMedia?: boolean;
+    supportsBrowseMedia?: boolean;
+    supportsSearchMedia?: boolean;
+    supportsAnnounce?: boolean;
+    supportsEnqueue?: boolean;
     shuffleEnabled?: boolean;
     repeatMode?: MediaRepeatMode;
+    soundMode?: string;
+    soundModeList?: string[];
+    volumeStep?: number;
     outputDevices?: Array<{
       id: string;
       name: string;
@@ -233,7 +245,10 @@ interface ContextSidebarProps {
     supportsClose?: boolean;
     supportsStop?: boolean;
     supportsSetPosition?: boolean;
+    supportsOpenTilt?: boolean;
+    supportsCloseTilt?: boolean;
     supportsSetTiltPosition?: boolean;
+    supportsStopTilt?: boolean;
     rawAttributes?: Record<string, unknown>;
   };
   weatherConfig?: {
@@ -280,6 +295,10 @@ interface ContextSidebarProps {
     toggleSpeakerMute: () => void;
     toggleSpeakerShuffle: () => void;
     cycleSpeakerRepeatMode: () => void;
+    stopSpeakerPlayback?: () => void;
+    clearSpeakerPlaylist?: () => void;
+    selectSpeakerSoundMode?: (soundMode: string) => void;
+    playSpeakerMedia?: (request: MediaPlayRequest) => void;
     selectSpeakerOutputDevice: (deviceId: string) => void;
     toggleSpeakerGroupMember: (deviceId: string, shouldJoin: boolean) => void;
     disarmAlarm: (code?: string, options?: AlarmActionAuthOptions) => boolean | void | Promise<boolean | void>;
@@ -305,6 +324,9 @@ interface ContextSidebarProps {
     closeCover: () => void;
     stopCover: () => void;
     setCoverPosition?: (position: number) => void;
+    openCoverTilt?: () => void;
+    closeCoverTilt?: () => void;
+    stopCoverTilt?: () => void;
     setCoverTiltPosition?: (position: number) => void;
     moveCameraPtz?: (direction: CameraPtzDirection) => void;
     stopCameraPtz?: () => void;
@@ -550,6 +572,7 @@ export function ContextSidebar({
           supportsSeek={speaker.supportsSeek}
           supportsVolume={speaker.supportsVolume}
           supportsMute={speaker.supportsMute}
+          supportsVolumeStep={speaker.supportsVolumeStep}
           supportsNextTrack={speaker.supportsNextTrack}
           supportsPreviousTrack={speaker.supportsPreviousTrack}
           supportsPower={speaker.supportsPower}
@@ -557,8 +580,19 @@ export function ContextSidebar({
           supportsRepeat={speaker.supportsRepeat}
           supportsSelectSource={speaker.supportsSelectSource}
           supportsGrouping={speaker.supportsGrouping}
+          supportsStop={speaker.supportsStop}
+          supportsClearPlaylist={speaker.supportsClearPlaylist}
+          supportsSelectSoundMode={speaker.supportsSelectSoundMode}
+          supportsPlayMedia={speaker.supportsPlayMedia}
+          supportsBrowseMedia={speaker.supportsBrowseMedia}
+          supportsSearchMedia={speaker.supportsSearchMedia}
+          supportsAnnounce={speaker.supportsAnnounce}
+          supportsEnqueue={speaker.supportsEnqueue}
           shuffleEnabled={speaker.shuffleEnabled}
           repeatMode={speaker.repeatMode}
+          soundMode={speaker.soundMode}
+          soundModeList={speaker.soundModeList}
+          volumeStep={speaker.volumeStep}
           outputDevices={speaker.outputDevices}
           selectedOutputDeviceId={speaker.selectedOutputDeviceId}
           multiroomDevices={speaker.multiroomDevices}
@@ -572,6 +606,10 @@ export function ContextSidebar({
           onToggleMute={actions.toggleSpeakerMute}
           onToggleShuffle={actions.toggleSpeakerShuffle}
           onCycleRepeatMode={actions.cycleSpeakerRepeatMode}
+          onStop={actions.stopSpeakerPlayback}
+          onClearPlaylist={actions.clearSpeakerPlaylist}
+          onSelectSoundMode={actions.selectSpeakerSoundMode}
+          onPlayMedia={actions.playSpeakerMedia}
           onSelectOutputDevice={actions.selectSpeakerOutputDevice}
           onToggleMultiroomDevice={actions.toggleSpeakerGroupMember}
         />
@@ -652,6 +690,9 @@ export function ContextSidebar({
           onClose={actions.closeCover}
           onStop={actions.stopCover}
           onSetPosition={actions.setCoverPosition}
+          onOpenTilt={actions.openCoverTilt}
+          onCloseTilt={actions.closeCoverTilt}
+          onStopTilt={actions.stopCoverTilt}
           onSetTiltPosition={actions.setCoverTiltPosition}
         />
       ) : null}

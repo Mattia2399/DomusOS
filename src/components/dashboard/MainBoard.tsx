@@ -18,6 +18,10 @@ import { RightSidebarManager } from './RightSidebarManager';
 import { GridCanvas } from './GridCanvas';
 import type { WidgetDisplayMetrics } from '../widgets/widgetDisplayVariant';
 import { createHomeAlarmMock, HOME_ALARM_MOCK_ENTITY_ID } from '../widgets/alarmMock';
+import {
+  createMediaPlayerStateMocks,
+} from '../widgets/mediaMock';
+import { createCoverStateMocks } from '../widgets/coverMock';
 import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
 import { Menu, Plus, X } from 'lucide-react';
 import {
@@ -25,6 +29,7 @@ import {
   setActiveWidgetTypeLayoutOverrides,
 } from './dashboardBreakpointConfig';
 import type { CameraPtzDirection } from '../settings/CameraControls';
+import type { MediaPlayRequest } from '../settings/MediaControls';
 import { useNotifications } from '../../context/NotificationProvider';
 import {
   ProfilePanel,
@@ -115,19 +120,31 @@ import {
 import {
   clampPercent,
   COVER_FEATURE_CLOSE,
+  COVER_FEATURE_CLOSE_TILT,
   COVER_FEATURE_OPEN,
+  COVER_FEATURE_OPEN_TILT,
   COVER_FEATURE_SET_POSITION,
   COVER_FEATURE_SET_TILT_POSITION,
   COVER_FEATURE_STOP,
+  COVER_FEATURE_STOP_TILT,
+  coverSupportsClose,
+  coverSupportsCloseTilt,
+  coverSupportsOpen,
+  coverSupportsOpenTilt,
   coverSupportsSetPosition,
+  coverSupportsSetTiltPosition,
   coverSupportsStop,
+  coverSupportsStopTilt,
   coverSupportsTilt,
   normalizeCoverState,
   resolveCoverPosition,
+  resolveCoverPositionAttribute,
   resolveCoverSupportedFeatures,
+  resolveCoverTiltAttribute,
   resolveCoverTiltPosition,
   translateCoverState,
 } from '../../utils/coverUtils';
+import { normalizeMediaPlayerStateKey, translateMediaPlayerState } from '../../utils/mediaPlayerState';
 
 const LIGHT_FEATURE_BRIGHTNESS = 1;
 const LIGHT_FEATURE_COLOR_TEMP = 2;
@@ -237,11 +254,20 @@ const MEDIA_FEATURE_PREVIOUS_TRACK = 16;
 const MEDIA_FEATURE_NEXT_TRACK = 32;
 const MEDIA_FEATURE_TURN_ON = 128;
 const MEDIA_FEATURE_TURN_OFF = 256;
+const MEDIA_FEATURE_PLAY_MEDIA = 512;
+const MEDIA_FEATURE_VOLUME_STEP = 1024;
 const MEDIA_FEATURE_SELECT_SOURCE = 2048;
+const MEDIA_FEATURE_STOP = 4096;
+const MEDIA_FEATURE_CLEAR_PLAYLIST = 8192;
 const MEDIA_FEATURE_PLAY = 16384;
 const MEDIA_FEATURE_SHUFFLE_SET = 32768;
-const MEDIA_FEATURE_GROUPING = 524288;
+const MEDIA_FEATURE_SELECT_SOUND_MODE = 65536;
+const MEDIA_FEATURE_BROWSE_MEDIA = 131072;
 const MEDIA_FEATURE_REPEAT_SET = 262144;
+const MEDIA_FEATURE_GROUPING = 524288;
+const MEDIA_FEATURE_ANNOUNCE = 1048576;
+const MEDIA_FEATURE_ENQUEUE = 2097152;
+const MEDIA_FEATURE_SEARCH_MEDIA = 4194304;
 const LOCK_FEATURE_OPEN = 1;
 const VACUUM_FEATURE_PAUSE = 4;
 const VACUUM_FEATURE_STOP = 8;
@@ -2716,18 +2742,8 @@ function resolveSensorMeta(
   };
 }
 
-function resolveMediaState(value: string | undefined): 'playing' | 'paused' | 'idle' | 'unavailable' {
-  const normalized = (value ?? '').trim().toLowerCase();
-  if (normalized.includes('unavailable') || normalized.includes('offline')) {
-    return 'unavailable';
-  }
-  if (normalized.includes('play') || normalized === 'on') {
-    return 'playing';
-  }
-  if (normalized.includes('pause')) {
-    return 'paused';
-  }
-  return 'idle';
+function resolveMediaState(value: string | undefined) {
+  return normalizeMediaPlayerStateKey(value);
 }
 
 type MediaRepeatMode = 'off' | 'all' | 'one';
@@ -2809,6 +2825,15 @@ function resolveMediaCapabilities(entity?: MockEntityState) {
       supportsRepeat: true,
       supportsSelectSource: true,
       supportsGrouping: true,
+      supportsStop: true,
+      supportsClearPlaylist: true,
+      supportsVolumeStep: true,
+      supportsPlayMedia: true,
+      supportsSelectSoundMode: true,
+      supportsBrowseMedia: true,
+      supportsAnnounce: true,
+      supportsEnqueue: true,
+      supportsSearchMedia: true,
     };
   }
 
@@ -2846,6 +2871,17 @@ function resolveMediaCapabilities(entity?: MockEntityState) {
     supportsGrouping:
       (features & MEDIA_FEATURE_GROUPING) !== 0 ||
       toStringArray(entity.rawAttributes?.group_members).length > 0,
+    supportsStop: (features & MEDIA_FEATURE_STOP) !== 0,
+    supportsClearPlaylist: (features & MEDIA_FEATURE_CLEAR_PLAYLIST) !== 0,
+    supportsVolumeStep: (features & MEDIA_FEATURE_VOLUME_STEP) !== 0,
+    supportsPlayMedia: (features & MEDIA_FEATURE_PLAY_MEDIA) !== 0,
+    supportsSelectSoundMode:
+      (features & MEDIA_FEATURE_SELECT_SOUND_MODE) !== 0 ||
+      toStringArray(entity.rawAttributes?.sound_mode_list).length > 0,
+    supportsBrowseMedia: (features & MEDIA_FEATURE_BROWSE_MEDIA) !== 0,
+    supportsAnnounce: (features & MEDIA_FEATURE_ANNOUNCE) !== 0,
+    supportsEnqueue: (features & MEDIA_FEATURE_ENQUEUE) !== 0,
+    supportsSearchMedia: (features & MEDIA_FEATURE_SEARCH_MEDIA) !== 0,
   };
 }
 
@@ -2921,12 +2957,20 @@ function buildFallbackCoverAttributes(widget: Widget) {
   return {
     friendly_name: widget.title,
     current_position: currentPosition,
+    current_cover_position: currentPosition,
     current_tilt_position: tiltPosition,
+    current_cover_tilt_position: tiltPosition,
+    position: currentPosition,
+    tilt_position: tiltPosition,
+    device_class: 'shutter',
     supported_features:
       COVER_FEATURE_OPEN |
       COVER_FEATURE_CLOSE |
       COVER_FEATURE_STOP |
       COVER_FEATURE_SET_POSITION |
+      COVER_FEATURE_OPEN_TILT |
+      COVER_FEATURE_CLOSE_TILT |
+      COVER_FEATURE_STOP_TILT |
       COVER_FEATURE_SET_TILT_POSITION,
   } as Record<string, unknown>;
 }
@@ -3085,17 +3129,24 @@ function resolveVacuumCapabilities(entity: MockEntityState | undefined) {
   };
 }
 
-function resolveCoverCapabilities(entity: MockEntityState | undefined) {
-  const supportedFeatures = resolveCoverSupportedFeatures(entity);
-  const rawAttributes = entity?.rawAttributes;
+function resolveCoverCapabilities(
+  entity: MockEntityState | undefined,
+  fallbackRawAttributes?: Record<string, unknown>,
+) {
+  const rawAttributes = entity?.rawAttributes ?? fallbackRawAttributes;
+  const supportedFeatures =
+    resolveCoverSupportedFeatures(entity) ??
+    toFiniteNumber(rawAttributes?.supported_features);
   return {
     supportedFeatures,
-    supportsOpen: supportedFeatures === undefined || supportedFeatures === 0 || (supportedFeatures & COVER_FEATURE_OPEN) !== 0,
-    supportsClose:
-      supportedFeatures === undefined || supportedFeatures === 0 || (supportedFeatures & COVER_FEATURE_CLOSE) !== 0,
+    supportsOpen: coverSupportsOpen(supportedFeatures),
+    supportsClose: coverSupportsClose(supportedFeatures),
     supportsStop: coverSupportsStop(supportedFeatures),
     supportsSetPosition: coverSupportsSetPosition(supportedFeatures),
-    supportsSetTiltPosition: coverSupportsTilt(supportedFeatures, rawAttributes),
+    supportsOpenTilt: coverSupportsOpenTilt(supportedFeatures),
+    supportsCloseTilt: coverSupportsCloseTilt(supportedFeatures),
+    supportsSetTiltPosition: coverSupportsSetTiltPosition(supportedFeatures) || coverSupportsTilt(supportedFeatures, rawAttributes),
+    supportsStopTilt: coverSupportsStopTilt(supportedFeatures),
   };
 }
 
@@ -3488,6 +3539,8 @@ export function MainBoard() {
   const [climatePendingByEntity, setClimatePendingByEntity] = useState<Record<string, ClimatePendingState>>({});
   const [livingRoomClimateMock, setLivingRoomClimateMock] = useState<MockEntityState>(createLivingRoomClimateMock);
   const [homeAlarmMock, setHomeAlarmMock] = useState<MockEntityState>(createHomeAlarmMock);
+  const [mediaPlayerStateMocks] = useState<MockEntityStateMap>(createMediaPlayerStateMocks);
+  const [coverStateMocks, setCoverStateMocks] = useState<MockEntityStateMap>(createCoverStateMocks);
   const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
   const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
   const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
@@ -3648,6 +3701,8 @@ export function MainBoard() {
     if (!isHaConnected) {
       return {
         ...haStates,
+        ...mediaPlayerStateMocks,
+        ...coverStateMocks,
         [CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]: livingRoomClimateMock,
         [HOME_ALARM_MOCK_ENTITY_ID]: homeAlarmMock,
       };
@@ -3805,11 +3860,13 @@ export function MainBoard() {
       if (Number.isFinite(pending.position)) {
         rawAttributes.current_position = pending.position;
         rawAttributes.position = pending.position;
+        rawAttributes.current_cover_position = pending.position;
         changed = true;
       }
       if (Number.isFinite(pending.tiltPosition)) {
         rawAttributes.current_tilt_position = pending.tiltPosition;
         rawAttributes.tilt_position = pending.tiltPosition;
+        rawAttributes.current_cover_tilt_position = pending.tiltPosition;
         rawAttributes[COVER_PENDING_TILT_ATTRIBUTE_KEY] = true;
         changed = true;
       }
@@ -3945,9 +4002,19 @@ export function MainBoard() {
     if (!haStates[HOME_ALARM_MOCK_ENTITY_ID]) {
       ensureNextStates()[HOME_ALARM_MOCK_ENTITY_ID] = homeAlarmMock;
     }
+    Object.entries(mediaPlayerStateMocks).forEach(([entityId, entity]) => {
+      if (!haStates[entityId]) {
+        ensureNextStates()[entityId] = entity;
+      }
+    });
+    Object.entries(coverStateMocks).forEach(([entityId, entity]) => {
+      if (!haStates[entityId]) {
+        ensureNextStates()[entityId] = entity;
+      }
+    });
 
     return nextStates ?? haStates;
-  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, switchTogglePendingByEntity]);
+  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, coverStateMocks, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, mediaPlayerStateMocks, switchTogglePendingByEntity]);
   const initialLayoutRef = useRef(loadDashboardLayout());
   const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
   const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
@@ -4252,6 +4319,23 @@ export function MainBoard() {
     () => widgets.find((widget) => widget.id === selectedWidgetId) ?? null,
     [widgets, selectedWidgetId],
   );
+  const selectedWidgetActiveLayout = useMemo(() => {
+    if (!selectedWidget) {
+      return null;
+    }
+    const breakpointLayouts = selectedWidget.parentSectionId
+      ? responsiveLayouts.stacks?.[selectedWidget.parentSectionId]
+      : responsiveLayouts.root;
+    const activeLayoutItem = breakpointLayouts?.[activeGridBreakpoint]?.find(
+      (item) => item.i === selectedWidget.id,
+    );
+    return activeLayoutItem
+      ? {
+          w: activeLayoutItem.w,
+          h: activeLayoutItem.h,
+        }
+      : null;
+  }, [activeGridBreakpoint, responsiveLayouts.root, responsiveLayouts.stacks, selectedWidget]);
 
   const handleWidgetDisplayMetricsChange = useCallback((metrics: WidgetDisplayMetrics) => {
     setSelectedWidgetDisplayMetrics((current) =>
@@ -4290,7 +4374,7 @@ export function MainBoard() {
   const VACUUM_WIDGET_MIN_WIDTH = 2;
   const VACUUM_WIDGET_MIN_HEIGHT = 3;
   const COVER_WIDGET_MIN_WIDTH = 2;
-  const COVER_WIDGET_MIN_HEIGHT = 2;
+  const COVER_WIDGET_MIN_HEIGHT = 1;
   const MEMBERS_WIDGET_MIN_WIDTH = 3;
   const MEMBERS_WIDGET_MIN_HEIGHT = 2;
   const STACK_SECTION_AUTO_MIN_COLUMNS = 2;
@@ -5249,7 +5333,8 @@ export function MainBoard() {
     if (activeWidget?.kind !== 'light') {
       return state.lamp;
     }
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity = haStatesForUi[activeWidget.entityId];
+    const rawAttributes = liveEntity?.rawAttributes ?? state.speaker.rawAttributes;
     const capabilities = resolveLightCapabilities(liveEntity);
     return {
       name: activeWidget.title,
@@ -5459,7 +5544,7 @@ export function MainBoard() {
       };
     }
 
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity = haStatesForUi[activeWidget.entityId];
     const rawAttributes = liveEntity?.rawAttributes;
     const stateValue = normalizeCameraState(
       toTrimmedString(liveEntity?.stateLabel) ??
@@ -5521,8 +5606,11 @@ export function MainBoard() {
     if (activeWidget?.kind !== 'media') {
       return state.speaker;
     }
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
-    const mediaState = resolveMediaState(liveEntity?.stateLabel ?? liveEntity?.state ?? activeWidget.status);
+    const liveEntity = haStatesForUi[activeWidget.entityId];
+    const rawAttributes = liveEntity?.rawAttributes ?? state.speaker.rawAttributes;
+    const rawMediaStateValue = liveEntity?.state ?? liveEntity?.stateLabel ?? activeWidget.status;
+    const mediaState = resolveMediaState(rawMediaStateValue);
+    const mediaStateLabel = translateMediaPlayerState(rawMediaStateValue, activeWidget.status ?? state.speaker.status);
     const capabilities = resolveMediaCapabilities(liveEntity);
     const resolvedDuration =
       typeof liveEntity?.mediaDuration === 'number'
@@ -5552,17 +5640,19 @@ export function MainBoard() {
           : Math.max(0, Math.min(100, Math.round(fallbackProgress)));
     const resolvedPosition =
       resolvedPositionFromEntity ?? Math.max(0, Math.min(resolvedDuration, Math.round((resolvedProgress / 100) * resolvedDuration)));
-    const parsedShuffleValue = toBoolean(liveEntity?.rawAttributes?.shuffle);
+    const parsedShuffleValue = toBoolean(rawAttributes?.shuffle);
     const resolvedShuffleEnabled =
       typeof parsedShuffleValue === 'boolean'
         ? parsedShuffleValue
         : Boolean(state.speaker.shuffleEnabled);
     const resolvedRepeatMode = resolveMediaRepeatMode(
-      liveEntity?.rawAttributes?.repeat ?? state.speaker.repeatMode ?? 'off',
+      rawAttributes?.repeat ?? state.speaker.repeatMode ?? 'off',
     );
-    const liveSourceList = toStringArray(liveEntity?.rawAttributes?.source_list);
+    const liveSourceList = toStringArray(rawAttributes?.source_list);
+    const liveSoundModeList = toStringArray(rawAttributes?.sound_mode_list);
+    const selectedSoundMode = toTrimmedString(rawAttributes?.sound_mode);
     const selectedSource =
-      toTrimmedString(liveEntity?.rawAttributes?.source) ?? state.speaker.selectedOutputDeviceId ?? '';
+      toTrimmedString(rawAttributes?.source) ?? state.speaker.selectedOutputDeviceId ?? '';
     const outputSourceNames = Array.from(
       new Set(
         [selectedSource, ...liveSourceList]
@@ -5580,7 +5670,7 @@ export function MainBoard() {
         : isHaConnected
           ? []
           : state.speaker.outputDevices;
-    const groupedMemberIds = toStringArray(liveEntity?.rawAttributes?.group_members).filter(
+    const groupedMemberIds = toStringArray(rawAttributes?.group_members).filter(
       (entityId) => entityId !== activeWidget.entityId,
     );
     const groupedSet = new Set(groupedMemberIds);
@@ -5605,7 +5695,10 @@ export function MainBoard() {
         candidateMap.set(entityId, {
           id: entityId,
           name: friendlyName,
-          subtitle: toTrimmedString(entity.stateLabel) ?? toTrimmedString(entity.state),
+          subtitle: translateMediaPlayerState(
+            toTrimmedString(entity.state) ?? toTrimmedString(entity.stateLabel),
+            toTrimmedString(entity.stateLabel) ?? toTrimmedString(entity.state) ?? 'Disponibile',
+          ),
           kind: inferMediaOutputKind(friendlyName),
         });
       });
@@ -5630,14 +5723,19 @@ export function MainBoard() {
 
     return {
       isPlaying: mediaState === 'playing',
-      status: liveEntity?.stateLabel ?? liveEntity?.state ?? activeWidget.status ?? state.speaker.status,
+      status: mediaStateLabel,
       progress: resolvedProgress,
       positionSeconds: resolvedPosition,
       trackTitle:
         liveEntity?.mediaTitle?.trim() || liveEntity?.nowPlaying?.trim() || state.speaker.trackTitle,
       trackArtist: liveEntity?.mediaArtist?.trim() || state.speaker.trackArtist,
       durationSeconds: resolvedDuration,
-      coverUrl: liveEntity?.imageUrl || state.speaker.coverUrl,
+      coverUrl:
+        liveEntity?.imageUrl ||
+        liveEntity?.mediaImageUrl ||
+        toTrimmedString(rawAttributes?.media_image_url) ||
+        toTrimmedString(rawAttributes?.entity_picture) ||
+        state.speaker.coverUrl,
       volumeLevel:
         typeof liveEntity?.volumeLevel === 'number'
           ? Math.max(0, Math.min(100, Math.round(liveEntity.volumeLevel)))
@@ -5646,6 +5744,7 @@ export function MainBoard() {
       supportsSeek: capabilities.supportsSeek,
       supportsVolume: capabilities.supportsVolume,
       supportsMute: capabilities.supportsMute,
+      supportsVolumeStep: capabilities.supportsVolumeStep,
       supportsNextTrack: capabilities.supportsNextTrack,
       supportsPreviousTrack: capabilities.supportsPreviousTrack,
       supportsPower: capabilities.supportsPower,
@@ -5653,14 +5752,28 @@ export function MainBoard() {
       supportsRepeat: capabilities.supportsRepeat,
       supportsSelectSource: capabilities.supportsSelectSource,
       supportsGrouping: capabilities.supportsGrouping,
+      supportsStop: capabilities.supportsStop,
+      supportsClearPlaylist: capabilities.supportsClearPlaylist,
+      supportsSelectSoundMode: capabilities.supportsSelectSoundMode,
+      supportsPlayMedia: capabilities.supportsPlayMedia,
+      supportsBrowseMedia: capabilities.supportsBrowseMedia,
+      supportsSearchMedia: capabilities.supportsSearchMedia,
+      supportsAnnounce: capabilities.supportsAnnounce,
+      supportsEnqueue: capabilities.supportsEnqueue,
       shuffleEnabled: resolvedShuffleEnabled,
       repeatMode: resolvedRepeatMode,
+      soundMode: selectedSoundMode,
+      soundModeList: liveSoundModeList,
+      volumeStep:
+        typeof liveEntity?.volumeStep === 'number'
+          ? liveEntity.volumeStep
+          : toFiniteNumber(rawAttributes?.volume_step) ?? state.speaker.volumeStep,
       outputDevices,
       selectedOutputDeviceId:
         selectedSource ||
         (isHaConnected ? undefined : state.speaker.selectedOutputDeviceId),
       multiroomDevices,
-      rawAttributes: liveEntity?.rawAttributes,
+      rawAttributes,
     };
   }, [activeWidget, haStatesForUi, isHaConnected, state.speaker]);
 
@@ -5915,12 +6028,15 @@ export function MainBoard() {
         supportsClose: true,
         supportsStop: true,
         supportsSetPosition: true,
+        supportsOpenTilt: false,
+        supportsCloseTilt: false,
         supportsSetTiltPosition: false,
+        supportsStopTilt: false,
         rawAttributes: undefined as Record<string, unknown> | undefined,
       };
     }
 
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity = activeWidget.entityId ? haStatesForUi[activeWidget.entityId] : undefined;
     const rawAttributes = liveEntity?.rawAttributes ?? buildFallbackCoverAttributes(activeWidget);
     const stateValue = normalizeCoverState(
       toTrimmedString(liveEntity?.state) ??
@@ -5929,14 +6045,14 @@ export function MainBoard() {
     );
     const position = resolveCoverPosition(
       stateValue,
-      rawAttributes?.current_position ?? rawAttributes?.position ?? activeWidget.value,
+      resolveCoverPositionAttribute(rawAttributes) ?? activeWidget.value,
       typeof activeWidget.value === 'number' ? activeWidget.value : 70,
     );
     const tiltPosition = resolveCoverTiltPosition(
-      rawAttributes?.current_tilt_position ?? rawAttributes?.tilt_position ?? activeWidget.coverTiltPosition,
+      resolveCoverTiltAttribute(rawAttributes) ?? activeWidget.coverTiltPosition,
       typeof activeWidget.coverTiltPosition === 'number' ? activeWidget.coverTiltPosition : 50,
     );
-    const capabilities = resolveCoverCapabilities(liveEntity);
+    const capabilities = resolveCoverCapabilities(liveEntity, rawAttributes);
 
     return {
       name:
@@ -5952,10 +6068,13 @@ export function MainBoard() {
       supportsClose: capabilities.supportsClose,
       supportsStop: capabilities.supportsStop,
       supportsSetPosition: capabilities.supportsSetPosition,
+      supportsOpenTilt: capabilities.supportsOpenTilt,
+      supportsCloseTilt: capabilities.supportsCloseTilt,
       supportsSetTiltPosition: capabilities.supportsSetTiltPosition,
+      supportsStopTilt: capabilities.supportsStopTilt,
       rawAttributes,
     };
-  }, [activeWidget, haStatesForUi, isHaConnected]);
+  }, [activeWidget, haStatesForUi]);
 
   const activeActivityTarget = useMemo(() => {
     if (!isHaConnected || (activeWidget?.kind !== 'lock' && activeWidget?.kind !== 'alarm')) {
@@ -6794,7 +6913,7 @@ export function MainBoard() {
               : widget.kind === 'climate' && typeof liveEntity.state === 'string'
                 ? liveEntity.state !== 'off'
               : widget.kind === 'media'
-                ? ['playing', 'paused'].includes(resolveMediaState(liveEntity.stateLabel ?? liveEntity.state))
+                ? ['playing', 'paused', 'buffering', 'on'].includes(resolveMediaState(liveEntity.state ?? liveEntity.stateLabel))
                 : widget.kind === 'switch'
                   ? normalizeLower(liveEntity.stateLabel ?? liveEntity.state) === 'on'
                 : widget.kind === 'alarm'
@@ -6808,7 +6927,7 @@ export function MainBoard() {
                       : widget.kind === 'cover'
                         ? resolveCoverPosition(
                             normalizeCoverState(liveEntity.stateLabel ?? liveEntity.state ?? widget.status),
-                            liveEntity.rawAttributes?.current_position ?? liveEntity.rawAttributes?.position ?? widget.value,
+                            resolveCoverPositionAttribute(liveEntity.rawAttributes) ?? widget.value,
                             typeof widget.value === 'number' ? widget.value : 70,
                           ) > 0
                       : widget.isOn;
@@ -6829,7 +6948,10 @@ export function MainBoard() {
             value = typeof liveEntity.numericValue === 'number' ? liveEntity.numericValue : undefined;
             statusLabel = resolveSensorMeta(widget, liveEntity, haStatesForUi).status;
           } else if (widget.kind === 'media') {
-            statusLabel = liveEntity.stateLabel ?? liveEntity.state ?? widget.status;
+            statusLabel = translateMediaPlayerState(
+              liveEntity.state ?? liveEntity.stateLabel ?? widget.status,
+              liveEntity.stateLabel ?? liveEntity.state ?? widget.status,
+            );
             value = typeof liveEntity.progress === 'number' ? liveEntity.progress : value;
           } else if (widget.kind === 'climate') {
             value = typeof liveEntity.currentValue === 'number' ? liveEntity.currentValue : value;
@@ -6852,13 +6974,11 @@ export function MainBoard() {
             statusLabel = normalizeCoverState(liveEntity.stateLabel ?? liveEntity.state ?? widget.status);
             value = resolveCoverPosition(
               statusLabel,
-              liveEntity.rawAttributes?.current_position ?? liveEntity.rawAttributes?.position ?? value,
+              resolveCoverPositionAttribute(liveEntity.rawAttributes) ?? value,
               typeof value === 'number' ? value : 70,
             );
             coverTiltPosition = resolveCoverTiltPosition(
-              liveEntity.rawAttributes?.current_tilt_position ??
-                liveEntity.rawAttributes?.tilt_position ??
-                coverTiltPosition,
+              resolveCoverTiltAttribute(liveEntity.rawAttributes) ?? coverTiltPosition,
               typeof coverTiltPosition === 'number' ? coverTiltPosition : 50,
             );
           } else if (widget.kind === 'lock') {
@@ -7476,11 +7596,11 @@ export function MainBoard() {
         );
         const livePosition = resolveCoverPosition(
           liveState,
-          rawAttributes?.current_position ?? rawAttributes?.position,
+          resolveCoverPositionAttribute(rawAttributes),
           pending.position ?? 70,
         );
         const liveTiltPosition = resolveCoverTiltPosition(
-          rawAttributes?.current_tilt_position ?? rawAttributes?.tilt_position,
+          resolveCoverTiltAttribute(rawAttributes),
           pending.tiltPosition ?? 50,
         );
         const pendingState = normalizeCoverState(pending.state);
@@ -9809,7 +9929,7 @@ export function MainBoard() {
   const resolveCoverTargetContext = (widget?: Widget) => {
     const targetWidget = widget?.kind === 'cover' ? widget : activeWidget?.kind === 'cover' ? activeWidget : undefined;
     const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
+    const liveEntity = entityId ? haStatesForUi[entityId] : undefined;
     const rawAttributes = liveEntity?.rawAttributes;
     const stateValue = normalizeCoverState(
       toTrimmedString(liveEntity?.state) ??
@@ -9818,11 +9938,11 @@ export function MainBoard() {
     );
     const position = resolveCoverPosition(
       stateValue,
-      rawAttributes?.current_position ?? rawAttributes?.position ?? targetWidget?.value,
+      resolveCoverPositionAttribute(rawAttributes) ?? targetWidget?.value,
       typeof targetWidget?.value === 'number' ? targetWidget.value : 70,
     );
     const tiltPosition = resolveCoverTiltPosition(
-      rawAttributes?.current_tilt_position ?? rawAttributes?.tilt_position ?? targetWidget?.coverTiltPosition,
+      resolveCoverTiltAttribute(rawAttributes) ?? targetWidget?.coverTiltPosition,
       typeof targetWidget?.coverTiltPosition === 'number' ? targetWidget.coverTiltPosition : 50,
     );
     const supportedFeatures = resolveCoverSupportedFeatures(liveEntity);
@@ -9836,9 +9956,62 @@ export function MainBoard() {
     };
   };
 
+  const canCallCoverService = (entityId: string | undefined): entityId is string =>
+    Boolean(isHaConnected && entityId && haStates[entityId]);
+
+  const patchLocalCoverEntity = (
+    entityId: string | undefined,
+    patch: {
+      state?: string;
+      position?: number;
+      tiltPosition?: number;
+    },
+  ) => {
+    if (!entityId) {
+      return;
+    }
+    setCoverStateMocks((current) => {
+      const entity = current[entityId];
+      if (!entity) {
+        return current;
+      }
+      const rawAttributes = { ...(entity.rawAttributes ?? {}) };
+      const nextState = patch.state ? normalizeCoverState(patch.state) : normalizeCoverState(entity.stateLabel ?? entity.state);
+      const currentPosition = resolveCoverPosition(
+        nextState,
+        resolveCoverPositionAttribute(rawAttributes) ?? entity.numericValue,
+        typeof entity.numericValue === 'number' ? entity.numericValue : 70,
+      );
+      const nextPosition = Number.isFinite(patch.position) ? clampPercent(patch.position ?? currentPosition) : currentPosition;
+      const currentTiltPosition = resolveCoverTiltPosition(resolveCoverTiltAttribute(rawAttributes), 50);
+      const nextTiltPosition = Number.isFinite(patch.tiltPosition)
+        ? clampPercent(patch.tiltPosition ?? currentTiltPosition)
+        : currentTiltPosition;
+
+      rawAttributes.current_position = nextPosition;
+      rawAttributes.current_cover_position = nextPosition;
+      rawAttributes.position = nextPosition;
+      rawAttributes.current_tilt_position = nextTiltPosition;
+      rawAttributes.current_cover_tilt_position = nextTiltPosition;
+      rawAttributes.tilt_position = nextTiltPosition;
+
+      return {
+        ...current,
+        [entityId]: {
+          ...entity,
+          state: nextState,
+          stateLabel: nextState,
+          numericValue: nextPosition,
+          toggleOn: nextState !== 'closed' && nextState !== 'unavailable' && nextState !== 'unknown' && nextPosition > 0,
+          rawAttributes,
+        },
+      };
+    });
+  };
+
   const openCover = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
-    if (isHaConnected && entityId) {
+    if (canCallCoverService(entityId)) {
       upsertCoverPending(entityId, {
         state: 'opening',
         position: 100,
@@ -9855,11 +10028,12 @@ export function MainBoard() {
       value: 100,
       isOn: true,
     }));
+    patchLocalCoverEntity(entityId, { state: 'open', position: 100 });
   };
 
   const closeCover = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
-    if (isHaConnected && entityId) {
+    if (canCallCoverService(entityId)) {
       upsertCoverPending(entityId, {
         state: 'closing',
         position: 0,
@@ -9876,11 +10050,12 @@ export function MainBoard() {
       value: 0,
       isOn: false,
     }));
+    patchLocalCoverEntity(entityId, { state: 'closed', position: 0 });
   };
 
   const stopCover = (widget?: Widget) => {
     const { targetWidget, entityId, position } = resolveCoverTargetContext(widget);
-    if (isHaConnected && entityId) {
+    if (canCallCoverService(entityId)) {
       upsertCoverPending(entityId, {
         state: 'stopped',
         position,
@@ -9897,12 +10072,13 @@ export function MainBoard() {
       value: position,
       isOn: position > 0,
     }));
+    patchLocalCoverEntity(entityId, { state: 'stopped', position });
   };
 
   const setCoverPosition = (position: number, widget?: Widget) => {
     const { targetWidget, entityId, position: currentPosition } = resolveCoverTargetContext(widget);
     const safePosition = clampPercent(position);
-    if (isHaConnected && entityId) {
+    if (canCallCoverService(entityId)) {
       const pendingState =
         safePosition > currentPosition
           ? 'opening'
@@ -9928,12 +10104,73 @@ export function MainBoard() {
       value: safePosition,
       isOn: safePosition > 0,
     }));
+    patchLocalCoverEntity(entityId, {
+      state: safePosition <= 0 ? 'closed' : 'open',
+      position: safePosition,
+    });
+  };
+
+  const openCoverTilt = (widget?: Widget) => {
+    const { targetWidget, entityId } = resolveCoverTargetContext(widget);
+    if (canCallCoverService(entityId)) {
+      upsertCoverPending(entityId, {
+        tiltPosition: 100,
+      });
+      void callHaService('cover', 'open_cover_tilt', { entity_id: entityId });
+      return;
+    }
+    if (!targetWidget) {
+      return;
+    }
+    updateWidget(targetWidget.id, (current) => ({
+      ...current,
+      coverTiltPosition: 100,
+    }));
+    patchLocalCoverEntity(entityId, { tiltPosition: 100 });
+  };
+
+  const closeCoverTilt = (widget?: Widget) => {
+    const { targetWidget, entityId } = resolveCoverTargetContext(widget);
+    if (canCallCoverService(entityId)) {
+      upsertCoverPending(entityId, {
+        tiltPosition: 0,
+      });
+      void callHaService('cover', 'close_cover_tilt', { entity_id: entityId });
+      return;
+    }
+    if (!targetWidget) {
+      return;
+    }
+    updateWidget(targetWidget.id, (current) => ({
+      ...current,
+      coverTiltPosition: 0,
+    }));
+    patchLocalCoverEntity(entityId, { tiltPosition: 0 });
+  };
+
+  const stopCoverTilt = (widget?: Widget) => {
+    const { targetWidget, entityId, tiltPosition } = resolveCoverTargetContext(widget);
+    if (canCallCoverService(entityId)) {
+      upsertCoverPending(entityId, {
+        tiltPosition,
+      });
+      void callHaService('cover', 'stop_cover_tilt', { entity_id: entityId });
+      return;
+    }
+    if (!targetWidget) {
+      return;
+    }
+    updateWidget(targetWidget.id, (current) => ({
+      ...current,
+      coverTiltPosition: tiltPosition,
+    }));
+    patchLocalCoverEntity(entityId, { tiltPosition });
   };
 
   const setCoverTiltPosition = (position: number, widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     const safePosition = clampPercent(position);
-    if (isHaConnected && entityId) {
+    if (canCallCoverService(entityId)) {
       upsertCoverPending(entityId, {
         tiltPosition: safePosition,
       });
@@ -9950,6 +10187,7 @@ export function MainBoard() {
       ...current,
       coverTiltPosition: safePosition,
     }));
+    patchLocalCoverEntity(entityId, { tiltPosition: safePosition });
   };
 
   const resolveVacuumTargetContext = (widget?: Widget) => {
@@ -10201,6 +10439,12 @@ export function MainBoard() {
     const targetWidget = widget ?? activeWidget;
     const entityId = targetWidget?.kind === 'media' ? targetWidget.entityId : undefined;
     if (isHaConnected && entityId) {
+      const liveEntity = haStatesForUi[entityId];
+      const mediaState = resolveMediaState(liveEntity?.state ?? liveEntity?.stateLabel ?? targetWidget?.status);
+      if (mediaState === 'off' || mediaState === 'standby') {
+        void callHaService('media_player', 'turn_on', { entity_id: entityId });
+        return;
+      }
       void callHaService('media_player', 'media_play_pause', { entity_id: entityId });
       return;
     }
@@ -10227,8 +10471,8 @@ export function MainBoard() {
     const entityId = targetWidget?.entityId;
     const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
     if (isHaConnected && entityId) {
-      const mediaState = resolveMediaState(liveEntity?.stateLabel ?? liveEntity?.state ?? targetWidget?.status);
-      const shouldTurnOn = mediaState === 'idle' || mediaState === 'unavailable' || (liveEntity?.state ?? '').toLowerCase() === 'off';
+      const mediaState = resolveMediaState(liveEntity?.state ?? liveEntity?.stateLabel ?? targetWidget?.status);
+      const shouldTurnOn = ['idle', 'unavailable', 'unknown', 'off', 'standby'].includes(mediaState);
       void callHaService('media_player', shouldTurnOn ? 'turn_on' : 'turn_off', { entity_id: entityId });
       return;
     }
@@ -10263,6 +10507,44 @@ export function MainBoard() {
       return;
     }
     actions.nextSpeakerTrack();
+  };
+
+  const stopMediaPlayback = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
+    const entityId = targetWidget?.entityId;
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'media_stop', { entity_id: entityId });
+      return;
+    }
+    if (targetWidget?.kind === 'media') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        isOn: false,
+        status: 'idle',
+        value: 0,
+      }));
+    }
+    if (state.speaker.isPlaying) {
+      actions.toggleSpeakerPlayback();
+    }
+  };
+
+  const clearMediaPlaylist = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
+    const entityId = targetWidget?.entityId;
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'clear_playlist', { entity_id: entityId });
+    }
   };
 
   const seekMediaPosition = (nextPosition: number, widget?: Widget) => {
@@ -10339,8 +10621,13 @@ export function MainBoard() {
     actions.toggleSpeakerMute();
   };
 
-  const toggleMediaShuffle = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+  const toggleMediaShuffle = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
     const entityId = targetWidget?.entityId;
     const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
     const currentShuffleRaw = toBoolean(liveEntity?.rawAttributes?.shuffle);
@@ -10361,8 +10648,13 @@ export function MainBoard() {
     actions.toggleSpeakerShuffle();
   };
 
-  const cycleMediaRepeatMode = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
+  const cycleMediaRepeatMode = (widget?: Widget) => {
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
     const entityId = targetWidget?.entityId;
     const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
     const currentRepeatMode = resolveMediaRepeatMode(
@@ -10406,6 +10698,67 @@ export function MainBoard() {
       return;
     }
     actions.setSpeakerOutputDevice(selectedSource);
+  };
+
+  const selectMediaSoundMode = (soundMode: string, widget?: Widget) => {
+    const selectedSoundMode = soundMode.trim();
+    if (!selectedSoundMode) {
+      return;
+    }
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
+    const entityId = targetWidget?.entityId;
+    if (isHaConnected && entityId) {
+      void callHaService('media_player', 'select_sound_mode', {
+        entity_id: entityId,
+        sound_mode: selectedSoundMode,
+      });
+    }
+  };
+
+  const playMedia = (request: MediaPlayRequest, widget?: Widget) => {
+    const mediaContentId = request.mediaContentId.trim();
+    const mediaContentType = request.mediaContentType.trim();
+    if (!mediaContentId || !mediaContentType) {
+      return;
+    }
+    const targetWidget =
+      widget?.kind === 'media'
+        ? widget
+        : activeWidget?.kind === 'media'
+          ? activeWidget
+          : undefined;
+    const entityId = targetWidget?.entityId;
+    if (isHaConnected && entityId) {
+      const serviceData: Record<string, unknown> = {
+        entity_id: entityId,
+        media_content_id: mediaContentId,
+        media_content_type: mediaContentType,
+      };
+      if (request.enqueue) {
+        serviceData.enqueue = request.enqueue;
+      }
+      if (request.announce === true) {
+        serviceData.announce = true;
+      }
+      void callHaService('media_player', 'play_media', serviceData);
+      return;
+    }
+    if (targetWidget?.kind === 'media') {
+      updateWidget(targetWidget.id, (current) => ({
+        ...current,
+        isOn: true,
+        status: 'playing',
+        value: typeof current.value === 'number' ? current.value : 0,
+      }));
+    }
+    if (!state.speaker.isPlaying) {
+      actions.toggleSpeakerPlayback();
+    }
   };
 
   const toggleMediaGroupMember = (memberEntityId: string, shouldJoin: boolean) => {
@@ -11109,11 +11462,11 @@ export function MainBoard() {
       );
       const position = resolveCoverPosition(
         stateValue,
-        rawAttributes?.current_position ?? rawAttributes?.position ?? widget.value,
+        resolveCoverPositionAttribute(rawAttributes) ?? widget.value,
         typeof widget.value === 'number' ? widget.value : 70,
       );
       const tiltPosition = resolveCoverTiltPosition(
-        rawAttributes?.current_tilt_position ?? rawAttributes?.tilt_position ?? widget.coverTiltPosition,
+        resolveCoverTiltAttribute(rawAttributes) ?? widget.coverTiltPosition,
         typeof widget.coverTiltPosition === 'number' ? widget.coverTiltPosition : 50,
       );
       const supportedFeatures = resolveCoverSupportedFeatures(liveEntity);
@@ -12121,6 +12474,7 @@ export function MainBoard() {
             <RoomsDashboard
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
+              isLoading={haStatus === 'connecting'}
               haConnected={isHaConnected}
               canManageRooms={canManageRooms}
               haAreas={haAreas}
@@ -12254,6 +12608,24 @@ export function MainBoard() {
                 }
                 seekMediaPosition(position, widget);
               }}
+              onWidgetMediaShuffle={(widget) => {
+                if (widget.kind !== 'media') {
+                  return;
+                }
+                if (activeWidget?.id !== widget.id) {
+                  setSelectedWidgetId(widget.id);
+                }
+                toggleMediaShuffle(widget);
+              }}
+              onWidgetMediaRepeat={(widget) => {
+                if (widget.kind !== 'media') {
+                  return;
+                }
+                if (activeWidget?.id !== widget.id) {
+                  setSelectedWidgetId(widget.id);
+                }
+                cycleMediaRepeatMode(widget);
+              }}
               onWidgetMediaSelectSource={(widget, source) => {
                 if (widget.kind !== 'media') {
                   return;
@@ -12295,6 +12667,18 @@ export function MainBoard() {
                   return;
                 }
                 openDoor(undefined, widget);
+              }}
+              onWidgetCoverPositionChange={(widget, position) => {
+                if (widget.kind !== 'cover') {
+                  return;
+                }
+                setCoverPosition(position, widget);
+              }}
+              onWidgetCoverTiltPositionChange={(widget, position) => {
+                if (widget.kind !== 'cover') {
+                  return;
+                }
+                setCoverTiltPosition(position, widget);
               }}
               onOpenMembersPanel={() => openProfileRoute('members')}
               onWeatherClick={openWeatherControls}
@@ -12365,6 +12749,10 @@ export function MainBoard() {
                 toggleSpeakerMute: () => toggleMediaMute(),
                 toggleSpeakerShuffle: () => toggleMediaShuffle(),
                 cycleSpeakerRepeatMode: () => cycleMediaRepeatMode(),
+                stopSpeakerPlayback: () => stopMediaPlayback(),
+                clearSpeakerPlaylist: () => clearMediaPlaylist(),
+                selectSpeakerSoundMode: (soundMode) => selectMediaSoundMode(soundMode),
+                playSpeakerMedia: (request) => playMedia(request),
                 selectSpeakerOutputDevice: (deviceId) => selectMediaOutputDevice(deviceId),
                 toggleSpeakerGroupMember: (deviceId, shouldJoin) =>
                   toggleMediaGroupMember(deviceId, shouldJoin),
@@ -12391,6 +12779,9 @@ export function MainBoard() {
                 closeCover: () => closeCover(),
                 stopCover: () => stopCover(),
                 setCoverPosition: (position) => setCoverPosition(position),
+                openCoverTilt: () => openCoverTilt(),
+                closeCoverTilt: () => closeCoverTilt(),
+                stopCoverTilt: () => stopCoverTilt(),
                 setCoverTiltPosition: (position) => setCoverTiltPosition(position),
                 moveCameraPtz: (direction) => moveCameraPtz(direction),
                 stopCameraPtz: () => stopCameraPtz(),
@@ -12403,6 +12794,7 @@ export function MainBoard() {
               onUpdateUserName={actions.setUserName}
               selectedWidget={selectedWidget}
               selectedWidgetDisplayMetrics={selectedWidgetDisplayMetrics}
+              selectedWidgetActiveLayout={selectedWidgetActiveLayout}
               selectedSection={selectedSection}
               selectedSidebarPath={selectedSidebarPath}
               sidebarPaths={visibleSidebarPaths}

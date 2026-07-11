@@ -64,6 +64,8 @@ type WidgetCardRendererProps = {
   onVacuumReturnToBase?: (widget: Widget) => void;
   onLockToggle?: (widget: Widget) => boolean | void;
   onLockOpen?: (widget: Widget) => void;
+  onCoverPositionChange?: (widget: Widget, position: number) => void;
+  onCoverTiltPositionChange?: (widget: Widget, position: number) => void;
   onMembersOpenPanel?: (widget: Widget) => void;
   liveEntity?: MockEntityState;
   gridBreakpoint?: GridEngineBreakpoint;
@@ -107,6 +109,8 @@ function WidgetCardRendererComponent({
   onVacuumReturnToBase,
   onLockToggle,
   onLockOpen,
+  onCoverPositionChange,
+  onCoverTiltPositionChange,
   onMembersOpenPanel,
   liveEntity,
   gridBreakpoint,
@@ -208,6 +212,9 @@ function WidgetCardRendererComponent({
         onSelectSource={(source) => onMediaSelectSource?.(widget, source)}
         hideHeader={mediaHideHeader}
         liveEntity={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -268,6 +275,11 @@ function WidgetCardRendererComponent({
         isEditMode={isEditMode}
         onClick={onClick}
         liveEntity={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
+        onPositionChange={(position) => onCoverPositionChange?.(widget, position)}
+        onTiltPositionChange={(position) => onCoverTiltPositionChange?.(widget, position)}
       />
     );
   }
@@ -322,8 +334,29 @@ function areWidgetEntitiesEqual(prevEntity: MockEntityState | undefined, nextEnt
     prevEntity.progress === nextEntity.progress &&
     prevEntity.mediaPosition === nextEntity.mediaPosition &&
     prevEntity.mediaPositionUpdatedAt === nextEntity.mediaPositionUpdatedAt &&
+    prevEntity.mediaTitle === nextEntity.mediaTitle &&
+    prevEntity.mediaArtist === nextEntity.mediaArtist &&
+    prevEntity.mediaAlbumName === nextEntity.mediaAlbumName &&
+    prevEntity.mediaAlbumArtist === nextEntity.mediaAlbumArtist &&
+    prevEntity.mediaChannel === nextEntity.mediaChannel &&
+    prevEntity.mediaContentId === nextEntity.mediaContentId &&
+    prevEntity.mediaContentType === nextEntity.mediaContentType &&
+    prevEntity.mediaEpisode === nextEntity.mediaEpisode &&
+    prevEntity.mediaPlaylist === nextEntity.mediaPlaylist &&
+    prevEntity.mediaSeason === nextEntity.mediaSeason &&
+    prevEntity.mediaSeriesTitle === nextEntity.mediaSeriesTitle &&
+    prevEntity.mediaTrack === nextEntity.mediaTrack &&
+    prevEntity.appId === nextEntity.appId &&
+    prevEntity.appName === nextEntity.appName &&
+    prevEntity.source === nextEntity.source &&
+    prevEntity.sourceList === nextEntity.sourceList &&
+    prevEntity.soundMode === nextEntity.soundMode &&
+    prevEntity.soundModeList === nextEntity.soundModeList &&
+    prevEntity.groupMembers === nextEntity.groupMembers &&
+    prevEntity.mediaDeviceClass === nextEntity.mediaDeviceClass &&
     prevEntity.volumeLevel === nextEntity.volumeLevel &&
     prevEntity.mediaMuted === nextEntity.mediaMuted &&
+    prevEntity.volumeStep === nextEntity.volumeStep &&
     prevEntity.hvacMode === nextEntity.hvacMode &&
     prevEntity.fanMode === nextEntity.fanMode &&
     prevEntity.presetMode === nextEntity.presetMode &&
@@ -350,6 +383,12 @@ function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nex
     return false;
   }
   if (prevProps.onLightColorChange !== nextProps.onLightColorChange) {
+    return false;
+  }
+  if (prevProps.onCoverPositionChange !== nextProps.onCoverPositionChange) {
+    return false;
+  }
+  if (prevProps.onCoverTiltPositionChange !== nextProps.onCoverTiltPositionChange) {
     return false;
   }
   if (!areWidgetEntitiesEqual(prevProps.liveEntity, nextProps.liveEntity)) {

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveAlarmPixelDisplayVariant,
   resolveClimatePixelDisplayVariant,
+  resolveCoverPixelDisplayVariant,
   resolveLightPixelDisplayVariant,
+  resolveMediaPixelDisplayVariant,
   resolveLockPixelDisplayVariant,
   resolveSensorPixelDisplayVariant,
   resolveSwitchPixelDisplayVariant,
@@ -53,6 +55,15 @@ describe('resolveWidgetDisplayVariant', () => {
     expect(resolveWidgetDisplayVariant({ kind: 'lock', breakpoint: 'xl', layout: { w: 2, h: 3 } })).toBe('standard');
     expect(resolveWidgetDisplayVariant({ kind: 'lock', breakpoint: 'xl', layout: { w: 2, h: 4 } })).toBe('full');
     expect(resolveWidgetDisplayVariant({ kind: 'lock', breakpoint: 'xl', layout: { w: 3, h: 2 } })).toBe('full');
+  });
+
+  it('uses dedicated cover compositions with position-first layouts', () => {
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 1, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 1, h: 2 } })).toBe('compact');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 2 } })).toBe('compact');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 3 } })).toBe('standard');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 4 } })).toBe('full');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 3, h: 3 } })).toBe('full');
   });
 });
 
@@ -132,5 +143,26 @@ describe('resolveLockPixelDisplayVariant', () => {
     expect(resolveLockPixelDisplayVariant({ width: 192, height: 112 })).toBe('compact');
     expect(resolveLockPixelDisplayVariant({ width: 192, height: 176 })).toBe('standard');
     expect(resolveLockPixelDisplayVariant({ width: 296, height: 196 })).toBe('full');
+  });
+});
+
+describe('resolveCoverPixelDisplayVariant', () => {
+  it('matches the cover card internal grid compositions', () => {
+    expect(resolveCoverPixelDisplayVariant({ width: 104, height: 48 })).toBe('mini');
+    expect(resolveCoverPixelDisplayVariant({ width: 192, height: 96 })).toBe('compact');
+    expect(resolveCoverPixelDisplayVariant({ width: 104, height: 120 })).toBe('compact');
+    expect(resolveCoverPixelDisplayVariant({ width: 192, height: 176 })).toBe('standard');
+    expect(resolveCoverPixelDisplayVariant({ width: 296, height: 196 })).toBe('standard');
+    expect(resolveCoverPixelDisplayVariant({ width: 380, height: 176 })).toBe('full');
+    expect(resolveCoverPixelDisplayVariant({ width: 192, height: 224 })).toBe('full');
+  });
+});
+
+describe('resolveMediaPixelDisplayVariant', () => {
+  it('uses measured media-card rectangles for mini through full layouts', () => {
+    expect(resolveMediaPixelDisplayVariant({ width: 104, height: 48 })).toBe('mini');
+    expect(resolveMediaPixelDisplayVariant({ width: 192, height: 96 })).toBe('compact');
+    expect(resolveMediaPixelDisplayVariant({ width: 232, height: 156 })).toBe('standard');
+    expect(resolveMediaPixelDisplayVariant({ width: 296, height: 224 })).toBe('full');
   });
 });

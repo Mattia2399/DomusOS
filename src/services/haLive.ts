@@ -1,5 +1,6 @@
 import type { AuthData, HassEntities } from 'home-assistant-js-websocket';
 import type { MockEntityStateMap, MockWeatherForecastEntry } from '../types/ha';
+import { translateMediaPlayerState } from '../utils/mediaPlayerState';
 
 const STORAGE_KEY = 'ha-external-dashboard:ha-live:v1';
 export const HASS_TOKENS_KEY = 'hass_auth_tokens';
@@ -574,6 +575,31 @@ export function mapHassEntitiesToMock(
     const friendlyName = toStringOrUndefined(rawAttributes.friendly_name);
     const mediaTitle = toStringOrUndefined(attributes.media_title);
     const mediaArtist = toStringOrUndefined(attributes.media_artist);
+    const mediaAlbumArtist = toStringOrUndefined(attributes.media_album_artist);
+    const mediaAlbumName = toStringOrUndefined(attributes.media_album_name);
+    const mediaChannel = toStringOrUndefined(attributes.media_channel);
+    const mediaContentId = toStringOrUndefined(attributes.media_content_id);
+    const mediaContentType = toStringOrUndefined(attributes.media_content_type);
+    const mediaEpisode = toStringOrUndefined(attributes.media_episode);
+    const mediaImageHash = toStringOrUndefined(attributes.media_image_hash);
+    const mediaImageRemotelyAccessible =
+      typeof attributes.media_image_remotely_accessible === 'boolean'
+        ? attributes.media_image_remotely_accessible
+        : undefined;
+    const mediaImageUrl = resolveEntityPicture(hassUrl, toStringOrUndefined(attributes.media_image_url));
+    const mediaImageLocalUrl = resolveEntityPicture(hassUrl, toStringOrUndefined(attributes.entity_picture_local));
+    const mediaPlaylist = toStringOrUndefined(attributes.media_playlist);
+    const mediaSeason = toStringOrUndefined(attributes.media_season);
+    const mediaSeriesTitle = toStringOrUndefined(attributes.media_series_title);
+    const mediaTrack = toNumberOrUndefined(attributes.media_track);
+    const appId = toStringOrUndefined(attributes.app_id);
+    const appName = toStringOrUndefined(attributes.app_name);
+    const source = toStringOrUndefined(attributes.source);
+    const sourceList = toStringArrayOrUndefined(attributes.source_list);
+    const soundMode = toStringOrUndefined(attributes.sound_mode);
+    const soundModeList = toStringArrayOrUndefined(attributes.sound_mode_list);
+    const groupMembers = toStringArrayOrUndefined(attributes.group_members);
+    const mediaDeviceClass = toStringOrUndefined(attributes.device_class);
     const unitOfMeasurement = toStringOrUndefined(attributes.unit_of_measurement);
     const weatherTemperatureUnit =
       toStringOrUndefined(attributes.temperature_unit) ??
@@ -647,6 +673,7 @@ export function mapHassEntitiesToMock(
     const fanModes = toStringArrayOrUndefined(attributes.fan_modes);
     const volumeLevel = toPercentFromUnitRange(attributes.volume_level);
     const mediaMuted = typeof attributes.is_volume_muted === 'boolean' ? attributes.is_volume_muted : undefined;
+    const volumeStep = toNumberOrUndefined(attributes.volume_step);
     const supportedFeatures = toNumberOrUndefined(attributes.supported_features);
     const colorMode = toStringOrUndefined(attributes.color_mode);
     const supportedColorModes = toStringArrayOrUndefined(attributes.supported_color_modes);
@@ -667,7 +694,7 @@ export function mapHassEntitiesToMock(
 
     const isOnOffEntity = entity.state === 'on' || entity.state === 'off';
     const toggleOn = isOnOffEntity ? entity.state === 'on' : undefined;
-    const stateLabel = hvacAction ?? entity.state;
+    const stateLabel = domain === 'media_player' ? translateMediaPlayerState(entity.state) : hvacAction ?? entity.state;
 
     const mediaSecondary = mediaTitle ? `${mediaTitle}${mediaArtist ? ` - ${mediaArtist}` : ''}` : undefined;
     const fallbackSecondary = friendlyName ?? (unit ? `${entity.state} ${unit}` : undefined);
@@ -689,9 +716,31 @@ export function mapHassEntitiesToMock(
       nowPlaying: mediaTitle,
       mediaTitle,
       mediaArtist,
+      mediaAlbumArtist,
+      mediaAlbumName,
+      mediaChannel,
+      mediaContentId,
+      mediaContentType,
       mediaPosition,
       mediaDuration,
       mediaPositionUpdatedAt,
+      mediaEpisode,
+      mediaImageHash,
+      mediaImageRemotelyAccessible,
+      mediaImageUrl,
+      mediaImageLocalUrl,
+      mediaPlaylist,
+      mediaSeason,
+      mediaSeriesTitle,
+      mediaTrack,
+      appId,
+      appName,
+      source,
+      sourceList,
+      soundMode,
+      soundModeList,
+      groupMembers,
+      mediaDeviceClass,
       forecast: domain === 'weather' ? weatherForecast : undefined,
       precipitation: domain === 'weather' ? weatherPrecipitation : undefined,
       windSpeed: domain === 'weather' ? weatherWindSpeed : undefined,
@@ -720,6 +769,7 @@ export function mapHassEntitiesToMock(
       fanModes,
       volumeLevel,
       mediaMuted,
+      volumeStep,
       colorMode,
       supportedColorModes,
       hsColor,
