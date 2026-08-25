@@ -13,7 +13,8 @@ Obiettivo: verificare manualmente i flussi sensibili prima di distribuire la bet
 - [x] Backup JSON non contiene `ha.dashboard.secrets.widgetCodes.v2`.
 - [x] Restore di un backup vecchio/sporco non ripristina token, passkey, PIN locali o codici widget.
 - [x] Condivisione configurazione/ruolo non contiene token, passkey, PIN locali o codici widget.
-- [x] Reset totale rimuove anche token, codici locali e credential locali.
+- [x] Reset totale rimuove documento condiviso e cronologia da Home Assistant; sul dispositivo che avvia il reset elimina anche token, codici e credential locali soltanto dopo la conferma server.
+- [x] Un tombstone condiviso impedisce agli altri dispositivi di ripubblicare cache obsolete dopo il reset; questi eliminano layout, bozze e segreti delle vecchie card ma preservano credenziali HA, passkey e preferenze personali.
 
 Verifica automatica 2026-07-17:
 

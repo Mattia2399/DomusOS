@@ -9,6 +9,12 @@ import {
 } from '../services/dashboardConfigurationRepository';
 import { DASHBOARD_LAYOUT_STORAGE_VERSION } from '../services/dashboardStorage';
 import { HA_DASHBOARD_REVISION_HISTORY_KEY } from '../services/dashboardRevisionHistory';
+import {
+  HA_DASHBOARD_RESET_MARKER_KEY,
+  completeDashboardResetMarker,
+  createDashboardResetMarker,
+} from '../services/dashboardReset';
+import { acknowledgeAuthoritativeDashboardReset } from '../services/dashboardResetClient';
 
 function buildDashboard(title = 'Initial'): DashboardLayoutConfiguration {
   return {
@@ -94,6 +100,89 @@ describe('useHaDashboardLayoutPersistence', () => {
       await expect(result.current.saveNow()).resolves.toMatchObject({ ok: false, code: 'migration_required' });
     });
     expect(callApi.mock.calls.some(([message]) => message.type === 'frontend/set_system_data')).toBe(false);
+  });
+
+  it('recognizes an authoritative reset instead of migrating stale local data', async () => {
+    const marker = completeDashboardResetMarker(
+      createDashboardResetMarker('owner', 'reset-123456'),
+    );
+    const callApi = vi.fn(async (message: Record<string, unknown>) => ({
+      value: message.key === HA_DASHBOARD_RESET_MARKER_KEY ? marker : null,
+    }));
+    const onHydrate = vi.fn();
+    const onAuthoritativeReset = vi.fn();
+    const { result } = renderHook(() => useHaDashboardLayoutPersistence({
+      active: true,
+      isConnected: true,
+      canManage: true,
+      userId: 'owner',
+      callApi,
+      dashboard: buildDashboard('Stale local layout'),
+      onHydrate,
+      onAuthoritativeReset,
+    }));
+
+    await waitFor(() => expect(onAuthoritativeReset).toHaveBeenCalledWith(marker));
+    expect(onHydrate).not.toHaveBeenCalled();
+    expect(result.current.serverRevision).toBeNull();
+    expect(result.current.loadStatus).toBe('migration_required');
+  });
+
+  it('does not loop back to welcome after the same reset was already acknowledged', async () => {
+    const marker = completeDashboardResetMarker(
+      createDashboardResetMarker('owner', 'reset-acknowledged'),
+    );
+    acknowledgeAuthoritativeDashboardReset(window.localStorage, marker);
+    const callApi = vi.fn(async (message: Record<string, unknown>) => ({
+      value: message.key === HA_DASHBOARD_RESET_MARKER_KEY ? marker : null,
+    }));
+    const onAuthoritativeReset = vi.fn();
+    const { result } = renderHook(() => useHaDashboardLayoutPersistence({
+      active: true,
+      isConnected: true,
+      canManage: true,
+      userId: 'owner',
+      callApi,
+      dashboard: buildDashboard('New setup'),
+      onHydrate: vi.fn(),
+      onAuthoritativeReset,
+    }));
+
+    await waitFor(() => expect(result.current.loadStatus).toBe('migration_required'));
+    expect(onAuthoritativeReset).not.toHaveBeenCalled();
+  });
+
+  it('detects a reset from another device during a remote update check', async () => {
+    let stored: SharedHouseConfiguration | null = buildDocument(buildDashboard('Version 1'));
+    let marker: ReturnType<typeof completeDashboardResetMarker> | null = null;
+    const callApi = vi.fn(async (message: Record<string, unknown>) => {
+      if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) return { value: marker };
+      if (message.key === HA_DASHBOARD_REVISION_HISTORY_KEY) return { value: null };
+      return { value: stored };
+    });
+    const onAuthoritativeReset = vi.fn();
+    const { result } = renderHook(() => useHaDashboardLayoutPersistence({
+      active: true,
+      autoSaveEnabled: false,
+      isConnected: true,
+      canManage: true,
+      userId: 'owner',
+      callApi,
+      dashboard: buildDashboard('Local'),
+      onHydrate: vi.fn(),
+      onAuthoritativeReset,
+      remoteCheckIntervalMs: 60_000,
+    }));
+
+    await waitFor(() => expect(result.current.loadStatus).toBe('ready'));
+    stored = null;
+    marker = completeDashboardResetMarker(
+      createDashboardResetMarker('other-owner', 'reset-654321'),
+    );
+    await act(async () => {
+      await expect(result.current.checkForRemoteUpdate()).resolves.toBe(true);
+    });
+    expect(onAuthoritativeReset).toHaveBeenCalledWith(marker);
   });
 
   it('hydrates a limited user but never attempts an authoritative write', async () => {
@@ -466,10 +555,14 @@ describe('useHaDashboardLayoutPersistence', () => {
 
   it('transfers the current local layout only after an explicit initialization', async () => {
     let stored: SharedHouseConfiguration | null = null;
+    let resetMarker: unknown = null;
     const callApi = vi.fn(async (message: Record<string, unknown>) => {
-      if (message.type === 'frontend/get_system_data') return { value: stored };
+      if (message.type === 'frontend/get_system_data') {
+        return { value: message.key === HA_DASHBOARD_RESET_MARKER_KEY ? resetMarker : stored };
+      }
       if (message.type === 'frontend/set_system_data') {
-        stored = message.value as SharedHouseConfiguration;
+        if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) resetMarker = message.value;
+        else stored = message.value as SharedHouseConfiguration;
         return undefined;
       }
       return null;

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { HaConnectionStatus } from '../../hooks/useHaLiveConnection';
+import type { DashboardResetProgressReporter } from '../../services/dashboardReset';
 import type { DashboardAppearance } from '../../theme/dashboardTheme';
 import DeferredGlassLoader from '../ui/DeferredGlassLoader';
 import SettingsManagementShell from './SettingsManagementShell';
@@ -52,7 +53,7 @@ export type SettingsManagementPanelProps = {
   isOAuthBusy: boolean;
   onDownloadBackup: () => void;
   onRestoreBackup: (file: File) => Promise<void>;
-  onResetAll: () => Promise<void>;
+  onResetAll: (reportProgress?: DashboardResetProgressReporter) => Promise<void>;
   onOpenLayoutVersions?: () => void;
 };
 

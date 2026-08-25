@@ -15,6 +15,7 @@
 ## Perché DomusOS
 
 - Layout condiviso dalla casa e sincronizzato tra i dispositivi.
+- Reset autorevole condiviso: nessun browser puo ripristinare accidentalmente un layout eliminato usando una cache precedente.
 - Griglie diverse per desktop, tablet e mobile, con drag and drop e undo/redo.
 - Card responsive e pannelli contestuali per le principali entità Home Assistant.
 - Onboarding guidato, Demo isolata e connessione tramite la sessione Home Assistant.

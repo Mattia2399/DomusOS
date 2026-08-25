@@ -228,7 +228,11 @@ const integrationSourceFiles = await collectFiles(
   '',
 );
 const integrationFiles = integrationSourceFiles
-  .filter((file) => !file.path.includes('/frontend/'))
+  .filter((file) =>
+    !file.path.includes('/frontend/') &&
+    !file.path.includes('__pycache__/') &&
+    !file.path.endsWith('.pyc'),
+  )
   .map((file) => {
     if (file.path.endsWith('/const.py')) {
       return {

@@ -5,6 +5,8 @@ import {
   type DashboardLayoutConfiguration,
   type SharedHouseConfiguration,
 } from './dashboardConfigurationRepository';
+import { HA_DASHBOARD_REVISION_HISTORY_KEY } from './dashboardRevisionHistory';
+import { HA_DASHBOARD_RESET_MARKER_KEY } from './dashboardReset';
 import { createHaDashboardConfigurationRepository } from './haDashboardConfigurationRepository';
 import {
   createLocalDashboardConfigurationCache,
@@ -250,6 +252,64 @@ describe('HA dashboard configuration repository', () => {
     await vi.runAllTimersAsync();
     await expect(savePromise).resolves.toMatchObject({ status: 'saved', document: { revision: 2 } });
     vi.useRealTimers();
+  });
+
+  it('clears and verifies revision history and shared configuration', async () => {
+    let storedConfiguration: unknown = buildDocument(4);
+    let storedHistory: unknown = { entries: [{ revision: 3 }] };
+    let storedResetMarker: unknown = null;
+    const progress: string[] = [];
+    const callApi = vi.fn(async (message: Record<string, unknown>) => {
+      if (message.type === 'frontend/set_system_data') {
+        if (message.key === HA_DASHBOARD_REVISION_HISTORY_KEY) storedHistory = message.value;
+        if (message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY) storedConfiguration = message.value;
+        if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) storedResetMarker = message.value;
+        return null;
+      }
+      return {
+        value: message.key === HA_DASHBOARD_REVISION_HISTORY_KEY
+          ? storedHistory
+          : message.key === HA_DASHBOARD_RESET_MARKER_KEY
+            ? storedResetMarker
+            : storedConfiguration,
+      };
+    });
+    const repository = createHaDashboardConfigurationRepository({
+      callApi,
+      isConnected: () => true,
+      canManageSharedConfiguration: () => true,
+    });
+
+    await expect(repository.resetAuthoritativeConfiguration('owner-1', (stage) => progress.push(stage)))
+      .resolves.toMatchObject({ status: 'reset', marker: { status: 'complete' } });
+    expect(progress).toEqual([
+      'publishing_reset',
+      'clearing_history',
+      'clearing_shared_configuration',
+      'verifying_server',
+      'finalizing_reset',
+    ]);
+    expect(storedHistory).toBeNull();
+    expect(storedConfiguration).toBeNull();
+    expect(storedResetMarker).toMatchObject({
+      schema: 'domusos-dashboard-reset',
+      status: 'complete',
+      requestedByUserId: 'owner-1',
+    });
+  });
+
+  it('fails closed without clearing when reset is unauthorized', async () => {
+    const callApi = vi.fn();
+    const repository = createHaDashboardConfigurationRepository({
+      callApi,
+      isConnected: () => true,
+      canManageSharedConfiguration: () => false,
+    });
+
+    await expect(repository.resetAuthoritativeConfiguration('owner-1')).resolves.toEqual({
+      status: 'unauthorized',
+    });
+    expect(callApi).not.toHaveBeenCalled();
   });
 });
 

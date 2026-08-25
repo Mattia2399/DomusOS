@@ -98,7 +98,7 @@ describe('SettingsDataBackupSection', () => {
     renderSection({ props: { onResetAll } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset totale' }));
-    expect(await screen.findByRole('heading', { name: 'Inizializzare la dashboard?' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Ripristinare DomusOS?' })).toBeTruthy();
 
     const confirmButton = screen.getByRole('button', { name: 'Conferma' });
     expect(confirmButton.hasAttribute('disabled')).toBe(true);
@@ -106,5 +106,28 @@ describe('SettingsDataBackupSection', () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => expect(onResetAll).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows non-dismissible reset progress reported by the persistence layer', async () => {
+    let releaseReset: (() => void) | undefined;
+    const onResetAll = vi.fn(async (reportProgress?: (stage: 'clearing_history') => void) => {
+      reportProgress?.('clearing_history');
+      await new Promise<void>((resolve) => {
+        releaseReset = resolve;
+      });
+    });
+    renderSection({ props: { onResetAll } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset totale' }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'RESET' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Conferma' }));
+
+    expect(await screen.findByRole('heading', { name: 'Ripristino di DomusOS' })).toBeTruthy();
+    expect(screen.getByText('Eliminazione delle versioni')).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Avanzamento reset' }).getAttribute('aria-valuenow'))
+      .toBe('35');
+    expect(screen.queryByRole('button', { name: /chiudi/i })).toBeNull();
+
+    releaseReset?.();
   });
 });

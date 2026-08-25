@@ -29,6 +29,10 @@ describe('Home Assistant panel bridge schema', () => {
       key: 'premium-home.dashboard-revisions.v1',
     })).toBe(true);
     expect(validatePanelApiMessage({
+      type: 'frontend/get_system_data',
+      key: 'premium-home.dashboard-reset.v1',
+    })).toBe(true);
+    expect(validatePanelApiMessage({
       type: 'frontend/set_system_data',
       key: 'premium-home.dashboard-revisions.v1',
       value: {
@@ -38,6 +42,39 @@ describe('Home Assistant panel bridge schema', () => {
         entries: [],
       },
     })).toBe(true);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'premium-home.shared-house.v1',
+      value: null,
+    })).toBe(true);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'premium-home.dashboard-revisions.v1',
+      value: null,
+    })).toBe(true);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'premium-home.dashboard-reset.v1',
+      value: {
+        schema: 'domusos-dashboard-reset',
+        version: 1,
+        resetId: 'reset-123456',
+        status: 'complete',
+        requestedAt: '2026-08-25T10:00:00.000Z',
+        completedAt: '2026-08-25T10:00:01.000Z',
+        requestedByUserId: 'owner-1',
+      },
+    })).toBe(true);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'premium-home.dashboard-reset.v1',
+      value: { schema: 'wrong' },
+    })).toBe(false);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'another-app.secret',
+      value: null,
+    })).toBe(false);
     expect(validatePanelApiMessage({
       type: 'frontend/get_system_data',
       key: 'another-app.secret',
@@ -68,9 +105,10 @@ describe('Home Assistant panel bridge schema', () => {
     expect(parsePanelBridgeCapabilities([
       'shared_configuration',
       'revision_history',
+      'dashboard_reset_marker',
       'unknown_capability',
       42,
-    ])).toEqual(['shared_configuration', 'revision_history']);
+    ])).toEqual(['shared_configuration', 'revision_history', 'dashboard_reset_marker']);
     expect(parsePanelBridgeCapabilities(null)).toEqual([]);
   });
 });

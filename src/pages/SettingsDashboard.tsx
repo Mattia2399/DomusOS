@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ArchiveRestore,
   BellRing,
   Box,
   ChevronRight,
@@ -94,7 +93,6 @@ type SettingsDashboardProps = {
   onDeveloperModeChange: (value: boolean) => void;
   onDownloadBackup: () => void;
   onRestoreBackup: (file: File) => Promise<void>;
-  onResetAll: () => Promise<void>;
   layoutRevisions?: DashboardRevisionRecord[];
   layoutRevisionHistoryStatus?: DashboardRevisionHistoryStatus;
   onRefreshLayoutRevisions?: () => Promise<boolean>;
@@ -862,7 +860,6 @@ export default function SettingsDashboard({
   onDeveloperModeChange,
   onDownloadBackup,
   onRestoreBackup,
-  onResetAll,
   layoutRevisions = [],
   layoutRevisionHistoryStatus = 'idle',
   onRefreshLayoutRevisions,
@@ -1042,21 +1039,6 @@ export default function SettingsDashboard({
     } finally {
       setIsRestoreBusy(false);
     }
-  };
-
-  const handleResetAll = () => {
-    void (async () => {
-      const authorized = await sensitiveGate.authorize({
-        action: 'reset_dashboard',
-        capability: 'reset_dashboard',
-        title: 'Inizializzare la dashboard?',
-        description: 'Questa azione elimina la configurazione locale e non può essere annullata.',
-        confirmationPhrase: 'RESET',
-      });
-      if (authorized) {
-        await onResetAll();
-      }
-    })();
   };
 
   const handleRestartServer = () => {
@@ -1985,10 +1967,10 @@ export default function SettingsDashboard({
                 {security.can('reset_dashboard') ? (
                   <button
                     type="button"
-                    onClick={handleResetAll}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-rose-400/25 bg-rose-500/[0.06] px-3 py-2 text-xs font-semibold text-rose-200 transition-colors hover:bg-rose-500/12"
+                    onClick={() => navigateTo('/settings/data')}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] px-3 py-2 text-xs font-semibold text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-surface-glass-strong)]"
                   >
-                    <ArchiveRestore size={14} /> Inizializza dashboard
+                    <Database size={14} /> Apri Dati e backup
                   </button>
                 ) : null}
               </div>

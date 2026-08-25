@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-beta.9 — 2026-08-25
+
+### Aggiunto
+
+- reset autorevole condiviso con avanzamento bloccante e verifica dello storage Home Assistant;
+- tombstone di reset sincronizzato per impedire a browser e dispositivi secondari di ripubblicare layout obsoleti;
+- riconoscimento locale del reset per evitare loop nel nuovo onboarding.
+
+### Corretto
+
+- il reset elimina layout, cronologia, cache, bozze e segreti delle card senza confondere uno store azzerato con una prima migrazione;
+- i dispositivi secondari mantengono credenziali Home Assistant, passkey e preferenze personali quando recepiscono il reset globale;
+- panel bridge aggiornato con schema e allowlist stretti per il marcatore di reset.
+
 ## 0.1.0-beta.8 — 2026-08-25
 
 ### Corretto

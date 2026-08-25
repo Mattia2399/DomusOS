@@ -11,6 +11,7 @@ const PANEL_BRIDGE_PROTOCOL_VERSION = 2;
 const PANEL_BRIDGE_CAPABILITIES = Object.freeze([
   "shared_configuration",
   "revision_history",
+  "dashboard_reset_marker",
 ]);
 const ALLOWED_WS_TYPES = new Set([
   "auth/current_user", "auth/list", "config/auth/list", "get_services",
@@ -31,6 +32,7 @@ const HA_NAME = /^[a-z0-9_]+$/;
 const REQUEST_ID = /^ha-panel-call-(?:service|api)-\d{10,}-[a-z0-9]+$/;
 const SHARED_HOUSE_KEY = "premium-home.shared-house.v1";
 const DASHBOARD_REVISIONS_KEY = "premium-home.dashboard-revisions.v1";
+const DASHBOARD_RESET_MARKER_KEY = "premium-home.dashboard-reset.v1";
 const isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const isValidService = (domain, service, data) =>
   typeof domain === "string" && HA_NAME.test(domain) &&
@@ -57,14 +59,33 @@ const isValidDashboardRevisionHistory = (value) =>
     isRecord(entry.dashboard) && Array.isArray(entry.dashboard.sections) &&
     Array.isArray(entry.dashboard.widgets)
   );
+const isValidDashboardResetMarker = (value) =>
+  isRecord(value) &&
+  value.schema === "domusos-dashboard-reset" &&
+  value.version === 1 &&
+  (value.status === "pending" || value.status === "complete") &&
+  typeof value.resetId === "string" && /^[a-z0-9-]{8,160}$/i.test(value.resetId) &&
+  typeof value.requestedAt === "string" && Number.isFinite(Date.parse(value.requestedAt)) &&
+  typeof value.requestedByUserId === "string" && value.requestedByUserId.trim().length > 0 &&
+  value.requestedByUserId.length <= 160 &&
+  (value.completedAt === undefined ||
+    (typeof value.completedAt === "string" && Number.isFinite(Date.parse(value.completedAt)))) &&
+  (value.status !== "complete" ||
+    (typeof value.completedAt === "string" && Number.isFinite(Date.parse(value.completedAt))));
 const isValidWsMessage = (message) => {
   if (!isRecord(message) || typeof message.type !== "string" || !ALLOWED_WS_TYPES.has(message.type)) return false;
   if (message.type === "frontend/get_system_data") {
-    return message.key === SHARED_HOUSE_KEY || message.key === DASHBOARD_REVISIONS_KEY;
+    return message.key === SHARED_HOUSE_KEY || message.key === DASHBOARD_REVISIONS_KEY ||
+      message.key === DASHBOARD_RESET_MARKER_KEY;
   }
   if (message.type === "frontend/set_system_data") {
+    if (message.value === null) {
+      return message.key === SHARED_HOUSE_KEY || message.key === DASHBOARD_REVISIONS_KEY ||
+        message.key === DASHBOARD_RESET_MARKER_KEY;
+    }
     if (message.key === SHARED_HOUSE_KEY) return isValidSharedHouseDocument(message.value);
     if (message.key === DASHBOARD_REVISIONS_KEY) return isValidDashboardRevisionHistory(message.value);
+    if (message.key === DASHBOARD_RESET_MARKER_KEY) return isValidDashboardResetMarker(message.value);
     return false;
   }
   return message.type !== "call_service" ||

@@ -11,6 +11,10 @@ import {
   HA_DASHBOARD_REVISION_HISTORY_KEY,
   parseDashboardRevisionHistory,
 } from '../services/dashboardRevisionHistory';
+import {
+  HA_DASHBOARD_RESET_MARKER_KEY,
+  parseDashboardResetMarker,
+} from '../services/dashboardReset';
 
 type HaPanelPayloadBase = {
   type: string;
@@ -71,7 +75,11 @@ const HA_NAME_PATTERN = /^[a-z0-9_]+$/;
 const HA_ENTITY_ID_PATTERN = /^[a-z0-9_]+\.[a-z0-9_]+$/;
 const REQUEST_ID_PATTERN = /^ha-panel-call-(?:service|api)-\d{10,}-[a-z0-9]+$/;
 const MAX_BRIDGE_STATES = 20_000;
-const PANEL_BRIDGE_CAPABILITIES = new Set(['shared_configuration', 'revision_history']);
+const PANEL_BRIDGE_CAPABILITIES = new Set([
+  'shared_configuration',
+  'revision_history',
+  'dashboard_reset_marker',
+]);
 
 export function parsePanelBridgeCapabilities(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -149,9 +157,15 @@ export function validatePanelApiMessage(message: unknown): message is Record<str
   }
   if (message.type === 'frontend/get_system_data') {
     return message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY ||
-      message.key === HA_DASHBOARD_REVISION_HISTORY_KEY;
+      message.key === HA_DASHBOARD_REVISION_HISTORY_KEY ||
+      message.key === HA_DASHBOARD_RESET_MARKER_KEY;
   }
   if (message.type === 'frontend/set_system_data') {
+    if (message.value === null) {
+      return message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY ||
+        message.key === HA_DASHBOARD_REVISION_HISTORY_KEY ||
+        message.key === HA_DASHBOARD_RESET_MARKER_KEY;
+    }
     if (message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY) {
       return parseSharedHouseConfiguration(message.value) !== null;
     }
@@ -160,6 +174,9 @@ export function validatePanelApiMessage(message: unknown): message is Record<str
         Array.isArray(message.value.entries) &&
         message.value.entries.length <= 4 &&
         parseDashboardRevisionHistory(message.value) !== null;
+    }
+    if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) {
+      return parseDashboardResetMarker(message.value) !== null;
     }
     return false;
   }

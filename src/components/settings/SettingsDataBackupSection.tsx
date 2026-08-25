@@ -11,7 +11,13 @@ import {
 } from 'lucide-react';
 import { useDashboardSecurity } from '../../security/dashboardAccess';
 import { useSensitiveActionGate } from '../../security/SensitiveActionGate';
+import type {
+  DashboardResetProgressReporter,
+  DashboardResetStage,
+} from '../../services/dashboardReset';
 import type { DashboardAppearance } from '../../theme/dashboardTheme';
+import GlassLoader from '../ui/GlassLoader';
+import GlassModal from '../ui/GlassModal';
 import GlassToggle from '../ui/GlassToggle';
 
 export type SettingsDataBackupSectionProps = {
@@ -20,7 +26,7 @@ export type SettingsDataBackupSectionProps = {
   onDeveloperModeChange: (value: boolean) => void;
   onDownloadBackup: () => void;
   onRestoreBackup: (file: File) => Promise<void>;
-  onResetAll: () => Promise<void>;
+  onResetAll: (reportProgress?: DashboardResetProgressReporter) => Promise<void>;
   onOpenLayoutVersions?: () => void;
   enterpriseControlsEnabled?: boolean;
   dashboardDeviceId?: string;
@@ -69,6 +75,7 @@ export function SettingsDataBackupSection({
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isActionBusy, setIsActionBusy] = useState(false);
+  const [resetStage, setResetStage] = useState<DashboardResetStage | null>(null);
   const [deviceLayoutFeedback, setDeviceLayoutFeedback] = useState<ActionFeedback>({
     tone: 'idle',
     text: '',
@@ -161,8 +168,8 @@ export function SettingsDataBackupSection({
     const authorized = await sensitiveGate.authorize({
       action: 'reset_dashboard',
       capability: 'reset_dashboard',
-      title: 'Inizializzare la dashboard?',
-      description: 'Questa azione elimina la configurazione locale e non può essere annullata.',
+      title: 'Ripristinare DomusOS?',
+      description: 'Verranno eliminati il layout condiviso, le cinque versioni disponibili, le preferenze e i dati DomusOS presenti su questo dispositivo. Gli utenti collegati alla stessa casa perderanno il layout attuale. Entità, dispositivi e configurazione di Home Assistant non verranno modificati. Questa azione non può essere annullata.',
       confirmationPhrase: 'RESET',
     });
     if (!authorized) {
@@ -171,13 +178,65 @@ export function SettingsDataBackupSection({
 
     setActionError(null);
     setIsActionBusy(true);
+    setResetStage('preparing');
     try {
-      await onResetAll();
+      await onResetAll(setResetStage);
     } catch (error) {
+      setResetStage(null);
       setActionError(normalizeError(error));
     } finally {
       setIsActionBusy(false);
     }
+  };
+
+  const resetProgress = resetStage === 'preparing'
+    ? 8
+    : resetStage === 'publishing_reset'
+      ? 20
+      : resetStage === 'clearing_history'
+        ? 35
+      : resetStage === 'clearing_shared_configuration'
+        ? 52
+        : resetStage === 'verifying_server'
+          ? 68
+          : resetStage === 'finalizing_reset'
+            ? 80
+          : resetStage === 'clearing_device'
+            ? 91
+            : 100;
+  const resetCopy: Record<DashboardResetStage, { label: string; description: string }> = {
+    preparing: {
+      label: 'Preparazione del reset',
+      description: 'Verifichiamo autorizzazione e connessione alla casa.',
+    },
+    publishing_reset: {
+      label: 'Sincronizzazione del reset',
+      description: 'Informiamo tutti i dispositivi collegati che la configurazione sta per essere azzerata.',
+    },
+    clearing_history: {
+      label: 'Eliminazione delle versioni',
+      description: 'Rimuoviamo la cronologia dei layout da Home Assistant.',
+    },
+    clearing_shared_configuration: {
+      label: 'Eliminazione del layout condiviso',
+      description: 'Rimuoviamo la configurazione DomusOS condivisa dalla casa.',
+    },
+    verifying_server: {
+      label: 'Verifica con Home Assistant',
+      description: 'Attendiamo la conferma che i dati siano stati rimossi.',
+    },
+    finalizing_reset: {
+      label: 'Conferma del reset condiviso',
+      description: 'Rendiamo definitivo il reset per tutti i dispositivi della casa.',
+    },
+    clearing_device: {
+      label: 'Pulizia del dispositivo',
+      description: 'Eliminiamo preferenze, cache e credenziali locali DomusOS.',
+    },
+    restarting: {
+      label: 'Reset completato',
+      description: 'DomusOS sta tornando alla schermata iniziale.',
+    },
   };
 
   const handleRelinkCurrentDeviceLayout = () => {
@@ -438,6 +497,46 @@ export function SettingsDataBackupSection({
       />
 
       {actionError ? <p className={`mt-3 ${errorTextClass}`}>{actionError}</p> : null}
+
+      <GlassModal
+        isOpen={resetStage !== null}
+        onClose={() => undefined}
+        eyebrow="Reset totale"
+        title="Ripristino di DomusOS"
+        description="Non chiudere la pagina e non interrompere la connessione."
+        variant="responsive"
+        size="sm"
+        dismissible={false}
+        showCloseButton={false}
+        zIndex={300}
+        backdropClassName="bg-black/78 backdrop-blur-3xl"
+      >
+        {resetStage ? (
+          <div className="flex min-h-[15rem] flex-col items-center justify-center px-2 py-6 text-center">
+            <GlassLoader
+              size="lg"
+              label={resetCopy[resetStage].label}
+              description={resetCopy[resetStage].description}
+            />
+            <div
+              className="mt-7 h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--ui-fill-tertiary)]"
+              role="progressbar"
+              aria-label="Avanzamento reset"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={resetProgress}
+            >
+              <div
+                className="h-full rounded-full bg-[color:var(--ui-accent)] transition-[width] duration-500 ease-out"
+                style={{ width: `${resetProgress}%` }}
+              />
+            </div>
+            <p className="mt-3 text-xs font-medium text-[color:var(--ui-text-tertiary)]">
+              {resetProgress}%
+            </p>
+          </div>
+        ) : null}
+      </GlassModal>
     </section>
   );
 }

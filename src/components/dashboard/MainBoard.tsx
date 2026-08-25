@@ -274,6 +274,14 @@ import {
   restoreDashboardBackup,
   serializeDashboardBackup,
 } from '../../services/configBackup';
+import type {
+  DashboardResetMarker,
+  DashboardResetProgressReporter,
+} from '../../services/dashboardReset';
+import {
+  acknowledgeAuthoritativeDashboardReset,
+  invalidateLocalDashboardAfterAuthoritativeReset,
+} from '../../services/dashboardResetClient';
 import {
   INITIAL_AUTH_ATTEMPT_STATE,
   appendSecurityAuditEvent,
@@ -6342,6 +6350,15 @@ export function MainBoard() {
     setResponsiveLayouts(layout.responsiveLayouts);
     setWidgetLayoutOverrides(layout.widgetLayoutOverrides);
   }, []);
+  const handleAuthoritativeDashboardReset = useCallback((marker: DashboardResetMarker) => {
+    if (typeof window === 'undefined') return;
+    invalidateLocalDashboardAfterAuthoritativeReset(
+      window.localStorage,
+      window.sessionStorage,
+      marker,
+    );
+    window.location.reload();
+  }, []);
   const haDashboardLayoutPersistence = useHaDashboardLayoutPersistence({
     active: effectiveRuntimeMode === 'real',
     autoSaveEnabled: false,
@@ -6352,6 +6369,7 @@ export function MainBoard() {
     callApi: callHaApi,
     dashboard: authoritativeDashboardLayout,
     onHydrate: hydrateAuthoritativeDashboardLayout,
+    onAuthoritativeReset: handleAuthoritativeDashboardReset,
   });
   const lastNotifiedRemoteRevisionRef = useRef<number | null>(null);
   const lastAnnouncedAppliedRevisionRef = useRef<number | null>(null);
@@ -10103,7 +10121,7 @@ export function MainBoard() {
     window.location.reload();
   };
 
-  const resetAllConfiguration = async () => {
+  const resetAllConfiguration = async (reportProgress?: DashboardResetProgressReporter) => {
     if (
       typeof window === 'undefined' ||
       !dashboardSecurity.can('reset_dashboard')
@@ -10111,10 +10129,34 @@ export function MainBoard() {
       return;
     }
 
+    let authoritativeResetMarker: DashboardResetMarker | null = null;
+    if (effectiveRuntimeMode === 'real') {
+      const resetResult = await haDashboardLayoutPersistence.resetAuthoritativeConfiguration(
+        reportProgress,
+      );
+      if (resetResult.status !== 'reset') {
+        const message = resetResult.status === 'offline'
+          ? 'Home Assistant non è raggiungibile. Il reset non è stato eseguito.'
+          : resetResult.status === 'unauthorized'
+            ? 'Non hai i permessi necessari per eliminare la configurazione condivisa.'
+            : resetResult.status === 'unsupported'
+              ? 'Questa installazione non supporta il reset della configurazione condivisa.'
+              : 'Home Assistant non ha confermato il reset. I dati locali non sono stati eliminati.';
+        throw new Error(message);
+      }
+      authoritativeResetMarker = resetResult.marker;
+    }
+
+    reportProgress?.('clearing_device');
     clearManagedDashboardStorage(
       window.localStorage,
       effectiveRuntimeMode === 'demo' ? 'demo' : 'all',
     );
+    if (authoritativeResetMarker) {
+      acknowledgeAuthoritativeDashboardReset(window.localStorage, authoritativeResetMarker);
+    }
+    reportProgress?.('restarting');
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 450));
     window.location.reload();
   };
 
@@ -10944,7 +10986,6 @@ export function MainBoard() {
               onDeveloperModeChange={handleDeveloperModeChange}
               onDownloadBackup={downloadConfigurationBackup}
               onRestoreBackup={restoreConfigurationFromFile}
-              onResetAll={resetAllConfiguration}
               layoutRevisions={haDashboardLayoutPersistence.revisions}
               layoutRevisionHistoryStatus={haDashboardLayoutPersistence.revisionHistoryStatus}
               onRefreshLayoutRevisions={haDashboardLayoutPersistence.refreshRevisionHistory}

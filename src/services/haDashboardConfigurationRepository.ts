@@ -19,6 +19,14 @@ import {
   type DashboardRevisionArchiveResult,
   type DashboardRevisionHistoryLoadResult,
 } from './dashboardRevisionHistory';
+import {
+  HA_DASHBOARD_RESET_MARKER_KEY,
+  completeDashboardResetMarker,
+  createDashboardResetMarker,
+  parseDashboardResetMarker,
+  type DashboardResetMarker,
+  type DashboardResetProgressReporter,
+} from './dashboardReset';
 
 export type DashboardHaApiCaller = (
   message: Record<string, unknown>,
@@ -37,6 +45,21 @@ export type HaDashboardStorageCapability =
   | 'offline'
   | 'unsupported'
   | 'error';
+
+export type HaDashboardAuthoritativeResetResult =
+  | { status: 'reset'; marker: DashboardResetMarker }
+  | { status: 'unauthorized' }
+  | { status: 'offline' }
+  | { status: 'unsupported' }
+  | { status: 'error'; reason?: string };
+
+export type HaDashboardResetMarkerLoadResult =
+  | { status: 'found'; marker: DashboardResetMarker }
+  | { status: 'empty' }
+  | { status: 'unauthorized' }
+  | { status: 'offline' }
+  | { status: 'unsupported' }
+  | { status: 'error'; reason?: string };
 
 type HaStoredValueResponse = { value: unknown };
 type PersistenceLogLevel = 'info' | 'warn' | 'error';
@@ -203,6 +226,57 @@ export class HaDashboardConfigurationRepository implements DashboardConfiguratio
     return this.readRaw();
   }
 
+  async loadDashboardResetMarker(): Promise<HaDashboardResetMarkerLoadResult> {
+    if (!this.options.isConnected()) return { status: 'offline' };
+    try {
+      const response = await this.options.callApi(
+        {
+          type: 'frontend/get_system_data',
+          key: HA_DASHBOARD_RESET_MARKER_KEY,
+        },
+        { reportError: false, throwOnError: true },
+      );
+      if (response === null || response === undefined) {
+        return this.options.isConnected() ? { status: 'unsupported' } : { status: 'offline' };
+      }
+      if (!hasStoredValue(response)) return { status: 'error', reason: 'invalid_response' };
+      if (response.value === null || response.value === undefined) return { status: 'empty' };
+      const marker = parseDashboardResetMarker(response.value);
+      return marker
+        ? { status: 'found', marker }
+        : { status: 'error', reason: 'invalid_document' };
+    } catch (error) {
+      const status = classifyFailure(error, this.options.isConnected());
+      return status === 'error'
+        ? { status, reason: failureMessage(error) || undefined }
+        : { status };
+    }
+  }
+
+  async clearDashboardResetMarker() {
+    if (!this.options.isConnected()) return false;
+    if (!this.options.canManageSharedConfiguration()) return false;
+    try {
+      await this.options.callApi(
+        {
+          type: 'frontend/set_system_data',
+          key: HA_DASHBOARD_RESET_MARKER_KEY,
+          value: null,
+        },
+        { reportError: false, throwOnError: true },
+      );
+      for (const delayMs of [0, 150, 400]) {
+        await waitForVerification(delayMs);
+        const verified = await this.loadDashboardResetMarker();
+        if (verified.status === 'empty') return true;
+      }
+    } catch {
+      // A stale marker is harmless once a real shared document exists. Clients
+      // only honor it together with an empty authoritative configuration.
+    }
+    return false;
+  }
+
   async loadDashboardRevisionHistory(): Promise<DashboardRevisionHistoryLoadResult> {
     if (!this.options.isConnected()) return { status: 'offline' };
     try {
@@ -293,6 +367,128 @@ export class HaDashboardConfigurationRepository implements DashboardConfiguratio
     if (result.status === 'offline') return 'offline';
     if (result.status === 'unsupported') return 'unsupported';
     return 'error';
+  }
+
+  async resetAuthoritativeConfiguration(
+    requestedByUserId: string,
+    reportProgress?: DashboardResetProgressReporter,
+  ): Promise<HaDashboardAuthoritativeResetResult> {
+    const operationId = `reset-${Date.now().toString(36)}`;
+    if (!this.options.isConnected()) {
+      logPersistence('warn', 'reset:blocked', { operationId, reason: 'offline' });
+      return { status: 'offline' };
+    }
+    if (!this.options.canManageSharedConfiguration()) {
+      logPersistence('warn', 'reset:blocked', { operationId, reason: 'unauthorized' });
+      return { status: 'unauthorized' };
+    }
+    if (!requestedByUserId.trim()) {
+      logPersistence('warn', 'reset:blocked', { operationId, reason: 'identity-unavailable' });
+      return { status: 'unauthorized' };
+    }
+
+    const pendingMarker = createDashboardResetMarker(requestedByUserId, operationId);
+
+    const clearKey = async (
+      key: typeof HA_DASHBOARD_REVISION_HISTORY_KEY | typeof HA_SHARED_HOUSE_CONFIGURATION_KEY,
+    ) => {
+      await this.options.callApi(
+        {
+          type: 'frontend/set_system_data',
+          key,
+          value: null,
+        },
+        { reportError: false, throwOnError: true },
+      );
+    };
+
+    const writeMarker = async (marker: DashboardResetMarker) => {
+      await this.options.callApi(
+        {
+          type: 'frontend/set_system_data',
+          key: HA_DASHBOARD_RESET_MARKER_KEY,
+          value: marker,
+        },
+        { reportError: false, throwOnError: true },
+      );
+    };
+
+    try {
+      // Publish intent first. If power or transport fails after the shared
+      // document is cleared, another client can still distinguish a reset from
+      // a first migration and cannot upload its stale browser cache.
+      reportProgress?.('publishing_reset');
+      await writeMarker(pendingMarker);
+      reportProgress?.('clearing_history');
+      await clearKey(HA_DASHBOARD_REVISION_HISTORY_KEY);
+      reportProgress?.('clearing_shared_configuration');
+      await clearKey(HA_SHARED_HOUSE_CONFIGURATION_KEY);
+    } catch (error) {
+      const status = classifyFailure(error, this.options.isConnected());
+      logPersistence(status === 'error' ? 'error' : 'warn', 'reset:transport-failed', {
+        operationId,
+        status,
+        reason: failureMessage(error) || 'unknown',
+      });
+      return status === 'error'
+        ? { status, reason: failureMessage(error) || undefined }
+        : { status };
+    }
+
+    reportProgress?.('verifying_server');
+    for (const [attemptIndex, delayMs] of [0, 150, 400, 900].entries()) {
+      await waitForVerification(delayMs);
+      const [configuration, history] = await Promise.all([
+        this.loadSharedHouseConfiguration(),
+        this.loadDashboardRevisionHistory(),
+      ]);
+      logPersistence('info', 'reset:verify', {
+        operationId,
+        attempt: attemptIndex + 1,
+        configurationStatus: configuration.status,
+        historyStatus: history.status,
+      });
+      if (configuration.status === 'empty' && history.status === 'empty') {
+        const completedMarker = completeDashboardResetMarker(pendingMarker);
+        try {
+          reportProgress?.('finalizing_reset');
+          await writeMarker(completedMarker);
+          const verifiedMarker = await this.loadDashboardResetMarker();
+          if (
+            verifiedMarker.status === 'found' &&
+            verifiedMarker.marker.resetId === completedMarker.resetId &&
+            verifiedMarker.marker.status === 'complete'
+          ) {
+            logPersistence('info', 'reset:confirmed', {
+              operationId,
+              attempts: attemptIndex + 1,
+            });
+            return { status: 'reset', marker: verifiedMarker.marker };
+          }
+        } catch (error) {
+          logPersistence('error', 'reset:marker-finalize-failed', {
+            operationId,
+            reason: failureMessage(error) || 'unknown',
+          });
+        }
+        return { status: 'error', reason: 'reset_marker_not_confirmed' };
+      }
+      const terminal = [configuration, history].find((result) =>
+        result.status === 'unauthorized' ||
+        result.status === 'offline' ||
+        result.status === 'unsupported',
+      );
+      if (
+        terminal?.status === 'unauthorized' ||
+        terminal?.status === 'offline' ||
+        terminal?.status === 'unsupported'
+      ) {
+        return { status: terminal.status };
+      }
+    }
+
+    logPersistence('error', 'reset:not-confirmed', { operationId });
+    return { status: 'error', reason: 'reset_not_confirmed' };
   }
 
   async saveSharedHouseConfiguration(

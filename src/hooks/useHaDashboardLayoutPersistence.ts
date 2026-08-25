@@ -26,6 +26,11 @@ import {
   type DashboardRevisionRecord,
   type DashboardRevisionHistoryStatus,
 } from '../services/dashboardRevisionHistory';
+import type {
+  DashboardResetMarker,
+  DashboardResetProgressReporter,
+} from '../services/dashboardReset';
+import { isAuthoritativeDashboardResetAcknowledged } from '../services/dashboardResetClient';
 
 export type HaDashboardLayoutLoadStatus =
   | 'idle'
@@ -49,6 +54,7 @@ type UseHaDashboardLayoutPersistenceInput = {
   callApi: DashboardHaApiCaller;
   dashboard: DashboardLayoutConfiguration;
   onHydrate: (dashboard: DashboardLayoutConfiguration) => void;
+  onAuthoritativeReset?: (marker: DashboardResetMarker) => void;
   debounceMs?: number;
   remoteCheckIntervalMs?: number;
   /** Stable injection point for tests; production creates one id per mounted client. */
@@ -119,6 +125,7 @@ export function useHaDashboardLayoutPersistence({
   callApi,
   dashboard,
   onHydrate,
+  onAuthoritativeReset,
   debounceMs = 700,
   remoteCheckIntervalMs = DEFAULT_REMOTE_CHECK_INTERVAL_MS,
   clientId,
@@ -128,11 +135,13 @@ export function useHaDashboardLayoutPersistence({
   const permissionRef = useRef(canManage);
   const callApiRef = useRef(callApi);
   const hydrateRef = useRef(onHydrate);
+  const authoritativeResetRef = useRef(onAuthoritativeReset);
   const deferRemoteUpdatesRef = useRef(deferRemoteUpdates);
   connectionRef.current = isConnected;
   permissionRef.current = canManage;
   callApiRef.current = callApi;
   hydrateRef.current = onHydrate;
+  authoritativeResetRef.current = onAuthoritativeReset;
   deferRemoteUpdatesRef.current = deferRemoteUpdates;
 
   const repository = useMemo(
@@ -165,7 +174,33 @@ export function useHaDashboardLayoutPersistence({
   const conflictRef = useRef(false);
   const saveChainRef = useRef<Promise<DashboardLayoutSaveResult>>(Promise.resolve(errorResult('server_unavailable')));
   const pendingSaveTimeoutRef = useRef<number | null>(null);
+  const handledResetIdRef = useRef<string | null>(null);
   dashboardRef.current = dashboard;
+
+  const handleAuthoritativeReset = useCallback((marker: DashboardResetMarker) => {
+    if (handledResetIdRef.current === marker.resetId) return;
+    handledResetIdRef.current = marker.resetId;
+    if (pendingSaveTimeoutRef.current !== null) {
+      window.clearTimeout(pendingSaveTimeoutRef.current);
+      pendingSaveTimeoutRef.current = null;
+    }
+    cache?.clearSharedHouseConfiguration();
+    documentRef.current = null;
+    pendingRemoteDocumentRef.current = null;
+    pendingLocalPublicationRef.current = null;
+    persistedSignatureRef.current = '';
+    awaitingHydrationRef.current = false;
+    conflictRef.current = false;
+    setServerRevision(null);
+    setPublishedRevision(null);
+    setRevisionHistory([]);
+    setRevisionHistoryStatus('ready');
+    setPendingRemoteUpdate(null);
+    setLastAppliedRemoteRevision(null);
+    setStatus({ phase: 'idle' });
+    setLoadStatus('migration_required');
+    authoritativeResetRef.current?.(marker);
+  }, [cache]);
 
   useEffect(() => {
     if (!active) {
@@ -184,6 +219,7 @@ export function useHaDashboardLayoutPersistence({
       persistedSignatureRef.current = '';
       awaitingHydrationRef.current = false;
       conflictRef.current = false;
+      handledResetIdRef.current = null;
       return;
     }
     if (!isConnected || !userId) {
@@ -194,7 +230,10 @@ export function useHaDashboardLayoutPersistence({
     let cancelled = false;
     setLoadStatus('loading');
     setStatus({ phase: 'idle' });
-    void repository.loadSharedHouseConfiguration().then((result) => {
+    void Promise.all([
+      repository.loadSharedHouseConfiguration(),
+      repository.loadDashboardResetMarker(),
+    ]).then(([result, resetMarkerResult]) => {
       if (cancelled) return;
       if (result.status === 'found') {
         if (result.document.dashboard.storageVersion !== DASHBOARD_LAYOUT_STORAGE_VERSION) {
@@ -247,6 +286,26 @@ export function useHaDashboardLayoutPersistence({
       persistedSignatureRef.current = '';
       awaitingHydrationRef.current = false;
       if (result.status === 'empty') {
+        if (resetMarkerResult.status === 'found') {
+          const alreadyAcknowledged = typeof window !== 'undefined' &&
+            isAuthoritativeDashboardResetAcknowledged(
+              window.localStorage,
+              resetMarkerResult.marker,
+            );
+          if (!alreadyAcknowledged) {
+            handleAuthoritativeReset(resetMarkerResult.marker);
+            return;
+          }
+        }
+        if (
+          resetMarkerResult.status !== 'found' &&
+          resetMarkerResult.status !== 'empty' &&
+          resetMarkerResult.status !== 'unsupported'
+        ) {
+          setLoadStatus(resetMarkerResult.status === 'offline' ? 'offline' : 'error');
+          setStatus(statusFromResult(errorResult('server_unavailable')));
+          return;
+        }
         setLoadStatus(canManage ? 'migration_required' : 'read_only');
         if (canManage) setStatus(statusFromResult(errorResult('migration_required')));
         return;
@@ -266,7 +325,7 @@ export function useHaDashboardLayoutPersistence({
     return () => {
       cancelled = true;
     };
-  }, [active, cache, canManage, isConnected, repository, userId]);
+  }, [active, cache, canManage, handleAuthoritativeReset, isConnected, repository, userId]);
 
   const applyRemoteDocument = useCallback((document: SharedHouseConfiguration) => {
     documentRef.current = document;
@@ -333,6 +392,23 @@ export function useHaDashboardLayoutPersistence({
     remoteCheckInFlightRef.current = true;
     try {
       const result = await repository.loadSharedHouseConfiguration();
+      if (result.status === 'empty') {
+        const resetMarkerResult = await repository.loadDashboardResetMarker();
+        if (resetMarkerResult.status === 'found') {
+          if (
+            typeof window !== 'undefined' &&
+            isAuthoritativeDashboardResetAcknowledged(
+              window.localStorage,
+              resetMarkerResult.marker,
+            )
+          ) {
+            return false;
+          }
+          handleAuthoritativeReset(resetMarkerResult.marker);
+          return true;
+        }
+        return false;
+      }
       if (result.status !== 'found') return false;
       if (result.document.dashboard.storageVersion !== DASHBOARD_LAYOUT_STORAGE_VERSION) {
         setLoadStatus('error');
@@ -372,7 +448,7 @@ export function useHaDashboardLayoutPersistence({
     } finally {
       remoteCheckInFlightRef.current = false;
     }
-  }, [acknowledgeOwnPublication, active, applyRemoteDocument, registerPendingRemoteDocument, repository, userId]);
+  }, [acknowledgeOwnPublication, active, applyRemoteDocument, handleAuthoritativeReset, registerPendingRemoteDocument, repository, userId]);
 
   const applyPendingRemoteUpdate = useCallback(() => {
     const pending = pendingRemoteDocumentRef.current;
@@ -674,6 +750,10 @@ export function useHaDashboardLayoutPersistence({
     awaitingHydrationRef.current = false;
     conflictRef.current = false;
     cache?.saveSharedHouseConfiguration(saved.document);
+    // The marker is only relevant while the authoritative configuration is
+    // empty. Remove it after a confirmed new setup without making setup depend
+    // on this best-effort cleanup.
+    void repository.clearDashboardResetMarker();
     saveDashboardLayout(
       dashboard.sections,
       dashboard.widgets,
@@ -753,6 +833,36 @@ export function useHaDashboardLayoutPersistence({
     return result;
   }, [persist, revisionHistory]);
 
+  const resetAuthoritativeConfiguration = useCallback(async (
+    reportProgress?: DashboardResetProgressReporter,
+  ) => {
+    if (pendingSaveTimeoutRef.current !== null) {
+      window.clearTimeout(pendingSaveTimeoutRef.current);
+      pendingSaveTimeoutRef.current = null;
+    }
+    const result = userId
+      ? await repository.resetAuthoritativeConfiguration(userId, reportProgress)
+      : { status: 'unauthorized' as const };
+    if (result.status === 'reset') {
+      cache?.clearSharedHouseConfiguration();
+      documentRef.current = null;
+      pendingRemoteDocumentRef.current = null;
+      pendingLocalPublicationRef.current = null;
+      persistedSignatureRef.current = '';
+      awaitingHydrationRef.current = false;
+      conflictRef.current = false;
+      setServerRevision(null);
+      setPublishedRevision(null);
+      setRevisionHistory([]);
+      setRevisionHistoryStatus('ready');
+      setPendingRemoteUpdate(null);
+      setLastAppliedRemoteRevision(null);
+      setStatus({ phase: 'idle' });
+      setLoadStatus('migration_required');
+    }
+    return result;
+  }, [cache, repository, userId]);
+
   const revisions = publishedRevision
     ? [publishedRevision, ...revisionHistory.filter((entry) => entry.revision !== publishedRevision.revision)].slice(0, 5)
     : revisionHistory.slice(0, 5);
@@ -769,6 +879,7 @@ export function useHaDashboardLayoutPersistence({
     initializeFromCurrentDashboard,
     refreshRevisionHistory,
     restoreRevision,
+    resetAuthoritativeConfiguration,
     checkForRemoteUpdate,
     applyPendingRemoteUpdate,
   };

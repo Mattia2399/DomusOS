@@ -30,6 +30,7 @@ npm run release:gate
 - [ ] OAuth esterno su HTTPS.
 - [ ] Owner, Admin non Owner e utente limitato.
 - [ ] Backup e restore su due browser o dispositivi.
+- [ ] Reset totale su HA reale: conferma informativa, avanzamento, ritorno al primo avvio e nessuna reidratazione del vecchio layout su un secondo dispositivo.
 - [ ] Aggiornamento da una directory versionata e rollback.
 - [ ] Alarm SOS su entità mock o impianto di test sicuro.
 - [ ] Lock `open` su entità che espone lo scrocco.
@@ -45,7 +46,7 @@ npm run release:gate
 - [x] Procedura aggiornamento e rollback.
 - [x] Pagina Sicurezza e privacy.
 - [x] Roadmap pubblica e limiti dichiarati.
-- [x] Numero versione tecnica `0.1.0-beta.8`.
+- [x] Numero versione tecnica `0.1.0-beta.9`.
 - [x] Versione leggibile nella pagina Impostazioni.
 - [x] Archivio release riproducibile, manifest file e checksum SHA-256.
 - [x] Diagnostica supporto aggregata e priva di segreti.

@@ -514,6 +514,24 @@ salvato soltanto dopo la rilettura di conferma da Home Assistant; Demo resta
 isolata. Restano migrazione guidata, configurazione condivisa di Security/Rooms,
 conflitti interattivi e collaudo multidispositivo.
 
+Aggiornamento 25 agosto 2026: il `Reset totale` non si limita piu al browser.
+Con conferma sensibile e frase `RESET`, elimina prima la cronologia delle
+revisioni e poi il documento condiviso nello storage Home Assistant, verifica
+entrambi tramite rilettura e soltanto dopo pulisce cache, preferenze e segreti
+locali. Durante l'operazione una schermata bloccante comunica l'avanzamento; se
+Home Assistant non conferma la cancellazione, i dati locali restano intatti e
+l'utente riceve un errore esplicito.
+
+Aggiornamento 25 agosto 2026: il reset pubblica inoltre un tombstone condiviso
+prima di eliminare layout e cronologia. Ogni altro client controlla insieme il
+documento e questo marcatore sia all'avvio sia nel polling: se la configurazione
+e vuota per un reset intenzionale, scarta cache, recovery, bozza e segreti delle
+vecchie card e torna al benvenuto senza ripubblicare il layout obsoleto. Token
+Home Assistant, passkey del dispositivo, tema e preferenze personali degli
+altri client restano locali e non vengono cancellati. Il tombstone viene chiuso
+e verificato sul server, quindi rimosso in modo best-effort soltanto dopo una
+nuova configurazione confermata.
+
 La configurazione corrente contiene gia sezioni, card e layout distinti `2xl / xl / lg / md / sm / xs`, ma viene salvata nel `localStorage` del singolo browser. La preview Mobile del Builder modifica correttamente `sm/xs`; la sincronizzazione automatica verso un telefono diverso arrivera tramite un aggiornamento successivo.
 
 Intervento:
@@ -549,7 +567,7 @@ sovrascrive la storia. La pagina `Impostazioni > Dati e backup > Versioni del
 layout` mostra autore, data, origine e riepilogo strutturale delle modifiche. La
 seconda fase mantiene per la beta l'ambito unico `Casa`: gli altri client
 controllano la revisione su focus, ritorno in primo piano, ripresa della pagina,
-ritorno online e ogni 15 secondi, anche sui browser mobile che sospendono i timer
+ritorno online e ogni 120 secondi, anche sui browser mobile che sospendono i timer
 in background. Una revisione remota viene applicata direttamente e senza refresh
 fuori dall'Edit Mode; durante una bozza resta sospesa, compare nella barra
 dell'editor e blocca qualsiasi salvataggio obsoleto. L'utente puo continuare a
