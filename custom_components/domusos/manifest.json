@@ -1,7 +1,6 @@
 {
   "domain": "domusos",
   "name": "DomusOS",
-  "version": "0.1.0-beta.6",
   "codeowners": ["@Mattia2399"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "panel_custom"],
@@ -9,5 +8,6 @@
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/Mattia2399/DomusOS/issues",
-  "single_config_entry": true
+  "single_config_entry": true,
+  "version": "0.1.0-beta.6"
 }
