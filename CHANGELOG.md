@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.1.0-beta.6 — in preparazione
+## 0.1.0-beta.7 — 2026-08-25
+
+### Corretto
+
+- manifest Home Assistant allineato a Hassfest con classe IoT locale push e chiavi ordinate;
+- configurazione YAML esclusa esplicitamente per l’integrazione basata esclusivamente su Config Flow;
+- aggiunto il workflow Hassfest richiesto per la candidatura al catalogo HACS pubblico.
+
+## 0.1.0-beta.6 — 2026-08-25
 
 ### Aggiunto
 
