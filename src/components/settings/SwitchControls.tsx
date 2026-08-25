@@ -4,6 +4,7 @@ import { Clock3, Plug, Power, ToggleRight, Zap } from 'lucide-react';
 import type { MockEntityState } from '../../types/ha';
 import { ContextPanelHeader } from './ContextPanelHeader';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 
 const SWITCH_TOGGLE_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_switch_toggle';
 
@@ -154,8 +155,8 @@ export function SwitchControls({
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mb-3 flex items-center justify-between gap-3 px-1">
-          <span className="text-sm font-medium text-white/72">Stato</span>
-          <span className="text-xs font-semibold text-white/48">{stateLabel}</span>
+          <span className="text-sm font-medium text-[color:var(--ui-text-secondary)]">Stato</span>
+          <span className="text-xs font-semibold text-[color:var(--ui-text-tertiary)]">{stateLabel}</span>
         </div>
         <button
           type="button"
@@ -163,31 +164,31 @@ export function SwitchControls({
           disabled={isUnavailable || isPending}
           className={`group flex min-h-[5rem] w-full items-center justify-between gap-4 rounded-[1.55rem] border px-4 text-left transition-all active:scale-[0.985] disabled:cursor-not-allowed ${
             isOn && !isUnavailable
-              ? 'border-white/[0.18] bg-white/[0.15] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_14px_35px_rgba(0,0,0,0.12)]'
-              : 'border-white/[0.07] bg-black/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-          } ${isUnavailable ? 'opacity-55' : 'hover:bg-white/[0.12]'}`}
+              ? 'liquid-glass-selection border-[color:rgb(var(--ui-accent-rgb)/0.34)] shadow-[0_14px_35px_var(--ui-shadow-soft)]'
+              : 'dashboard-content-surface-soft border-[color:var(--ui-border)]'
+          } ${isUnavailable ? 'opacity-55' : 'hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)]'}`}
           aria-label={isOn ? `Spegni ${name}` : `Accendi ${name}`}
         >
           <span className="flex min-w-0 items-center gap-3">
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
                 isOn && !isUnavailable
-                  ? 'border-white bg-white text-slate-950 shadow-[0_8px_22px_rgba(255,255,255,0.18)]'
-                  : 'border-white/[0.12] bg-white/[0.06] text-white/65'
+                  ? 'border-[color:rgb(var(--ui-accent-rgb)/0.58)] bg-[color:var(--ui-accent)] text-[color:var(--ui-accent-contrast)] shadow-[0_8px_22px_rgb(var(--ui-accent-rgb)/0.22)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
               }`}
             >
               <HeaderIcon size={19} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-base font-semibold text-white/92">{stateLabel}</span>
-              <span className="mt-0.5 block truncate text-xs text-white/48">{deviceTypeLabel}</span>
+              <span className="block truncate text-base font-semibold text-[color:var(--ui-text-primary)]">{stateLabel}</span>
+              <span className="mt-0.5 block truncate text-xs text-[color:var(--ui-text-tertiary)]">{deviceTypeLabel}</span>
             </span>
           </span>
           <span
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
               isOn && !isUnavailable
-                ? 'border-white/80 bg-white text-slate-950'
-                : 'border-white/[0.12] bg-white/[0.05] text-white/68'
+                ? 'border-[color:rgb(var(--ui-accent-rgb)/0.58)] bg-[color:var(--ui-accent)] text-[color:var(--ui-accent-contrast)]'
+                : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
             }`}
           >
             <Power size={17} />
@@ -198,76 +199,65 @@ export function SwitchControls({
       {consumptionEntityId ? (
         <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
-            <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-white/72">
-              <Zap size={15} className="text-[#FFD60A]" />
+            <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-[color:var(--ui-text-secondary)]">
+              <Zap size={15} className="text-[color:var(--ui-warning)]" />
               {resolveConsumptionLabel(consumptionEntity)}
             </span>
-            <span className="max-w-[9rem] truncate text-xs text-white/42">
+            <span className="max-w-[9rem] truncate text-xs text-[color:var(--ui-text-tertiary)]">
               {consumptionName || consumptionEntityId}
             </span>
           </div>
-          <div className="rounded-[1.55rem] border border-white/[0.07] bg-black/[0.14] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]">
+          <div className="dashboard-content-surface-soft rounded-[1.55rem] px-4 py-5">
             {consumptionValue !== undefined ? (
               <div className="flex items-end gap-2">
-                <span className="text-[2.65rem] font-light leading-none text-white">
+                <span className="text-[2.65rem] font-light leading-none text-[color:var(--ui-text-primary)]">
                   {formatConsumptionValue(consumptionValue)}
                 </span>
                 {consumptionUnit ? (
-                  <span className="pb-1 text-sm font-semibold text-white/52">{consumptionUnit}</span>
+                  <span className="pb-1 text-sm font-semibold text-[color:var(--ui-text-secondary)]">{consumptionUnit}</span>
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm font-medium text-white/58">Dato non disponibile</p>
+              <p className="text-sm font-medium text-[color:var(--ui-text-secondary)]">Dato non disponibile</p>
             )}
-            <p className="mt-2 truncate text-xs text-white/38">{consumptionEntityId}</p>
+            <p className="mt-2 truncate text-xs text-[color:var(--ui-text-tertiary)]">{consumptionEntityId}</p>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 px-1">
-            <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-white/48">
+            <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-[color:var(--ui-text-tertiary)]">
               <Clock3 size={14} />
               Andamento
             </span>
-            <span className="shrink-0 text-xs font-semibold text-white/52">
+            <span className="shrink-0 text-xs font-semibold text-[color:var(--ui-text-secondary)]">
               {consumptionAverage !== undefined
                 ? `Media ${formatConsumptionValue(consumptionAverage)}${consumptionUnit ? ` ${consumptionUnit}` : ''}`
                 : 'Media --'}
             </span>
           </div>
 
-          <div className="liquid-segmented-control mt-2">
-            <div className="grid grid-cols-4 gap-1">
-              {CONSUMPTION_HISTORY_WINDOWS.map((hours) => {
-                const active = historyHours === hours;
-                return (
-                  <button
-                    key={hours}
-                    type="button"
-                    onClick={() => setHistoryHours(hours)}
-                    className={`flex h-9 min-w-0 items-center justify-center rounded-full text-xs font-semibold transition-all active:scale-[0.96] ${
-                      active
-                        ? 'liquid-segmented-option-active'
-                        : 'liquid-segmented-option-inactive'
-                    }`}
-                    aria-pressed={active}
-                    aria-label={`Mostra ultime ${hours} ore`}
-                  >
-                    {hours}h
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <GlassSegmentSelect<(typeof CONSUMPTION_HISTORY_WINDOWS)[number]>
+            ariaLabel="Intervallo storico consumi"
+            className="mt-2"
+            options={CONSUMPTION_HISTORY_WINDOWS.map((hours) => ({
+              value: hours,
+              label: `${hours}h`,
+              ariaLabel: `Mostra ultime ${hours} ore`,
+            }))}
+            value={historyHours}
+            onChange={setHistoryHours}
+            optionClassName="h-9"
+          />
 
-          <div className="mt-3 h-36 overflow-hidden rounded-[1.55rem] border border-white/[0.07] bg-black/[0.14] px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]">
+          <div className="dashboard-content-surface-soft mt-3 h-36 overflow-hidden rounded-[1.55rem] px-2 py-3">
             {consumptionChartData.length >= 2 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={consumptionChartData} margin={{ top: 8, right: 4, left: 4, bottom: 4 }}>
                   <Area
                     type="monotone"
                     dataKey="value"
-                    stroke="rgba(255,214,10,0.86)"
+                    stroke="var(--ui-warning)"
                     strokeWidth={2.2}
-                    fill="rgba(255,214,10,0.10)"
+                    fill="color-mix(in srgb, var(--ui-warning) 10%, transparent)"
                     dot={false}
                     activeDot={false}
                     isAnimationActive={false}
@@ -275,7 +265,7 @@ export function SwitchControls({
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-full items-center justify-center px-4 text-center text-xs text-white/42">
+              <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[color:var(--ui-text-tertiary)]">
                 Nessun dato storico disponibile
               </div>
             )}

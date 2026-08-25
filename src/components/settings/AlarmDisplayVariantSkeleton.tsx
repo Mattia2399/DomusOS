@@ -9,17 +9,16 @@ type AlarmDisplayVariantSkeletonProps = {
 
 export function AlarmDisplayVariantSkeleton({ variant, active, disabled }: AlarmDisplayVariantSkeletonProps) {
   const accent = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.72)]'
+    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.72)]'
     : disabled
-      ? 'bg-white/[0.08]'
+      ? 'bg-[color:var(--ui-fill-tertiary)]'
       : 'bg-emerald-200/60';
-  const strong = disabled ? 'bg-white/[0.10]' : 'bg-white/[0.28]';
-  const medium = disabled ? 'bg-white/[0.07]' : 'bg-white/[0.17]';
-  const subtle = disabled ? 'bg-white/[0.045]' : 'bg-white/[0.09]';
-  const frame =
-    'relative overflow-hidden rounded-[0.82rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.065),rgba(255,255,255,0.02))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]';
+  const strong = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-primary)]';
+  const medium = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-secondary)]';
+  const subtle = 'bg-[color:var(--ui-fill-tertiary)]';
+  const frame = 'dashboard-content-surface-soft relative overflow-hidden rounded-[0.82rem] p-2';
   const stateLine = <span className={`absolute inset-x-[20%] top-0 h-px ${accent}`} />;
-  const action = <span className={`block h-3.5 w-full rounded-full border border-white/[0.06] ${subtle}`} />;
+  const action = <span className={`block h-3.5 w-full rounded-full border border-[color:var(--ui-border)] ${subtle}`} />;
 
   if (variant === 'mini' || variant === 'compact') {
     return (
@@ -67,7 +66,7 @@ export function AlarmDisplayVariantSkeleton({ variant, active, disabled }: Alarm
           <span className={`h-2.5 w-2.5 rounded-[0.2rem] ${accent}`} />
         </span>
         <span className={`h-2 w-[52%] rounded-full ${strong}`} />
-        <span className="flex gap-0.5 rounded-[0.32rem] bg-black/15 p-0.5">
+        <span className="flex gap-0.5 rounded-[0.32rem] bg-[color:var(--ui-fill-tertiary)] p-0.5">
           <span className={`h-2 flex-1 rounded-[0.25rem] ${accent}`} />
           <span className={`h-2 flex-1 rounded-[0.25rem] ${subtle}`} />
           <span className={`h-2 flex-1 rounded-[0.25rem] ${subtle}`} />

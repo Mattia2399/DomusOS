@@ -20,12 +20,12 @@ export function DetailScaffold({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3.5 py-2 text-sm text-white/85 backdrop-blur-xl transition-colors hover:bg-white/14 sm:px-4"
+          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3.5 py-2 text-sm text-[color:var(--ui-text-secondary)] backdrop-blur-xl transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)] sm:px-4"
         >
           <ArrowLeft size={16} />
           Torna indietro
         </button>
-        <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--ui-text-primary)] sm:text-3xl">{title}</h2>
       </div>
 
       <div className="grid min-h-0 grid-cols-1 gap-4 lg:gap-6 xl:grid-cols-12 xl:gap-8">
@@ -53,7 +53,7 @@ export function ChartCard({
   return (
     <div className="liquid-glass-card p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium uppercase tracking-[0.14em] text-white/55">{title}</p>
+        <p className="text-sm font-medium uppercase tracking-[0.14em] text-[color:var(--ui-text-tertiary)]">{title}</p>
         {controls}
       </div>
       <div className="h-48 min-h-48 min-w-0 sm:h-56">{children}</div>
@@ -70,7 +70,7 @@ export function IntervalPills({
 }) {
   const options: IntervalKey[] = ['24H', '7G', '30G'];
   return (
-    <div className="flex rounded-full border border-white/[0.06] bg-white/[0.02] p-0.5">
+    <div className="flex rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-0.5">
       {options.map((option) => (
         <button
           key={option}
@@ -78,8 +78,8 @@ export function IntervalPills({
           onClick={() => onChange(option)}
           className={`rounded-full px-3 py-1 text-xs transition-all ${
             value === option
-              ? 'bg-white/10 font-medium text-white shadow-sm backdrop-blur-md'
-              : 'text-white/40 hover:text-white/70'
+              ? 'bg-[color:var(--ui-bg-elevated)] font-medium text-[color:var(--ui-text-primary)] shadow-sm backdrop-blur-md'
+              : 'text-[color:var(--ui-text-tertiary)] hover:text-[color:var(--ui-text-primary)]'
           }`}
         >
           {option}
@@ -111,13 +111,13 @@ export function PremiumTooltip({
   }
 
   return (
-    <div className="liquid-glass-card rounded-xl px-3 py-2 text-sm text-white">
-      {label !== undefined ? <p className="mb-1 text-xs text-white/60">{label}</p> : null}
+    <div className="liquid-glass-card rounded-xl px-3 py-2 text-sm text-[color:var(--ui-text-primary)]">
+      {label !== undefined ? <p className="mb-1 text-xs text-[color:var(--ui-text-secondary)]">{label}</p> : null}
       <div className="space-y-1">
         {payload.map((item, index) => (
           <div key={`${item.name ?? 'value'}-${index}`} className="flex items-center justify-between gap-4">
-            <span className="text-white/70">{item.name ?? 'Valore'}</span>
-            <span className="font-semibold text-white">
+            <span className="text-[color:var(--ui-text-secondary)]">{item.name ?? 'Valore'}</span>
+            <span className="font-semibold text-[color:var(--ui-text-primary)]">
               {item.value}
               {suffix}
             </span>

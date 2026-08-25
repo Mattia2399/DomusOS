@@ -19,10 +19,10 @@ export function StatusGlow({ widget, state }: StatusGlowProps) {
 
   return (
     <div
-      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-[color:var(--ui-text-primary)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)] ${
         active
           ? 'border-emerald-300/35 bg-emerald-500/12 shadow-[0_0_22px_rgba(16,185,129,0.2)]'
-          : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'
+          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)]'
       }`}
     >
       <div className="flex h-full min-w-0 items-center gap-3">
@@ -30,12 +30,12 @@ export function StatusGlow({ widget, state }: StatusGlowProps) {
           className={`h-3.5 w-3.5 shrink-0 rounded-full transition-transform duration-200 ${
             active
               ? 'bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)] animate-pulse [animation-duration:2.2s]'
-              : 'bg-white/35 shadow-[0_0_12px_rgba(255,255,255,0.18)]'
+              : 'bg-[color:var(--ui-fill-primary)] shadow-[0_0_12px_var(--ui-shadow-soft)]'
           }`}
         />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-white/50">{status}</p>
+          <p className="truncate text-sm font-medium leading-tight text-[color:var(--ui-text-primary)]">{label}</p>
+          <p className="mt-0.5 truncate text-[11px] leading-tight text-[color:var(--ui-text-tertiary)]">{status}</p>
         </div>
       </div>
     </div>

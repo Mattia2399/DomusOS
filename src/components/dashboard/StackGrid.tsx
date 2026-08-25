@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import GridLayout from 'react-grid-layout/legacy';
 import { MoreHorizontal } from 'lucide-react';
 import { WidgetCardRenderer } from '../widgets/CardRenderer';
@@ -32,6 +32,7 @@ import {
   reflowLayoutsToColumns,
   scaleLayoutColumns,
 } from './gridEngineGeometry';
+import { solveGridStackLayout } from './gridStackLayoutSolver';
 
 type HouseMemberCardItem = {
   id: string;
@@ -549,6 +550,7 @@ function enforceWidgetLayoutOverrides(
   cols: number,
   widgetLayoutOverrides: WidgetLayoutOverrides,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
+  coverWidgetIds: ReadonlySet<string> = new Set(),
 ): GridItem[] {
   if (!widgetLayoutOverrides || Object.keys(widgetLayoutOverrides).length === 0) {
     return normalizeRuntimeLayout(layouts);
@@ -570,9 +572,12 @@ function enforceWidgetLayoutOverrides(
             : lightIsOn
             ? override.hOn ?? override.h
             : override.hOff ?? override.h;
+      const minimumW = coverWidgetIds.has(item.i) && breakpoint !== 'xs' && breakpoint !== 'sm'
+        ? Math.min(safeCols, 2)
+        : 1;
       const nextW = override.w
-        ? Math.min(safeCols, Math.max(1, Math.round(override.w)))
-        : Math.min(safeCols, Math.max(1, Math.round(item.w)));
+        ? Math.min(safeCols, Math.max(minimumW, Math.round(override.w)))
+        : Math.min(safeCols, Math.max(minimumW, Math.round(item.w)));
       const nextH = rawH
         ? autoExpand && lightIsOn && rawH <= 1
           ? Math.max(2, Math.round(rawH))
@@ -690,6 +695,7 @@ function enforceGridStackWidgetSpans(
     cols,
     widgetLayoutOverrides,
     lightWidgetStateById,
+    coverWidgetIds,
   );
 }
 
@@ -737,18 +743,25 @@ type StackGridProps = {
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onWidgetVacuumStartPause: (widget: Widget) => void;
+  onWidgetVacuumStop: (widget: Widget) => void;
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => boolean | void;
   onWidgetLockOpen: (widget: Widget) => void;
   onWidgetCoverPositionChange: (widget: Widget, position: number) => void;
   onWidgetCoverTiltPositionChange: (widget: Widget, position: number) => void;
+  onWidgetCoverOpen: (widget: Widget) => void;
+  onWidgetCoverStop: (widget: Widget) => void;
+  onWidgetCoverClose: (widget: Widget) => void;
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onStackBreakpointLayoutChange: (sectionId: string, breakpoint: GridEngineBreakpoint, next: GridItem[]) => void;
   haConnected: boolean;
   haStates: MockEntityStateMap;
   sensorHistoryByEntity?: Record<string, number[]>;
-  onGridStackUsedRowsChange?: (sectionId: string, usedRows: number) => void;
+  onGridStackGeometryChange?: (
+    sectionId: string,
+    geometry: { usedCols: number; usedRows: number },
+  ) => void;
   onCompactDragStart?: (event: Event | null | undefined) => void;
   onCompactDragMove?: (event: Event | null | undefined) => void;
   onCompactDragStop?: () => void;
@@ -799,18 +812,22 @@ function StackGridComponent({
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
   onWidgetVacuumStartPause,
+  onWidgetVacuumStop,
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
   onWidgetCoverPositionChange,
   onWidgetCoverTiltPositionChange,
+  onWidgetCoverOpen,
+  onWidgetCoverStop,
+  onWidgetCoverClose,
   onOpenMembersPanel,
   onWidgetLayoutChange,
   onStackBreakpointLayoutChange,
   haConnected,
   haStates,
   sensorHistoryByEntity = {},
-  onGridStackUsedRowsChange,
+  onGridStackGeometryChange,
   onCompactDragStart,
   onCompactDragMove,
   onCompactDragStop,
@@ -832,9 +849,11 @@ function StackGridComponent({
   const [measuredStackWidth, setMeasuredStackWidth] = useState(0);
   const [isAdaptiveSpanEnabled, setIsAdaptiveSpanEnabled] = useState(false);
   const [compactDragArmedItemId, setCompactDragArmedItemId] = useState<string | null>(null);
+  const [keyboardLayoutAnnouncement, setKeyboardLayoutAnnouncement] = useState('');
   const stableWidthRef = useRef(0);
   const isHorizontalStack = section.kind === 'stack-horizontal';
   const isGridStack = section.kind === 'stack-grid';
+  const gridStackWidthMode = section.stackColumnsMode === 'manual' ? 'manual' : 'auto';
   const isCompactEditCardMenuMode = isEditMode && (gridBreakpoint === 'xs' || gridBreakpoint === 'sm');
   const canvasLinkedCols = section.kind === 'stack-vertical' ? 1 : Math.max(1, Math.round(sectionCanvasCols));
   const canonicalCols = isGridStack
@@ -1107,8 +1126,7 @@ function StackGridComponent({
     }
 
     const updateMeasuredWidth = () => {
-      const rawWidth = host.getBoundingClientRect().width;
-      const rounded = Math.max(1, Math.round(rawWidth));
+      const rounded = Math.max(1, Math.round(host.clientWidth));
       const previous = stableWidthRef.current;
       if (previous <= 0) {
         stableWidthRef.current = rounded;
@@ -1145,7 +1163,7 @@ function StackGridComponent({
       }
       observer.disconnect();
     };
-  }, []);
+  }, [sectionsMounted]);
   useEffect(() => {
     if (!ENABLE_STACK_ADAPTIVE_MIN_WIDTH || !isGridStack) {
       setIsAdaptiveSpanEnabled(false);
@@ -1264,7 +1282,7 @@ function StackGridComponent({
       ),
     [stackWidgets],
   );
-  const stackLayout = useMemo<GridItem[]>(
+  const baseStackLayout = useMemo<GridItem[]>(
     () => {
       const resolveResponsiveSource = () => {
         const current = responsiveLayouts?.[gridBreakpoint];
@@ -1486,29 +1504,17 @@ function StackGridComponent({
     ],
   );
 
-  const stackShowBackground = section.stackShowBackground ?? true;
-  const stackShowBorder = section.stackShowBorder ?? true;
-  const stackSurfaceClass = stackShowBackground
-    ? 'liquid-glass-card rounded-[1.5rem] border-t-transparent'
-    : stackShowBorder
-      ? 'border border-white/[0.06] border-t-transparent bg-transparent'
-      : 'border border-transparent bg-transparent';
+  const gridStackSolution = useMemo(
+    () => solveGridStackLayout(baseStackLayout, cols, gridStackWidthMode),
+    [baseStackLayout, cols, gridStackWidthMode],
+  );
+  const stackLayout = isGridStack ? gridStackSolution.layout : baseStackLayout;
+
   const stackLayoutMap = useMemo(
     () => new Map((stackPreviewLayout ?? stackLayout).map((item) => [item.i, item])),
     [stackLayout, stackPreviewLayout],
   );
   const liveStackLayout = stackPreviewLayout ?? stackLayout;
-  const stackCommittedUsedRows = useMemo(
-    () =>
-      Math.max(
-        1,
-        stackLayout.reduce(
-          (maxRows, item) => Math.max(maxRows, Math.max(0, Math.round(item.y)) + Math.max(1, Math.round(item.h))),
-          0,
-        ),
-      ),
-    [stackLayout],
-  );
   const hasGridItemMoved = useCallback((start: GridItem | null, next: GridItem | undefined | null) => {
     if (!start || !next) {
       return false;
@@ -1543,10 +1549,13 @@ function StackGridComponent({
           stackCoverWidgetIds,
         )
       : normalized;
-    const nextPreview = isGridStack ? compactAndResolveLayout(nextPreviewBase, cols) : nextPreviewBase;
+    const nextPreview = isGridStack
+      ? solveGridStackLayout(nextPreviewBase, cols, gridStackWidthMode).layout
+      : nextPreviewBase;
     setStackPreviewLayout((current) => (sameGridLayout(current, nextPreview) ? current : nextPreview));
   }, [
     cols,
+    gridStackWidthMode,
     gridBreakpoint,
     widgetTypeLayoutOverrides,
     widgetLayoutOverrides,
@@ -1574,12 +1583,15 @@ function StackGridComponent({
       window.clearTimeout(timeoutId);
     };
   }, [stackLayout, stackPreviewLayout]);
-  useEffect(() => {
-    if (!isGridStack || !onGridStackUsedRowsChange) {
+  useLayoutEffect(() => {
+    if (!isGridStack || !onGridStackGeometryChange) {
       return;
     }
-    onGridStackUsedRowsChange(section.id, stackCommittedUsedRows);
-  }, [isGridStack, onGridStackUsedRowsChange, section.id, stackCommittedUsedRows]);
+    onGridStackGeometryChange(section.id, {
+      usedCols: gridStackSolution.usedCols,
+      usedRows: gridStackSolution.usedRows,
+    });
+  }, [gridStackSolution.usedCols, gridStackSolution.usedRows, isGridStack, onGridStackGeometryChange, section.id]);
   const toCanonicalStackLayout = useCallback(
     (next: GridItem[]) => {
       if (isHorizontalStack) {
@@ -1613,7 +1625,7 @@ function StackGridComponent({
           });
       }
       if (isGridStack) {
-        return compactAndResolveLayout(
+        return solveGridStackLayout(
           enforceGridStackWidgetSpans(
             next.map((item) => clampLayoutToColumns(item, cols)),
             gridBreakpoint,
@@ -1634,7 +1646,8 @@ function StackGridComponent({
             stackCoverWidgetIds,
           ),
           cols,
-        );
+          gridStackWidthMode,
+        ).layout;
       }
       return next.map((item) => {
         let scaled =
@@ -1665,6 +1678,7 @@ function StackGridComponent({
       canonicalCols,
       cols,
       gridBreakpoint,
+      gridStackWidthMode,
       widgetTypeLayoutOverrides,
       widgetLayoutOverrides,
       isGridStack,
@@ -1693,10 +1707,68 @@ function StackGridComponent({
     },
     [gridBreakpoint, onStackBreakpointLayoutChange, onWidgetLayoutChange, section.id, toCanonicalStackLayout],
   );
+  const handleStackItemKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, itemId: string, itemLabel: string) => {
+      if (!isEditMode) {
+        return;
+      }
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        return;
+      }
+
+      const current = liveStackLayout.find((item) => item.i === itemId);
+      if (!current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectWidget(itemId);
+      onSelectSection(null);
+
+      const nextItem = { ...current };
+      const isResize = event.shiftKey;
+      if (isResize) {
+        if (event.key === 'ArrowLeft') nextItem.w = Math.max(1, nextItem.w - 1);
+        if (event.key === 'ArrowRight') nextItem.w = Math.min(cols - nextItem.x, nextItem.w + 1);
+        if (event.key === 'ArrowUp') nextItem.h = Math.max(1, nextItem.h - 1);
+        if (event.key === 'ArrowDown') nextItem.h += 1;
+      } else {
+        if (event.key === 'ArrowLeft') nextItem.x = Math.max(0, nextItem.x - 1);
+        if (event.key === 'ArrowRight') nextItem.x = Math.min(cols - nextItem.w, nextItem.x + 1);
+        if (event.key === 'ArrowUp') nextItem.y = Math.max(0, nextItem.y - 1);
+        if (event.key === 'ArrowDown') nextItem.y += 1;
+      }
+
+      if (!hasGridItemMoved(current, nextItem)) {
+        setKeyboardLayoutAnnouncement(`${itemLabel}: limite dello stack raggiunto.`);
+        return;
+      }
+
+      const nextLayout = liveStackLayout.map((item) => (item.i === itemId ? nextItem : item));
+      updateStackPreviewLayout(nextLayout);
+      commitStackLayout(nextLayout);
+      setKeyboardLayoutAnnouncement(
+        isResize
+          ? `${itemLabel}: dimensione ${nextItem.w} colonne per ${nextItem.h} righe.`
+          : `${itemLabel}: posizione colonna ${nextItem.x + 1}, riga ${nextItem.y + 1}.`,
+      );
+    },
+    [
+      cols,
+      commitStackLayout,
+      hasGridItemMoved,
+      isEditMode,
+      liveStackLayout,
+      onSelectSection,
+      onSelectWidget,
+      updateStackPreviewLayout,
+    ],
+  );
 
   return (
     <div
-      className={`relative w-full flex-1 min-h-0 min-w-0 rounded-[1.5rem] p-0 ${stackSurfaceClass} ${
+      className={`relative h-full w-full flex-1 min-h-0 min-w-0 rounded-[1.5rem] bg-transparent p-0 ${
         isHorizontalStack ? 'overflow-x-auto overflow-y-hidden hide-scrollbar [scroll-behavior:smooth] [touch-action:pan-x]' : ''
       } ${
         isSelected ? 'selection-corners' : ''
@@ -1719,7 +1791,15 @@ function StackGridComponent({
       }}
     >
       {isEditMode ? (
-        <div className="pointer-events-none absolute inset-0 rounded-[1.5rem] bg-[radial-gradient(#93c5fd3f_1px,transparent_1px)] bg-[size:16px_16px]" />
+        <>
+          <div className="pointer-events-none absolute inset-0 rounded-[1.5rem] bg-[radial-gradient(#93c5fd3f_1px,transparent_1px)] bg-[size:16px_16px]" />
+          <p id={`stack-grid-keyboard-help-${section.id}`} className="sr-only">
+            Usa le frecce per spostare. Usa Maiuscole più frecce per ridimensionare.
+          </p>
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {keyboardLayoutAnnouncement}
+          </p>
+        </>
       ) : null}
       {isEditMode && isGridStack ? (
         <div className="liquid-glass-card pointer-events-none absolute right-2 top-2 z-20 rounded-md px-2 py-1 text-[10px] font-medium text-cyan-100">
@@ -1727,10 +1807,10 @@ function StackGridComponent({
         </div>
       ) : null}
       {sectionsMounted ? (
-        <div ref={stackHostRef} className="relative w-full min-h-0">
+        <div ref={stackHostRef} className="relative h-full w-full min-h-0">
           {!isEditMode ? (
             <div
-              className="grid min-h-0 min-w-0"
+              className="grid h-full min-h-0 min-w-0"
               style={{
                 width: isHorizontalStack ? `${gridWidth}px` : '100%',
                 gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(0, 1fr))`,
@@ -1839,7 +1919,8 @@ function StackGridComponent({
                       <WidgetCardRenderer
                         widget={runtimeWidget}
                         dashboardState={state}
-                        isEditMode={false}
+                        isEditMode={isEditMode}
+                        isInteractive={haConnected || runtimeWidget.dataSource === 'mock'}
                         isSelected={selectedWidgetId === widget.id}
                         gridBreakpoint={gridBreakpoint}
                         value={value}
@@ -1884,11 +1965,15 @@ function StackGridComponent({
                         onAlarmDisarm={onWidgetAlarmDisarm}
                         onAlarmArm={onWidgetAlarmArm}
                         onVacuumStartPause={onWidgetVacuumStartPause}
+                        onVacuumStop={onWidgetVacuumStop}
                         onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                         onLockToggle={onWidgetLockToggle}
                         onLockOpen={onWidgetLockOpen}
                         onCoverPositionChange={onWidgetCoverPositionChange}
                         onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
+                        onCoverOpen={onWidgetCoverOpen}
+                        onCoverStop={onWidgetCoverStop}
+                        onCoverClose={onWidgetCoverClose}
                         onMembersOpenPanel={() => onOpenMembersPanel()}
                         liveEntity={haStates[widget.entityId]}
                         switchConsumptionEntity={
@@ -1925,6 +2010,7 @@ function StackGridComponent({
                 useCSSTransforms
                 isDraggable
                 isResizable={false}
+                resizeHandles={[]}
                 compactType={overlayCompactType}
                 draggableHandle={isCompactEditCardMenuMode ? '.compact-stack-drag-handle' : undefined}
                 draggableCancel=".widget-action,.react-resizable-handle"
@@ -2013,6 +2099,7 @@ function StackGridComponent({
                             widget={overlayRuntimeWidget}
                             dashboardState={state}
                             isEditMode={false}
+                            isInteractive={false}
                             isSelected={selectedWidgetId === item.i}
                             gridBreakpoint={gridBreakpoint}
                             value={overlayValue}
@@ -2039,11 +2126,15 @@ function StackGridComponent({
                             onAlarmDisarm={onWidgetAlarmDisarm}
                             onAlarmArm={onWidgetAlarmArm}
                             onVacuumStartPause={onWidgetVacuumStartPause}
+                            onVacuumStop={onWidgetVacuumStop}
                             onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                             onLockToggle={onWidgetLockToggle}
                             onLockOpen={onWidgetLockOpen}
                             onCoverPositionChange={onWidgetCoverPositionChange}
                             onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
+                            onCoverOpen={onWidgetCoverOpen}
+                            onCoverStop={onWidgetCoverStop}
+                            onCoverClose={onWidgetCoverClose}
                             onMembersOpenPanel={() => onOpenMembersPanel()}
                             liveEntity={haStates[overlayRuntimeWidget.entityId]}
                             switchConsumptionEntity={
@@ -2099,12 +2190,20 @@ function StackGridComponent({
                             onSelectSection(null);
                           }
                         }}
+                        onKeyDown={(event) =>
+                          handleStackItemKeyDown(
+                            event,
+                            item.i,
+                            overlayWidget?.title?.trim() || item.i,
+                          )
+                        }
+                        aria-describedby={`stack-grid-keyboard-help-${section.id}`}
                         aria-label={`Muovi ${overlayWidget?.title || item.i}`}
                       />
                       {isCompactEditCardMenuMode ? (
                         <button
                           type="button"
-                          className="widget-action absolute right-2 top-2 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
+                          className="widget-action absolute right-2 top-2 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
                           onPointerDown={(event) => {
                             event.stopPropagation();
                           }}

@@ -31,14 +31,13 @@ describe('SwitchCard', () => {
         onToggleSwitch={onToggleSwitch}
         liveEntity={{ state: 'on', toggleOn: true, rawAttributes: { device_class: 'outlet' } }}
         consumptionEntity={{ state: '18', numericValue: 18, unit: 'W' }}
-        displayVariant="compact"
       />,
     );
 
     expect(container.querySelector('.switch-card__icon-shell')).not.toBeNull();
     expect(container.querySelector('.switch-card__control')).toBeNull();
     expect(container.querySelector('.switch-card__consumption')).not.toBeNull();
-    expect(container.firstElementChild?.getAttribute('data-switch-variant')).toBe('compact');
+    expect(container.firstElementChild?.hasAttribute('data-switch-variant')).toBe(false);
     fireEvent.click(getByRole('switch'));
     expect(onToggleSwitch).toHaveBeenCalledOnce();
   });
@@ -55,13 +54,12 @@ describe('SwitchCard', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 1; });
     vi.stubGlobal('cancelAnimationFrame', () => undefined);
     const onDisplayMetricsChange = vi.fn();
-    const { container } = render(
+    render(
       <SwitchCard
         widget={widget}
         isSelected={false}
         isEditMode={false}
         onClick={() => undefined}
-        displayVariant="mini"
         onDisplayMetricsChange={onDisplayMetricsChange}
       />,
     );
@@ -75,7 +73,6 @@ describe('SwitchCard', () => {
       } as unknown as ResizeObserverEntry], {} as ResizeObserver);
     });
 
-    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-switch-variant')).toBe('standard'));
     await waitFor(() => expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
       widgetId: widget.id,
       width: 192,

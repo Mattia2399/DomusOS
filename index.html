@@ -1,8 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Dashboard premium per Home Assistant." />
+    <meta name="color-scheme" content="light dark" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'self' https:; manifest-src 'self'" />
     <!-- Attiva la modalita standalone PWA a schermo intero su iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="SmartHome" />
@@ -10,9 +13,10 @@
     <!-- Rende la barra di stato trasparente su iOS -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <!-- Uniforma la status bar Android/Chrome con l'estetica scura dell'app -->
-    <meta name="theme-color" content="#05070d" />
-    <title>HA Dashboard Builder</title>
+    <!-- Allinea la UI del browser all'aspetto scelto dal dispositivo prima del bootstrap React. -->
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <title>DomusOS</title>
   </head>
   <body>
     <div id="root"></div>

@@ -3,14 +3,11 @@ import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { useObservedElementSize } from '../../hooks/useObservedElementSize';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
-import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
 import { LightCardView } from './LightCardView';
 import { buildLightCardModel } from './lightCardModel';
 import {
   resolveLightPixelDisplayVariant,
-  resolveWidgetDisplayVariant,
   type WidgetDisplayMetrics,
-  type WidgetDisplayVariant,
 } from './widgetDisplayVariant';
 
 type LightCardProps = {
@@ -22,8 +19,6 @@ type LightCardProps = {
   onBrightnessChange?: (value: number) => void;
   onColorChange?: (hs: [number, number]) => void;
   liveLightState?: MockEntityState;
-  gridBreakpoint?: GridEngineBreakpoint;
-  displayVariant?: WidgetDisplayVariant;
   onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
@@ -36,22 +31,14 @@ export function LightCard({
   onBrightnessChange,
   onColorChange,
   liveLightState,
-  gridBreakpoint,
-  displayVariant,
   onDisplayMetricsChange,
 }: LightCardProps) {
   const isPrimaryLamp = widget.id === 'light.living_room_lamp';
-  const fallbackVariant = displayVariant ?? resolveWidgetDisplayVariant({
-    kind: 'light',
-    breakpoint: gridBreakpoint,
-    layout: widget.layout,
-    parentSectionId: widget.parentSectionId,
-  });
   const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
   const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
-  const layoutVariant = measuredSize
+  const measuredVariant = measuredSize
     ? resolveLightPixelDisplayVariant({ width: measuredSize.width, height: measuredSize.height })
-    : fallbackVariant;
+    : null;
   const model = useMemo(
     () => buildLightCardModel({
       widget,
@@ -65,14 +52,14 @@ export function LightCard({
   );
 
   useEffect(() => {
-    if (!measuredSize || !onDisplayMetricsChange) return;
+    if (!measuredSize || !measuredVariant || !onDisplayMetricsChange) return;
     onDisplayMetricsChange({
       widgetId: widget.id,
       width: measuredSize.width,
       height: measuredSize.height,
-      variant: layoutVariant,
+      variant: measuredVariant,
     });
-  }, [layoutVariant, measuredSize, onDisplayMetricsChange, widget.id]);
+  }, [measuredSize, measuredVariant, onDisplayMetricsChange, widget.id]);
 
   return (
     <LightCardView
@@ -83,7 +70,6 @@ export function LightCard({
       onBrightnessChange={!isEditMode ? onBrightnessChange : undefined}
       onColorChange={!isEditMode ? onColorChange : undefined}
       rootRef={cardRef}
-      layoutVariant={layoutVariant}
     />
   );
 }

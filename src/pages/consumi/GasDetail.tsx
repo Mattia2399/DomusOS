@@ -37,7 +37,7 @@ export function GasDetail({
   );
 
   const left = (
-    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_center,rgba(251,146,60,0.16)_0%,transparent_72%)]">
+    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[#160e0a] bg-[radial-gradient(circle_at_center,rgba(251,146,60,0.2)_0%,#160e0a_74%)]">
       <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(255,255,255,0.07)_0%,rgba(255,255,255,0.02)_40%,rgba(15,23,42,0.22)_100%)]" />
 
       <OrbitalDevices devices={gasDevices} centerX={50} centerY={50} radius={25} />
@@ -79,7 +79,7 @@ export function GasDetail({
               </feMerge>
             </filter>
           </defs>
-          <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
+          <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'var(--ui-text-tertiary)', fontSize: 11 }} />
           <YAxis axisLine={false} tickLine={false} tick={false} width={0} />
           <Tooltip content={<PremiumTooltip suffix=" Sm3" />} />
           <Line

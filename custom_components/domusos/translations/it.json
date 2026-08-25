@@ -1,0 +1,14 @@
+{
+  "title": "DomusOS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configura DomusOS",
+        "description": "Aggiungi DomusOS alla barra laterale. Userà l'account Home Assistant attuale per identità, permessi e comandi."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "DomusOS è già configurato."
+    }
+  }
+}

@@ -1,9 +1,11 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Battery, DoorOpen, Lock, Unlock } from 'lucide-react';
+import { AlertTriangle, DoorOpen, Lock, Unlock, Wifi, WifiOff } from 'lucide-react';
 import { useHoldToConfirm } from '../../hooks/useHoldToConfirm';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
 import { normalizeLockCardState, translateLockCardState } from '../widgets/lockCardModel';
+import { BatteryLevelGlyph } from './DeviceMetadataCard';
+import { DeviceTelemetryStrip, type DeviceTelemetryStripItem } from './DeviceTelemetryStrip';
 
 type LockControlsProps = {
   lock: {
@@ -20,6 +22,10 @@ type LockControlsProps = {
     activityTimelineStatus?: 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
     supportedFeatures?: number;
     batteryLevel?: number;
+    connection?: {
+      state: 'online' | 'offline' | 'unknown';
+      label: string;
+    };
     rawAttributes?: Record<string, unknown>;
     lockCode?: string;
   };
@@ -117,14 +123,29 @@ export function LockControls({
       : undefined;
   const supportsOpen = typeof supportedFeatures === 'number' && (supportedFeatures & LOCK_FEATURE_OPEN) !== 0;
   const batteryLevel = resolveBatteryLevel(lock);
-  const batteryTone =
-    batteryLevel === undefined
-      ? 'unknown'
-      : batteryLevel <= 20
-        ? 'low'
-        : batteryLevel <= 45
-          ? 'medium'
-          : 'good';
+  const connection = lock.connection;
+  const telemetryItems = useMemo<DeviceTelemetryStripItem[]>(() => {
+    const items: DeviceTelemetryStripItem[] = [];
+    if (batteryLevel !== undefined) {
+      items.push({
+        id: 'battery',
+        icon: <BatteryLevelGlyph percentage={batteryLevel} compact />,
+        label: 'Batteria',
+        value: `${batteryLevel}%`,
+        tone: batteryLevel <= 20 ? 'danger' : batteryLevel <= 50 ? 'warning' : 'success',
+      });
+    }
+    if (connection) {
+      items.push({
+        id: 'connection',
+        icon: connection.state === 'offline' ? <WifiOff size={15} /> : <Wifi size={15} />,
+        label: 'Connessione',
+        value: connection.label,
+        tone: connection.state === 'online' ? 'success' : connection.state === 'offline' ? 'danger' : 'neutral',
+      });
+    }
+    return items;
+  }, [batteryLevel, connection]);
   const isLocked = simulatedState === 'locked' || simulatedState === 'locking';
   const isUnlocked = simulatedState === 'unlocked' || simulatedState === 'open' || simulatedState === 'opening';
   const isOpen = simulatedState === 'open' || simulatedState === 'opening';
@@ -157,7 +178,7 @@ export function LockControls({
     enabled: canUnlock,
     durationMs: 1000,
     onComplete: () => {
-      const didUnlock = onUnlock(actionCode);
+      const didUnlock = onUnlock();
       if (didUnlock === false) {
         return;
       }
@@ -205,7 +226,7 @@ export function LockControls({
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mt-6 flex flex-col items-center">
           <div
-            className={`relative h-[clamp(8rem,42vw,10rem)] w-[clamp(8rem,42vw,10rem)] rounded-full border border-white/10 ${panelAuraClass} backdrop-blur-xl flex items-center justify-center transition-all duration-200 ${
+            className={`relative flex h-[clamp(8rem,42vw,10rem)] w-[clamp(8rem,42vw,10rem)] items-center justify-center rounded-full border border-[color:var(--ui-border)] ${panelAuraClass} transition-all duration-200 ${
               isHolding ? 'scale-[1.03]' : 'scale-100'
             } ${
               isSuccessPulse
@@ -237,12 +258,12 @@ export function LockControls({
               viewBox="0 0 150 150"
               fill="none"
             >
-              <circle cx="75" cy="75" r={RING_RADIUS} stroke="rgba(255,255,255,0.16)" strokeWidth="6" />
+              <circle cx="75" cy="75" r={RING_RADIUS} stroke="var(--ui-border-strong)" strokeWidth="6" />
               <circle
                 cx="75"
                 cy="75"
                 r={RING_RADIUS}
-                stroke="rgba(255,255,255,0.95)"
+                stroke="var(--ui-accent)"
                 strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={RING_CIRCUMFERENCE}
@@ -251,11 +272,11 @@ export function LockControls({
                 style={{ transition: isHolding ? 'none' : 'stroke-dashoffset 110ms linear' }}
               />
             </svg>
-            <div className="h-[clamp(4.6rem,24vw,6rem)] w-[clamp(4.6rem,24vw,6rem)] rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
+            <div className="flex h-[clamp(4.6rem,24vw,6rem)] w-[clamp(4.6rem,24vw,6rem)] items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-primary)] shadow-[inset_0_1px_0_rgb(var(--ui-accent-rgb)/0.12)]">
               <HeaderIcon size={36} />
             </div>
           </div>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-white/50">
+          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-[color:var(--ui-text-tertiary)]">
             {canUnlock
               ? 'Tenere premuto per sbloccare'
               : canLock
@@ -266,7 +287,7 @@ export function LockControls({
           </p>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-white/5 bg-white/[0.04] p-1.5 flex flex-wrap gap-1.5">
+        <div className="dashboard-content-surface-soft mt-6 flex flex-wrap gap-1.5 rounded-3xl p-1.5">
           <button
             type="button"
             onClick={() => {
@@ -280,10 +301,10 @@ export function LockControls({
               }
             }}
             disabled={!canLock}
-            className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+            className={`glass-button inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-all ${
               canLock
-                ? 'bg-white/18 text-white hover:bg-white/24 active:scale-[0.98]'
-                : 'bg-white/6 text-white/35 cursor-not-allowed'
+                ? 'text-[color:var(--ui-text-primary)] active:scale-[0.98]'
+                : 'cursor-not-allowed text-[color:var(--ui-text-disabled)]'
             }`}
           >
             <Lock size={16} />
@@ -295,7 +316,7 @@ export function LockControls({
               if (!canUnlock) {
                 return;
               }
-              const didUnlock = onUnlock(actionCode);
+              const didUnlock = onUnlock();
               if (didUnlock === false) {
                 return;
               }
@@ -305,10 +326,10 @@ export function LockControls({
               }
             }}
             disabled={!canUnlock}
-            className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+            className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-semibold transition-all ${
               canUnlock
-                ? 'bg-red-500/30 border border-red-300/35 text-red-100 hover:bg-red-500/40 active:scale-[0.98]'
-                : 'bg-white/6 text-white/35 cursor-not-allowed'
+                ? 'border-[color:color-mix(in_srgb,var(--ui-danger)_34%,transparent)] bg-[color:color-mix(in_srgb,var(--ui-danger)_14%,transparent)] text-[color:var(--ui-danger)] hover:bg-[color:color-mix(in_srgb,var(--ui-danger)_20%,transparent)] active:scale-[0.98]'
+                : 'cursor-not-allowed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
             }`}
           >
             <Unlock size={16} />
@@ -322,16 +343,16 @@ export function LockControls({
                   return;
                 }
                 setSimulatedState('opening');
-                onOpen(actionCode);
+                onOpen();
                 if (shouldUseLocalTimeline) {
                   pushTimeline(`${timelineActor} ha aperto lo scrocco ${formatTimeLabel(new Date())}`);
                 }
               }}
               disabled={!canOpen}
-              className={`flex-1 h-12 rounded-full text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+              className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-semibold transition-all ${
                 canOpen
-                  ? 'bg-orange-400/18 border border-orange-200/25 text-orange-50 hover:bg-orange-400/26 active:scale-[0.98]'
-                  : 'bg-white/6 text-white/35 cursor-not-allowed'
+                  ? 'border-[color:color-mix(in_srgb,var(--ui-warning)_32%,transparent)] bg-[color:color-mix(in_srgb,var(--ui-warning)_13%,transparent)] text-[color:var(--ui-warning)] hover:bg-[color:color-mix(in_srgb,var(--ui-warning)_19%,transparent)] active:scale-[0.98]'
+                  : 'cursor-not-allowed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
               }`}
             >
               <DoorOpen size={16} />
@@ -340,54 +361,24 @@ export function LockControls({
           ) : null}
         </div>
 
-        {batteryLevel !== undefined ? (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-[1.35rem] border border-white/[0.07] bg-white/[0.045] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
-            <span className="flex min-w-0 items-center gap-3">
-              <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ${
-                  batteryTone === 'low'
-                    ? 'border-rose-200/20 bg-rose-500/12 text-rose-100'
-                    : batteryTone === 'medium'
-                      ? 'border-amber-200/20 bg-amber-400/12 text-amber-100'
-                      : 'border-emerald-200/18 bg-emerald-400/10 text-emerald-100'
-                }`}
-              >
-                <Battery size={17} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-white/48">Batteria</span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-white/82">Dispositivo</span>
-              </span>
-            </span>
-            <span
-              className={`shrink-0 text-lg font-bold tracking-[-0.04em] ${
-                batteryTone === 'low'
-                  ? 'text-rose-100'
-                  : batteryTone === 'medium'
-                    ? 'text-amber-100'
-                    : 'text-white/92'
-              }`}
-            >
-              {batteryLevel}%
-            </span>
-          </div>
-        ) : null}
       </div>
 
+      <DeviceTelemetryStrip items={telemetryItems} />
+
       <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-white/55">ATTIVITÀ RECENTE</p>
+        <p className="text-[11px] font-semibold tracking-[0.2em] text-[color:var(--ui-text-secondary)]">ATTIVITÀ RECENTE</p>
         <div className="mt-3 space-y-2.5">
           {timeline.length > 0 ? (
             timeline.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/78"
+                className="dashboard-content-surface rounded-2xl px-3.5 py-2.5 text-sm text-[color:var(--ui-text-secondary)]"
               >
                 {entry.text}
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/58">
+            <div className="dashboard-content-surface rounded-2xl px-3.5 py-2.5 text-sm text-[color:var(--ui-text-tertiary)]">
               {activityUnavailableMessage}
             </div>
           )}

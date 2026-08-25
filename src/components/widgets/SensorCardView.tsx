@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import type { SensorCardModel, SensorTrendDirection } from './sensorCardModel';
-import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 import './SensorCard.css';
 
 type SensorCardViewProps = {
@@ -9,7 +8,6 @@ type SensorCardViewProps = {
   isEditMode: boolean;
   onClick: () => void;
   rootRef?: React.Ref<HTMLDivElement>;
-  layoutVariant?: WidgetDisplayVariant;
 };
 
 function SensorStatusGlyph({ activeBars }: { activeBars: number }) {
@@ -62,7 +60,6 @@ export function SensorCardView({
   isEditMode,
   onClick,
   rootRef,
-  layoutVariant,
 }: SensorCardViewProps) {
   const sparklinePoints = useMemo(() => buildSparklinePoints(model.history), [model.history]);
   const levelPosition = `${(model.levelRatio * 100).toFixed(1)}%`;
@@ -73,14 +70,13 @@ export function SensorCardView({
   return (
     <div
       ref={rootRef}
-      className={`sensor-card ${isSelected ? 'selection-corners' : ''}`}
+      className="sensor-card"
       data-sensor-group={model.visualGroup}
       data-sensor-level={model.level}
       data-sensor-available={model.available ? 'true' : 'false'}
-      data-sensor-variant={layoutVariant}
       style={rootStyle}
     >
-      <div className="liquid-glass-card sensor-card__surface">
+      <div className={`liquid-glass-card sensor-card__surface ${isSelected ? 'selection-corners' : ''}`}>
         <p className="sensor-card__title" title={model.title}>
           {model.title}
         </p>

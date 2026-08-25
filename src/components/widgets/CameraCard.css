@@ -1,0 +1,418 @@
+.camera-card {
+  --camera-accent-rgb: 114 184 255;
+  --camera-surface-rgb: 114 184 255;
+  --camera-radius: 1.55rem;
+  container-name: camera-card;
+  container-type: size;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--camera-radius);
+}
+
+.camera-card[data-camera-variant='mini'] {
+  --camera-radius: 1.05rem;
+}
+
+.camera-card[data-camera-variant='compact'] {
+  --camera-radius: 1.35rem;
+}
+
+.camera-card[data-camera-variant='full'] {
+  --camera-radius: 1.75rem;
+}
+
+.camera-card[data-camera-tone='recording'] {
+  --camera-accent-rgb: 255 105 102;
+  --camera-surface-rgb: 255 105 102;
+}
+
+.camera-card[data-camera-tone='idle'] {
+  --camera-accent-rgb: 202 213 226;
+  --camera-surface-rgb: 202 213 226;
+}
+
+.camera-card[data-camera-tone='offline'] {
+  --camera-accent-rgb: 165 174 190;
+  --camera-surface-rgb: 165 174 190;
+}
+
+.camera-card__surface {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 90% at 16% 0%, rgb(var(--camera-surface-rgb) / 0.12), transparent 60%),
+    linear-gradient(145deg, rgb(var(--ui-glass-highlight-rgb) / 0.055), transparent),
+    var(--ui-surface-glass);
+  box-shadow:
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.16),
+    0 16px 36px var(--ui-shadow-soft),
+    0 0 30px rgb(var(--camera-surface-rgb) / 0.08);
+}
+
+.camera-card__visual {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 30% 18%, rgb(var(--camera-surface-rgb) / 0.28), transparent 58%),
+    linear-gradient(145deg, rgb(22 31 48 / 0.94), rgb(10 15 25 / 0.96));
+}
+
+.camera-card__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.014);
+  filter: saturate(1.06) contrast(1.04);
+}
+
+.camera-card__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 0.22) 0%, rgb(0 0 0 / 0.06) 34%, rgb(0 0 0 / 0.72) 100%),
+    radial-gradient(circle at 85% 12%, rgb(var(--camera-surface-rgb) / 0.16), transparent 42%);
+}
+
+.camera-card__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  color: rgb(255 255 255 / 0.58);
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.camera-card__placeholder-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  color: rgb(255 255 255 / 0.78);
+}
+
+.camera-card__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgb(0 0 0 / 0.18);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.camera-card__loading span {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgb(255 255 255 / 0.22);
+  border-top-color: rgb(255 255 255 / 0.9);
+  border-radius: 999px;
+  animation: camera-card-spin 900ms linear infinite;
+}
+
+.camera-card__topbar,
+.camera-card__meta,
+.camera-card__details {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+}
+
+.camera-card__topbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  align-self: start;
+  padding: 0.72rem 0.72rem 0;
+}
+
+.camera-card__status-chip,
+.camera-card__detail {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background:
+    radial-gradient(80% 140% at 20% 0%, rgb(255 255 255 / 0.2), transparent 56%),
+    rgb(0 0 0 / 0.25);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 8px 20px rgb(0 0 0 / 0.18);
+  color: rgb(255 255 255 / 0.82);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.camera-card__status-chip {
+  height: 1.44rem;
+  border-radius: 999px;
+  gap: 0.34rem;
+  padding: 0 0.55rem;
+  font-size: 0.57rem;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.camera-card__live-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgb(var(--camera-accent-rgb) / 0.98);
+  box-shadow: 0 0 0 0.18rem rgb(var(--camera-accent-rgb) / 0.18), 0 0 0.8rem rgb(var(--camera-accent-rgb) / 0.48);
+}
+
+.camera-card[data-camera-tone='live'] .camera-card__live-dot,
+.camera-card[data-camera-tone='recording'] .camera-card__live-dot {
+  animation: camera-card-pulse 1.6s ease-in-out infinite;
+}
+
+.camera-card__detail svg {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+}
+
+.camera-card__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: end;
+  gap: 0.18rem;
+  align-self: end;
+  padding: 0 0.78rem 0.78rem;
+}
+
+.camera-card__title,
+.camera-card__subtitle,
+.camera-card__status-chip span,
+.camera-card__detail span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.camera-card__title {
+  margin: 0;
+  /* Kept near-white (not --ui-text-primary) + shadow for legibility over the video feed. */
+  color: rgb(255 255 255 / 0.96);
+  font-size: clamp(0.78rem, 6cqi, 1rem);
+  font-weight: var(--ui-card-title-weight);
+  letter-spacing: var(--ui-card-title-tracking);
+  line-height: 1.04;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.44);
+}
+
+.camera-card__subtitle {
+  margin: 0;
+  color: rgb(255 255 255 / 0.58);
+  font-size: clamp(0.56rem, 3.8cqi, 0.68rem);
+  font-weight: 620;
+  line-height: 1.08;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.36);
+}
+
+.camera-card__details {
+  display: none;
+  align-self: end;
+  gap: 0.35rem;
+  padding: 0 0.78rem 0.78rem;
+}
+
+.camera-card__detail {
+  max-width: 100%;
+  height: 1.45rem;
+  gap: 0.32rem;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.56rem;
+  font-weight: 720;
+}
+
+.camera-card__detail--device {
+  display: none;
+}
+
+.camera-card__open-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+}
+
+.camera-card[data-camera-tone='offline'] .camera-card__image {
+  filter: grayscale(0.85) saturate(0.6) brightness(0.82);
+}
+
+/* When the real card container is small, the state becomes a single semantic
+   light: its colour still distinguishes live, recording, idle and offline. */
+@container camera-card (max-width: 220px) {
+  .camera-card__status-chip {
+    width: 1rem;
+    height: 1rem;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .camera-card__status-chip span:not(.camera-card__live-dot) {
+    display: none;
+  }
+
+  .camera-card__live-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+}
+
+@container camera-card (max-height: 125px) {
+  .camera-card__status-chip {
+    width: 1rem;
+    height: 1rem;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .camera-card__status-chip span:not(.camera-card__live-dot) {
+    display: none;
+  }
+
+  .camera-card__live-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+}
+
+@container camera-card (max-width: 132px) {
+  .camera-card__topbar {
+    padding: 0.54rem 0.56rem 0;
+  }
+
+  .camera-card__meta {
+    padding: 0 0.6rem 0.6rem;
+  }
+
+  .camera-card__title {
+    font-size: 0.7rem;
+  }
+
+  .camera-card__subtitle {
+    display: none;
+  }
+}
+
+@container camera-card (max-height: 72px) {
+  .camera-card__topbar {
+    padding: 0.54rem 0.56rem 0;
+  }
+
+  .camera-card__meta {
+    padding: 0 0.6rem 0.6rem;
+  }
+
+  .camera-card__title {
+    font-size: 0.7rem;
+  }
+
+  .camera-card__subtitle {
+    display: none;
+  }
+}
+
+@container camera-card (min-width: 150px) and (min-height: 108px) {
+  .camera-card__surface {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
+@container camera-card (min-width: 260px) and (min-height: 170px) {
+  .camera-card__topbar {
+    padding: 0.86rem 0.92rem 0;
+  }
+
+  .camera-card__meta {
+    padding: 0 0.96rem 0.9rem;
+  }
+
+  .camera-card__details {
+    display: flex;
+    flex-wrap: wrap;
+    padding-inline: 0.96rem;
+  }
+
+  .camera-card__subtitle {
+    color: rgb(255 255 255 / 0.64);
+  }
+}
+
+@container camera-card (min-width: 360px) and (min-height: 230px) {
+  .camera-card__surface {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .camera-card__topbar {
+    padding: 1rem 1rem 0;
+  }
+
+  .camera-card__meta {
+    padding: 0 1rem 0.96rem;
+  }
+
+  .camera-card__details {
+    padding-inline: 1rem;
+  }
+
+  .camera-card__detail--device {
+    display: inline-flex;
+  }
+}
+
+@keyframes camera-card-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.62;
+    transform: scale(0.86);
+  }
+}
+
+@keyframes camera-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

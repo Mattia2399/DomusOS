@@ -115,11 +115,11 @@ export function MicroSuperChart({ widget, state, history }: MicroSuperChartProps
   const series = buildSeries(history, currentValue);
 
   return (
-    <div className="min-h-[4.25rem] rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-white/20 hover:bg-white/[0.08] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)]">
+    <div className="min-h-[4.25rem] rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 py-2.5 text-[color:var(--ui-text-primary)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)]">
       <div className="flex h-full min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
-          <p className="shrink-0 text-[11px] font-semibold leading-tight text-white/72">{formattedValue}</p>
+          <p className="truncate text-sm font-medium leading-tight text-[color:var(--ui-text-primary)]">{label}</p>
+          <p className="shrink-0 text-[11px] font-semibold leading-tight text-[color:var(--ui-text-secondary)]">{formattedValue}</p>
         </div>
         <div className="h-10 w-full">
           {series.length >= 2 ? (
@@ -127,7 +127,7 @@ export function MicroSuperChart({ widget, state, history }: MicroSuperChartProps
               {renderChart(chartType, series)}
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[11px] text-white/45">Nessun dato</div>
+            <div className="flex h-full w-full items-center justify-center text-[11px] text-[color:var(--ui-text-tertiary)]">Nessun dato</div>
           )}
         </div>
       </div>

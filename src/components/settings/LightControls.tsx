@@ -4,6 +4,8 @@ import { HexColorInput, HexColorPicker } from 'react-colorful';
 import './LightControls.css';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
+import GlassSlider from '../ui/GlassSlider';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 
 const COLOR_PICKER_DEBOUNCE_MS = 160;
 
@@ -132,6 +134,7 @@ export function LightControlsPanel({
   onFlash,
 }: LightControlsProps) {
   const colorDebounceRef = useRef<number | null>(null);
+  const skipNextBrightnessBlurCommitRef = useRef(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isAdjustingBrightness, setIsAdjustingBrightness] = useState(false);
   const brightness = Math.round(lamp.brightness);
@@ -192,9 +195,6 @@ export function LightControlsPanel({
     return nearest;
   }, [lamp.hsColor]);
 
-  const sliderAccent = lamp.isOn
-    ? `hsl(${lamp.hsColor[0]} ${Math.max(56, lamp.hsColor[1])}% 62%)`
-    : 'rgba(255,255,255,0.16)';
   const displayedBrightness = lamp.isOn ? brightnessDraft : 0;
   const displayedWhite = lamp.isOn ? whiteDraft : 0;
   const currentColorHex = useMemo(() => rgbToHex(hsToRgb(lamp.hsColor[0], lamp.hsColor[1])), [lamp.hsColor]);
@@ -255,6 +255,12 @@ export function LightControlsPanel({
     }, COLOR_PICKER_DEBOUNCE_MS);
   };
 
+  const commitBrightness = (rawValue: number) => {
+    const nextValue = clamp(Math.round(rawValue), 0, 100);
+    setBrightnessDraft(nextValue);
+    onBrightnessChange(nextValue, commandOptions);
+  };
+
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
       <ContextPanelHeader title={lamp.name} subtitle={currentStateLabel} icon={<Lightbulb size={22} />} />
@@ -262,18 +268,18 @@ export function LightControlsPanel({
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <span className="text-sm text-gray-400">{supportsBrightness ? 'Luminosita' : 'Stato'}</span>
-            <p className="mt-0.5 text-xs text-white/45">{currentStateLabel}</p>
+            <span className="text-sm text-[color:var(--ui-text-secondary)]">{supportsBrightness ? 'Luminosita' : 'Stato'}</span>
+            <p className="mt-0.5 text-xs text-[color:var(--ui-text-tertiary)]">{currentStateLabel}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
-            {supportsBrightness ? <span className="text-sm text-gray-300">{`${Math.round(displayedBrightness)}%`}</span> : null}
+            {supportsBrightness ? <span className="text-sm text-[color:var(--ui-text-secondary)]">{`${Math.round(displayedBrightness)}%`}</span> : null}
             <button
               type="button"
               onClick={onToggle}
               className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all ${
                 lamp.isOn
-                  ? 'bg-white border-white text-slate-900 shadow-[0_8px_24px_rgba(255,255,255,0.22)]'
-                  : 'bg-white/8 border-white/15 text-white'
+                  ? 'border-[color:rgb(var(--ui-accent-rgb)/0.58)] bg-[color:var(--ui-accent)] text-[color:var(--ui-accent-contrast)] shadow-[0_8px_24px_rgb(var(--ui-accent-rgb)/0.22)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]'
               }`}
               aria-label="Accendi o spegni luce"
               title="Accendi o spegni luce"
@@ -284,45 +290,54 @@ export function LightControlsPanel({
         </div>
 
         {supportsBrightness ? (
-          <div className="relative h-16 overflow-hidden rounded-full border border-white/10 bg-black/35">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-300"
-              style={{
-                width: `${Math.max(0, Math.min(100, displayedBrightness))}%`,
-                background: `linear-gradient(90deg, rgba(255,255,255,0.88) 0%, ${sliderAccent} 100%)`,
-              }}
-            />
+          <div
+            className="ha-light-brightness-slider"
+            data-adjusting={isAdjustingBrightness ? 'true' : 'false'}
+            style={{
+              '--ha-light-panel-progress': `${Math.max(0, Math.min(100, displayedBrightness))}%`,
+            } as React.CSSProperties}
+          >
+            <span className="ha-light-brightness-slider__fill" aria-hidden="true" />
+            <span className="ha-light-brightness-slider__handle" aria-hidden="true" />
 
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-5">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${lamp.isOn ? 'bg-white/26 text-white' : 'bg-white/10 text-gray-300'}`}>
-                <Sun size={18} />
-              </span>
-              <span className="text-sm font-semibold tracking-wide text-white">{`${Math.round(displayedBrightness)}%`}</span>
-            </div>
-
-            <input
-              className="absolute inset-0 h-full w-full cursor-pointer touch-none opacity-0"
-              type="range"
+            <GlassSlider
+              variant="overlay"
+              className="ha-light-brightness-slider__input"
               min={0}
               max={100}
               step={1}
               value={displayedBrightness}
-              onPointerDown={() => {
+              onPointerDown={(event) => {
                 setIsAdjustingBrightness(true);
+                setBrightnessDraft(Number(event.currentTarget.value));
               }}
-              onPointerUp={() => {
+              onPointerUp={(event) => {
+                commitBrightness(Number(event.currentTarget.value));
                 setIsAdjustingBrightness(false);
+                skipNextBrightnessBlurCommitRef.current = true;
               }}
               onPointerCancel={() => {
                 setIsAdjustingBrightness(false);
+                setBrightnessDraft(brightness);
               }}
-              onBlur={() => {
+              onBlur={(event) => {
                 setIsAdjustingBrightness(false);
+                if (skipNextBrightnessBlurCommitRef.current) {
+                  skipNextBrightnessBlurCommitRef.current = false;
+                  return;
+                }
+                if (brightnessDraft !== brightness) {
+                  commitBrightness(Number(event.currentTarget.value));
+                }
               }}
               onChange={(event) => {
                 const nextValue = clamp(Number(event.target.value), 0, 100);
                 setBrightnessDraft(nextValue);
-                onBrightnessChange(nextValue, commandOptions);
+              }}
+              onKeyUp={(event) => {
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+                  commitBrightness(Number(event.currentTarget.value));
+                }
               }}
               aria-label="Luminosita lampada"
               aria-valuetext={`${Math.round(displayedBrightness)}%`}
@@ -333,52 +348,35 @@ export function LightControlsPanel({
 
       {supportsColorTemp ? (
         <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-          <div className="mb-4 flex items-center justify-between gap-3 text-white/75">
+          <div className="mb-4 flex items-center justify-between gap-3 text-[color:var(--ui-text-secondary)]">
             <span className="inline-flex min-w-0 items-center gap-2">
               <Sun size={16} />
-              <span className="text-sm text-gray-300">Temperatura colore</span>
+              <span className="text-sm text-[color:var(--ui-text-secondary)]">Temperatura colore</span>
             </span>
           </div>
 
-          <div className="liquid-segmented-control">
-            <div
-              className="liquid-segmented-thumb absolute bottom-1 left-1 top-1"
-              style={{
-                width: 'calc((100% - 0.5rem) / 4)',
-                transform: `translateX(${activeTempIndex * 100}%)`,
-              }}
-            />
-
-            <div className="relative grid grid-cols-4">
-              {presets.map((preset, index) => (
-                <button
-                  key={preset.kelvin}
-                  type="button"
-                  onClick={() => onColorTempChange(preset.kelvin, commandOptions)}
-                  className={`relative z-10 h-10 rounded-full text-xs font-medium transition-all duration-500 ease-[cubic-bezier(0.34,1.15,0.3,1)] ${
-                    index === activeTempIndex ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]' : 'text-white/60 hover:text-white/90'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <GlassSegmentSelect
+            ariaLabel="Temperatura colore"
+            options={presets.map((preset) => ({ value: preset.kelvin, label: preset.label }))}
+            value={presets[activeTempIndex]?.kelvin}
+            onChange={(kelvin) => onColorTempChange(kelvin, commandOptions)}
+            optionClassName="font-medium"
+          />
         </div>
       ) : null}
 
       {supportsColor ? (
         <div className={`${CONTEXT_PANEL_LAYOUT.section} ${hasAdvancedControls ? 'mb-1' : 'mt-auto'}`}>
           <div className="mb-4 flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2 text-white/78">
+            <div className="flex min-w-0 items-center gap-2 text-[color:var(--ui-text-secondary)]">
               <Palette size={16} />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-300">Colore</p>
+                <p className="text-sm font-medium text-[color:var(--ui-text-secondary)]">Colore</p>
               </div>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-2.5 py-1 text-xs font-medium text-white/70">
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2.5 py-1 text-xs font-medium text-[color:var(--ui-text-secondary)]">
               <span
-                className="h-3.5 w-3.5 rounded-full border border-white/25"
+                className="h-3.5 w-3.5 rounded-full border border-[#fff]/45"
                 style={{ backgroundColor: pickerColor }}
                 aria-hidden="true"
               />
@@ -397,8 +395,8 @@ export function LightControlsPanel({
                 }}
                 className={`group flex min-h-[4.6rem] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-2.5 text-center transition-all active:scale-[0.97] ${
                   index === activeSwatchIndex
-                    ? 'border-white/24 bg-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
-                    : 'border-white/[0.07] bg-white/[0.035] hover:bg-white/[0.07]'
+                    ? 'liquid-glass-selection border-[color:var(--ui-border-strong)] shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.14)]'
+                    : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:bg-[color:var(--ui-fill-secondary)]'
                 }`}
                 aria-label={`Imposta colore ${preset.label}`}
                 title={preset.label}
@@ -406,37 +404,37 @@ export function LightControlsPanel({
                 <span
                   className={`h-9 w-9 rounded-full border transition-transform group-hover:scale-105 ${
                     index === activeSwatchIndex
-                      ? 'border-white/85 shadow-[0_0_0_3px_rgba(255,255,255,0.12),0_10px_20px_rgba(0,0,0,0.2)]'
-                      : 'border-white/24 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]'
+                      ? 'border-[#fff]/85 shadow-[0_0_0_3px_rgb(var(--ui-accent-rgb)/0.16),0_10px_20px_var(--ui-shadow-soft)]'
+                      : 'border-[#fff]/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]'
                   }`}
                   style={{ backgroundColor: `hsl(${preset.hue} ${preset.saturation}% 52%)` }}
                   aria-hidden="true"
                 />
-                <span className="max-w-full truncate text-[11px] font-semibold leading-none text-white/72">{preset.label}</span>
+                <span className="max-w-full truncate text-[11px] font-semibold leading-none text-[color:var(--ui-text-secondary)]">{preset.label}</span>
               </button>
             ))}
           </div>
 
-          <div className="liquid-glass-card mt-4 overflow-hidden rounded-2xl">
+          <div className="dashboard-content-surface-soft mt-4 overflow-hidden rounded-2xl">
             <button
               type="button"
               onClick={() => {
                 setIsPickerOpen((prev) => !prev);
               }}
-              className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.055] active:scale-[0.99]"
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-[color:var(--ui-fill-secondary)] active:scale-[0.99]"
               aria-expanded={isPickerOpen}
               aria-label="Colore personalizzato"
             >
               <span className="flex min-w-0 items-center gap-3">
-                <span className="ha-light-spectrum-swatch h-10 w-10 shrink-0 rounded-full border border-white/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_20px_rgba(0,0,0,0.24)]" />
+                <span className="ha-light-spectrum-swatch h-10 w-10 shrink-0 rounded-full border border-[#fff]/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_20px_var(--ui-shadow-soft)]" />
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-white/86">Personalizzato</span>
-                  <span className="mt-0.5 block truncate text-xs text-white/46">{pickerColor.toUpperCase()}</span>
+                  <span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">Personalizzato</span>
+                  <span className="mt-0.5 block truncate text-xs text-[color:var(--ui-text-tertiary)]">{pickerColor.toUpperCase()}</span>
                 </span>
               </span>
               <span
                 className={`h-8 w-8 shrink-0 rounded-full border transition-transform ${
-                  isPickerOpen ? 'scale-110 border-white/70' : 'border-white/20'
+                  isPickerOpen ? 'scale-110 border-[#fff]/70' : 'border-[#fff]/30'
                 }`}
                 style={{ backgroundColor: pickerColor }}
                 aria-hidden="true"
@@ -444,7 +442,7 @@ export function LightControlsPanel({
             </button>
 
             {isPickerOpen ? (
-              <div className="ha-light-color-picker border-t border-white/[0.07] px-3.5 pb-3.5 pt-3">
+              <div className="ha-light-color-picker border-t border-[color:var(--ui-separator)] px-3.5 pb-3.5 pt-3">
                 <HexColorPicker color={pickerColor} onChange={handlePickerChange} />
                 <div className="mt-3 flex items-center gap-3">
                   <HexColorInput
@@ -468,19 +466,18 @@ export function LightControlsPanel({
 
       {hasAdvancedControls ? (
         <div className={`${CONTEXT_PANEL_LAYOUT.section} mt-auto space-y-4`}>
-          <div className="flex items-center gap-2 text-white/78">
+          <div className="flex items-center gap-2 text-[color:var(--ui-text-secondary)]">
             <Sparkles size={16} />
-            <span className="text-sm font-medium text-gray-300">Funzioni</span>
+            <span className="text-sm font-medium text-[color:var(--ui-text-secondary)]">Funzioni</span>
           </div>
 
           {supportsWhite ? (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3.5">
+            <div className="dashboard-content-surface-soft rounded-2xl p-3.5">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="min-w-0 text-sm font-medium text-white/80">Bianco</span>
-                <span className="shrink-0 text-xs font-semibold text-white/56">{Math.round(displayedWhite)}%</span>
+                <span className="min-w-0 text-sm font-medium text-[color:var(--ui-text-primary)]">Bianco</span>
+                <span className="shrink-0 text-xs font-semibold text-[color:var(--ui-text-secondary)]">{Math.round(displayedWhite)}%</span>
               </div>
-              <input
-                type="range"
+              <GlassSlider
                 min={0}
                 max={100}
                 step={1}
@@ -490,17 +487,17 @@ export function LightControlsPanel({
                   setWhiteDraft(nextValue);
                   onWhiteChange(nextValue, commandOptions);
                 }}
-                className="ha-light-range"
                 aria-label="Canale bianco"
+                tone="accent"
               />
             </div>
           ) : null}
 
           {supportsEffects && effectOptions.length > 0 ? (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3.5">
+            <div className="dashboard-content-surface-soft rounded-2xl p-3.5">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="min-w-0 text-sm font-medium text-white/80">Effetti</span>
-                <span className="truncate text-xs text-white/45">{lamp.effect || 'off'}</span>
+                <span className="min-w-0 text-sm font-medium text-[color:var(--ui-text-primary)]">Effetti</span>
+                <span className="truncate text-xs text-[color:var(--ui-text-tertiary)]">{lamp.effect || 'off'}</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {effectOptions.map((effectName) => {
@@ -514,8 +511,8 @@ export function LightControlsPanel({
                       onClick={() => onEffectChange(effectName, commandOptions)}
                       className={`shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.97] ${
                         isActive
-                          ? 'border-white/35 bg-white/18 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]'
-                          : 'border-white/[0.08] bg-black/18 text-white/58 hover:bg-white/[0.07] hover:text-white/82'
+                          ? 'liquid-glass-selection border-[color:var(--ui-border-strong)] shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.18)]'
+                          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]'
                       }`}
                     >
                       {label}
@@ -529,13 +526,13 @@ export function LightControlsPanel({
           {supportsFlash ? (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 text-sm font-medium text-white/80">Flash</span>
+                <span className="min-w-0 text-sm font-medium text-[color:var(--ui-text-primary)]">Flash</span>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => onFlash('short')}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-3 text-sm font-semibold text-white/76 transition-all hover:bg-white/[0.07] active:scale-[0.97]"
+                  className="glass-button min-h-11 rounded-2xl px-3 py-3 text-sm font-semibold active:scale-[0.97]"
                 >
                   <Zap size={15} />
                   Breve
@@ -543,7 +540,7 @@ export function LightControlsPanel({
                 <button
                   type="button"
                   onClick={() => onFlash('long')}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-3 text-sm font-semibold text-white/76 transition-all hover:bg-white/[0.07] active:scale-[0.97]"
+                  className="glass-button min-h-11 rounded-2xl px-3 py-3 text-sm font-semibold active:scale-[0.97]"
                 >
                   <Zap size={15} />
                   Lungo
@@ -553,23 +550,22 @@ export function LightControlsPanel({
           ) : null}
 
           {supportsTransition ? (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3.5">
+            <div className="dashboard-content-surface-soft rounded-2xl p-3.5">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 text-sm font-medium text-white/80">
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--ui-text-primary)]">
                   <Timer size={15} />
                   Transizione
                 </span>
-                <span className="text-xs font-semibold text-white/56">{transitionSeconds.toFixed(transitionSeconds % 1 === 0 ? 0 : 1)}s</span>
+                <span className="text-xs font-semibold text-[color:var(--ui-text-secondary)]">{transitionSeconds.toFixed(transitionSeconds % 1 === 0 ? 0 : 1)}s</span>
               </div>
-              <input
-                type="range"
+              <GlassSlider
                 min={0}
                 max={10}
                 step={0.5}
                 value={transitionSeconds}
                 onChange={(event) => setTransitionSeconds(clamp(Number(event.target.value), 0, 10))}
-                className="ha-light-range"
                 aria-label="Durata transizione"
+                tone="accent"
               />
             </div>
           ) : null}

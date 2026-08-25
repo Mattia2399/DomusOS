@@ -2,11 +2,13 @@
 
 Aggiornata: 2026-07-10
 
-Obiettivo: arrivare a una beta vendibile di HA Dashboard Builder senza inseguire tutte le card subito. La priorita e' distribuire un nucleo stabile, bello e sicuro, raccogliere feedback reali e iniziare a validare il prezzo.
+> Nota: la roadmap tecnica aggiornata dopo l'audit completo di `/home` e disponibile in [`domusos-roadmap.md`](./domusos-roadmap.md). Questo documento conserva il piano beta e go-to-market originale; in caso di conflitto, prevale la roadmap DomusOS del 14 luglio 2026.
+
+Obiettivo: arrivare a una beta vendibile di DomusOS senza inseguire tutte le card subito. La priorita e' distribuire un nucleo stabile, bello e sicuro, raccogliere feedback reali e iniziare a validare il prezzo.
 
 ## Posizionamento beta
 
-HA Dashboard Builder e' una dashboard premium per Home Assistant pensata per utenti che vogliono:
+DomusOS e' una dashboard premium per Home Assistant pensata per utenti che vogliono:
 
 - una UI piu' curata delle dashboard standard;
 - card responsive e configurabili;

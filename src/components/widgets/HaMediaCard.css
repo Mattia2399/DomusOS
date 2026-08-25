@@ -1,4 +1,12 @@
 .ha-media-card {
+  --ha-media-text-primary: #ffffff;
+  --ha-media-text-secondary: rgb(255 255 255 / 0.7);
+  --ha-media-text-tertiary: rgb(255 255 255 / 0.48);
+  --ha-media-border: rgb(255 255 255 / 0.14);
+  --ha-media-fill: rgb(255 255 255 / 0.09);
+  --ha-media-fill-hover: rgb(255 255 255 / 0.18);
+  --ha-media-active-bg: rgb(255 255 255 / 0.92);
+  --ha-media-active-text: rgb(17 24 39 / 0.96);
   width: 100%;
   min-width: 0;
   height: 100%;
@@ -15,8 +23,23 @@
   display: block;
   height: 100%;
   min-height: 0;
-  background: #181820;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  background: var(--ui-surface-glass);
+  box-shadow: 0 8px 24px var(--ui-shadow-soft);
+}
+
+.ha-media-card__surface::after {
+  content: '';
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  border: 1px solid rgb(var(--ui-accent-rgb) / 0.72);
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ha-media-card--command-pending .ha-media-card__surface::after {
+  animation: ha-media-command-pending 1.45s ease-in-out infinite;
 }
 
 .ha-media-card__surface--compact {
@@ -69,27 +92,24 @@
 
 .ha-media-card--idle .ha-media-card__bg {
   background:
-    radial-gradient(circle at 14% 10%, rgba(67, 99, 191, 0.28), transparent 54%),
-    radial-gradient(circle at 88% 80%, rgba(63, 86, 160, 0.2), transparent 52%),
-    linear-gradient(145deg, #1a2031 0%, #111522 48%, #0d1018 100%);
-  filter: blur(24px) brightness(0.66);
+    radial-gradient(circle at 14% 10%, rgb(var(--ui-accent-rgb) / 0.16), transparent 54%),
+    var(--ui-surface-glass);
+  filter: blur(24px) brightness(0.98);
 }
 
 .ha-media-card--on .ha-media-card__bg,
 .ha-media-card--off .ha-media-card__bg {
   background:
-    radial-gradient(circle at 14% 10%, rgba(80, 92, 120, 0.26), transparent 54%),
-    radial-gradient(circle at 88% 80%, rgba(64, 73, 98, 0.2), transparent 52%),
-    linear-gradient(145deg, #1b202d 0%, #111620 48%, #0d1018 100%);
-  filter: blur(24px) brightness(0.62);
+    radial-gradient(circle at 14% 10%, rgb(var(--ui-accent-rgb) / 0.1), transparent 54%),
+    var(--ui-surface-glass);
+  filter: blur(24px) brightness(0.98);
 }
 
 .ha-media-card--unavailable .ha-media-card__bg {
   background:
-    radial-gradient(circle at 20% 12%, rgba(120, 136, 170, 0.22), transparent 55%),
-    radial-gradient(circle at 82% 78%, rgba(94, 107, 140, 0.18), transparent 52%),
-    linear-gradient(145deg, #232938 0%, #1c212f 52%, #141925 100%);
-  filter: blur(26px) saturate(0.72) brightness(0.5);
+    radial-gradient(circle at 20% 12%, var(--ui-fill-secondary), transparent 55%),
+    var(--ui-surface-glass);
+  filter: blur(26px) saturate(0.72) brightness(0.96);
 }
 
 .ha-media-card__overlay {
@@ -97,6 +117,27 @@
   inset: 0;
   z-index: 0;
   background: linear-gradient(180deg, rgba(7, 8, 12, 0.24) 0%, rgba(7, 8, 12, 0.46) 100%);
+}
+
+.ha-media-card--idle,
+.ha-media-card--on,
+.ha-media-card--off,
+.ha-media-card--unavailable {
+  --ha-media-text-primary: var(--ui-text-primary);
+  --ha-media-text-secondary: var(--ui-text-secondary);
+  --ha-media-text-tertiary: var(--ui-text-tertiary);
+  --ha-media-border: var(--ui-border);
+  --ha-media-fill: var(--ui-fill-tertiary);
+  --ha-media-fill-hover: var(--ui-fill-secondary);
+  --ha-media-active-bg: var(--ui-surface-glass-strong);
+  --ha-media-active-text: var(--ui-text-primary);
+}
+
+.ha-media-card--idle .ha-media-card__overlay,
+.ha-media-card--on .ha-media-card__overlay,
+.ha-media-card--off .ha-media-card__overlay,
+.ha-media-card--unavailable .ha-media-card__overlay {
+  background: linear-gradient(180deg, rgb(var(--ui-glass-highlight-rgb) / 0.08), transparent);
 }
 
 .ha-media-card__content {
@@ -149,15 +190,15 @@
   min-width: 0;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ha-media-border);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   flex: 0 1 auto;
-  background: rgba(255, 255, 255, 0.075);
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--ha-media-fill);
+  color: var(--ha-media-text-secondary);
   font-family: "SF Pro Text";
   font-size: 10px;
   font-weight: 700;
@@ -181,8 +222,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: var(--ha-media-fill);
+  border: 1px solid var(--ha-media-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
   flex: 0 0 36px;
 }
@@ -190,7 +231,7 @@
 .ha-media-card__icon {
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--ha-media-text-primary);
 }
 
 .ha-media-card__icon-cover {
@@ -206,12 +247,12 @@
 }
 
 .ha-media-card__name {
-  color: #ffffff;
+  color: var(--ha-media-text-primary);
   font-family: "SF Pro Display";
   font-size: clamp(0.86rem, 4.6cqw, 1.05rem);
-  font-weight: 400;
+  font-weight: var(--ui-card-title-weight);
   line-height: 1.2;
-  letter-spacing: -0.015em;
+  letter-spacing: var(--ui-card-title-tracking);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -245,7 +286,7 @@
 
 .ha-media-card__status {
   margin-top: 2px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ha-media-text-secondary);
   font-family: "SF Pro Text";
   font-size: 12px;
   font-weight: 400;
@@ -320,30 +361,30 @@
   position: relative;
   width: clamp(28px, 10cqw, 36px);
   height: clamp(28px, 10cqw, 36px);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid var(--ha-media-border);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
+  background: var(--ha-media-fill);
+  color: var(--ha-media-text-primary);
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease;
 }
 
 .ha-media-card__transport-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--ha-media-fill-hover);
+  border-color: var(--ui-border-strong);
 }
 
 .ha-media-card__transport-button--secondary {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ha-media-text-secondary);
 }
 
 .ha-media-card__transport-button--active {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(255, 255, 255, 0.94);
-  color: rgba(17, 24, 39, 0.96);
+  background: var(--ha-media-active-bg);
+  border-color: var(--ha-media-border);
+  color: var(--ha-media-active-text);
   box-shadow:
     0 8px 20px rgba(255, 255, 255, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -357,8 +398,8 @@
 .ha-media-card__transport-button--primary {
   width: clamp(34px, 12cqw, 44px);
   height: clamp(34px, 12cqw, 44px);
-  background: rgba(255, 255, 255, 0.24);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--ha-media-fill-hover);
+  border-color: var(--ha-media-border);
 }
 
 .ha-media-card__transport-icon {
@@ -397,7 +438,7 @@
   border-radius: 14px;
   overflow: hidden;
   flex: 0 0 56px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--ha-media-fill);
   box-shadow:
     0 8px 18px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -416,7 +457,7 @@
 .ha-media-card__art-fallback {
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--ha-media-text-secondary);
 }
 
 .ha-media-card__track-meta {
@@ -427,7 +468,7 @@
 }
 
 .ha-media-card__track-title {
-  color: #ffffff;
+  color: var(--ha-media-text-primary);
   font-family: "SF Pro Display";
   font-size: 14px;
   font-weight: 600;
@@ -438,7 +479,7 @@
 }
 
 .ha-media-card__track-artist {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ha-media-text-secondary);
   font-family: "SF Pro Text";
   font-size: 12px;
   font-weight: 400;
@@ -468,14 +509,14 @@
   max-width: min(140px, 50cqw);
   height: 24px;
   padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ha-media-border);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  background: rgba(255, 255, 255, 0.075);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--ha-media-fill);
+  color: var(--ha-media-text-secondary);
   font-family: "SF Pro Text";
   font-size: 10px;
   font-weight: 700;
@@ -494,7 +535,7 @@
 
 .ha-media-card__cast-label {
   margin: 0;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--ha-media-text-tertiary);
   font-family: "SF Pro Text";
   font-size: 10px;
   font-weight: 700;
@@ -523,15 +564,15 @@
   max-width: min(150px, 58cqw);
   height: 32px;
   padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--ha-media-border);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   flex: 0 0 auto;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--ha-media-fill);
+  color: var(--ha-media-text-secondary);
   cursor: pointer;
   transition:
     background 150ms ease,
@@ -541,9 +582,9 @@
 }
 
 .ha-media-card__cast-chip:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: var(--ha-media-fill-hover);
+  border-color: var(--ui-border-strong);
+  color: var(--ha-media-text-primary);
 }
 
 .ha-media-card__cast-chip:active {
@@ -559,9 +600,9 @@
 }
 
 .ha-media-card__cast-chip--active {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(255, 255, 255, 0.94);
-  color: rgba(17, 24, 39, 0.96);
+  background: var(--ha-media-active-bg);
+  border-color: var(--ha-media-border);
+  color: var(--ha-media-active-text);
   box-shadow:
     0 8px 20px rgba(255, 255, 255, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -600,10 +641,10 @@
   outline: none;
   background: linear-gradient(
     90deg,
-    #ffffff 0%,
-    #ffffff var(--ha-media-progress, 0%),
-    rgba(255, 255, 255, 0.28) var(--ha-media-progress, 0%),
-    rgba(255, 255, 255, 0.28) 100%
+    var(--ha-media-text-primary) 0%,
+    var(--ha-media-text-primary) var(--ha-media-progress, 0%),
+    var(--ha-media-fill-hover) var(--ha-media-progress, 0%),
+    var(--ha-media-fill-hover) 100%
   );
 }
 
@@ -616,12 +657,12 @@
   background:
     linear-gradient(
       90deg,
-      #ffffff 0%,
-      #ffffff var(--ha-media-progress, 0%),
-      rgba(255, 255, 255, 0.28) var(--ha-media-progress, 0%),
-      rgba(255, 255, 255, 0.28) 100%
+      var(--ha-media-text-primary) 0%,
+      var(--ha-media-text-primary) var(--ha-media-progress, 0%),
+      var(--ha-media-fill-hover) var(--ha-media-progress, 0%),
+      var(--ha-media-fill-hover) 100%
     ),
-    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.42) 50%, transparent 100%);
+    linear-gradient(90deg, transparent 0%, var(--ha-media-text-secondary) 50%, transparent 100%);
   background-size: 100% 100%, 48px 100%;
   animation: ha-media-buffering 1.1s linear infinite;
 }
@@ -640,7 +681,7 @@
   margin-top: calc((clamp(4px, 1.5cqh, 6px) - clamp(10px, 4cqw, 14px)) / 2);
   border: 0;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--ha-media-text-primary);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
 }
 
@@ -648,13 +689,13 @@
   height: clamp(4px, 1.5cqh, 6px);
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--ha-media-fill-hover);
 }
 
 .ha-media-card__progress::-moz-range-progress {
   height: clamp(4px, 1.5cqh, 6px);
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--ha-media-text-primary);
 }
 
 .ha-media-card__progress::-moz-range-thumb {
@@ -662,7 +703,7 @@
   height: clamp(10px, 4cqw, 14px);
   border: 0;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--ha-media-text-primary);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
 }
 
@@ -670,7 +711,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ha-media-text-secondary);
   font-family: "SF Pro Text";
   font-size: 12px;
   font-weight: 400;
@@ -696,7 +737,16 @@
   }
 }
 
+@keyframes ha-media-command-pending {
+  0%, 100% { opacity: 0.2; box-shadow: inset 0 0 0 0 rgb(var(--ui-accent-rgb) / 0.08); }
+  50% { opacity: 0.82; box-shadow: inset 0 0 18px rgb(var(--ui-accent-rgb) / 0.16); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ha-media-card--command-pending .ha-media-card__surface::after {
+    animation: none;
+    opacity: 0.58;
+  }
   .ha-media-card__name-marquee,
   .ha-media-card__status-marquee {
     animation: none;

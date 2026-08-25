@@ -13,23 +13,23 @@ export function SensorDisplayVariantSkeleton({
   disabled,
 }: SensorDisplayVariantSkeletonProps) {
   const accentClass = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.72)]'
+    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.72)]'
     : disabled
-      ? 'bg-white/[0.10]'
-      : 'bg-white/[0.34]';
+      ? 'bg-[color:var(--ui-fill-tertiary)]'
+      : 'bg-[color:var(--ui-text-tertiary)]';
   const softClass = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb-2)/0.34)]'
+    ? 'bg-[color:rgb(var(--ui-accent-secondary-rgb)/0.34)]'
     : disabled
-      ? 'bg-white/[0.05]'
-      : 'bg-white/[0.13]';
-  const mutedClass = disabled ? 'bg-white/[0.07]' : 'bg-white/[0.20]';
+      ? 'bg-[color:var(--ui-fill-tertiary)]'
+      : 'bg-[color:var(--ui-fill-secondary)]';
+  const mutedClass = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-primary)]';
   const chartClass = active
-    ? 'text-[color:rgb(var(--profile-sheet-accent-rgb)/0.78)]'
+    ? 'text-[color:rgb(var(--ui-accent-rgb)/0.78)]'
     : disabled
-      ? 'text-white/10'
-      : 'text-white/34';
+      ? 'text-[color:var(--ui-text-disabled)]'
+      : 'text-[color:var(--ui-text-tertiary)]';
   const surfaceClass =
-    'overflow-hidden rounded-[0.82rem] border border-white/10 bg-white/[0.035] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
+    'dashboard-content-surface-soft overflow-hidden rounded-[0.82rem]';
 
   const statusGlyph = (
     <span className="inline-flex h-3.5 w-4 shrink-0 items-end justify-end gap-[2px]" aria-hidden="true">
@@ -62,7 +62,7 @@ export function SensorDisplayVariantSkeleton({
         <span className={`h-1 w-4 rounded-full ${mutedClass}`} />
         <span className={`h-1 w-4 rounded-full ${mutedClass}`} />
       </span>
-      <span className={`relative block min-w-0 overflow-hidden rounded-full border border-white/[0.07] ${softClass} ${tall ? 'h-4' : 'h-3'}`}>
+      <span className={`relative block min-w-0 overflow-hidden rounded-full border border-[color:var(--ui-border)] ${softClass} ${tall ? 'h-4' : 'h-3'}`}>
         <svg viewBox="0 0 100 24" preserveAspectRatio="none" className={`absolute inset-0 h-full w-full ${chartClass}`} fill="none">
           <polyline points="0,19 18,15 35,17 52,8 69,12 84,5 100,8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

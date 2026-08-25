@@ -7,6 +7,7 @@ import {
   sanitizeDashboardLayoutValue,
 } from './configBackup';
 import { WIDGET_SECRETS_STORAGE_KEY } from './widgetSecrets';
+import { REAL_DASHBOARD_RECOVERY_STORAGE_KEY } from './dashboardRuntime';
 
 const BACKUP_SCHEMA = 'ha-dashboard-builder-backup';
 
@@ -36,12 +37,21 @@ beforeEach(() => {
 });
 
 describe('config backup security filtering', () => {
+  it('does not export the HA-backed local cache', () => {
+    window.localStorage.setItem('ha.dashboard.cache.sharedHouseConfiguration.v1', '{"revision":2}');
+
+    const payload = createDashboardBackupPayload(window.localStorage);
+
+    expect(payload.entries['ha.dashboard.cache.sharedHouseConfiguration.v1']).toBeUndefined();
+  });
+
   it('excludes device auth ids and local alarm PIN from exports', () => {
     window.localStorage.setItem('ha.dashboard.deviceAuth.credentialId.user', 'credential-id');
     window.localStorage.setItem('ha.dashboard.security.biometricCredentialId', 'legacy-credential-id');
     window.localStorage.setItem('ha.dashboard.security.alarmPin', '2580');
     window.localStorage.setItem(WIDGET_SECRETS_STORAGE_KEY, JSON.stringify({ widgets: { lock: { lockCode: '9999' } } }));
     window.localStorage.setItem('ha.dashboard.userName', 'Casa');
+    window.localStorage.setItem(REAL_DASHBOARD_RECOVERY_STORAGE_KEY, 'local-recovery-copy');
 
     const payload = createDashboardBackupPayload(window.localStorage);
 
@@ -49,6 +59,7 @@ describe('config backup security filtering', () => {
     expect(payload.entries['ha.dashboard.security.biometricCredentialId']).toBeUndefined();
     expect(payload.entries['ha.dashboard.security.alarmPin']).toBeUndefined();
     expect(payload.entries[WIDGET_SECRETS_STORAGE_KEY]).toBeUndefined();
+    expect(payload.entries[REAL_DASHBOARD_RECOVERY_STORAGE_KEY]).toBeUndefined();
     expect(payload.entries['ha.dashboard.userName']).toBe('Casa');
   });
 

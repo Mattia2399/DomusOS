@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { AlarmArmMode, AlarmCardModel, AlarmCardTone } from './alarmCardModel';
 import type { WidgetDisplayVariant } from './widgetDisplayVariant';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 
 type AlarmCardViewProps = {
   model: AlarmCardModel;
@@ -87,9 +88,14 @@ function resolveAccent(tone: AlarmCardTone) {
     line: 'via-cyan-300/80', glow: 'bg-cyan-400/19', icon: 'text-cyan-200', action: 'bg-cyan-300/[0.10] border-cyan-100/14 hover:bg-cyan-300/[0.15]', progress: 'bg-cyan-300/76', selectedMode: 'border-cyan-200/28 bg-cyan-300/[0.14] text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_3px_12px_rgba(6,182,212,0.15)]',
   };
   return {
-    surface: 'bg-[linear-gradient(145deg,rgba(255,255,255,0.078),rgba(255,255,255,0.024))]',
-    wash: 'bg-[radial-gradient(80%_70%_at_8%_0%,rgba(255,255,255,0.10),transparent_64%)]',
-    line: 'via-white/36', glow: 'bg-white/[0.07]', icon: 'text-white/52', action: 'bg-white/[0.075] border-white/[0.10] hover:bg-white/[0.12]', progress: 'bg-white/50', selectedMode: 'border-white/24 bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.17),0_3px_10px_rgba(0,0,0,0.16)]',
+    surface: 'bg-[color:var(--ui-surface-glass)]',
+    wash: 'bg-[radial-gradient(80%_70%_at_8%_0%,rgb(var(--ui-glass-highlight-rgb)/0.10),transparent_64%)]',
+    line: 'via-[color:var(--ui-border-strong)]',
+    glow: 'bg-[color:var(--ui-fill-tertiary)]',
+    icon: 'text-[color:var(--ui-text-tertiary)]',
+    action: 'bg-[color:var(--ui-fill-tertiary)] border-[color:var(--ui-border)] hover:bg-[color:var(--ui-fill-secondary)]',
+    progress: 'bg-[color:var(--ui-fill-primary)]',
+    selectedMode: 'border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-secondary)] text-[color:var(--ui-text-primary)] shadow-[0_3px_10px_var(--ui-shadow-soft)]',
   };
 }
 
@@ -100,21 +106,6 @@ function stateCaption(model: AlarmCardModel) {
   const active = model.supportedModes.find((mode) => mode.id === model.activeMode);
   if (active) return MODE_DESCRIPTIONS[active.id];
   return 'Sistema non inserito';
-}
-
-function scrollModesWithWheel(event: React.WheelEvent<HTMLDivElement>) {
-  const rail = event.currentTarget;
-  const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
-  if (maxScrollLeft <= 0) return;
-
-  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-  if (delta === 0) return;
-
-  const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, rail.scrollLeft + delta));
-  if (nextScrollLeft !== rail.scrollLeft) {
-    event.preventDefault();
-    rail.scrollLeft = nextScrollLeft;
-  }
 }
 
 export function AlarmCardView({
@@ -140,6 +131,11 @@ export function AlarmCardView({
   const radiusClass = isCompact ? 'rounded-[1.2rem]' : isFull ? 'rounded-[2rem]' : 'rounded-[1.85rem]';
   const selectedMode = selectedArmMode ? model.supportedModes.find((mode) => mode.id === selectedArmMode) : undefined;
   const selectedIsActive = Boolean(selectedArmMode && selectedArmMode === model.activeMode);
+  const usesSemanticSurface = model.tone === 'neutral' || model.tone === 'unavailable';
+  const primaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-primary)]' : 'text-white';
+  const secondaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-secondary)]' : 'text-white/58';
+  const tertiaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-tertiary)]' : 'text-white/42';
+  const neutralFillClass = usesSemanticSurface ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-white/[0.055]';
 
   const actionLabel = model.isTriggered
     ? 'Disattiva'
@@ -173,7 +169,7 @@ export function AlarmCardView({
       type="button"
       onClick={runAction}
       disabled={model.primaryAction === 'none' || model.isTransitioning}
-      className={`${compact ? 'h-[2.36rem] text-[0.72rem]' : isFull ? 'h-9 text-[0.74rem]' : 'h-10 text-xs'} flex w-full shrink-0 items-center justify-center rounded-full border px-3 font-semibold text-white/86 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl transition active:scale-[0.985] disabled:cursor-default disabled:opacity-45 ${accent.action}`}
+      className={`${compact ? 'h-[2.36rem] text-[0.72rem]' : isFull ? 'h-9 text-[0.74rem]' : 'h-10 text-xs'} flex w-full shrink-0 items-center justify-center rounded-full border px-3 font-semibold ${primaryTextClass} shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.16)] backdrop-blur-xl transition active:scale-[0.985] disabled:cursor-default disabled:opacity-45 ${accent.action}`}
       aria-label={actionLabel}
     >
       <span className="truncate">{actionLabel}</span>
@@ -193,13 +189,13 @@ export function AlarmCardView({
       aria-label={`${model.title}, ${model.stateLabel}`}
       aria-busy={model.isTransitioning || undefined}
     >
-      <div className={`relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border border-white/[0.10] ${accent.surface} shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_14px_34px_rgba(0,0,0,0.22)] backdrop-blur-[28px] backdrop-saturate-[1.35] ${radiusClass} ${isCompact ? 'p-3' : 'p-3.5'} ${isEditMode ? 'pointer-events-none' : ''}`}>
+      <div className={`relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border border-[color:var(--ui-border)] ${accent.surface} shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.16),0_14px_34px_var(--ui-shadow-soft)] backdrop-blur-[28px] backdrop-saturate-[1.35] ${radiusClass} ${isCompact ? 'p-3' : 'p-3.5'} ${isEditMode ? 'pointer-events-none' : ''}`}>
         <div className={`pointer-events-none absolute inset-x-[12%] top-0 h-px bg-gradient-to-r from-transparent ${accent.line} to-transparent`} />
         <div className={`pointer-events-none absolute -top-8 left-1/2 h-16 w-36 -translate-x-1/2 rounded-full blur-[30px] ${accent.glow}`} />
         <div className={`pointer-events-none absolute inset-0 ${radiusClass} ${accent.wash}`} />
 
         {model.isTransitioning ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden bg-white/[0.04]">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden bg-[color:var(--ui-fill-tertiary)]">
             <div className={`h-full w-1/2 animate-[alarm-progress_1.4s_ease-in-out_infinite] rounded-full ${accent.progress}`} />
           </div>
         ) : null}
@@ -207,12 +203,12 @@ export function AlarmCardView({
         {isCompact ? (
           <>
             <div className="relative z-10 flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.055] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${neutralFillClass} shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.10)]`}>
                 <StateIcon size={18} className={accent.icon} />
               </div>
               <div className="min-w-0">
-                <h2 className="truncate text-[0.86rem] font-semibold leading-tight text-white">{model.title}</h2>
-                <p className={`mt-0.5 truncate text-[0.68rem] font-medium ${model.isTriggered ? 'text-rose-200' : 'text-white/48'}`}>{model.stateLabel}</p>
+                <h2 className={`truncate text-[0.86rem] font-semibold leading-tight tracking-[-0.01em] ${primaryTextClass}`}>{model.title}</h2>
+                <p className={`mt-0.5 truncate text-[0.68rem] font-medium ${model.isTriggered ? 'text-rose-200' : tertiaryTextClass}`}>{model.stateLabel}</p>
               </div>
             </div>
             <div className="relative z-10 mt-auto">{actionButton(true)}</div>
@@ -220,58 +216,51 @@ export function AlarmCardView({
         ) : (
           <>
             <div className="relative z-10 flex min-w-0 items-center justify-between gap-3">
-              <span className="min-w-0 truncate text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/44">{isFull ? 'Stato sistema' : model.title}</span>
+              <span
+                className={`min-w-0 truncate ${
+                  isFull
+                    ? `text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${tertiaryTextClass}`
+                    : `text-[0.86rem] font-semibold tracking-[-0.01em] ${primaryTextClass}`
+                }`}
+              >
+                {isFull ? 'Stato sistema' : model.title}
+              </span>
               <StateIcon size={17} className={`shrink-0 ${accent.icon} ${model.isTransitioning ? 'animate-pulse' : ''}`} />
             </div>
 
             <div className={`relative z-10 ${isFull ? 'mt-2.5' : 'my-auto'} min-w-0`}>
-              <p className={`${isFull ? 'text-[1.48rem]' : 'text-[1.35rem]'} truncate font-bold leading-none tracking-[-0.035em] text-white`}>{model.stateLabel.toUpperCase()}</p>
-              <p className={`${isFull ? 'mt-1' : 'mt-1.5'} truncate text-[0.68rem] font-medium text-white/42`}>{stateCaption(model)}</p>
+              <p className={`${isFull ? 'text-[1.48rem]' : 'text-[1.35rem]'} truncate font-bold leading-none tracking-[-0.035em] ${primaryTextClass}`}>{model.stateLabel.toUpperCase()}</p>
+              <p className={`${isFull ? 'mt-1' : 'mt-1.5'} truncate text-[0.68rem] font-medium ${tertiaryTextClass}`}>{stateCaption(model)}</p>
             </div>
 
             {isFull && !model.isTriggered && !model.isUnavailable && model.supportedModes.length > 0 ? (
-              <div className="liquid-segmented-control relative z-10 mt-2.5">
-                <div
-                  className="grid w-full grid-flow-col gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-                  style={{ gridAutoColumns: 'minmax(2.35rem, 1fr)' }}
-                  onWheel={scrollModesWithWheel}
-                >
-                  {model.supportedModes.map((mode) => {
-                    const selected = selectedArmMode === mode.id;
-                    return (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        disabled={model.isTransitioning}
-                        title={mode.label}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onSelectArmMode(mode.id);
-                        }}
-                        className={`flex h-8 w-full min-w-0 items-center justify-center rounded-full border px-1.5 transition-all active:scale-[0.95] disabled:cursor-default disabled:opacity-45 ${
-                          selected
-                            ? 'liquid-segmented-option-active border-transparent'
-                            : 'liquid-segmented-option-inactive border-transparent'
-                        }`}
-                        aria-pressed={selected}
-                        aria-label={`Seleziona modalità ${mode.label}`}
-                      >
-                        {resolveModeIcon(mode.id, 15)}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="relative z-10 mt-2.5" onClick={(event) => event.stopPropagation()}>
+                <GlassSegmentSelect
+                  ariaLabel="Modalità allarme"
+                  options={model.supportedModes.map((mode) => ({
+                    value: mode.id,
+                    label: resolveModeIcon(mode.id, 15),
+                    ariaLabel: `Seleziona modalità ${mode.label}`,
+                    title: mode.label,
+                  }))}
+                  value={selectedArmMode}
+                  onChange={onSelectArmMode}
+                  disabled={model.isTransitioning}
+                  minOptionWidth="2.35rem"
+                  scrollable
+                  optionClassName="h-8 border border-transparent px-1.5"
+                />
               </div>
             ) : null}
 
             {isFull && !model.isTriggered ? (
-              <div className="relative z-10 mt-2 space-y-1 text-[0.6rem] leading-tight text-white/42">
-                <p className="truncate"><span className="text-white/58">Ultima modifica:</span> {model.changedBy ?? 'Sincronizzato'}</p>
-                <p className="truncate"><span className="text-white/58">Sicurezza:</span> {model.armActionLocked || model.disarmActionLocked ? 'Autorizzazione richiesta' : 'Accesso rapido'}</p>
+              <div className={`relative z-10 mt-2 space-y-1 text-[0.6rem] leading-tight ${tertiaryTextClass}`}>
+                <p className="truncate"><span className={secondaryTextClass}>Ultima modifica:</span> {model.changedBy ?? 'Sincronizzato'}</p>
+                <p className="truncate"><span className={secondaryTextClass}>Sicurezza:</span> {model.armActionLocked || model.disarmActionLocked ? 'Autorizzazione richiesta' : 'Accesso rapido'}</p>
               </div>
             ) : null}
 
-            <div className={`relative z-10 ${isFull ? 'mt-auto pt-2.5' : 'mt-auto border-t border-white/[0.06] pt-3'}`}>{actionButton()}</div>
+            <div className={`relative z-10 ${isFull ? 'mt-auto pt-2.5' : 'mt-auto border-t border-[color:var(--ui-border)] pt-3'}`}>{actionButton()}</div>
           </>
         )}
 
@@ -281,19 +270,19 @@ export function AlarmCardView({
             aria-modal="true"
             aria-label="Scegli modalità allarme"
             tabIndex={-1}
-            className={`absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden ${radiusClass} border border-white/[0.24] bg-[#080d16]/90 bg-[linear-gradient(145deg,rgba(72,78,92,0.84)_0%,rgba(27,32,43,0.93)_38%,rgba(7,11,18,0.98)_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_18px_44px_rgba(4,8,18,0.42)] backdrop-blur-[30px] backdrop-saturate-[1.45]`}
+            className={`absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden ${radiusClass} border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-surface-glass-strong)] p-2 text-[color:var(--ui-text-primary)] shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.22),0_18px_44px_var(--ui-shadow)] backdrop-blur-[30px] backdrop-saturate-[1.45]`}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === 'Escape') onCloseModeMenu();
             }}
           >
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_68%_at_12%_0%,rgba(255,255,255,0.24),transparent_58%),radial-gradient(70%_72%_at_100%_100%,rgba(255,255,255,0.08),transparent_66%)]" />
-            <div aria-hidden="true" className="pointer-events-none absolute -left-[12%] -top-[34%] h-[62%] w-[72%] rotate-[-10deg] rounded-[50%] border border-white/[0.10] bg-white/[0.08] blur-[1px]" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_68%_at_12%_0%,rgb(var(--ui-glass-highlight-rgb)/0.18),transparent_58%)]" />
+            <div aria-hidden="true" className="pointer-events-none absolute -left-[12%] -top-[34%] h-[62%] w-[72%] rotate-[-10deg] rounded-[50%] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] blur-[1px]" />
             <div className="relative z-10 mb-1.5 flex items-center justify-between gap-3">
-              <p className="min-w-0 truncate text-xs font-semibold tracking-[-0.01em] text-white/94">Scegli la modalità:</p>
+              <p className="min-w-0 truncate text-xs font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)]">Scegli la modalità:</p>
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.22] bg-white/[0.11] text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_5px_16px_rgba(0,0,0,0.12)] backdrop-blur-xl transition hover:bg-white/[0.18] hover:text-white active:scale-95"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] shadow-[0_5px_16px_var(--ui-shadow-soft)] backdrop-blur-xl transition hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)] active:scale-95"
                 onClick={(event) => {
                   event.stopPropagation();
                   onCloseModeMenu();
@@ -312,8 +301,8 @@ export function AlarmCardView({
                     type="button"
                     className={`flex min-h-[2.6rem] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1 text-center transition-all active:scale-[0.96] ${
                       active
-                        ? 'border-white/40 bg-white/[0.22] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)] backdrop-blur-2xl'
-                        : 'border-white/[0.14] bg-white/[0.075] text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl hover:border-white/[0.24] hover:bg-white/[0.13] hover:text-white'
+                        ? 'border-[color:rgb(var(--ui-accent-rgb)/0.52)] bg-[color:rgb(var(--ui-accent-rgb)/0.18)] text-[color:var(--ui-text-primary)] shadow-[0_10px_24px_rgb(var(--ui-accent-rgb)/0.16)] backdrop-blur-2xl'
+                        : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] backdrop-blur-xl hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]'
                     }`}
                     onClick={(event) => {
                       event.stopPropagation();

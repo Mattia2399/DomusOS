@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SecurityAuthModal } from './SecurityAuthModal';
 
@@ -45,5 +45,52 @@ describe('SecurityAuthModal safety messaging', () => {
       />,
     );
     expect(queryByText('Impossibile autorizzare il comando.')).not.toBeNull();
+  });
+
+  it('shows the PIN keypad when device verification is cancelled or times out', async () => {
+    const onVerifyWithDevice = vi.fn(async () => false);
+    const { findByRole } = render(
+      <SecurityAuthModal
+        {...baseProps}
+        preferDeviceAuth
+        onVerifyWithDevice={onVerifyWithDevice}
+      />,
+    );
+
+    expect(await findByRole('button', { name: 'Riprova' })).toBeTruthy();
+    expect(onVerifyWithDevice).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the active device attempt across parent rerenders', async () => {
+    let resolveVerification: ((verified: boolean) => void) | undefined;
+    const firstVerifier = vi.fn(
+      () => new Promise<boolean>((resolve) => {
+        resolveVerification = resolve;
+      }),
+    );
+    const { findByRole, rerender } = render(
+      <SecurityAuthModal
+        {...baseProps}
+        preferDeviceAuth
+        onVerifyWithDevice={firstVerifier}
+      />,
+    );
+
+    await waitFor(() => expect(firstVerifier).toHaveBeenCalledOnce());
+
+    rerender(
+      <SecurityAuthModal
+        {...baseProps}
+        preferDeviceAuth
+        isAuthBusy
+        onVerifyWithDevice={async () => false}
+      />,
+    );
+
+    await act(async () => {
+      resolveVerification?.(false);
+    });
+
+    expect(await findByRole('button', { name: 'Riprova' })).toBeTruthy();
   });
 });

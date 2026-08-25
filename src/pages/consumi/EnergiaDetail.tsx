@@ -273,7 +273,7 @@ export function EnergiaDetail({
   );
 
   const left = (
-    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_50%_42%,rgba(56,189,248,0.1)_0%,transparent_68%)]">
+    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[1.5rem] bg-[#07131f] bg-[radial-gradient(circle_at_50%_42%,rgba(56,189,248,0.16)_0%,#07131f_72%)]">
       <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.01)_40%,rgba(15,23,42,0.3)_100%)]" />
 
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-1 pb-14 pt-1 sm:px-3 sm:pb-[4.5rem] sm:pt-2">
@@ -462,7 +462,7 @@ export function EnergiaDetail({
       {!hasAnyConfiguredFlow ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center px-6">
           <div className="liquid-glass-card px-5 py-4 text-center">
-            <p className="text-sm font-medium text-white">Configura almeno Casa + Solare, Casa + Rete o Casa + Batteria in modalita edit.</p>
+            <p className="text-sm font-medium text-[color:var(--ui-text-primary)]">Configura almeno Casa + Solare, Casa + Rete o Casa + Batteria in modalita edit.</p>
           </div>
         </div>
       ) : null}
@@ -553,8 +553,8 @@ export function EnergiaDetail({
 
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-white/50">Mix</p>
-                <p className="text-xl font-bold tracking-tight text-white">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--ui-text-tertiary)]">Mix</p>
+                <p className="text-xl font-bold tracking-tight text-[color:var(--ui-text-primary)]">
                   {pieData.length > 0
                     ? `${pieData[0].value.toLocaleString('it-IT', { maximumFractionDigits: 0 })}%`
                     : '--'}
@@ -563,7 +563,7 @@ export function EnergiaDetail({
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-white/70">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[color:var(--ui-text-secondary)]">
             {pieData.map((entry) => (
               <div key={`legend-${entry.name}`} className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />

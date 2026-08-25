@@ -2,14 +2,11 @@ import React, { useEffect, useMemo } from 'react';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
 import { useObservedElementSize } from '../../hooks/useObservedElementSize';
-import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
 import { SensorCardView } from './SensorCardView';
 import { buildSensorCardModel } from './sensorCardModel';
 import {
   resolveSensorPixelDisplayVariant,
-  resolveWidgetDisplayVariant,
   type WidgetDisplayMetrics,
-  type WidgetDisplayVariant,
 } from './widgetDisplayVariant';
 
 type SensorCardProps = {
@@ -21,8 +18,6 @@ type SensorCardProps = {
   onClick: () => void;
   liveEntity?: MockEntityState;
   batteryEntity?: MockEntityState;
-  gridBreakpoint?: GridEngineBreakpoint;
-  displayVariant?: WidgetDisplayVariant;
   onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
@@ -35,39 +30,29 @@ export function SensorCard({
   onClick,
   liveEntity,
   batteryEntity,
-  gridBreakpoint,
-  displayVariant,
   onDisplayMetricsChange,
 }: SensorCardProps) {
-  const fallbackVariant =
-    displayVariant ??
-    resolveWidgetDisplayVariant({
-      kind: widget.kind,
-      breakpoint: gridBreakpoint,
-      layout: widget.layout,
-      parentSectionId: widget.parentSectionId,
-    });
   const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
   const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
-  const layoutVariant = measuredSize
+  const measuredVariant = measuredSize
     ? resolveSensorPixelDisplayVariant({ width: measuredSize.width, height: measuredSize.height })
-    : fallbackVariant;
+    : null;
   const model = useMemo(
     () => buildSensorCardModel({ widget, value, sensorHistory, liveEntity, batteryEntity }),
     [batteryEntity, liveEntity, sensorHistory, value, widget],
   );
 
   useEffect(() => {
-    if (!measuredSize || !onDisplayMetricsChange) {
+    if (!measuredSize || !measuredVariant || !onDisplayMetricsChange) {
       return;
     }
     onDisplayMetricsChange({
       widgetId: widget.id,
       width: measuredSize.width,
       height: measuredSize.height,
-      variant: layoutVariant,
+      variant: measuredVariant,
     });
-  }, [layoutVariant, measuredSize, onDisplayMetricsChange, widget.id]);
+  }, [measuredSize, measuredVariant, onDisplayMetricsChange, widget.id]);
 
   return (
     <SensorCardView
@@ -76,7 +61,6 @@ export function SensorCard({
       isEditMode={isEditMode}
       onClick={onClick}
       rootRef={cardRef}
-      layoutVariant={layoutVariant}
     />
   );
 }

@@ -4,7 +4,6 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Widget } from '../../types/dashboardModels';
 import { SensorCard } from './SensorCard';
-import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 
 const widget: Widget = {
   id: 'sensor-card-test',
@@ -24,7 +23,7 @@ const widget: Widget = {
   },
 };
 
-function renderVariant(variant: WidgetDisplayVariant, hasValue = true) {
+function renderSensor(hasValue = true) {
   const value = hasValue ? 37 : undefined;
   return renderToStaticMarkup(
     <SensorCard
@@ -34,7 +33,6 @@ function renderVariant(variant: WidgetDisplayVariant, hasValue = true) {
       sensorHistory={[28, 31, 35, 37]}
       isEditMode={false}
       onClick={() => undefined}
-      displayVariant={variant}
       liveEntity={
         hasValue
           ? { state: '37', numericValue: 37, unit: '%', rawAttributes: { device_class: 'humidity' } }
@@ -45,12 +43,12 @@ function renderVariant(variant: WidgetDisplayVariant, hasValue = true) {
 }
 
 describe('SensorCard view contract', () => {
-  it.each(['mini', 'compact', 'standard', 'full'] as const)('reports the fallback %s layout before measurement', (variant) => {
-    expect(renderVariant(variant)).toContain(`data-sensor-variant="${variant}"`);
+  it('does not expose a JS-owned visual variant', () => {
+    expect(renderSensor()).not.toContain('data-sensor-variant');
   });
 
   it('always renders the fixed slots used by container queries', () => {
-    const markup = renderVariant('mini');
+    const markup = renderSensor();
     expect(markup).toContain('sensor-card__title');
     expect(markup).toContain('sensor-card__value');
     expect(markup).toContain('sensor-card__trend');
@@ -60,7 +58,7 @@ describe('SensorCard view contract', () => {
   });
 
   it('marks unavailable sensors so CSS can remove trend, visual and stats', () => {
-    const markup = renderVariant('standard', false);
+    const markup = renderSensor(false);
     expect(markup).toContain('data-sensor-available="false"');
     expect(markup).toContain('aria-label="—"');
   });
@@ -98,7 +96,6 @@ describe('SensorCard pixel reporting', () => {
         sensorHistory={[28, 31, 35, 37]}
         isEditMode={false}
         onClick={() => undefined}
-        displayVariant="mini"
         onDisplayMetricsChange={onDisplayMetricsChange}
       />,
     );
@@ -120,16 +117,36 @@ describe('SensorCard pixel reporting', () => {
     };
 
     resizeTo(104, 48);
-    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('mini'));
+    await waitFor(() =>
+      expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
+        widgetId: widget.id,
+        width: 104,
+        height: 48,
+        variant: 'mini',
+      }),
+    );
 
     resizeTo(104, 112);
-    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('compact'));
+    await waitFor(() =>
+      expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
+        widgetId: widget.id,
+        width: 104,
+        height: 112,
+        variant: 'compact',
+      }),
+    );
 
     resizeTo(192, 112);
-    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('standard'));
+    await waitFor(() =>
+      expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
+        widgetId: widget.id,
+        width: 192,
+        height: 112,
+        variant: 'standard',
+      }),
+    );
 
     resizeTo(296, 112);
-    await waitFor(() => expect(container.firstElementChild?.getAttribute('data-sensor-variant')).toBe('full'));
     await waitFor(() =>
       expect(onDisplayMetricsChange).toHaveBeenLastCalledWith({
         widgetId: widget.id,

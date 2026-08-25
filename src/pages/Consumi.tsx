@@ -256,17 +256,20 @@ const ENERGY_GUIDE_STEPS: GuidedSetupStep[] = [
     title: 'Panoramica energia',
     description:
       'Questa vista mostra produzione, rete, accumulo e consumi in tempo reale con indicatori rapidi di efficienza.',
+    icon: Bolt,
   },
   {
     title: 'Dettagli e confronto',
     description:
       'Apri la card Energia per entrare nel dettaglio e analizzare andamento, trend e costi stimati della giornata.',
+    icon: BarChart3,
   },
   {
     title: 'Configurazione guidata sensori',
     description:
       'In modalita edit puoi associare le entita Home Assistant per alimentare il pannello con i tuoi dati reali.',
     hint: 'La configurazione del pannello consumi si salva automaticamente.',
+    icon: Gauge,
   },
 ];
 
@@ -406,14 +409,14 @@ function formatCurrency(value: number) {
 
 function GlobalMetric({ value, label, icon }: GlobalMetricDefinition) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_12px_30px_rgba(0,0,0,0.25)] sm:rounded-3xl sm:p-4">
+    <div className="dashboard-content-surface min-w-0 rounded-xl p-1.5 shadow-[0_12px_30px_var(--ui-shadow-soft)] sm:rounded-3xl sm:p-4">
       <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 [&>svg]:h-3 [&>svg]:w-3 sm:h-11 sm:w-11 sm:rounded-2xl sm:[&>svg]:h-5 sm:[&>svg]:w-5">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] [&>svg]:h-3 [&>svg]:w-3 sm:h-11 sm:w-11 sm:rounded-2xl sm:[&>svg]:h-5 sm:[&>svg]:w-5">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[0.82rem] font-bold leading-tight tracking-normal text-white sm:text-3xl sm:tracking-tight">{value}</p>
-          <p className="mt-0.5 text-[0.42rem] font-semibold uppercase leading-[1.05] tracking-[0.06em] text-white/50 sm:text-xs sm:tracking-[0.16em]">{label}</p>
+          <p className="truncate text-[0.82rem] font-bold leading-tight tracking-normal text-[color:var(--ui-text-primary)] sm:text-3xl sm:tracking-tight">{value}</p>
+          <p className="mt-0.5 text-[0.42rem] font-semibold uppercase leading-[1.05] tracking-[0.06em] text-[color:var(--ui-text-tertiary)] sm:text-xs sm:tracking-[0.16em]">{label}</p>
         </div>
       </div>
     </div>
@@ -887,13 +890,13 @@ export function ConsumptionDashboardPage({
   }, [activeView, cardTitles, config, dashboardData, detailIntervals, handleBackToOverview, setIntervalForCard]);
 
   return (
-    <div className={cn('relative h-full w-full overflow-hidden text-white', embedded ? '' : 'min-h-screen')}>
+    <div className={cn('relative h-full w-full overflow-hidden text-[color:var(--ui-text-primary)]', embedded ? '' : 'min-h-screen')}>
       <div className="relative z-10 h-full min-h-0">
         {activeView === 'overview' ? (
           <div className="h-full min-h-0 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] sm:p-6 sm:pb-[calc(env(safe-area-inset-bottom)+1.5rem)] lg:p-10">
             <div className="flex min-h-full flex-col">
               <header>
-                <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                <h1 className="dashboard-page-title">
                   Hub Sostenibilità e Consumi
                 </h1>
                 <div className="mt-4 max-w-3xl" aria-live="polite">
@@ -910,10 +913,10 @@ export function ConsumptionDashboardPage({
                         className={cn('relative h-1.5 w-1.5 rounded-full', smartInsightVisual.dotClassName)}
                       />
                     </span>
-                    <span className="text-[0.68rem] font-semibold uppercase leading-none tracking-[0.18em] text-white/40">
+                    <span className="text-[0.68rem] font-semibold uppercase leading-none tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
                       Monitoraggio live
                     </span>
-                    <span className="h-px w-10 bg-gradient-to-r from-white/24 to-transparent" aria-hidden="true" />
+                    <span className="h-px w-10 bg-gradient-to-r from-[color:var(--ui-separator)] to-transparent" aria-hidden="true" />
                     <span
                       className="text-[0.68rem] font-semibold uppercase leading-none tracking-[0.18em]"
                       style={{ color: smartInsightVisual.accent }}
@@ -921,21 +924,21 @@ export function ConsumptionDashboardPage({
                       {smartInsightVisual.label}
                     </span>
                   </div>
-                  <p className="mt-2 max-w-[46rem] text-sm font-medium leading-relaxed text-white/70 sm:text-[0.95rem]">
+                  <p className="mt-2 max-w-[46rem] text-sm font-medium leading-relaxed text-[color:var(--ui-text-secondary)] sm:text-[0.95rem]">
                     {smartInsight.text}
                   </p>
                 </div>
               </header>
 
               <section className="mt-4 w-full max-w-[1280px] sm:mt-7">
-                <div className="rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] sm:p-2">
+                <div className="dashboard-content-surface-soft rounded-full p-1 sm:p-2">
                   <div className="flex items-center gap-[3px] sm:gap-1.5">
                     {progressTicks.map((isActive, index) => (
                       <span
                         key={`tick-${index}`}
                         className={cn(
                           'h-3.5 min-w-0 flex-1 rounded-full transition-colors duration-300 sm:h-7',
-                          isActive ? 'bg-emerald-400/92 shadow-[0_0_18px_rgba(52,211,153,0.46)]' : 'bg-white/12',
+                          isActive ? 'bg-[color:var(--ui-success)] shadow-[0_0_18px_color-mix(in_srgb,var(--ui-success)_46%,transparent)]' : 'bg-[color:var(--ui-fill-secondary)]',
                         )}
                       />
                     ))}
@@ -978,6 +981,7 @@ export function ConsumptionDashboardPage({
         isOpen={shouldShowEnergyGuide}
         tag="Pannello energia"
         heading="Configurazione guidata energia"
+        description="Impara a leggere i flussi energetici e collega i sensori necessari per ottenere dati reali."
         steps={ENERGY_GUIDE_STEPS}
         onDismiss={dismissEnergyGuide}
         completeLabel="Inizia monitoraggio"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveAlarmPixelDisplayVariant,
+  resolveCameraPixelDisplayVariant,
   resolveClimatePixelDisplayVariant,
   resolveCoverPixelDisplayVariant,
   resolveLightPixelDisplayVariant,
@@ -8,6 +9,7 @@ import {
   resolveLockPixelDisplayVariant,
   resolveSensorPixelDisplayVariant,
   resolveSwitchPixelDisplayVariant,
+  resolveVacuumPixelDisplayVariant,
   resolveWidgetDisplayVariant,
 } from './widgetDisplayVariant';
 
@@ -59,11 +61,33 @@ describe('resolveWidgetDisplayVariant', () => {
 
   it('uses dedicated cover compositions with position-first layouts', () => {
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 1, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'md', layout: { w: 2, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xs', layout: { w: 1, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'sm', layout: { w: 1, h: 2 } })).toBe('compact');
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 1, h: 2 } })).toBe('compact');
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 2 } })).toBe('compact');
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 3 } })).toBe('standard');
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 2, h: 4 } })).toBe('full');
     expect(resolveWidgetDisplayVariant({ kind: 'cover', breakpoint: 'xl', layout: { w: 3, h: 3 } })).toBe('full');
+  });
+
+  it('uses dedicated camera compositions from preview to full stream', () => {
+    expect(resolveWidgetDisplayVariant({ kind: 'camera', breakpoint: 'xl', layout: { w: 1, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'camera', breakpoint: 'xs', layout: { w: 2, h: 2 } })).toBe('compact');
+    expect(resolveWidgetDisplayVariant({ kind: 'camera', breakpoint: 'xl', layout: { w: 3, h: 3 } })).toBe('standard');
+    expect(resolveWidgetDisplayVariant({ kind: 'camera', breakpoint: 'xl', layout: { w: 4, h: 4 } })).toBe('full');
+    expect(resolveWidgetDisplayVariant({ kind: 'camera', breakpoint: 'xl', layout: { w: 5, h: 3 } })).toBe('full');
+  });
+
+  it('uses dedicated vacuum compositions across desktop and mobile', () => {
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xl', layout: { w: 2, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xs', layout: { w: 1, h: 1 } })).toBe('mini');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xs', layout: { w: 1, h: 2 } })).toBe('compact');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xl', layout: { w: 2, h: 2 } })).toBe('compact');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xl', layout: { w: 2, h: 3 } })).toBe('standard');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xl', layout: { w: 3, h: 4 } })).toBe('full');
+    expect(resolveWidgetDisplayVariant({ kind: 'vacuum', breakpoint: 'xs', layout: { w: 2, h: 5 } })).toBe('full');
   });
 });
 
@@ -164,5 +188,24 @@ describe('resolveMediaPixelDisplayVariant', () => {
     expect(resolveMediaPixelDisplayVariant({ width: 192, height: 96 })).toBe('compact');
     expect(resolveMediaPixelDisplayVariant({ width: 232, height: 156 })).toBe('standard');
     expect(resolveMediaPixelDisplayVariant({ width: 296, height: 224 })).toBe('full');
+  });
+});
+
+describe('resolveCameraPixelDisplayVariant', () => {
+  it('uses measured camera-card rectangles for progressive overlays', () => {
+    expect(resolveCameraPixelDisplayVariant({ width: 104, height: 80 })).toBe('mini');
+    expect(resolveCameraPixelDisplayVariant({ width: 192, height: 128 })).toBe('compact');
+    expect(resolveCameraPixelDisplayVariant({ width: 296, height: 190 })).toBe('standard');
+    expect(resolveCameraPixelDisplayVariant({ width: 380, height: 240 })).toBe('full');
+  });
+});
+
+describe('resolveVacuumPixelDisplayVariant', () => {
+  it('keeps card contents aligned to the measured rectangle', () => {
+    expect(resolveVacuumPixelDisplayVariant({ width: 192, height: 48 })).toBe('mini');
+    expect(resolveVacuumPixelDisplayVariant({ width: 96, height: 136 })).toBe('compact');
+    expect(resolveVacuumPixelDisplayVariant({ width: 192, height: 144 })).toBe('standard');
+    expect(resolveVacuumPixelDisplayVariant({ width: 296, height: 196 })).toBe('full');
+    expect(resolveVacuumPixelDisplayVariant({ width: 192, height: 244 })).toBe('full');
   });
 });

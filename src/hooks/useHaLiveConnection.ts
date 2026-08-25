@@ -3,8 +3,6 @@ import {
   callService as callHaService,
   createConnection,
   createLongLivedTokenAuth,
-  ERR_INVALID_AUTH,
-  ERR_INVALID_AUTH_CALLBACK,
   getAuth,
   subscribeEntities,
   type Connection,
@@ -14,12 +12,20 @@ import {
   clearHassAuthTokensStorage,
   loadHassAuthTokensFromStorage,
   mapHassEntitiesToMock,
-  normalizeHassUrl,
+  validateHassUrl,
   saveHassAuthTokensToStorage,
 } from '../services/haLive';
 import type { MockEntityStateMap } from '../types/ha';
+import {
+  classifyHaConnectionFailure,
+  HA_CONNECTION_OFFLINE_DELAY_MS,
+  HA_CONNECTION_WATCHDOG_INTERVAL_MS,
+  HA_CONNECTION_WATCHDOG_TIMEOUT_MS,
+  isHaAuthenticationFailure,
+  type HaConnectionStatus,
+} from '../services/haConnectionState';
 
-export type HaConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type { HaConnectionStatus } from '../services/haConnectionState';
 
 type HaLiveConnectionOptions = {
   url: string;
@@ -36,6 +42,10 @@ export type HaArea = {
   picture?: string;
   temperature_entity_id?: string | null;
 };
+
+// Coalesce noisy sensor streams. A dashboard does not benefit from repainting
+// the whole canvas eight times per second, especially on large HA registries.
+const HA_ENTITY_UPDATE_INTERVAL_MS = 250;
 
 function parseAreaRegistryPayload(payload: unknown): HaArea[] {
   if (!Array.isArray(payload)) {
@@ -83,11 +93,8 @@ function parseAreaRegistryPayload(payload: unknown): HaArea[] {
 }
 
 function toHaErrorMessage(error: unknown) {
-  if (error === ERR_INVALID_AUTH) {
+  if (isHaAuthenticationFailure(error)) {
     return 'Autenticazione Home Assistant non valida o revocata.';
-  }
-  if (error === ERR_INVALID_AUTH_CALLBACK) {
-    return 'Callback OAuth Home Assistant non valido.';
   }
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
@@ -95,53 +102,214 @@ function toHaErrorMessage(error: unknown) {
   return 'Connessione Home Assistant fallita.';
 }
 
-function shouldResetOAuthTokens(error: unknown) {
-  if (error === ERR_INVALID_AUTH || error === ERR_INVALID_AUTH_CALLBACK) {
-    return true;
-  }
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('invalid auth') ||
-    message.includes('invalid authentication') ||
-    message.includes('revoked') ||
-    message.includes('callback')
-  );
-}
-
 export function useHaLiveConnection({ url, token }: HaLiveConnectionOptions) {
   const [status, setStatus] = useState<HaConnectionStatus>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [haStates, setHaStates] = useState<MockEntityStateMap>({});
   const [haAreas, setHaAreas] = useState<HaArea[]>([]);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const connectionRef = useRef<Connection | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const rawEntitiesRef = useRef<HassEntities>({});
+  const pendingEntitiesRef = useRef<HassEntities | null>(null);
+  const entityUpdateTimeoutRef = useRef<number | null>(null);
+  const statusRef = useRef<HaConnectionStatus>('disconnected');
+  const manualDisconnectRef = useRef(false);
+  const removeConnectionListenersRef = useRef<(() => void) | null>(null);
+  const offlineTimeoutRef = useRef<number | null>(null);
+  const watchdogIntervalRef = useRef<number | null>(null);
+  const watchdogInFlightRef = useRef(false);
 
-  const disconnect = useCallback(() => {
+  const updateStatus = useCallback((nextStatus: HaConnectionStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
+
+  const clearOfflineTimeout = useCallback(() => {
+    if (offlineTimeoutRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(offlineTimeoutRef.current);
+    }
+    offlineTimeoutRef.current = null;
+  }, []);
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogIntervalRef.current !== null && typeof window !== 'undefined') {
+      window.clearInterval(watchdogIntervalRef.current);
+    }
+    watchdogIntervalRef.current = null;
+    watchdogInFlightRef.current = false;
+  }, []);
+
+  const clearPendingEntityUpdate = useCallback(() => {
+    if (entityUpdateTimeoutRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(entityUpdateTimeoutRef.current);
+    }
+    entityUpdateTimeoutRef.current = null;
+    pendingEntitiesRef.current = null;
+  }, []);
+
+  const publishEntitySnapshot = useCallback((entities: HassEntities, hassUrl: string) => {
+    const previousRawEntities = rawEntitiesRef.current;
+    const changedEntities: HassEntities = {};
+    let changed = false;
+
+    Object.entries(entities).forEach(([entityId, entity]) => {
+      if (previousRawEntities[entityId] === entity) {
+        return;
+      }
+      changedEntities[entityId] = entity;
+      changed = true;
+    });
+    const removedEntityIds = Object.keys(previousRawEntities).filter((entityId) => !(entityId in entities));
+    if (removedEntityIds.length > 0) {
+      changed = true;
+    }
+
+    rawEntitiesRef.current = entities;
+    if (!changed) {
+      return;
+    }
+
+    setHaStates((current) => {
+      const mappedChanges = mapHassEntitiesToMock(changedEntities, hassUrl, current);
+      const next = { ...current, ...mappedChanges };
+      removedEntityIds.forEach((entityId) => {
+        delete next[entityId];
+      });
+      return next;
+    });
+    setLastUpdatedAt(Date.now());
+  }, []);
+
+  const queueEntitySnapshot = useCallback(
+    (entities: HassEntities, hassUrl: string) => {
+      pendingEntitiesRef.current = entities;
+      if (entityUpdateTimeoutRef.current !== null) {
+        return;
+      }
+
+      // Publish the initial HA snapshot immediately. Subsequent state_changed
+      // bursts are coalesced so large installations cannot force a complete
+      // dashboard render for every sensor event.
+      if (Object.keys(rawEntitiesRef.current).length === 0) {
+        const initialSnapshot = pendingEntitiesRef.current;
+        pendingEntitiesRef.current = null;
+        if (initialSnapshot) {
+          publishEntitySnapshot(initialSnapshot, hassUrl);
+        }
+        return;
+      }
+
+      entityUpdateTimeoutRef.current = window.setTimeout(() => {
+        entityUpdateTimeoutRef.current = null;
+        const latestSnapshot = pendingEntitiesRef.current;
+        pendingEntitiesRef.current = null;
+        if (latestSnapshot) {
+          publishEntitySnapshot(latestSnapshot, hassUrl);
+        }
+      }, HA_ENTITY_UPDATE_INTERVAL_MS);
+    },
+    [publishEntitySnapshot],
+  );
+
+  const teardownConnection = useCallback((clearSnapshots: boolean) => {
+    clearOfflineTimeout();
+    clearWatchdog();
+    clearPendingEntityUpdate();
+    removeConnectionListenersRef.current?.();
+    removeConnectionListenersRef.current = null;
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     connectionRef.current?.close();
     connectionRef.current = null;
-    setStatus('disconnected');
+    if (clearSnapshots) {
+      setHaStates({});
+      setHaAreas([]);
+      setLastUpdatedAt(null);
+      rawEntitiesRef.current = {};
+    }
+  }, [clearOfflineTimeout, clearPendingEntityUpdate, clearWatchdog]);
+
+  const scheduleOfflineState = useCallback(() => {
+    clearOfflineTimeout();
+    if (typeof window === 'undefined') {
+      updateStatus('offline');
+      return;
+    }
+    offlineTimeoutRef.current = window.setTimeout(() => {
+      offlineTimeoutRef.current = null;
+      if (statusRef.current === 'reconnecting') {
+        updateStatus('offline');
+        setError('Home Assistant non Ã¨ raggiungibile. I dati mostrati potrebbero non essere aggiornati.');
+      }
+    }, HA_CONNECTION_OFFLINE_DELAY_MS);
+  }, [clearOfflineTimeout, updateStatus]);
+
+  const markTransientDisconnection = useCallback(() => {
+    if (manualDisconnectRef.current || statusRef.current === 'reauth_required') {
+      return;
+    }
+    clearWatchdog();
+    updateStatus('reconnecting');
+    setError('Connessione temporaneamente interrotta. Riconnessione automatica in corso.');
+    scheduleOfflineState();
+  }, [clearWatchdog, scheduleOfflineState, updateStatus]);
+
+  const startWatchdog = useCallback((connection: Connection) => {
+    clearWatchdog();
+    if (typeof window === 'undefined') {
+      return;
+    }
+    watchdogIntervalRef.current = window.setInterval(() => {
+      if (
+        watchdogInFlightRef.current ||
+        connectionRef.current !== connection ||
+        statusRef.current !== 'connected'
+      ) {
+        return;
+      }
+      watchdogInFlightRef.current = true;
+      let timeoutId: number | null = null;
+      const timeout = new Promise<false>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve(false), HA_CONNECTION_WATCHDOG_TIMEOUT_MS);
+      });
+      void Promise.race([
+        connection.ping().then(() => true, () => false),
+        timeout,
+      ]).then((alive) => {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        watchdogInFlightRef.current = false;
+        if (!alive && connectionRef.current === connection) {
+          markTransientDisconnection();
+          connection.reconnect(true);
+        }
+      });
+    }, HA_CONNECTION_WATCHDOG_INTERVAL_MS);
+  }, [clearWatchdog, markTransientDisconnection]);
+
+  const disconnect = useCallback(() => {
+    manualDisconnectRef.current = true;
+    teardownConnection(true);
+    updateStatus('disconnected_by_user');
     setError(null);
-    setHaStates({});
-    setHaAreas([]);
-  }, []);
+  }, [teardownConnection, updateStatus]);
 
   const connect = useCallback(async () => {
-    const hassUrl = normalizeHassUrl(url);
+    const urlValidation = validateHassUrl(url);
+    const hassUrl = urlValidation.ok ? urlValidation.url : '';
     const tokenValue = token.trim();
 
     if (!hassUrl) {
       setStatus('error');
-      setError('URL Home Assistant e obbligatorio.');
+      setError(urlValidation.ok === false ? urlValidation.error : 'URL Home Assistant non valido.');
       return;
     }
 
-    disconnect();
-    setStatus('connecting');
+    manualDisconnectRef.current = false;
+    teardownConnection(false);
+    updateStatus('connecting');
     setError(null);
 
     try {
@@ -155,39 +323,95 @@ export function useHaLiveConnection({ url, token }: HaLiveConnectionOptions) {
             limitHassInstance: true,
           });
       const connection = await createConnection({ auth, setupRetry: 2 });
+      if (manualDisconnectRef.current) {
+        connection.close();
+        return;
+      }
+
+      const handleReady = () => {
+        if (connectionRef.current !== connection || manualDisconnectRef.current) {
+          return;
+        }
+        clearOfflineTimeout();
+        updateStatus('connected');
+        setError(null);
+        startWatchdog(connection);
+      };
+      const handleDisconnected = () => {
+        if (connectionRef.current === connection) {
+          markTransientDisconnection();
+        }
+      };
+      const handleReconnectError = (_connection: Connection, eventData?: unknown) => {
+        if (connectionRef.current !== connection) {
+          return;
+        }
+        if (isHaAuthenticationFailure(eventData)) {
+          clearOfflineTimeout();
+          clearWatchdog();
+          clearHassAuthTokensStorage();
+          updateStatus('reauth_required');
+          setError('La sessione Home Assistant non Ã¨ piÃ¹ valida. Accedi nuovamente.');
+          return;
+        }
+        markTransientDisconnection();
+      };
+
+      connection.addEventListener('ready', handleReady);
+      connection.addEventListener('disconnected', handleDisconnected);
+      connection.addEventListener('reconnect-error', handleReconnectError);
+      removeConnectionListenersRef.current = () => {
+        connection.removeEventListener('ready', handleReady);
+        connection.removeEventListener('disconnected', handleDisconnected);
+        connection.removeEventListener('reconnect-error', handleReconnectError);
+      };
+
       const unsubscribe = subscribeEntities(connection, (entities: HassEntities) => {
-        setHaStates((current) => mapHassEntitiesToMock(entities, hassUrl, current));
+        queueEntitySnapshot(entities, hassUrl);
       });
 
       connectionRef.current = connection;
       unsubscribeRef.current = unsubscribe;
-      const areaRegistry = await connection.sendMessagePromise<unknown>({
-        type: 'config/area_registry/list',
-      });
-      setHaAreas(parseAreaRegistryPayload(areaRegistry));
-      setStatus('connected');
+      clearOfflineTimeout();
+      updateStatus('connected');
+      startWatchdog(connection);
+
+      // The entity subscription is the actual connection boundary. Registry
+      // reads are optional and can be unavailable to limited HA users; they
+      // must not downgrade an authenticated, working connection to an error.
+      void connection
+        .sendMessagePromise<unknown>({ type: 'config/area_registry/list' })
+        .then((areaRegistry) => {
+          if (connectionRef.current === connection) {
+            setHaAreas(parseAreaRegistryPayload(areaRegistry));
+          }
+        })
+        .catch(() => {
+          if (connectionRef.current === connection) {
+            setHaAreas([]);
+          }
+        });
     } catch (err) {
-      if (!tokenValue && shouldResetOAuthTokens(err)) {
-        clearHassAuthTokensStorage();
-        if (typeof window !== 'undefined') {
-          void getAuth({
-            hassUrl,
-            clientId: window.location.origin,
-            saveTokens: saveHassAuthTokensToStorage,
-            loadTokens: async () => undefined,
-            limitHassInstance: true,
-          }).catch(() => undefined);
-        }
+      if (manualDisconnectRef.current) {
+        return;
       }
-      setStatus('error');
+      const failureStatus = classifyHaConnectionFailure(err);
+      if (!tokenValue && failureStatus === 'reauth_required') {
+        clearHassAuthTokensStorage();
+      }
+      updateStatus(failureStatus);
       setError(toHaErrorMessage(err));
       setHaAreas([]);
     }
-  }, [disconnect, token, url]);
+  }, [clearOfflineTimeout, clearWatchdog, markTransientDisconnection, queueEntitySnapshot, startWatchdog, teardownConnection, token, updateStatus, url]);
 
   const callService = useCallback(
     async (domain: string, service: string, serviceData: Record<string, unknown>) => {
-      if (!connectionRef.current) {
+      if (
+        statusRef.current !== 'connected' ||
+        !connectionRef.current ||
+        !connectionRef.current.connected
+      ) {
         setError('Connessione Home Assistant non disponibile.');
         return false;
       }
@@ -207,11 +431,19 @@ export function useHaLiveConnection({ url, token }: HaLiveConnectionOptions) {
   const callApi = useCallback(
     async <TResponse = unknown>(
       message: Record<string, unknown>,
-      options?: { reportError?: boolean },
+      options?: { reportError?: boolean; throwOnError?: boolean },
     ) => {
-      if (!connectionRef.current) {
+      if (
+        statusRef.current !== 'connected' ||
+        !connectionRef.current ||
+        !connectionRef.current.connected
+      ) {
+        const connectionError = new Error('Connessione Home Assistant non disponibile.');
         if (options?.reportError !== false) {
-          setError('Connessione Home Assistant non disponibile.');
+          setError(connectionError.message);
+        }
+        if (options?.throwOnError) {
+          throw connectionError;
         }
         return null;
       }
@@ -228,19 +460,26 @@ export function useHaLiveConnection({ url, token }: HaLiveConnectionOptions) {
         if (options?.reportError !== false) {
           setError(err instanceof Error ? err.message : 'Richiesta Home Assistant fallita.');
         }
+        if (options?.throwOnError) {
+          throw err;
+        }
         return null;
       }
     },
     [],
   );
 
-  useEffect(() => () => disconnect(), [disconnect]);
+  useEffect(() => () => {
+    manualDisconnectRef.current = true;
+    teardownConnection(false);
+  }, [teardownConnection]);
 
   return {
     status,
     error,
     haStates,
     haAreas,
+    lastUpdatedAt,
     connect,
     disconnect,
     callService,

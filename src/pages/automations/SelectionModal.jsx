@@ -1,10 +1,10 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { IconGlyph } from './IconGlyph';
 import { normalizeName } from './utils';
+import GlassModal from '../../components/ui/GlassModal';
 
 function cn(...values) {
   return twMerge(clsx(values));
@@ -78,29 +78,29 @@ export function SelectionModal({
       key={item.id}
       type="button"
       onClick={() => onSelect(item)}
-      className="flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-white transition-colors hover:bg-white/10"
+      className="flex w-full items-start gap-4 rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 text-left text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)]"
     >
-      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/80">
+      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] text-[color:var(--ui-text-secondary)]">
         <IconGlyph name={item.icon} size={18} />
       </div>
       <div className="min-w-0">
-        <p className="text-base text-white">{item.label}</p>
+        <p className="text-base text-[color:var(--ui-text-primary)]">{item.label}</p>
         {item.description ? (
-          <p className="mt-1 text-sm leading-relaxed text-white/60">{item.description}</p>
+          <p className="mt-1 text-sm leading-relaxed text-[color:var(--ui-text-secondary)]">{item.description}</p>
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em]">
           <span
             className={cn(
               'rounded-full border px-2 py-1',
               item.source === 'ha'
-                ? 'border-emerald-300/35 bg-emerald-400/16 text-emerald-100'
-                : 'border-sky-300/30 bg-sky-400/16 text-sky-100',
+                ? 'border-emerald-300/35 bg-emerald-400/16 text-[color:var(--ui-success)]'
+                : 'border-sky-300/30 bg-sky-400/16 text-[color:var(--ui-info)]',
             )}
           >
             {item.source === 'ha' ? 'Home Assistant' : 'Suggerito'}
           </span>
           {item.group ? (
-            <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/70">
+            <span className="rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] px-2 py-1 text-[color:var(--ui-text-secondary)]">
               {item.group}
             </span>
           ) : null}
@@ -110,41 +110,27 @@ export function SelectionModal({
   );
 
   return (
-    <AnimatePresence>
-      {isOpen ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[260] flex items-center justify-center p-6"
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Chiudi menu selezione"
-            className="absolute inset-0 bg-black/70 backdrop-blur-md"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            className="relative w-full max-w-xl rounded-[2rem] border border-white/10 bg-neutral-900/80 p-6 shadow-2xl backdrop-blur-3xl"
-            onClick={(eventClick) => eventClick.stopPropagation()}
-          >
-            <h3 className="text-xl font-semibold text-white">{title}</h3>
-            <div className="mt-2 text-xs uppercase tracking-[0.16em] text-white/45">
-              {connected ? 'Dati live + template' : 'Template locale'}
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-                <Search size={16} className="text-white/45" />
+    <GlassModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      eyebrow={connected ? 'Dati live + template' : 'Template locale'}
+      variant="responsive"
+      size="lg"
+      zIndex={260}
+      closeLabel="Chiudi menu selezione"
+      backdropClassName="bg-[color:var(--ui-scrim)] backdrop-blur-md"
+      panelClassName="bg-[color:var(--ui-surface-glass-strong)] shadow-2xl"
+      bodyClassName="flex flex-col overflow-hidden"
+    >
+            <div className="mt-4 rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-3">
+              <div className="flex items-center gap-2 rounded-xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 py-2">
+                <Search size={16} className="text-[color:var(--ui-text-tertiary)]" />
                 <input
                   value={query}
                   onChange={(eventInput) => setQuery(eventInput.target.value)}
                   placeholder={searchPlaceholder}
-                  className="w-full bg-transparent text-sm text-white placeholder:text-white/35 focus:outline-none"
+                  className="w-full bg-transparent text-sm text-[color:var(--ui-text-primary)] placeholder:text-[color:var(--ui-text-disabled)] focus:outline-none"
                 />
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -154,8 +140,8 @@ export function SelectionModal({
                   className={cn(
                     'rounded-xl border px-3 py-2 text-xs transition-colors',
                     sourceFilter === 'all'
-                      ? 'border-emerald-300/30 bg-emerald-400/16 text-emerald-100'
-                      : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white',
+                      ? 'border-emerald-300/30 bg-emerald-400/16 text-[color:var(--ui-success)]'
+                      : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]',
                   )}
                 >
                   Tutti
@@ -166,8 +152,8 @@ export function SelectionModal({
                   className={cn(
                     'rounded-xl border px-3 py-2 text-xs transition-colors',
                     sourceFilter === 'template'
-                      ? 'border-emerald-300/30 bg-emerald-400/16 text-emerald-100'
-                      : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white',
+                      ? 'border-emerald-300/30 bg-emerald-400/16 text-[color:var(--ui-success)]'
+                      : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]',
                   )}
                 >
                   Suggeriti
@@ -179,8 +165,8 @@ export function SelectionModal({
                   className={cn(
                     'rounded-xl border px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45',
                     sourceFilter === 'ha'
-                      ? 'border-emerald-300/30 bg-emerald-400/16 text-emerald-100'
-                      : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white',
+                      ? 'border-emerald-300/30 bg-emerald-400/16 text-[color:var(--ui-success)]'
+                      : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]',
                   )}
                 >
                   Home Assistant
@@ -188,10 +174,10 @@ export function SelectionModal({
               </div>
             </div>
 
-            <div className="mt-5 max-h-[52vh] space-y-4 overflow-y-auto pr-1">
+            <div className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 glass-scrollbar">
               {templateOptions.length > 0 ? (
                 <section>
-                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-sky-100/80">
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-info)]">
                     Suggeriti ({optionKindLabel})
                   </p>
                   <div className="space-y-2">{templateOptions.map(renderOption)}</div>
@@ -200,7 +186,7 @@ export function SelectionModal({
 
               {haOptions.length > 0 ? (
                 <section>
-                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-emerald-100/80">
+                  <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-success)]">
                     Home Assistant ({optionKindLabel})
                   </p>
                   <div className="space-y-2">{haOptions.map(renderOption)}</div>
@@ -208,15 +194,12 @@ export function SelectionModal({
               ) : null}
 
               {filteredOptions.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+                <div className="rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 text-sm text-[color:var(--ui-text-secondary)]">
                   Nessun risultato trovato. Prova con un termine diverso o cambia filtro.
                 </div>
               ) : null}
             </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    </GlassModal>
   );
 }
 

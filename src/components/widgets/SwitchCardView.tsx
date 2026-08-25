@@ -14,7 +14,6 @@ import {
   Waves,
   type LucideIcon,
 } from 'lucide-react';
-import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 import type { SwitchCardModel, SwitchDeviceIcon } from './switchCardModel';
 import './SwitchCard.css';
 
@@ -25,7 +24,6 @@ type SwitchCardViewProps = {
   onToggle: () => void;
   onOpen: () => void;
   rootRef?: React.Ref<HTMLDivElement>;
-  layoutVariant?: WidgetDisplayVariant;
 };
 
 const SWITCH_ICON_MAP: Record<SwitchDeviceIcon, LucideIcon> = {
@@ -50,7 +48,6 @@ export function SwitchCardView({
   onToggle,
   onOpen,
   rootRef,
-  layoutVariant,
 }: SwitchCardViewProps) {
   const DeviceIcon = SWITCH_ICON_MAP[model.deviceIcon];
   const canToggle = !isEditMode && model.available && !model.pending;
@@ -65,14 +62,13 @@ export function SwitchCardView({
   return (
     <div
       ref={rootRef}
-      className={`switch-card ${isSelected ? 'selection-corners' : ''}`}
+      className="switch-card"
       data-switch-state={model.available ? (model.isOn ? 'on' : 'off') : 'unavailable'}
       data-switch-pending={model.pending ? 'true' : 'false'}
-      data-switch-variant={layoutVariant}
       data-switch-has-consumption={model.consumption.available ? 'true' : 'false'}
     >
       <div
-        className="liquid-glass-card switch-card__surface"
+        className={`liquid-glass-card switch-card__surface ${isSelected ? 'selection-corners' : ''}`}
         role={!isEditMode ? 'switch' : undefined}
         tabIndex={canToggle ? 0 : undefined}
         aria-checked={!isEditMode ? model.isOn : undefined}

@@ -24,7 +24,6 @@ export type LockCardModel = {
   caption: string;
   hint: string;
   changedBy?: string;
-  batteryLevel?: number;
   supportsOpen: boolean;
   pendingAction?: LockPendingAction;
   isLocked: boolean;
@@ -118,23 +117,6 @@ function resolvePendingState(action: LockPendingAction): LockCardState {
   return 'unlocking';
 }
 
-function resolveBatteryLevel(rawAttributes: Record<string, unknown> | undefined) {
-  if (!rawAttributes) return undefined;
-  const candidates = [
-    rawAttributes.battery_level,
-    rawAttributes.battery,
-    rawAttributes.battery_percentage,
-    rawAttributes.battery_percent,
-  ];
-  for (const candidate of candidates) {
-    const value = toFiniteNumber(candidate);
-    if (value !== undefined) {
-      return Math.max(0, Math.min(100, Math.round(value)));
-    }
-  }
-  return undefined;
-}
-
 function resolveSupportedFeatures(liveEntity: MockEntityState | undefined, rawAttributes: Record<string, unknown> | undefined) {
   if (typeof liveEntity?.supportedFeatures === 'number') {
     return liveEntity.supportedFeatures;
@@ -162,7 +144,10 @@ function resolveTone(state: LockCardState): LockCardTone {
   return 'open';
 }
 
-export function buildLockCardModel(widget: Widget, liveEntity?: MockEntityState): LockCardModel {
+export function buildLockCardModel(
+  widget: Widget,
+  liveEntity?: MockEntityState,
+): LockCardModel {
   const rawAttributes = liveEntity?.rawAttributes;
   const pendingAction = resolvePendingAction(rawAttributes?.[LOCK_PENDING_ATTRIBUTE_KEY]);
   const entityState = normalizeLockCardState(
@@ -202,7 +187,6 @@ export function buildLockCardModel(widget: Widget, liveEntity?: MockEntityState)
           ? 'Tocca per bloccare'
           : caption,
     changedBy,
-    batteryLevel: resolveBatteryLevel(rawAttributes),
     supportsOpen,
     pendingAction,
     isLocked,

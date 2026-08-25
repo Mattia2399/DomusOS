@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock3, Lightbulb, Palette, Sparkles, Sun, Thermometer } from 'lucide-react';
-import type { WidgetDisplayVariant } from './widgetDisplayVariant';
+import GlassSlider from '../ui/GlassSlider';
 import type { LightCardModel } from './lightCardModel';
 import './LightCard.css';
 
@@ -12,7 +12,6 @@ type LightCardViewProps = {
   onBrightnessChange?: (value: number) => void;
   onColorChange?: (hs: [number, number]) => void;
   rootRef?: React.Ref<HTMLDivElement>;
-  layoutVariant?: WidgetDisplayVariant;
 };
 
 type SliderMode = 'brightness' | 'color';
@@ -29,7 +28,6 @@ export function LightCardView({
   onBrightnessChange,
   onColorChange,
   rootRef,
-  layoutVariant,
 }: LightCardViewProps) {
   const [sliderMode, setSliderMode] = useState<SliderMode>('brightness');
   const [draftValue, setDraftValue] = useState<number | null>(null);
@@ -41,8 +39,11 @@ export function LightCardView({
   const sliderValue = draftValue ?? sourceValue;
   const sliderMaximum = sliderMode === 'color' ? 360 : 100;
   const progress = (sliderValue / sliderMaximum) * 100;
+  const statusLabel = sliderMode === 'brightness' && draftValue !== null && model.available && model.isOn
+    ? `Accesa · ${Math.round(sliderValue)}%`
+    : model.statusLabel;
   const effectiveSaturation = Math.max(72, model.saturation);
-  const accentRgb = model.rgb.join(' ');
+  const accentRgb = (model.supportsColor ? model.rgb : [61, 90, 254]).join(' ');
   const rootStyle = useMemo(
     () => ({
       '--light-accent-rgb': accentRgb,
@@ -84,37 +85,62 @@ export function LightCardView({
       ? { id: 'effect', icon: <Sparkles />, label: 'Effetto', value: model.effect }
       : null,
   ].filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const hasTopActions = model.timerActive || model.supportsColor;
 
   return (
     <div
       ref={rootRef}
-      className={`light-card ${isSelected ? 'selection-corners' : ''}`}
+      className="light-card"
       data-light-state={model.available ? (model.isOn ? 'on' : 'off') : 'unavailable'}
       data-light-mode={sliderMode}
-      data-light-variant={layoutVariant}
       data-light-has-details={detailItems.length > 0 ? 'true' : 'false'}
       style={rootStyle}
     >
-      <div className="liquid-glass-card light-card__surface">
+      <div className={`liquid-glass-card light-card__surface ${isSelected ? 'selection-corners' : ''}`}>
         <div className={`light-card__icon-shell ${model.pending ? 'light-card__icon-shell--pending' : ''}`} aria-hidden="true">
           <Lightbulb className="light-card__icon" />
         </div>
 
         <div className="light-card__meta">
           <p className="light-card__title" title={model.title}>{model.title}</p>
-          <p className="light-card__status">{model.statusLabel}</p>
+          <p className="light-card__status" aria-live="polite">{statusLabel}</p>
         </div>
 
-        {model.timerActive ? (
-          <span className="light-card__timer" title="Timer attivo" aria-label="Timer attivo">
-            <Clock3 />
-          </span>
+        {hasTopActions ? (
+          <div className="light-card__top-actions">
+            {model.supportsColor ? (
+              <button
+                type="button"
+                className="light-card__mode-button"
+                disabled={!model.isOn || !model.available || !onColorChange}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDraftValue(null);
+                  setSliderMode((current) => current === 'brightness' ? 'color' : 'brightness');
+                }}
+                aria-label={sliderMode === 'brightness' ? 'Passa al controllo colore' : 'Torna al controllo luminosità'}
+                title={sliderMode === 'brightness' ? 'Colore' : 'Luminosità'}
+              >
+                {sliderMode === 'brightness' ? <Palette /> : <Sun />}
+              </button>
+            ) : null}
+
+            {model.timerActive ? (
+              <span className="light-card__timer" title="Timer attivo" aria-label="Timer attivo">
+                <Clock3 />
+              </span>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="light-card__controls" onClick={(event) => event.stopPropagation()}>
-          <input
-            className="light-card__slider"
-            type="range"
+          <div className="light-card__slider">
+            <span className="light-card__slider-fill" aria-hidden="true" />
+            <span className="light-card__slider-handle" aria-hidden="true" />
+          <GlassSlider
+            variant="overlay"
+            className="light-card__slider-input"
             min={0}
             max={sliderMaximum}
             step={1}
@@ -154,24 +180,7 @@ export function LightCardView({
               }
             }}
           />
-
-          {model.supportsColor ? (
-            <button
-              type="button"
-              className="light-card__mode-button"
-              disabled={!model.isOn || !model.available || !onColorChange}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setDraftValue(null);
-                setSliderMode((current) => current === 'brightness' ? 'color' : 'brightness');
-              }}
-              aria-label={sliderMode === 'brightness' ? 'Passa al controllo colore' : 'Torna al controllo luminosità'}
-              title={sliderMode === 'brightness' ? 'Colore' : 'Luminosità'}
-            >
-              {sliderMode === 'brightness' ? <Palette /> : <Sun />}
-            </button>
-          ) : null}
+          </div>
         </div>
 
         <div className="light-card__details" aria-label="Dettagli luce">

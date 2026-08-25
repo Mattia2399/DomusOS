@@ -9,8 +9,7 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  border-radius: 1.55rem;
+  overflow: visible;
 }
 
 .sensor-card[data-sensor-group='environment'] {
@@ -52,7 +51,7 @@
   gap: 0.15rem 0.3rem;
   padding: 0.35rem 0.5rem;
   overflow: hidden;
-  border-radius: inherit;
+  border-radius: 1.55rem;
   pointer-events: none;
 }
 
@@ -61,9 +60,10 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: rgb(255 255 255 / 0.58);
+  color: var(--ui-text-primary);
   font-size: 0.48rem;
-  font-weight: 500;
+  font-weight: var(--ui-card-title-weight);
+  letter-spacing: var(--ui-card-title-tracking);
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -99,7 +99,7 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: white;
+  color: var(--ui-text-primary);
   font-size: clamp(1rem, 30cqi, 1.45rem);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -117,7 +117,7 @@
   max-width: 34%;
   margin-top: 0.25em;
   overflow: hidden;
-  color: rgb(255 255 255 / 0.55);
+  color: var(--ui-text-tertiary);
   font-size: 0.45rem;
   font-weight: 500;
   line-height: 1;
@@ -138,7 +138,7 @@
 }
 
 .sensor-card[data-sensor-available='false'] .sensor-card__status {
-  color: #8f96aa;
+  color: var(--ui-text-disabled);
 }
 
 @container sensor-card (min-width: 132px) and (min-height: 44px) {
@@ -301,7 +301,7 @@
     justify-content: space-between;
     gap: 0.5rem;
     margin-bottom: 0.2rem;
-    color: rgb(255 255 255 / 0.42);
+    color: var(--ui-text-tertiary);
     font-size: clamp(0.5rem, 3cqi, 0.62rem);
     font-weight: 550;
     line-height: 1;
@@ -311,7 +311,7 @@
     position: relative;
     height: clamp(0.7rem, 10cqb, 1.15rem);
     overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--ui-border);
     border-radius: 999px;
     background: var(--sensor-accent-soft);
   }
@@ -332,8 +332,8 @@
     width: 3px;
     transform: translateX(-50%);
     border-radius: 999px;
-    background: white;
-    box-shadow: 0 0 10px rgb(255 255 255 / 0.5);
+    background: var(--ui-text-primary);
+    box-shadow: 0 0 10px var(--sensor-accent-soft);
   }
 
   .sensor-card__sparkline {
@@ -356,10 +356,6 @@
 }
 
 @container sensor-card (min-width: 260px) and (min-height: 104px) {
-  .sensor-card {
-    border-radius: 2rem;
-  }
-
   .sensor-card__surface {
     grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -369,6 +365,7 @@
       'trend stats';
     gap: 0.35rem 0.85rem;
     padding: 0.65rem 0.85rem;
+    border-radius: 2rem;
   }
 
   .sensor-card__value {
@@ -386,7 +383,7 @@
 
   .sensor-card__trend-delta {
     display: inline;
-    color: rgb(255 255 255 / 0.48);
+    color: var(--ui-text-tertiary);
   }
 
   .sensor-card__visual {
@@ -412,13 +409,13 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    color: rgb(255 255 255 / 0.7);
+    color: var(--ui-text-secondary);
     font-size: 0.6rem;
     line-height: 1.05;
   }
 
   .sensor-card__stats small {
-    color: rgb(255 255 255 / 0.36);
+    color: var(--ui-text-tertiary);
     font-size: 0.48rem;
     font-weight: 550;
   }
@@ -432,10 +429,6 @@
 }
 
 @container sensor-card (min-width: 176px) and (min-height: 160px) {
-  .sensor-card {
-    border-radius: 2rem;
-  }
-
   .sensor-card__surface {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -446,6 +439,7 @@
       'stats stats';
     gap: 0.45rem 0.65rem;
     padding: 0.8rem 0.9rem;
+    border-radius: 2rem;
   }
 
   .sensor-card__value-text {
@@ -454,7 +448,7 @@
 
   .sensor-card__trend-delta {
     display: inline;
-    color: rgb(255 255 255 / 0.48);
+    color: var(--ui-text-tertiary);
   }
 
   .sensor-card__visual {
@@ -480,12 +474,12 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    color: rgb(255 255 255 / 0.74);
+    color: var(--ui-text-secondary);
     font-size: 0.7rem;
   }
 
   .sensor-card__stats small {
-    color: rgb(255 255 255 / 0.36);
+    color: var(--ui-text-tertiary);
     font-size: 0.52rem;
   }
 

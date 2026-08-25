@@ -33,25 +33,25 @@ export function ValuePill({ widget, state }: ValuePillProps) {
 
   return (
     <div
-      className={`group min-h-[4.25rem] rounded-full border px-3.5 py-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`group min-h-[4.25rem] rounded-full border px-3.5 py-2.5 text-[color:var(--ui-text-primary)] shadow-[inset_0_1px_0_var(--ui-glass-highlight)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)] ${
         active
           ? 'border-sky-300/35 bg-sky-500/16 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_22px_rgba(56,189,248,0.2)]'
-          : 'border-white/10 bg-white/10 hover:border-white/20 hover:bg-white/14'
+          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)]'
       }`}
     >
       <div className="flex h-full min-w-0 items-center gap-3">
         <span
-          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white/85 transition-transform duration-200 group-hover:scale-[1.05] ${
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[color:var(--ui-text-secondary)] transition-transform duration-200 group-hover:scale-[1.05] ${
             active
-              ? 'border-sky-200/40 bg-sky-400/22 shadow-[0_0_16px_rgba(56,189,248,0.24)]'
-              : 'border-white/12 bg-white/10'
+              ? 'border-sky-200/40 bg-sky-400/22 text-sky-100 shadow-[0_0_16px_rgba(56,189,248,0.24)]'
+              : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)]'
           }`}
         >
           <Activity size={16} />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold leading-tight text-white">{formatValue(state)}</p>
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-white/55">{label}</p>
+          <p className="truncate text-base font-semibold leading-tight text-[color:var(--ui-text-primary)]">{formatValue(state)}</p>
+          <p className="mt-0.5 truncate text-[11px] leading-tight text-[color:var(--ui-text-tertiary)]">{label}</p>
         </div>
       </div>
     </div>

@@ -206,7 +206,7 @@ export function AcquaDetail({
   );
 
   const left = (
-    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_50%_48%,rgba(34,211,238,0.22)_0%,rgba(34,211,238,0.06)_42%,transparent_76%)]">
+    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[#07131f] bg-[radial-gradient(circle_at_50%_48%,rgba(34,211,238,0.28)_0%,rgba(34,211,238,0.08)_42%,#07131f_78%)]">
       <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.03)_38%,rgba(15,23,42,0.24)_100%)]" />
 
       <motion.div
@@ -463,13 +463,13 @@ export function AcquaDetail({
 
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-white/50">Modalita</p>
-                <p className="text-xl font-semibold text-white">{mode === 'PIOGGIA' ? 'Pioggia' : 'Normale'}</p>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--ui-text-tertiary)]">Modalita</p>
+                <p className="text-xl font-semibold text-[color:var(--ui-text-primary)]">{mode === 'PIOGGIA' ? 'Pioggia' : 'Normale'}</p>
               </div>
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-white/70">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-[color:var(--ui-text-secondary)]">
             {sourcePieData.map((entry) => (
               <div key={`legend-${entry.name}`} className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
@@ -493,8 +493,8 @@ export function AcquaDetail({
           ].map((row) => (
             <div key={row.label}>
               <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="text-white/65">{row.label}</span>
-                <span className="font-semibold text-white">
+                <span className="text-[color:var(--ui-text-secondary)]">{row.label}</span>
+                <span className="font-semibold text-[color:var(--ui-text-primary)]">
                   {row.value.toLocaleString('it-IT', {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,

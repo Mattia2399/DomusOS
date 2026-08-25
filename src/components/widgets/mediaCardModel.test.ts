@@ -51,6 +51,16 @@ describe('buildMediaCardModel', () => {
     });
   });
 
+  it('exposes coordinated commands as a temporary pending state', () => {
+    expect(buildMediaCardModel({
+      widget,
+      liveEntity: {
+        state: 'playing',
+        rawAttributes: { __dashboard_command_phase: 'awaiting_confirmation' },
+      },
+    }).commandPending).toBe(true);
+  });
+
   it('normalizes official feature flags and metadata', () => {
     const supportedFeatures =
       MEDIA_FEATURE_PLAY |

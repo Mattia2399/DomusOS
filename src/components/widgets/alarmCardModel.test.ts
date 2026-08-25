@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Widget } from '../../types/dashboardModels';
 import { HOME_ALARM_MOCK_FEATURES, createHomeAlarmMock } from './alarmMock';
 import { buildAlarmCardModel, resolveAlarmModeOptions } from './alarmCardModel';
+import { initializeWidgetSecrets, setWidgetSecrets } from '../../services/widgetSecrets';
 
 const widget: Widget = {
   id: 'alarm.test',
@@ -14,6 +15,10 @@ const widget: Widget = {
 };
 
 describe('alarm card model', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    initializeWidgetSecrets(window.localStorage);
+  });
   it('resolves every supported mock mode and a safe fallback set', () => {
     expect(resolveAlarmModeOptions(HOME_ALARM_MOCK_FEATURES).map((mode) => mode.id)).toEqual([
       'home',
@@ -48,13 +53,15 @@ describe('alarm card model', () => {
 
   it('separates Home Assistant arm code from local disarm protection', () => {
     const mock = createHomeAlarmMock();
+    setWidgetSecrets(widget.id, { alarmUnlockCode: '1234' }, window.localStorage);
     const localModel = buildAlarmCardModel(
-      { ...widget, alarmUnlockCode: '1234', alarmRequireAuthToDisarm: true },
+      { ...widget, alarmRequireAuthToDisarm: true },
       mock,
     );
     expect(localModel.armActionLocked).toBe(false);
     expect(localModel.disarmActionLocked).toBe(true);
 
+    setWidgetSecrets(widget.id, { alarmUnlockCode: '' }, window.localStorage);
     const haCodeModel = buildAlarmCardModel(widget, {
       ...mock,
       rawAttributes: {

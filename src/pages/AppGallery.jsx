@@ -1,5 +1,9 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import GlassToggle from '../components/ui/GlassToggle';
+import GlassSlider from '../components/ui/GlassSlider';
+import GlassModal from '../components/ui/GlassModal';
+import FeatureAvailabilityPage from '../components/ui/FeatureAvailabilityPage';
 import { loadHassAuthTokensFromStorage, normalizeHassUrl } from '../services/haLive';
 import {
   ArrowLeft,
@@ -937,7 +941,7 @@ function PortalCard({ portal, onNavigate = navigateTo }) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => onNavigate(portal.route)}
-      className={`group relative flex aspect-video w-full flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 text-left backdrop-blur-3xl transition-colors duration-300 ${portal.borderHoverClass}`}
+      className={`group relative flex aspect-video w-full flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-[#08131f] p-6 text-left shadow-[0_22px_54px_var(--ui-shadow-soft)] backdrop-blur-3xl transition-colors duration-300 ${portal.borderHoverClass}`}
     >
       <div
         aria-hidden
@@ -986,15 +990,15 @@ function CreateDashboardPlaceholder() {
       onClick={() => {
         console.log('Create new dashboard');
       }}
-      className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-white/20 bg-transparent p-6 text-center backdrop-blur-3xl transition-colors duration-300 hover:border-white/35 hover:bg-white/[0.03]"
+      className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] p-6 text-center backdrop-blur-3xl transition-colors duration-300 hover:bg-[color:var(--ui-fill-secondary)]"
     >
       <div className="flex flex-col items-center gap-3">
-        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/5 text-white/75 transition-colors duration-300 group-hover:bg-white/10 group-hover:text-white">
+        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors duration-300 group-hover:bg-[color:var(--ui-fill-secondary)] group-hover:text-[color:var(--ui-text-primary)]">
           <Plus className="h-6 w-6" />
         </span>
         <div>
-          <p className="text-lg font-semibold text-white/90">Nuova Plancia</p>
-          <p className="mt-1 text-sm text-white/45">Crea una dashboard personalizzata</p>
+          <p className="text-lg font-semibold text-[color:var(--ui-text-primary)]">Nuova Plancia</p>
+          <p className="mt-1 text-sm text-[color:var(--ui-text-tertiary)]">Crea una dashboard personalizzata</p>
         </div>
       </div>
     </motion.button>
@@ -1012,47 +1016,39 @@ function ZoneConfigModal({
   onRemoveStartTime,
   onBaseDurationChange,
 }) {
+  if (!zoneConfig) return null;
+
   return (
-    <AnimatePresence>
-      {isOpen && zoneConfig ? (
-        <motion.div
-          className="fixed inset-0 z-[170] flex items-center justify-center p-4 sm:p-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
+    <GlassModal
+      isOpen={isOpen}
+      onClose={onClose}
+      eyebrow="Programmazione zona"
+      title={zoneConfig.name}
+      description="Le entità tecniche arrivano dalla configurazione Edit Mode."
+      size="lg"
+      zIndex={170}
+      closeLabel="Chiudi programmazione zona"
+      backdropClassName="bg-black/70 backdrop-blur-sm"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            aria-label="Chiudi programmazione zona"
-          />
-
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            initial={{ opacity: 0, y: 18, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.97 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="liquid-glass-panel relative z-10 w-full max-w-xl p-5 text-white sm:p-6"
+            className="rounded-xl border border-white/12 bg-white/[0.03] px-4 py-2 text-sm text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/45">Programmazione Zona</p>
-                <h3 className="mt-2 text-2xl font-semibold text-white">{zoneConfig.name}</h3>
-                <p className="mt-1 text-sm text-white/55">Le entita tecniche arrivano dalla configurazione Edit Mode.</p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-4">
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-xl border border-cyan-300/40 bg-cyan-500/25 px-5 py-2 text-sm font-semibold text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.28)] transition-colors hover:bg-cyan-500/35"
+          >
+            Salva programma
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-white/55">Giorni Attivi</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1113,41 +1109,22 @@ function ZoneConfigModal({
 
               <label className="block">
                 <span className="text-xs uppercase tracking-[0.16em] text-white/55">Durata (minuti)</span>
-                <input
-                  type="range"
+                <GlassSlider
                   min={1}
                   max={240}
                   value={zoneConfig.baseDuration}
                   onChange={(event) => onBaseDurationChange(event.target.value)}
-                  className="mt-2 w-full accent-cyan-300"
+                  className="mt-2"
+                  tone="cyan"
+                  aria-label="Durata irrigazione in minuti"
                 />
                 <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/30 px-3 py-1 text-sm font-semibold text-cyan-100">
                   <Clock3 className="h-4 w-4" />
                   <span>{zoneConfig.baseDuration} min</span>
                 </div>
               </label>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-white/12 bg-white/[0.03] px-4 py-2 text-sm text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={onSave}
-                className="rounded-xl border border-cyan-300/40 bg-cyan-500/25 px-5 py-2 text-sm font-semibold text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.28)] transition-colors hover:bg-cyan-500/35"
-              >
-                Salva Programma
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+      </div>
+    </GlassModal>
   );
 }
 
@@ -1169,10 +1146,10 @@ function LauncherView({ onNavigate = navigateTo }) {
 
       <section className="space-y-5">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-white/55">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[color:var(--ui-text-secondary)]">
             Sistema & Plance Dedicate
           </h2>
-          <p className="text-sm text-white/45">Portali diretti verso dashboard tecniche specializzate.</p>
+          <p className="text-sm text-[color:var(--ui-text-tertiary)]">Portali diretti verso dashboard tecniche specializzate.</p>
         </div>
 
         <motion.div
@@ -1189,8 +1166,8 @@ function LauncherView({ onNavigate = navigateTo }) {
 
       <section className="space-y-5">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-white/55">Le Tue Dashboard</h2>
-          <p className="text-sm text-white/45">Spazio riservato alle plance create da te.</p>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[color:var(--ui-text-secondary)]">Le Tue Dashboard</h2>
+          <p className="text-sm text-[color:var(--ui-text-tertiary)]">Spazio riservato alle plance create da te.</p>
         </div>
 
         <motion.div
@@ -2078,7 +2055,7 @@ function IrrigationDashboardView({
         <button
           type="button"
           onClick={() => onNavigate('/appgallery')}
-          className="inline-flex items-center gap-2 text-sm text-white/65 transition-colors hover:text-white"
+          className="inline-flex items-center gap-2 text-sm text-[color:var(--ui-text-secondary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Torna alla Libreria</span>
@@ -2094,7 +2071,7 @@ function IrrigationDashboardView({
       >
         <motion.section
           variants={cardVariants}
-          className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-3xl lg:p-8 xl:col-span-8"
+          className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-8"
         >
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-sky-500/15 blur-[90px]" />
 
@@ -2233,29 +2210,15 @@ function IrrigationDashboardView({
                     <span className="text-[10px] uppercase tracking-[0.14em] text-white/55">
                       {isRainSensorSyncing ? 'Sincronizzo...' : rainSensorEnabled ? 'On' : 'Off'}
                     </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={rainSensorEnabled}
-                      aria-label="Attiva o disattiva sensore pioggia per la logica automazioni"
-                      onClick={() => {
+                    <GlassToggle
+                      checked={rainSensorEnabled}
+                      label="Attiva o disattiva sensore pioggia per la logica automazioni"
+                      onChange={() => {
                         void handleRainSensorToggle();
                       }}
-                      disabled={isRainSensorSyncing}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full border transition-colors ${
-                        isRainSensorSyncing
-                          ? 'cursor-wait border-white/15 bg-white/10'
-                          : rainSensorEnabled
-                            ? 'border-emerald-300/40 bg-emerald-400/80'
-                            : 'border-white/20 bg-white/20'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition-transform ${
-                          rainSensorEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
+                      busy={isRainSensorSyncing}
+                      size="compact"
+                    />
                   </div>
                 </div>
 
@@ -2281,7 +2244,7 @@ function IrrigationDashboardView({
 
         <motion.section
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 text-center backdrop-blur-3xl lg:p-8 xl:col-span-4"
+          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-center text-white backdrop-blur-3xl lg:p-8 xl:col-span-4"
         >
           {isEditMode ? (
             <div className="flex h-full flex-col justify-between text-left">
@@ -2344,7 +2307,7 @@ function IrrigationDashboardView({
 
         <motion.section
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-3xl lg:p-8 xl:col-span-8"
+          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-8"
         >
           {isEditMode ? (
             <>
@@ -2644,7 +2607,7 @@ function IrrigationDashboardView({
 
         <motion.section
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-3xl lg:p-8 xl:col-span-4"
+          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-4"
         >
           {isEditMode ? (
             <div className="space-y-5">
@@ -2758,24 +2721,15 @@ function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
   const title = titleByView[view] ?? 'Plancia';
 
   return (
-    <div className="dashboard-page-content dashboard-page-content-wide items-center justify-center gap-6 pb-8 text-center">
-      <button
-        type="button"
-        onClick={() => onNavigate('/appgallery')}
-        className="inline-flex items-center gap-2 text-sm text-white/65 transition-colors hover:text-white"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        <span>Torna alla Libreria</span>
-      </button>
-
-      <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-8 backdrop-blur-3xl">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/45">In costruzione</p>
-        <h2 className="mt-3 text-3xl font-semibold text-white">{title}</h2>
-        <p className="mt-2 text-sm text-white/55">
-          Questa plancia dedicata sara disponibile a breve.
-        </p>
-      </div>
-    </div>
+    <FeatureAvailabilityPage
+      nested
+      title={title}
+      headline={`${title} è in preparazione`}
+      description="Questa plancia dedicata arriverà in un prossimo aggiornamento. Le funzioni già disponibili della Libreria restano utilizzabili."
+      onBack={() => onNavigate('/appgallery')}
+      backLabel="Libreria"
+      icon={view === 'pool' ? Waves : Cpu}
+    />
   );
 }
 
@@ -2848,7 +2802,7 @@ export function AppGallery({
     <div className="dashboard-page-scroll relative bg-transparent custom-scrollbar">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.28),rgba(0,0,0,0.1)_36%,rgba(0,0,0,0.22)_100%)] backdrop-blur-[2px]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--ui-bg-canvas)_22%,transparent),transparent_36%,color-mix(in_srgb,var(--ui-bg-grouped)_28%,transparent)_100%)]"
       />
 
       {activeView === 'launcher' ? (

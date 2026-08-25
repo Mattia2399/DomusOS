@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Battery, ChevronRight, DoorOpen, Lock, Unlock } from 'lucide-react';
+import { AlertTriangle, ChevronRight, DoorOpen, Lock, Unlock } from 'lucide-react';
 import type { LockCardModel } from './lockCardModel';
 import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 import './LockCard.css';
@@ -20,10 +20,6 @@ type LockCardViewProps = {
   onEndHold: () => void;
   onResetHold: () => void;
 };
-
-function formatBattery(value: number | undefined) {
-  return typeof value === 'number' ? `${value}%` : 'n/d';
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -58,15 +54,6 @@ export function LockCardView({
     : model.isUnlocked || model.isOpen
       ? 'Aperta'
       : model.stateLabel;
-  const batteryTone =
-    typeof model.batteryLevel === 'number'
-      ? model.batteryLevel <= 20
-        ? 'low'
-        : model.batteryLevel <= 45
-          ? 'medium'
-          : 'good'
-      : 'unknown';
-  const batteryLabel = typeof model.batteryLevel === 'number' ? `${model.batteryLevel}%` : 'ND';
   const progressStyle = { '--lock-hold-progress': String(Math.max(0, Math.min(1, holdProgress))) } as React.CSSProperties;
   const sliderRef = React.useRef<HTMLButtonElement | null>(null);
   const sliderDragRef = React.useRef<{
@@ -298,11 +285,6 @@ export function LockCardView({
           <span className="lock-card__status">{headerStateLabel}</span>
         </span>
 
-        <span className="lock-card__battery-badge" data-battery-tone={batteryTone} aria-label={`Batteria ${batteryLabel}`}>
-          <Battery size={11} />
-          <span>{batteryLabel}</span>
-        </span>
-
         <button
           type="button"
           className="lock-card__mini-toggle"
@@ -371,10 +353,6 @@ export function LockCardView({
           <span>
             <small>Modifica</small>
             <strong>{model.changedBy ?? 'Sincronizzata'}</strong>
-          </span>
-          <span>
-            <small>Batteria</small>
-            <strong>{formatBattery(model.batteryLevel)}</strong>
           </span>
           <span>
             <small>Scrocco</small>

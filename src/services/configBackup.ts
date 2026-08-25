@@ -1,4 +1,14 @@
-import { WIDGET_SECRETS_STORAGE_KEY } from './widgetSecrets';
+import {
+  LEGACY_WIDGET_SECRETS_STORAGE_KEY,
+  WIDGET_SECRETS_STORAGE_KEY,
+} from './widgetSecrets';
+import {
+  DASHBOARD_RUNTIME_MODE_STORAGE_KEY,
+  DEMO_DASHBOARD_LAYOUT_STORAGE_KEY,
+  DEMO_DASHBOARD_RECOVERY_STORAGE_KEY,
+  REAL_DASHBOARD_RECOVERY_STORAGE_KEY,
+} from './dashboardRuntime';
+import type { DashboardRuntimeMode } from '../security/dashboardAccess';
 
 const BACKUP_SCHEMA = 'ha-dashboard-builder-backup';
 const BACKUP_VERSION = 1;
@@ -8,6 +18,7 @@ export const DASHBOARD_LAYOUT_STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
 const SECURITY_ALARM_PIN_STORAGE_KEY = 'ha.dashboard.security.alarmPin';
 const LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY = 'ha.dashboard.security.biometricCredentialId';
 const DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX = 'ha.dashboard.deviceAuth.credentialId.';
+const DASHBOARD_SERVER_CACHE_STORAGE_PREFIX = 'ha.dashboard.cache.';
 
 const MANAGED_STORAGE_PREFIXES = ['ha.dashboard.'];
 const MANAGED_STORAGE_KEYS = [HA_LIVE_STORAGE_KEY, HA_OAUTH_TOKENS_STORAGE_KEY];
@@ -16,14 +27,22 @@ const BACKUP_EXCLUDED_STORAGE_KEYS = new Set([
   LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY,
   HA_OAUTH_TOKENS_STORAGE_KEY,
   WIDGET_SECRETS_STORAGE_KEY,
+  LEGACY_WIDGET_SECRETS_STORAGE_KEY,
+  DASHBOARD_RUNTIME_MODE_STORAGE_KEY,
+  REAL_DASHBOARD_RECOVERY_STORAGE_KEY,
+  DEMO_DASHBOARD_RECOVERY_STORAGE_KEY,
 ]);
-const BACKUP_EXCLUDED_STORAGE_PREFIXES = [DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX];
+const BACKUP_EXCLUDED_STORAGE_PREFIXES = [
+  DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX,
+  DASHBOARD_SERVER_CACHE_STORAGE_PREFIX,
+];
 const SENSITIVE_WIDGET_FIELDS = ['alarmUnlockCode', 'alarmLocalExtraCode', 'lockCode'] as const;
 
 export type DashboardBackupPayload = {
   schema: typeof BACKUP_SCHEMA;
   version: typeof BACKUP_VERSION;
   exportedAt: string;
+  scope?: DashboardRuntimeMode;
   entries: Record<string, string>;
 };
 
@@ -31,14 +50,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function normalizeBackupEntries(rawEntries: unknown) {
+function normalizeBackupEntries(rawEntries: unknown, scope: DashboardRuntimeMode = 'real') {
   if (!isRecord(rawEntries)) {
     return null;
   }
 
   const entries: Record<string, string> = {};
   Object.entries(rawEntries).forEach(([key, value]) => {
-    if (!isBackupStorageKey(key)) {
+    if (!isBackupStorageKey(key, scope)) {
       return;
     }
     if (typeof value === 'string') {
@@ -101,7 +120,7 @@ function sanitizeSensitiveStorageValue(key: string, value: string) {
     });
   }
 
-  if (key === DASHBOARD_LAYOUT_STORAGE_KEY) {
+  if (key === DASHBOARD_LAYOUT_STORAGE_KEY || key === DEMO_DASHBOARD_LAYOUT_STORAGE_KEY) {
     return sanitizeDashboardLayoutValue(value);
   }
 
@@ -146,8 +165,13 @@ export function isBackupExcludedStorageKey(key: string) {
   );
 }
 
-export function isBackupStorageKey(key: string) {
-  return isManagedStorageKey(key) && !isBackupExcludedStorageKey(key);
+export function isBackupStorageKey(key: string, scope: DashboardRuntimeMode = 'real') {
+  if (!isManagedStorageKey(key) || isBackupExcludedStorageKey(key)) {
+    return false;
+  }
+  return scope === 'demo'
+    ? key.startsWith('ha.dashboard.demo.')
+    : !key.startsWith('ha.dashboard.demo.');
 }
 
 export function listManagedStorageKeys(storage: Storage) {
@@ -163,12 +187,15 @@ export function listManagedStorageKeys(storage: Storage) {
   return keys;
 }
 
-export function listBackupStorageKeys(storage: Storage) {
-  return listManagedStorageKeys(storage).filter(isBackupStorageKey);
+export function listBackupStorageKeys(storage: Storage, scope: DashboardRuntimeMode = 'real') {
+  return listManagedStorageKeys(storage).filter((key) => isBackupStorageKey(key, scope));
 }
 
-export function createDashboardBackupPayload(storage: Storage): DashboardBackupPayload {
-  const keys = listBackupStorageKeys(storage);
+export function createDashboardBackupPayload(
+  storage: Storage,
+  scope: DashboardRuntimeMode = 'real',
+): DashboardBackupPayload {
+  const keys = listBackupStorageKeys(storage, scope);
   const entries: Record<string, string> = {};
 
   keys.forEach((key) => {
@@ -182,6 +209,7 @@ export function createDashboardBackupPayload(storage: Storage): DashboardBackupP
     schema: BACKUP_SCHEMA,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    scope,
     entries,
   };
 }
@@ -205,7 +233,8 @@ export function parseDashboardBackup(raw: string): DashboardBackupPayload {
   const schema = parsed.schema;
   const version = parsed.version;
   const exportedAt = parsed.exportedAt;
-  const strictEntries = normalizeBackupEntries(parsed.entries);
+  const scope: DashboardRuntimeMode = parsed.scope === 'demo' ? 'demo' : 'real';
+  const strictEntries = normalizeBackupEntries(parsed.entries, scope);
   if (schema === BACKUP_SCHEMA && version === BACKUP_VERSION) {
     if (typeof exportedAt !== 'string' || exportedAt.trim().length === 0) {
       throw new Error('Il backup non contiene la data di esportazione.');
@@ -217,11 +246,12 @@ export function parseDashboardBackup(raw: string): DashboardBackupPayload {
       schema: BACKUP_SCHEMA,
       version: BACKUP_VERSION,
       exportedAt,
+      scope,
       entries: strictEntries,
     };
   }
 
-  const legacyEntries = strictEntries ?? normalizeBackupEntries(parsed);
+  const legacyEntries = strictEntries ?? normalizeBackupEntries(parsed, scope);
   if (legacyEntries && Object.keys(legacyEntries).length > 0) {
     return {
       schema: BACKUP_SCHEMA,
@@ -230,6 +260,7 @@ export function parseDashboardBackup(raw: string): DashboardBackupPayload {
         typeof exportedAt === 'string' && exportedAt.trim().length > 0
           ? exportedAt
           : new Date().toISOString(),
+      scope,
       entries: legacyEntries,
     };
   }
@@ -243,21 +274,38 @@ export function parseDashboardBackup(raw: string): DashboardBackupPayload {
   throw new Error('Il backup non contiene configurazioni dashboard ripristinabili.');
 }
 
-export function clearManagedDashboardStorage(storage: Storage) {
-  const keys = listManagedStorageKeys(storage);
+export function clearManagedDashboardStorage(
+  storage: Storage,
+  scope: DashboardRuntimeMode | 'all' = 'all',
+) {
+  const keys = listManagedStorageKeys(storage).filter((key) => {
+    if (scope === 'all') {
+      return true;
+    }
+    if (key === DASHBOARD_RUNTIME_MODE_STORAGE_KEY) {
+      return false;
+    }
+    return scope === 'demo'
+      ? key.startsWith('ha.dashboard.demo.')
+      : !key.startsWith('ha.dashboard.demo.');
+  });
   keys.forEach((key) => storage.removeItem(key));
   return keys.length;
 }
 
-export function restoreDashboardBackup(payload: DashboardBackupPayload, storage: Storage) {
+export function restoreDashboardBackup(
+  payload: DashboardBackupPayload,
+  storage: Storage,
+  scope: DashboardRuntimeMode = payload.scope ?? 'real',
+) {
   const managedEntries = Object.entries(payload.entries).filter(
-    ([key, value]) => isBackupStorageKey(key) && typeof value === 'string',
+    ([key, value]) => isBackupStorageKey(key, scope) && typeof value === 'string',
   );
   if (!managedEntries.length) {
     return 0;
   }
 
-  clearManagedDashboardStorage(storage);
+  clearManagedDashboardStorage(storage, scope);
   let restoredCount = 0;
   managedEntries.forEach(([key, value]) => {
     storage.setItem(key, sanitizeSensitiveStorageValue(key, value));

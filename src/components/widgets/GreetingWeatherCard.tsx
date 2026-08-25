@@ -31,6 +31,7 @@ export function GreetingWeatherCard({
   subtitle,
   titleAuto = true,
   subtitleAuto = true,
+  compact = false,
   isEditMode = false,
   onWeatherClick,
   weatherLayout = 'auto',
@@ -63,7 +64,7 @@ export function GreetingWeatherCard({
             subtitle={subtitle}
             titleAuto={titleAuto}
             subtitleAuto={subtitleAuto}
-            compact
+            compact={compact}
             clampTitle
           />
         </div>

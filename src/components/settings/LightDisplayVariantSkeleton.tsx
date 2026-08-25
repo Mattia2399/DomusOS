@@ -9,16 +9,16 @@ type LightDisplayVariantSkeletonProps = {
 
 export function LightDisplayVariantSkeleton({ variant, active, disabled }: LightDisplayVariantSkeletonProps) {
   const accent = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.72)]'
-    : disabled ? 'bg-white/10' : 'bg-white/34';
+    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.72)]'
+    : disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-text-tertiary)]';
   const soft = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb-2)/0.3)]'
-    : disabled ? 'bg-white/[0.05]' : 'bg-white/[0.13]';
-  const muted = disabled ? 'bg-white/[0.07]' : 'bg-white/[0.2]';
-  const frame = 'overflow-hidden rounded-[0.82rem] border border-white/10 bg-white/[0.035] p-2';
+    ? 'bg-[color:rgb(var(--ui-accent-secondary-rgb)/0.3)]'
+    : disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-secondary)]';
+  const muted = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-primary)]';
+  const frame = 'dashboard-content-surface-soft overflow-hidden rounded-[0.82rem] p-2';
 
   const header = (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5">
       <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${soft}`}>
         <span className={`h-2 w-2 rounded-full ${accent}`} />
       </span>
@@ -26,17 +26,15 @@ export function LightDisplayVariantSkeleton({ variant, active, disabled }: Light
         <span className={`h-1.5 w-[74%] rounded-full ${muted}`} />
         <span className={`h-1 w-[48%] rounded-full ${soft}`} />
       </span>
+      <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[0.48rem] border border-[color:var(--ui-border)] ${soft}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${accent}`} />
+      </span>
     </span>
   );
   const controls = (
-    <span className="flex items-center gap-1.5">
-      <span className={`relative h-3.5 min-w-0 flex-1 overflow-hidden rounded-full ${soft}`}>
-        <span className={`absolute inset-y-0 left-0 w-[58%] rounded-full ${accent}`} />
-        <span className="absolute left-[52%] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-white/60 bg-white/80" />
-      </span>
-      <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${soft}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${accent}`} />
-      </span>
+    <span className={`relative block h-7 min-w-0 overflow-hidden rounded-[0.68rem] border border-[color:var(--ui-border)] ${soft}`}>
+      <span className={`absolute inset-y-0 left-0 w-[58%] rounded-l-[inherit] border-r border-white/25 bg-white/90`} />
+      <span className="absolute inset-y-1 left-[58%] w-0.5 rounded-full bg-white/70 shadow-[0_0_8px_rgba(255,255,255,0.25)]" />
     </span>
   );
 

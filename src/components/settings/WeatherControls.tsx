@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import {
   Cloud,
+  CloudOff,
   CloudRain,
   Droplets,
   Eye,
@@ -194,14 +195,14 @@ function WeatherMetricCard({
   subtext?: string;
 }) {
   return (
-    <div className="aspect-square rounded-[28px] border border-white/10 bg-white/5 p-4 flex flex-col justify-between backdrop-blur-xl">
-      <div className="flex items-center gap-2 text-white/65">
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10">{icon}</span>
+    <div className="dashboard-content-surface flex aspect-square flex-col justify-between rounded-[28px] p-4">
+      <div className="flex items-center gap-2 text-[color:var(--ui-text-secondary)]">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--ui-fill-secondary)]">{icon}</span>
         <p className="text-[10px] uppercase tracking-[0.16em]">{title}</p>
       </div>
       <div>
-        <p className="text-3xl font-semibold tracking-tight text-white">{value}</p>
-        {subtext ? <p className="mt-1 text-xs text-white/55">{subtext}</p> : null}
+        <p className="text-3xl font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{value}</p>
+        {subtext ? <p className="mt-1 text-xs text-[color:var(--ui-text-tertiary)]">{subtext}</p> : null}
       </div>
     </div>
   );
@@ -270,27 +271,33 @@ export function WeatherControlsPanel({
   const sunsetValue = formatClock(readFirst(attrs, ['sunset', 'next_setting', 'next_dusk']));
 
   const forecastCount = Math.max(1, Math.min(8, forecastDays ?? 5));
-  const sourceForecast = weather.forecast.slice(0, forecastCount);
+  const forecast = weather.forecast.slice(0, forecastCount);
   const dense = forecastDensity === 'compact';
-  const forecast = Array.from({ length: forecastCount }, (_, index) => {
-    const entry = sourceForecast[index];
-    if (entry) {
-      return entry;
-    }
-    return {
-      label: index === 0 ? 'Oggi' : `G${index + 1}`,
-      condition,
-      high: weather.high,
-      low: weather.low,
-      precipitation: weather.precipitation,
-      precipitationAmount: weather.precipitationAmount,
-      precipitationProbability: weather.precipitation,
-    };
-  });
 
   React.useEffect(() => {
     setSelectedForecastIndex((current) => Math.min(current, Math.max(0, forecast.length - 1)));
   }, [forecast.length]);
+
+  if (!weather.available) {
+    const isOffline = weather.source === 'offline';
+    return (
+      <div className={CONTEXT_PANEL_LAYOUT.shell}>
+        <div className={`${CONTEXT_PANEL_LAYOUT.section} flex min-h-56 flex-col items-center justify-center text-center`}>
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--ui-fill-secondary)] text-[color:var(--ui-text-secondary)]">
+            <CloudOff size={26} strokeWidth={1.6} aria-hidden="true" />
+          </span>
+          <h2 className="mt-4 text-lg font-semibold text-[color:var(--ui-text-primary)]">
+            {isOffline ? 'Meteo non disponibile' : 'Meteo non configurato'}
+          </h2>
+          <p className="mt-1 max-w-xs text-sm text-[color:var(--ui-text-secondary)]">
+            {isOffline
+              ? 'Riconnetti Home Assistant per aggiornare condizioni e previsioni.'
+              : 'Seleziona un’entità weather.* nelle impostazioni della sezione per mostrare condizioni e previsioni reali.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const safeSelectedIndex = Math.min(selectedForecastIndex, Math.max(0, forecast.length - 1));
   const selectedForecast = forecast[safeSelectedIndex] ?? forecast[0];
@@ -304,13 +311,15 @@ export function WeatherControlsPanel({
   };
 
   const forecastTitle =
-    forecastType === 'hourly'
-      ? `PREVISIONI ${forecastCount} ORE`
+    forecast.length === 0
+      ? 'PREVISIONI NON DISPONIBILI'
+      : forecastType === 'hourly'
+      ? `PREVISIONI ${forecast.length} ORE`
       : forecastType === 'twice_daily'
-        ? `PREVISIONI ${forecastCount} SLOT`
-        : forecastCount === 5
+        ? `PREVISIONI ${forecast.length} SLOT`
+        : forecast.length === 5
           ? 'PREVISIONI 5 GIORNI'
-          : `PREVISIONI ${forecastCount} GIORNI`;
+          : `PREVISIONI ${forecast.length} GIORNI`;
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
@@ -320,13 +329,13 @@ export function WeatherControlsPanel({
         <div className="relative">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-2xl font-semibold text-white truncate">{weather.location}</h2>
-              <p className="mt-1 text-6xl font-thin leading-none tracking-[-0.04em] text-white">{`${Math.round(displayTemp)}\u00B0`}</p>
-              <p className="mt-2 text-sm text-white/60 truncate">
+              <h2 className="truncate text-2xl font-semibold text-[color:var(--ui-text-primary)]">{weather.location}</h2>
+              <p className="mt-1 text-6xl font-thin leading-none tracking-[-0.04em] text-[color:var(--ui-text-primary)]">{`${Math.round(displayTemp)}\u00B0`}</p>
+              <p className="mt-2 truncate text-sm text-[color:var(--ui-text-secondary)]">
                 {`${visual.label} • H:${Math.round(displayHigh)}\u00B0 L:${Math.round(displayLow)}\u00B0`}
               </p>
             </div>
-            <span className="mt-1 shrink-0 text-white/90">
+            <span className="mt-1 shrink-0 text-[color:var(--ui-text-primary)]">
               <AnimatedWeatherIcon condition={condition} size={36} />
             </span>
           </div>
@@ -334,9 +343,14 @@ export function WeatherControlsPanel({
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
-        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-white/40">{forecastTitle}</p>
-        <div className="flex items-start justify-between gap-2">
-          {forecast.map((entry, index) => {
+        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">{forecastTitle}</p>
+        {forecast.length === 0 ? (
+          <p className="text-sm text-[color:var(--ui-text-secondary)]">
+            Home Assistant non ha restituito previsioni per questa entità.
+          </p>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            {forecast.map((entry, index) => {
             const high = unit === 'F' ? toFahrenheit(entry.high) : entry.high;
             const low = unit === 'F' ? toFahrenheit(entry.low) : entry.low;
             const labelText = normalizeForecastLabel(
@@ -352,33 +366,34 @@ export function WeatherControlsPanel({
                   type="button"
                   onClick={() => setSelectedForecastIndex(index)}
                   className={`rounded-lg px-1.5 py-0.5 transition-colors ${
-                    index === safeSelectedIndex ? 'bg-white/14 text-white' : 'text-white/70 hover:bg-white/10'
+                    index === safeSelectedIndex ? 'liquid-glass-selection text-[color:var(--ui-text-primary)]' : 'text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
                   } ${dense ? 'text-[10px]' : 'text-[11px]'}`}
                 >
                   {labelText}
                 </button>
-                <span className="mt-1 text-white/90">
+                <span className="mt-1 text-[color:var(--ui-text-primary)]">
                   <AnimatedWeatherIcon condition={entry.condition} size={dense ? 16 : 18} />
                 </span>
-                <p className={`mt-1 font-semibold text-white ${dense ? 'text-[11px]' : 'text-xs'}`}>{`${Math.round(high)}\u00B0`}</p>
-                <p className={`text-white/60 ${dense ? 'text-[10px]' : 'text-[11px]'}`}>{`${Math.round(low)}\u00B0`}</p>
+                <p className={`mt-1 font-semibold text-[color:var(--ui-text-primary)] ${dense ? 'text-[11px]' : 'text-xs'}`}>{`${Math.round(high)}\u00B0`}</p>
+                <p className={`text-[color:var(--ui-text-tertiary)] ${dense ? 'text-[10px]' : 'text-[11px]'}`}>{`${Math.round(low)}\u00B0`}</p>
               </div>
             );
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.16em] text-white/40">VISIBILITA</p>
-          <div className="flex items-center gap-2 text-sm text-white/70">
+          <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">VISIBILITA</p>
+          <div className="flex items-center gap-2 text-sm text-[color:var(--ui-text-secondary)]">
             <Eye size={15} />
             <span>{`${Math.round(visibilityValue)} ${visibilityUnit}`}</span>
           </div>
         </div>
-        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-2 overflow-hidden rounded-full bg-[color:var(--ui-fill-secondary)]">
           <div
-            className="h-full rounded-full bg-blue-400"
+            className="h-full rounded-full bg-[color:var(--ui-info)]"
             style={{ width: `${Math.min(100, (visibilityValue / 40) * 100)}%` }}
           />
         </div>
@@ -434,61 +449,61 @@ export function WeatherControlsPanel({
       </div>
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
-        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-white/40">DETTAGLI SLOT SELEZIONATO</p>
-        <div className="grid grid-cols-2 gap-3 text-xs text-white/70">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Temperatura percepita</p>
-            <p className="mt-1 text-sm font-semibold text-white">{formatTemp(selectedForecast?.apparentTemperature)}</p>
+        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">DETTAGLI SLOT SELEZIONATO</p>
+        <div className="grid grid-cols-2 gap-3 text-xs text-[color:var(--ui-text-secondary)]">
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Temperatura percepita</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">{formatTemp(selectedForecast?.apparentTemperature)}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Precipitazioni</p>
-            <p className="mt-1 text-sm font-semibold text-white">
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Precipitazioni</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">
               {selectedForecast?.precipitationProbability === undefined
                 ? '--'
                 : `${Math.round(selectedForecast.precipitationProbability)}%`}
             </p>
-            <p className="mt-1 text-[11px] text-white/55">
+            <p className="mt-1 text-[11px] text-[color:var(--ui-text-tertiary)]">
               {selectedForecast?.precipitationAmount === undefined
                 ? '--'
                 : `${selectedForecast.precipitationAmount.toFixed(1)} ${precipUnit}`}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Dew point / Umidita</p>
-            <p className="mt-1 text-sm font-semibold text-white">{`${formatTemp(selectedForecast?.dewPoint)} • ${selectedForecast?.humidity === undefined ? '--' : `${Math.round(selectedForecast.humidity)}%`}`}</p>
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Dew point / Umidita</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">{`${formatTemp(selectedForecast?.dewPoint)} • ${selectedForecast?.humidity === undefined ? '--' : `${Math.round(selectedForecast.humidity)}%`}`}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Pressione / UV</p>
-            <p className="mt-1 text-sm font-semibold text-white">{`${selectedForecast?.pressure === undefined ? '--' : `${Math.round(selectedForecast.pressure)} ${pressureUnit}`} • ${selectedForecast?.uvIndex === undefined ? '--' : `${Math.round(selectedForecast.uvIndex)}`}`}</p>
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Pressione / UV</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">{`${selectedForecast?.pressure === undefined ? '--' : `${Math.round(selectedForecast.pressure)} ${pressureUnit}`} • ${selectedForecast?.uvIndex === undefined ? '--' : `${Math.round(selectedForecast.uvIndex)}`}`}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Vento</p>
-            <p className="mt-1 text-sm font-semibold text-white">{`${selectedForecast?.windSpeed === undefined ? '--' : `${Math.round(selectedForecast.windSpeed)} ${windUnit}`}`}</p>
-            <p className="mt-1 text-[11px] text-white/55">{`Raffiche ${selectedForecast?.windGustSpeed === undefined ? '--' : `${Math.round(selectedForecast.windGustSpeed)} ${windUnit}`}`}</p>
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Vento</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">{`${selectedForecast?.windSpeed === undefined ? '--' : `${Math.round(selectedForecast.windSpeed)} ${windUnit}`}`}</p>
+            <p className="mt-1 text-[11px] text-[color:var(--ui-text-tertiary)]">{`Raffiche ${selectedForecast?.windGustSpeed === undefined ? '--' : `${Math.round(selectedForecast.windGustSpeed)} ${windUnit}`}`}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <p className="text-white/45 uppercase tracking-[0.16em]">Direzione / Slot</p>
-            <p className="mt-1 text-sm font-semibold text-white">{`${formatBearing(selectedForecast?.windBearing)} • ${selectedForecast?.isDaytime === undefined ? '--' : selectedForecast.isDaytime ? 'Giorno' : 'Notte'}`}</p>
-            <p className="mt-1 text-[11px] text-white/55">{`${selectedForecast?.cloudCoverage === undefined ? '--' : `${Math.round(selectedForecast.cloudCoverage)}%`} nuvole`}</p>
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <p className="uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Direzione / Slot</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--ui-text-primary)]">{`${formatBearing(selectedForecast?.windBearing)} • ${selectedForecast?.isDaytime === undefined ? '--' : selectedForecast.isDaytime ? 'Giorno' : 'Notte'}`}</p>
+            <p className="mt-1 text-[11px] text-[color:var(--ui-text-tertiary)]">{`${selectedForecast?.cloudCoverage === undefined ? '--' : `${Math.round(selectedForecast.cloudCoverage)}%`} nuvole`}</p>
           </div>
         </div>
       </div>
 
       <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center gap-2 text-white/65">
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <div className="flex items-center gap-2 text-[color:var(--ui-text-secondary)]">
               <Sunrise size={15} />
               <span className="text-[10px] uppercase tracking-[0.16em]">ALBA</span>
             </div>
-            <p className="mt-2 text-xl font-semibold tracking-tight text-white">{sunriseValue}</p>
+            <p className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{sunriseValue}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center gap-2 text-white/65">
+          <div className="dashboard-content-surface rounded-2xl p-3">
+            <div className="flex items-center gap-2 text-[color:var(--ui-text-secondary)]">
               <Sunset size={15} />
               <span className="text-[10px] uppercase tracking-[0.16em]">TRAMONTO</span>
             </div>
-            <p className="mt-2 text-xl font-semibold tracking-tight text-white">{sunsetValue}</p>
+            <p className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{sunsetValue}</p>
           </div>
         </div>
       </div>

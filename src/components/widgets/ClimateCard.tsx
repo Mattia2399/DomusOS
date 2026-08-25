@@ -407,11 +407,11 @@ function modeToSurface(mode: string): ClimateSurface {
     };
   }
   return {
-    gradient: 'from-[#4A4F5C] via-[#343842] to-[#242730]',
-    border: 'border-white/[0.14]',
-    glow: 'shadow-[0_0_22px_rgba(142,142,147,0.18),inset_0_1px_0_rgba(255,255,255,0.20)]',
-    iconSurface: 'bg-white/[0.06] border border-white/[0.10]',
-    controlSurface: 'border border-white/[0.08] bg-white/[0.06] text-white/82 backdrop-blur-xl hover:bg-white/[0.10] hover:text-white',
+    gradient: 'from-[color:var(--ui-surface-glass)] via-[color:var(--ui-surface-secondary)] to-[color:var(--ui-surface-glass-soft)]',
+    border: 'border-[color:var(--ui-border)]',
+    glow: 'shadow-[0_14px_34px_var(--ui-shadow-soft),inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.16)]',
+    iconSurface: 'bg-[color:var(--ui-fill-tertiary)] border border-[color:var(--ui-border)]',
+    controlSurface: 'border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)] backdrop-blur-xl hover:bg-[color:var(--ui-fill-secondary)]',
     fanAccent: '#8E8E93',
   };
 }
@@ -629,6 +629,7 @@ export function ClimateCard({
       (isDemoClimate ? toTrimmedString(state.climate.swingHorizontalMode) : undefined) ??
       swingHorizontalModes[0],
   );
+  const targetPending = rawAttributes?.[CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY] === true;
 
   const [localTarget, setLocalTarget] = useState<number | undefined>(targetTemp);
   const [localRange, setLocalRange] = useState<{ low: number; high: number } | null>(
@@ -639,19 +640,59 @@ export function ClimateCard({
   const [localPresetMode, setLocalPresetMode] = useState(activePresetMode);
   const [localSwingMode, setLocalSwingMode] = useState(activeSwingMode);
   const [localSwingHorizontalMode, setLocalSwingHorizontalMode] = useState(activeSwingHorizontalMode);
+  const [localTargetPending, setLocalTargetPending] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 
   useEffect(() => {
+    if (targetPending) {
+      return;
+    }
+    if (localTargetPending) {
+      if (
+        targetTemp !== undefined &&
+        localTarget !== undefined &&
+        Math.abs(targetTemp - localTarget) <= Math.max(0.05, targetStep / 2)
+      ) {
+        setLocalTargetPending(false);
+      }
+      return;
+    }
     setLocalTarget(targetTemp);
-  }, [targetTemp]);
+  }, [localTarget, localTargetPending, targetPending, targetStep, targetTemp]);
 
   useEffect(() => {
+    if (targetPending) {
+      return;
+    }
     if (hasRangeTarget) {
-      setLocalRange({ low: targetTempLow, high: targetTempHigh });
+      if (localTargetPending && localRange) {
+        const lowMatches = Math.abs(targetTempLow - localRange.low) <= Math.max(0.05, targetStep / 2);
+        const highMatches = Math.abs(targetTempHigh - localRange.high) <= Math.max(0.05, targetStep / 2);
+        if (lowMatches && highMatches) {
+          setLocalTargetPending(false);
+        }
+        return;
+      }
+      setLocalRange((current) =>
+        current && current.low === targetTempLow && current.high === targetTempHigh
+          ? current
+          : { low: targetTempLow, high: targetTempHigh },
+      );
+      return;
+    }
+    if (localTargetPending) {
       return;
     }
     setLocalRange(null);
-  }, [hasRangeTarget, targetTempHigh, targetTempLow]);
+  }, [hasRangeTarget, localRange, localTargetPending, targetPending, targetStep, targetTempHigh, targetTempLow]);
+
+  useEffect(() => {
+    if (!localTargetPending) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => setLocalTargetPending(false), 3500);
+    return () => window.clearTimeout(timeoutId);
+  }, [localTargetPending]);
 
   useEffect(() => {
     setLocalFanMode(activeFanMode);
@@ -691,7 +732,11 @@ export function ClimateCard({
   const safeMax = maxTemp ?? Number.POSITIVE_INFINITY;
   const safeStep = targetStep > 0 ? targetStep : 0.5;
   const surface = modeToSurface(activeMode);
-  const targetPending = rawAttributes?.[CLIMATE_PENDING_TARGET_ATTRIBUTE_KEY] === true;
+  const usesSemanticSurface = !['heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'].includes(activeMode);
+  const primaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-primary)]' : 'text-white';
+  const secondaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-secondary)]' : 'text-white/80';
+  const tertiaryTextClass = usesSemanticSurface ? 'text-[color:var(--ui-text-tertiary)]' : 'text-white/54';
+  const isTargetPending = targetPending || localTargetPending;
   const fanPending = rawAttributes?.[CLIMATE_PENDING_FAN_ATTRIBUTE_KEY] === true;
   const humidityPending = rawAttributes?.[CLIMATE_PENDING_HUMIDITY_ATTRIBUTE_KEY] === true;
   const primaryControl = resolveClimatePrimaryControl(activeMode, supportsTargetHumidity);
@@ -745,21 +790,21 @@ export function ClimateCard({
   const headerGapClass = isDenseCard ? 'gap-2.5' : isCompactClimateCard ? 'gap-2.5' : 'gap-3';
   const controlsGapClass = isDenseCard ? 'gap-2' : 'gap-2.5';
   const titleClass = isDenseCard
-    ? `leading-[1.08] font-normal text-white whitespace-normal break-words [overflow-wrap:anywhere] ${
+    ? `leading-[1.08] font-semibold tracking-[-0.01em] ${primaryTextClass} whitespace-normal break-words [overflow-wrap:anywhere] ${
         isLongTitle ? 'text-[clamp(0.78rem,1.5vw,0.9rem)]' : 'text-[clamp(0.84rem,1.7vw,0.98rem)]'
       }`
     : isCompactClimateCard
-      ? `leading-[1.08] font-normal text-white whitespace-normal break-words [overflow-wrap:anywhere] ${
+      ? `leading-[1.08] font-semibold tracking-[-0.01em] ${primaryTextClass} whitespace-normal break-words [overflow-wrap:anywhere] ${
           isLongTitle ? 'text-[clamp(0.84rem,1.8vw,1.02rem)]' : 'text-[clamp(0.92rem,2vw,1.12rem)]'
         }`
-      : `leading-[1.06] font-normal text-white whitespace-normal break-words [overflow-wrap:anywhere] ${
+      : `leading-[1.06] font-semibold tracking-[-0.01em] ${primaryTextClass} whitespace-normal break-words [overflow-wrap:anywhere] ${
           isLongTitle ? 'text-[clamp(0.94rem,2.15vw,1.16rem)]' : 'text-[clamp(1.02rem,2.35vw,1.32rem)]'
         }`;
   const subtitleClass = isDenseCard
-    ? 'line-clamp-1 mt-0.5 overflow-hidden text-[0.7rem] text-white/80'
+    ? `line-clamp-1 mt-0.5 overflow-hidden text-[0.7rem] ${secondaryTextClass}`
     : isCompactClimateCard
-      ? 'line-clamp-1 mt-0.5 overflow-hidden text-[0.78rem] text-white/80'
-      : 'line-clamp-1 mt-0.5 overflow-hidden text-[0.9rem] text-white/80';
+      ? `line-clamp-1 mt-0.5 overflow-hidden text-[0.78rem] ${secondaryTextClass}`
+      : `line-clamp-1 mt-0.5 overflow-hidden text-[0.9rem] ${secondaryTextClass}`;
   const controlsClass = isDenseCard
     ? 'h-9 w-9'
     : isCompactClimateCard
@@ -767,15 +812,15 @@ export function ClimateCard({
       : 'h-12 w-12';
   const controlIconSize = isDenseCard ? 16 : isCompactClimateCard ? 17 : 20;
   const setPointClass = isDenseCard
-    ? `text-[1.95rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`
+    ? `text-[1.95rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_var(--ui-shadow-soft)] ${isTargetPending ? secondaryTextClass : primaryTextClass}`
     : isCompactClimateCard
-      ? `text-[2.05rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`
-      : `text-[2.2rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_rgba(0,0,0,0.16)] ${targetPending ? 'text-white/72' : 'text-white'}`;
+      ? `text-[2.05rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_var(--ui-shadow-soft)] ${isTargetPending ? secondaryTextClass : primaryTextClass}`
+      : `text-[2.2rem] leading-none font-semibold tracking-tight drop-shadow-[0_6px_14px_var(--ui-shadow-soft)] ${isTargetPending ? secondaryTextClass : primaryTextClass}`;
   const unitClass = isDenseCard
-    ? `mt-0.5 text-[0.58rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-white/62' : 'text-white/82'}`
+    ? `mt-0.5 text-[0.58rem] leading-none font-semibold tracking-[0.18em] ${isTargetPending ? tertiaryTextClass : secondaryTextClass}`
     : isCompactClimateCard
-      ? `mt-0.5 text-[0.62rem] leading-none font-semibold tracking-[0.18em] ${targetPending ? 'text-white/62' : 'text-white/82'}`
-      : `mt-1 text-[0.74rem] leading-none font-semibold tracking-[0.2em] ${targetPending ? 'text-white/62' : 'text-white/82'}`;
+      ? `mt-0.5 text-[0.62rem] leading-none font-semibold tracking-[0.18em] ${isTargetPending ? tertiaryTextClass : secondaryTextClass}`
+      : `mt-1 text-[0.74rem] leading-none font-semibold tracking-[0.2em] ${isTargetPending ? tertiaryTextClass : secondaryTextClass}`;
   const fanModeIconIndex = Math.max(0, fanModes.findIndex((mode) => mode === 'auto'));
   const fanModesAreCrowded = fanModes.length > (isDenseCard ? 4 : isCompactClimateCard ? 5 : 7);
   const fanTrackClass = isDenseCard
@@ -834,7 +879,7 @@ export function ClimateCard({
             <div className="relative shrink-0">
               <button
                 type="button"
-                className={`inline-flex max-w-[7.75rem] items-center justify-center gap-1.5 rounded-full border border-white/[0.14] bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl transition-all hover:bg-white/[0.17] active:scale-95 ${
+                className={`inline-flex max-w-[7.75rem] items-center justify-center gap-1.5 rounded-full ${surface.controlSurface} shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.18)] transition-all active:scale-95 ${
                   isDenseCard ? 'h-8 w-8 p-0' : 'h-9 px-3 text-[0.72rem]'
                 }`}
                 onClick={(event) => {
@@ -866,12 +911,14 @@ export function ClimateCard({
                   const low = Math.min(nextLow, nextHigh);
                   const high = Math.max(nextLow, nextHigh);
                   setLocalRange({ low, high });
+                  setLocalTargetPending(true);
                   onTargetRangeChange(low, high);
                   return;
                 }
                 if (localTarget !== undefined && onTemperatureChange) {
                   const next = clamp(localTarget - safeStep, safeMin, safeMax);
                   setLocalTarget(next);
+                  setLocalTargetPending(true);
                   onTemperatureChange(next);
                 }
               }}
@@ -896,12 +943,14 @@ export function ClimateCard({
                   const low = Math.min(nextLow, nextHigh);
                   const high = Math.max(nextLow, nextHigh);
                   setLocalRange({ low, high });
+                  setLocalTargetPending(true);
                   onTargetRangeChange(low, high);
                   return;
                 }
                 if (localTarget !== undefined && onTemperatureChange) {
                   const next = clamp(localTarget + safeStep, safeMin, safeMax);
                   setLocalTarget(next);
+                  setLocalTargetPending(true);
                   onTemperatureChange(next);
                 }
               }}
@@ -971,7 +1020,7 @@ export function ClimateCard({
           <div className="relative mt-auto flex min-w-0 flex-col items-center justify-center text-center">
             <button
               type="button"
-              className={`${isDenseCard ? 'h-10 w-10' : 'h-12 w-12'} flex items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.08] text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all hover:bg-white/[0.14] hover:text-white active:scale-95`}
+              className={`${isDenseCard ? 'h-10 w-10' : 'h-12 w-12'} ${surface.controlSurface} flex items-center justify-center rounded-full shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.16)] transition-all active:scale-95`}
               onClick={(event) => {
                 event.stopPropagation();
                 onPowerToggle?.();
@@ -980,7 +1029,7 @@ export function ClimateCard({
             >
               <Power size={isDenseCard ? 17 : 20} />
             </button>
-            <p className="mt-1.5 text-[0.68rem] text-white/54">
+            <p className={`mt-1.5 text-[0.68rem] ${tertiaryTextClass}`}>
               {currentTemp !== undefined ? `Ambiente ${currentTemp.toFixed(1)}${temperatureUnit}` : 'Clima spento'}
             </p>
           </div>
@@ -1098,19 +1147,19 @@ export function ClimateCard({
             aria-modal="true"
             aria-label="Scegli la funzionalita"
             tabIndex={-1}
-            className={`absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden ${cardRadiusClass} border border-white/[0.24] bg-[#0b101a]/28 bg-[linear-gradient(145deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.055)_38%,rgba(8,13,22,0.60)_100%)] ${isDenseCard ? 'p-2' : 'p-3'} shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_18px_44px_rgba(4,8,18,0.30)] backdrop-blur-[30px] backdrop-saturate-[1.45]`}
+            className={`absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden ${cardRadiusClass} border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-surface-glass-strong)] ${isDenseCard ? 'p-2' : 'p-3'} text-[color:var(--ui-text-primary)] shadow-[inset_0_1px_0_rgb(var(--ui-glass-highlight-rgb)/0.22),0_18px_44px_var(--ui-shadow)] backdrop-blur-[30px] backdrop-saturate-[1.45]`}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === 'Escape') setIsModeMenuOpen(false);
             }}
           >
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_68%_at_12%_0%,rgba(255,255,255,0.24),transparent_58%),radial-gradient(70%_72%_at_100%_100%,rgba(255,255,255,0.08),transparent_66%)]" />
-            <div aria-hidden="true" className="pointer-events-none absolute -left-[12%] -top-[34%] h-[62%] w-[72%] rotate-[-10deg] rounded-[50%] border border-white/[0.10] bg-white/[0.08] blur-[1px]" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_68%_at_12%_0%,rgb(var(--ui-glass-highlight-rgb)/0.18),transparent_58%)]" />
+            <div aria-hidden="true" className="pointer-events-none absolute -left-[12%] -top-[34%] h-[62%] w-[72%] rotate-[-10deg] rounded-[50%] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] blur-[1px]" />
             <div className={`${isDenseCard ? 'mb-1.5' : 'mb-2.5'} relative z-10 flex items-center justify-between gap-3`}>
-              <p className={`min-w-0 truncate font-semibold tracking-[-0.01em] text-white/94 ${isDenseCard ? 'text-xs' : 'text-sm'}`}>Scegli la funzionalità:</p>
+              <p className={`min-w-0 truncate font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)] ${isDenseCard ? 'text-xs' : 'text-sm'}`}>Scegli la funzionalità:</p>
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.22] bg-white/[0.11] text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_5px_16px_rgba(0,0,0,0.12)] backdrop-blur-xl transition hover:bg-white/[0.18] hover:text-white active:scale-95"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] shadow-[0_5px_16px_var(--ui-shadow-soft)] backdrop-blur-xl transition hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)] active:scale-95"
                 onClick={(event) => {
                   event.stopPropagation();
                   setIsModeMenuOpen(false);
@@ -1129,8 +1178,8 @@ export function ClimateCard({
                     type="button"
                     className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border px-2 text-center transition-all active:scale-[0.96] ${isDenseCard ? 'min-h-[2.6rem] py-1' : 'min-h-[3.25rem] py-2'} ${
                       active
-                        ? 'border-white/40 bg-white/[0.22] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.34),inset_0_-1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(0,0,0,0.16)] backdrop-blur-2xl'
-                        : 'border-white/[0.14] bg-white/[0.075] text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl hover:border-white/[0.24] hover:bg-white/[0.13] hover:text-white'
+                        ? 'border-[color:rgb(var(--ui-accent-rgb)/0.52)] bg-[color:rgb(var(--ui-accent-rgb)/0.18)] text-[color:var(--ui-text-primary)] shadow-[0_10px_24px_rgb(var(--ui-accent-rgb)/0.16)] backdrop-blur-2xl'
+                        : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] backdrop-blur-xl hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]'
                     }`}
                     onClick={(event) => {
                       event.stopPropagation();

@@ -1,0 +1,62 @@
+name: Segnala un problema
+description: Segnala un comportamento riproducibile di DomusOS
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Non inserire token, PIN, URL privati o dati della casa. Per vulnerabilità usa la segnalazione privata descritta in SECURITY.md.
+  - type: input
+    id: domusos_version
+    attributes:
+      label: Versione DomusOS
+      placeholder: 0.1.0-beta.6
+    validations:
+      required: true
+  - type: input
+    id: home_assistant_version
+    attributes:
+      label: Versione Home Assistant
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installazione
+      options:
+        - HACS
+        - Ambiente di sviluppo
+        - Installazione legacy
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Cosa succede
+      description: Descrivi risultato attuale e risultato atteso.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Passaggi per riprodurre
+      placeholder: |
+        1. Apri…
+        2. Seleziona…
+        3. Osserva…
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostica ripulita
+      description: Allega solo log o screenshot privi di segreti e dati personali.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verifiche
+      options:
+        - label: Ho verificato che non esista già una issue equivalente.
+          required: true
+        - label: Ho rimosso token, PIN, URL privati e dati personali.
+          required: true

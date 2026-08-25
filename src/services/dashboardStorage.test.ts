@@ -1,8 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DASHBOARD_LAYOUT_STORAGE_KEY } from './configBackup';
 import { loadDashboardLayout, saveDashboardLayout } from './dashboardStorage';
-import { WIDGET_SECRETS_STORAGE_KEY } from './widgetSecrets';
-import type { Widget } from '../types/dashboardModels';
+import {
+  LEGACY_WIDGET_SECRETS_STORAGE_KEY,
+  WIDGET_SECRETS_STORAGE_KEY,
+  getWidgetSecrets,
+  initializeWidgetSecrets,
+  setWidgetSecrets,
+  setWidgetSecretsRemembered,
+} from './widgetSecrets';
+import type { DashboardSection, Widget } from '../types/dashboardModels';
 
 function buildWidget(overrides: Partial<Widget>): Widget {
   return {
@@ -19,65 +26,125 @@ function buildWidget(overrides: Partial<Widget>): Widget {
 
 beforeEach(() => {
   window.localStorage.clear();
+  initializeWidgetSecrets(window.localStorage);
 });
 
 describe('dashboard storage widget secrets', () => {
-  it('stores widget codes outside the persisted layout and hydrates them on load', () => {
+  it('reports a successful layout write instead of failing silently', () => {
+    const result = saveDashboardLayout([], [], {}, {}, {}, 'demo');
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.savedAt).toBeGreaterThan(0);
+      expect(result.bytes).toBeGreaterThan(0);
+      expect(window.localStorage.getItem(result.storageKey)).not.toBeNull();
+    }
+  });
+
+  it('reports exhausted browser storage without throwing', () => {
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage full', 'QuotaExceededError');
+      });
+
+    try {
+      const result = saveDashboardLayout([], [], {}, {}, {}, 'demo');
+
+      expect(result).toMatchObject({ ok: false, code: 'quota_exceeded' });
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('preserves the compact geometry of an automatic grid stack', () => {
+    const section: DashboardSection = {
+      id: 'stack-auto',
+      kind: 'stack-grid',
+      stackColumnsMode: 'auto',
+      layout: { i: 'stack-auto', x: 0, y: 0, w: 1, h: 2 },
+    };
+
+    saveDashboardLayout([section], []);
+
+    const restored = loadDashboardLayout().sections[0];
+    expect(restored?.layout).toMatchObject({ w: 1, h: 2 });
+  });
+
+  it('preserves an explicit manual placement policy across reloads', () => {
+    saveDashboardLayout([], [buildWidget({ placementPolicy: 'manual', isFavorite: true })]);
+
+    const restored = loadDashboardLayout();
+
+    expect(restored.widgets[0]?.placementPolicy).toBe('manual');
+    expect(restored.widgets[0]?.parentSectionId).toBeUndefined();
+  });
+
+  it('keeps widget codes in memory by default and clears them on reload', () => {
     const widgets = [
-      buildWidget({
-        id: 'alarm-1',
-        alarmUnlockCode: '1234',
-        alarmLocalExtraCode: '99',
-      }),
+      buildWidget({ id: 'alarm-1' }),
       buildWidget({
         id: 'lock-1',
         kind: 'lock',
         title: 'Porta',
         entityId: 'lock.front_door',
-        lockCode: '2580',
       }),
     ];
+    setWidgetSecrets('alarm-1', { alarmUnlockCode: '1234', alarmLocalExtraCode: '99' });
+    setWidgetSecrets('lock-1', { lockCode: '2580' });
 
     saveDashboardLayout([], widgets);
 
     const storedLayout = JSON.parse(window.localStorage.getItem(DASHBOARD_LAYOUT_STORAGE_KEY) ?? '{}');
-    const storedSecrets = JSON.parse(window.localStorage.getItem(WIDGET_SECRETS_STORAGE_KEY) ?? '{}');
 
     expect(storedLayout.widgets[0].alarmUnlockCode).toBeUndefined();
     expect(storedLayout.widgets[0].alarmLocalExtraCode).toBeUndefined();
     expect(storedLayout.widgets[1].lockCode).toBeUndefined();
-    expect(storedSecrets.widgets['alarm-1'].alarmUnlockCode).toBe('1234');
-    expect(storedSecrets.widgets['alarm-1'].alarmLocalExtraCode).toBe('99');
-    expect(storedSecrets.widgets['lock-1'].lockCode).toBe('2580');
+    expect(window.localStorage.getItem(WIDGET_SECRETS_STORAGE_KEY)).toBeNull();
+    expect(getWidgetSecrets('alarm-1')).toMatchObject({ alarmUnlockCode: '1234', alarmLocalExtraCode: '99' });
 
-    const restored = loadDashboardLayout();
-    expect(restored.widgets.find((widget) => widget.id === 'alarm-1')?.alarmUnlockCode).toBe('1234');
-    expect(restored.widgets.find((widget) => widget.id === 'alarm-1')?.alarmLocalExtraCode).toBe('99');
-    expect(restored.widgets.find((widget) => widget.id === 'lock-1')?.lockCode).toBe('2580');
+    loadDashboardLayout();
+    expect(getWidgetSecrets('alarm-1')).toEqual({});
+    expect(getWidgetSecrets('lock-1')).toEqual({});
   });
 
-  it('migrates legacy widget codes from an old local layout into widget secrets storage', () => {
+  it('hydrates only codes explicitly remembered on this device', () => {
+    saveDashboardLayout([], [buildWidget({ id: 'alarm-remembered' })]);
+    setWidgetSecrets('alarm-remembered', { alarmUnlockCode: '4321', alarmLocalExtraCode: '77' });
+    setWidgetSecretsRemembered('alarm-remembered', true, window.localStorage);
+
+    initializeWidgetSecrets(window.localStorage);
+
+    expect(getWidgetSecrets('alarm-remembered')).toMatchObject({
+      alarmUnlockCode: '4321',
+      alarmLocalExtraCode: '77',
+    });
+  });
+
+  it('discards legacy widget codes and removes the v1 secret archive', () => {
+    window.localStorage.setItem(LEGACY_WIDGET_SECRETS_STORAGE_KEY, JSON.stringify({ widgets: { old: { lockCode: '9999' } } }));
     window.localStorage.setItem(
       DASHBOARD_LAYOUT_STORAGE_KEY,
       JSON.stringify({
         version: 14,
         sections: [],
         widgets: [
-          buildWidget({
+          {
+            ...buildWidget({
             id: 'alarm-legacy',
+            }),
             alarmUnlockCode: '4321',
             alarmLocalExtraCode: '77',
-          }),
+          },
         ],
       }),
     );
 
     const restored = loadDashboardLayout();
-    const storedSecrets = JSON.parse(window.localStorage.getItem(WIDGET_SECRETS_STORAGE_KEY) ?? '{}');
-
-    expect(restored.widgets.find((widget) => widget.id === 'alarm-legacy')?.alarmUnlockCode).toBe('4321');
-    expect(restored.widgets.find((widget) => widget.id === 'alarm-legacy')?.alarmLocalExtraCode).toBe('77');
-    expect(storedSecrets.widgets['alarm-legacy'].alarmUnlockCode).toBe('4321');
-    expect(storedSecrets.widgets['alarm-legacy'].alarmLocalExtraCode).toBe('77');
+    const restoredWidget = restored.widgets.find((widget) => widget.id === 'alarm-legacy') as unknown as Record<string, unknown>;
+    expect(restoredWidget.alarmUnlockCode).toBeUndefined();
+    expect(restoredWidget.alarmLocalExtraCode).toBeUndefined();
+    expect(getWidgetSecrets('alarm-legacy')).toEqual({});
+    expect(window.localStorage.getItem(LEGACY_WIDGET_SECRETS_STORAGE_KEY)).toBeNull();
   });
 });

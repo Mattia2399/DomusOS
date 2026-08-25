@@ -1,0 +1,438 @@
+import { useEffect, useRef, useState, type ChangeEvent, type ComponentType } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  ShieldCheck,
+  Upload,
+  Users,
+} from 'lucide-react';
+import { useDashboardSecurity } from '../../security/dashboardAccess';
+import {
+  applyDashboardUserDataPayload,
+  buildDashboardUserDataPayload,
+  parseDashboardUserDataPayload,
+} from '../../services/haUserConfigSync';
+import {
+  createDashboardRoleSharePayload,
+  normalizeHouseMembers,
+  parseDashboardRoleSharePayload,
+  resolveDashboardShareRoleKey,
+  resolveDashboardShareRoleLabel,
+  type HouseAccessView,
+  type ProfileHouseMember,
+} from './settingsHouseAccessModel';
+
+export type SettingsHouseAccessSectionProps = {
+  view: HouseAccessView;
+  onViewChange: (view: HouseAccessView) => void;
+  houseMembers: readonly ProfileHouseMember[];
+  currentUserName?: string;
+  currentUserRole?: string;
+};
+
+type Feedback = {
+  tone: 'idle' | 'success' | 'error';
+  text: string;
+};
+
+function getMemberInitials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('') || '?'
+  );
+}
+
+export function SettingsHouseAccessSection({
+  view,
+  onViewChange,
+  houseMembers,
+  currentUserName,
+  currentUserRole,
+}: SettingsHouseAccessSectionProps) {
+  const dashboardSecurity = useDashboardSecurity();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [shareFeedback, setShareFeedback] = useState<Feedback>({
+    tone: 'idle',
+    text: '',
+  });
+
+  const members = normalizeHouseMembers(houseMembers);
+  const visibleMembers = members.slice(0, 4);
+  const hiddenMembersCount = Math.max(0, members.length - visibleMembers.length);
+  const currentRoleKey = resolveDashboardShareRoleKey(currentUserRole);
+  const currentRoleLabel = resolveDashboardShareRoleLabel(currentRoleKey);
+  const canManageDashboardData = dashboardSecurity.can('edit_dashboard');
+
+  useEffect(() => {
+    if (shareFeedback.tone === 'idle' || !shareFeedback.text) {
+      return undefined;
+    }
+    const timerId = window.setTimeout(() => {
+      setShareFeedback({ tone: 'idle', text: '' });
+    }, 2600);
+    return () => window.clearTimeout(timerId);
+  }, [shareFeedback]);
+
+  const settingsGroupClass =
+    'overflow-hidden rounded-[1.35rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-soft)] shadow-[0_14px_34px_var(--ui-shadow-soft),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl';
+  const settingsRowClass =
+    'flex min-h-[3.45rem] w-full items-center gap-3 px-3.5 py-3 text-left sm:px-4';
+  const settingsDividerClass = 'border-t border-[color:var(--ui-separator)]';
+  const settingsIconClass =
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]';
+  const settingsTitleClass = 'text-sm font-medium text-[color:var(--ui-text-primary)]';
+  const settingsSubtitleClass =
+    'mt-0.5 text-[11px] leading-snug text-[color:var(--ui-text-secondary)]';
+  const subtleTextClass = 'text-[color:var(--ui-text-secondary)]';
+  const buttonMotionClass =
+    'transition-[filter,transform] duration-200 hover:brightness-[1.03] active:scale-[0.995] disabled:hover:brightness-100 disabled:active:scale-100';
+  const neutralButtonClass =
+    'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-primary)] shadow-[0_8px_18px_var(--ui-shadow)] hover:bg-[color:var(--ui-surface-glass)]';
+  const accentButtonClass =
+    'border-[color:rgb(var(--ui-accent-rgb)/0.55)] bg-[linear-gradient(140deg,rgb(var(--ui-accent-rgb)/0.34)_0%,rgb(var(--ui-accent-secondary-rgb)/0.24)_100%)] text-[color:var(--ui-text-primary)] shadow-[0_12px_24px_var(--ui-shadow-soft)] hover:brightness-105';
+
+  const renderSettingsIcon = (
+    Icon: ComponentType<{ size?: number; className?: string }>,
+  ) => (
+    <span className={settingsIconClass}>
+      <Icon size={16} />
+    </span>
+  );
+
+  const handleDownloadDashboardShare = () => {
+    if (
+      !canManageDashboardData ||
+      typeof window === 'undefined' ||
+      typeof document === 'undefined'
+    ) {
+      return;
+    }
+    try {
+      const data = buildDashboardUserDataPayload(window.localStorage);
+      const payload = createDashboardRoleSharePayload({
+        roleKey: currentRoleKey,
+        roleLabel: currentRoleLabel,
+        createdBy: currentUserName?.trim() || undefined,
+        data,
+      });
+      const safeTimestamp = payload.createdAt.replace(/[:.]/g, '-');
+      const blob = new Blob([JSON.stringify(payload)], {
+        type: 'application/json;charset=utf-8',
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `ha-dashboard-share-${currentRoleKey}-${safeTimestamp}.json`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+      setShareFeedback({ tone: 'success', text: 'File JSON esportato.' });
+    } catch {
+      setShareFeedback({
+        tone: 'error',
+        text: 'Impossibile esportare il file di condivisione.',
+      });
+    }
+  };
+
+  const handleDashboardShareImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !canManageDashboardData || typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const parsedSharePayload = parseDashboardRoleSharePayload(await file.text());
+      if (!parsedSharePayload) {
+        setShareFeedback({ tone: 'error', text: 'File JSON non valido o corrotto.' });
+        return;
+      }
+      if (parsedSharePayload.roleKey !== currentRoleKey) {
+        setShareFeedback({
+          tone: 'error',
+          text: `Questo file è per ruolo ${parsedSharePayload.roleLabel}. Utente corrente: ${currentRoleLabel}.`,
+        });
+        return;
+      }
+      const parsedDashboardPayload = parseDashboardUserDataPayload(parsedSharePayload.data);
+      if (!parsedDashboardPayload) {
+        setShareFeedback({
+          tone: 'error',
+          text: 'Il file non contiene una configurazione dashboard valida.',
+        });
+        return;
+      }
+      const applyResult = applyDashboardUserDataPayload(
+        parsedDashboardPayload,
+        window.localStorage,
+      );
+      if (!applyResult.changed) {
+        setShareFeedback({ tone: 'success', text: 'Configurazione già aggiornata.' });
+        return;
+      }
+      setShareFeedback({
+        tone: 'success',
+        text: 'Configurazione applicata. Ricarico la dashboard...',
+      });
+      window.setTimeout(() => window.location.reload(), 320);
+    } catch {
+      setShareFeedback({
+        tone: 'error',
+        text: 'Impossibile leggere il file selezionato.',
+      });
+    }
+  };
+
+  const backButton = (
+    <button
+      type="button"
+      onClick={() => onViewChange('overview')}
+      className={`mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--ui-text-secondary)] hover:text-[color:var(--ui-text-primary)] ${buttonMotionClass}`}
+    >
+      <ChevronLeft size={16} />
+      Casa e accessi
+    </button>
+  );
+
+  if (view === 'members') {
+    return (
+      <section className="pb-6">
+        {backButton}
+        <h4 className="text-base font-semibold text-[color:var(--ui-text-primary)]">
+          Membri della casa
+        </h4>
+        <p className={`mt-1 text-xs ${subtleTextClass}`}>
+          Account e persone rilevate dalla configurazione Home Assistant.
+        </p>
+
+        {members.length > 0 ? (
+          <div className={`mt-4 ${settingsGroupClass}`}>
+            {members.map((member, index) => (
+              <div key={member.id}>
+                {index > 0 ? <div className={settingsDividerClass} /> : null}
+                <div className={settingsRowClass}>
+                  {member.avatarUrl ? (
+                    <img
+                      src={member.avatarUrl}
+                      alt={`Membro ${member.name}`}
+                      className="h-10 w-10 shrink-0 rounded-full border-2 border-[color:var(--ui-border-strong)] object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] text-xs font-semibold text-[color:var(--ui-text-primary)]">
+                      {getMemberInitials(member.name)}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">
+                      {member.name}
+                    </p>
+                    <p className={settingsSubtitleClass}>
+                      {member.isCurrent ? 'Account corrente' : 'Utente registrato'}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ui-text-secondary)]">
+                    {member.roleLabel?.trim() || 'Membro'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className={`mt-4 ${settingsGroupClass} px-4 py-6 text-center text-xs ${subtleTextClass}`}>
+            Nessun membro disponibile.
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (view === 'guest') {
+    return (
+      <section className="pb-6">
+        {backButton}
+        <div className={`${settingsGroupClass} px-5 py-6 text-center`}>
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]">
+            <Clock3 size={21} />
+          </span>
+          <h4 className="mt-4 text-base font-semibold text-[color:var(--ui-text-primary)]">
+            Accessi temporanei in preparazione
+          </h4>
+          <p className={`mx-auto mt-2 max-w-md text-xs leading-5 ${subtleTextClass}`}>
+            La beta non genera link ospite: un accesso sicuro richiede credenziali Home Assistant
+            verificabili e revocabili dal server. La funzione verrà attivata quando sarà disponibile
+            questa integrazione.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-medium text-[color:var(--ui-text-secondary)]">
+            <ShieldCheck size={14} />
+            Nessun accesso simulato o basato soltanto sull’URL
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === 'share') {
+    return (
+      <section className="pb-6">
+        {backButton}
+        <h4 className="text-base font-semibold text-[color:var(--ui-text-primary)]">
+          Condivisione dashboard
+        </h4>
+        <p className={`mt-2 text-xs ${subtleTextClass}`}>
+          Esporta un file JSON e importalo su un altro dispositivo associato allo stesso ruolo.
+          Token, passkey e codici sensibili non vengono inclusi.
+        </p>
+        <p className={`mt-2 text-[11px] ${subtleTextClass}`}>
+          Ruolo corrente:{' '}
+          <span className="font-semibold text-[color:var(--ui-text-primary)]">
+            {currentRoleLabel}
+          </span>
+        </p>
+
+        {canManageDashboardData ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={handleDownloadDashboardShare}
+                className={`min-h-[2.75rem] rounded-xl border px-3 py-2.5 text-xs font-semibold ${buttonMotionClass} ${accentButtonClass}`}
+              >
+                Scarica JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => importInputRef.current?.click()}
+                className={`min-h-[2.75rem] rounded-xl border px-3 py-2.5 text-xs font-semibold ${buttonMotionClass} ${neutralButtonClass}`}
+              >
+                Importa JSON
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json,text/plain"
+                className="hidden"
+                onChange={(event) => {
+                  void handleDashboardShareImport(event);
+                }}
+              />
+            </div>
+            <div className={`mt-3 rounded-xl px-3 py-2.5 text-[11px] ${subtleTextClass}`}>
+              L’importazione applica la configurazione locale e ricarica la dashboard.
+            </div>
+          </>
+        ) : (
+          <div className={`mt-4 ${settingsGroupClass} px-4 py-4 text-xs ${subtleTextClass}`}>
+            Servono i permessi di modifica della dashboard per esportare o importare configurazioni.
+          </div>
+        )}
+
+        {shareFeedback.text ? (
+          <p
+            className={`mt-3 text-xs ${
+              shareFeedback.tone === 'error' ? 'text-rose-500' : subtleTextClass
+            }`}
+          >
+            {shareFeedback.text}
+          </p>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section className="pb-6">
+      <p className={`text-xs leading-5 ${subtleTextClass}`}>
+        Persone, accessi temporanei e trasferimento della configurazione.
+      </p>
+
+      <div className={`mt-4 ${settingsGroupClass}`}>
+        <button
+          type="button"
+          onClick={() => onViewChange('members')}
+          className={`${settingsRowClass} ${buttonMotionClass}`}
+        >
+          {renderSettingsIcon(Users)}
+          <div className="min-w-0 flex-1">
+            <p className={settingsTitleClass}>Membri</p>
+            <p className={settingsSubtitleClass}>
+              {members.length > 0
+                ? `${members.length} ${members.length === 1 ? 'persona disponibile' : 'persone disponibili'}`
+                : 'Nessun membro disponibile'}
+            </p>
+          </div>
+          {visibleMembers.length > 0 ? (
+            <div className="hidden items-center sm:flex">
+              {visibleMembers.map((member, index) =>
+                member.avatarUrl ? (
+                  <img
+                    key={member.id}
+                    src={member.avatarUrl}
+                    alt=""
+                    className={`h-8 w-8 rounded-full border-2 border-[color:var(--ui-border-strong)] object-cover ${
+                      index === 0 ? '' : '-ml-2'
+                    }`}
+                  />
+                ) : (
+                  <span
+                    key={member.id}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] text-[10px] font-semibold text-[color:var(--ui-text-primary)] ${
+                      index === 0 ? '' : '-ml-2'
+                    }`}
+                  >
+                    {getMemberInitials(member.name)}
+                  </span>
+                ),
+              )}
+              {hiddenMembersCount > 0 ? (
+                <span className="-ml-2 flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] px-1 text-[10px] font-semibold text-[color:var(--ui-text-primary)]">
+                  +{hiddenMembersCount}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <ChevronRight size={16} className={subtleTextClass} />
+        </button>
+
+        <div className={settingsDividerClass} />
+
+        <button
+          type="button"
+          onClick={() => onViewChange('guest')}
+          className={`${settingsRowClass} ${buttonMotionClass}`}
+        >
+          {renderSettingsIcon(Clock3)}
+          <div className="min-w-0 flex-1">
+            <p className={settingsTitleClass}>Accessi ospiti</p>
+            <p className={settingsSubtitleClass}>In preparazione per una versione successiva.</p>
+          </div>
+          <ChevronRight size={16} className={subtleTextClass} />
+        </button>
+
+        <div className={settingsDividerClass} />
+
+        <button
+          type="button"
+          onClick={() => onViewChange('share')}
+          className={`${settingsRowClass} ${buttonMotionClass}`}
+        >
+          {renderSettingsIcon(Upload)}
+          <div className="min-w-0 flex-1">
+            <p className={settingsTitleClass}>Condividi dashboard</p>
+            <p className={settingsSubtitleClass}>Esporta o importa una configurazione JSON.</p>
+          </div>
+          <ChevronRight size={16} className={subtleTextClass} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export default SettingsHouseAccessSection;

@@ -11,6 +11,9 @@ export type WidgetKind =
   | 'cover'
   | 'members';
 export type SectionKind = 'greeting' | 'weather' | 'scenes' | 'stack-vertical' | 'stack-horizontal' | 'stack-grid';
+export type WidgetCatalogDestination =
+  | { type: 'canvas' }
+  | { type: 'stack'; sectionId: string };
 export type WeatherLayoutMode = 'auto' | 'card' | 'chip';
 export type WeatherUnit = 'C' | 'F';
 export type ForecastDensity = 'comfortable' | 'compact';
@@ -104,12 +107,12 @@ export type Widget = {
   kind: WidgetKind;
   title: string;
   entityId: string;
+  /** Explicit authority for this card. Mock sources must never reach Home Assistant APIs. */
+  dataSource?: 'ha' | 'mock';
   widgets?: MicroWidget[];
   isFavorite?: boolean;
-  alarmUnlockCode?: string;
-  alarmLocalExtraCode?: string;
+  placementPolicy?: 'manual' | 'favorites-auto';
   alarmRequireAuthToDisarm?: boolean;
-  lockCode?: string;
   lockRequireAuthToUnlock?: boolean;
   activityLogLimit?: number;
   activityLogHours?: number;
@@ -117,6 +120,8 @@ export type Widget = {
   sensorStatusEntityId?: string;
   sensorConnectionEntityId?: string;
   sensorDisplayPrecision?: number;
+  lockBatteryEntityId?: string;
+  lockConnectionEntityId?: string;
   switchConsumptionEntityId?: string;
   vacuumFanSpeed?: string;
   vacuumMapUrl?: string;
@@ -185,8 +190,30 @@ export const ENTITY_OPTIONS: Record<WidgetKind, string[]> = {
     'media_player.max_compat_standby',
   ],
   alarm: ['alarm_control_panel.home_alarm'],
-  vacuum: ['vacuum.demo_robot', 'vacuum.roborock_s8', 'vacuum.living_room_robot'],
-  lock: ['lock.front_door', 'lock.garage_entry'],
+  vacuum: [
+    'vacuum.demo_robot',
+    'vacuum.demo_robot_cleaning',
+    'vacuum.demo_robot_paused',
+    'vacuum.demo_robot_returning',
+    'vacuum.demo_robot_idle',
+    'vacuum.demo_robot_error',
+    'vacuum.demo_robot_unavailable',
+    'vacuum.roborock_s8',
+    'vacuum.living_room_robot',
+  ],
+  lock: [
+    'lock.front_door',
+    'lock.garage_entry',
+    'lock.max_compat_locked',
+    'lock.max_compat_unlocked',
+    'lock.max_compat_locking',
+    'lock.max_compat_unlocking',
+    'lock.max_compat_open',
+    'lock.max_compat_opening',
+    'lock.max_compat_jammed',
+    'lock.max_compat_unavailable',
+    'lock.max_compat_unknown',
+  ],
   cover: [
     'cover.living_room_shutter',
     'cover.kitchen_blind',
@@ -239,6 +266,7 @@ export const INITIAL_WIDGETS: Widget[] = [
     kind: 'sensor',
     title: 'Nest Wifi',
     entityId: 'sensor.nest_wifi_download',
+    dataSource: 'mock',
     status: 'Connected',
     isOn: true,
     value: 97,
@@ -250,6 +278,7 @@ export const INITIAL_WIDGETS: Widget[] = [
     kind: 'light',
     title: 'Lamp',
     entityId: 'light.living_room_lamp',
+    dataSource: 'mock',
     status: 'Opening',
     isOn: true,
     value: 62,
@@ -261,6 +290,7 @@ export const INITIAL_WIDGETS: Widget[] = [
     kind: 'climate',
     title: 'Air Conditioner',
     entityId: 'climate.air_conditioner',
+    dataSource: 'mock',
     status: 'Opening',
     isOn: true,
     value: 24,
@@ -272,6 +302,7 @@ export const INITIAL_WIDGETS: Widget[] = [
     kind: 'camera',
     title: 'Front Door Cam',
     entityId: 'camera.front_door',
+    dataSource: 'mock',
     status: 'Online',
     isOn: true,
     layout: { i: 'camera.front_door', x: 0, y: 2, w: 2, h: 4 },
@@ -281,6 +312,7 @@ export const INITIAL_WIDGETS: Widget[] = [
     kind: 'sensor',
     title: 'Humidity Sensor',
     entityId: 'sensor.living_room_humidity',
+    dataSource: 'mock',
     status: 'Tracking',
     isOn: true,
     value: 48,

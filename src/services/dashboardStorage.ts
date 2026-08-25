@@ -29,9 +29,15 @@ import {
   persistWidgetSecretsFromWidgets,
   stripWidgetSecretsFromWidgets,
 } from './widgetSecrets';
+import type { DashboardRuntimeMode } from '../security/dashboardAccess';
+import { getDashboardLayoutStorageKey } from './dashboardRuntime';
+import {
+  hydrateWidgetRuntimeDefaults,
+  stripWidgetRuntimeState,
+} from './dashboardPersistenceProjection';
 
-const STORAGE_KEY = 'ha.dashboard.builder.layout.v1';
-const STORAGE_VERSION = 14;
+export const DASHBOARD_LAYOUT_STORAGE_VERSION = 14;
+const STORAGE_VERSION = DASHBOARD_LAYOUT_STORAGE_VERSION;
 
 const VALID_SECTION_KINDS: SectionKind[] = [
   'greeting',
@@ -62,6 +68,46 @@ type StoredLayout = {
   responsiveLayouts?: DashboardResponsiveLayouts;
 };
 
+export type DashboardLayoutSaveErrorCode =
+  | 'storage_unavailable'
+  | 'server_unavailable'
+  | 'server_unauthorized'
+  | 'server_unsupported'
+  | 'server_conflict'
+  | 'migration_required'
+  | 'quota_exceeded'
+  | 'security_error'
+  | 'serialization_error'
+  | 'unknown';
+
+export type DashboardLayoutSaveResult =
+  | {
+      ok: true;
+      savedAt: number;
+      storageKey: string;
+      bytes: number;
+    }
+  | {
+      ok: false;
+      attemptedAt: number;
+      code: DashboardLayoutSaveErrorCode;
+    };
+
+export function classifyDashboardStorageError(error: unknown): DashboardLayoutSaveErrorCode {
+  if (error instanceof DOMException) {
+    if (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      return 'quota_exceeded';
+    }
+    if (error.name === 'SecurityError') {
+      return 'security_error';
+    }
+  }
+  if (error instanceof TypeError) {
+    return 'serialization_error';
+  }
+  return 'unknown';
+}
+
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -84,7 +130,8 @@ function normalizeBreakpointLayoutOverride(
   const h = toPositiveInt(source.h);
   const hOn = toPositiveInt(source.hOn);
   const hOff = toPositiveInt(source.hOff);
-  if (!w && !h && !hOn && !hOff) {
+  const autoExpand = typeof source.autoExpand === 'boolean' ? source.autoExpand : undefined;
+  if (!w && !h && !hOn && !hOff && autoExpand === undefined) {
     return undefined;
   }
   return {
@@ -92,6 +139,7 @@ function normalizeBreakpointLayoutOverride(
     ...(h ? { h } : null),
     ...(hOn ? { hOn } : null),
     ...(hOff ? { hOff } : null),
+    ...(autoExpand !== undefined ? { autoExpand } : null),
   };
 }
 
@@ -970,7 +1018,9 @@ function normalizeSection(section: DashboardSection, index: number): DashboardSe
       ? ROOT_CANVAS_COLS
       : section.kind === 'weather'
         ? WEATHER_SECTION_CHIP_COLS
-        : 2;
+        : section.kind === 'stack-grid' && section.stackColumnsMode !== 'manual'
+          ? 1
+          : 2;
   const minHeight =
     section.kind === 'greeting'
       ? (section.showWeather ?? false)
@@ -980,7 +1030,9 @@ function normalizeSection(section: DashboardSection, index: number): DashboardSe
         ? WEATHER_SECTION_BASE_ROWS
         : section.kind === 'scenes'
           ? SCENES_SECTION_ROWS
-          : ROOT_CANVAS_ROW_UNITS * 2;
+          : section.kind === 'stack-grid'
+            ? 1
+            : ROOT_CANVAS_ROW_UNITS * 2;
   const normalizedHeight = Math.max(minHeight, layout.h);
   const safeW = Math.min(ROOT_CANVAS_COLS, Math.max(minWidth, layout.w));
   const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
@@ -1056,6 +1108,7 @@ function normalizeWidget(widget: Widget, index: number, isRootWidget: boolean, p
 
   return {
     ...widgetWithoutSensorDisplayPrecision,
+    dataSource: widget.dataSource === 'mock' ? 'mock' : 'ha',
     ...(sensorDisplayPrecision !== undefined ? { sensorDisplayPrecision } : null),
     layout: {
       ...normalizedLayout,
@@ -1077,7 +1130,7 @@ function safeParse(raw: string | null): StoredLayout | null {
   }
 }
 
-export function loadDashboardLayout(): {
+export function loadDashboardLayout(runtimeMode: DashboardRuntimeMode = 'real'): {
   sections: DashboardSection[];
   widgets: Widget[];
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
@@ -1094,7 +1147,7 @@ export function loadDashboardLayout(): {
     };
   }
 
-  const parsed = safeParse(window.localStorage.getItem(STORAGE_KEY));
+  const parsed = safeParse(window.localStorage.getItem(getDashboardLayoutStorageKey(runtimeMode)));
   if (!parsed) {
     return {
       sections: INITIAL_SECTIONS,
@@ -1141,14 +1194,19 @@ export function loadDashboardLayout(): {
       const parentSection =
         typeof widget.parentSectionId === 'string' ? sectionById.get(widget.parentSectionId) : undefined;
       const isRootWidget = !parentSection;
-      const next = normalizeWidget(widget, index, isRootWidget, parentSection);
+      const next = normalizeWidget(hydrateWidgetRuntimeDefaults(widget), index, isRootWidget, parentSection);
       return {
         ...next,
         parentSectionId: isRootWidget ? undefined : parentSection?.id,
       };
     });
-  migrateLegacyWidgetSecretsFromWidgets(normalizedWidgets, window.localStorage);
-  const widgets = mergeWidgetSecretsIntoWidgets(normalizedWidgets, window.localStorage);
+  if (runtimeMode === 'real') {
+    migrateLegacyWidgetSecretsFromWidgets(normalizedWidgets, window.localStorage);
+  }
+  const widgets =
+    runtimeMode === 'real'
+      ? mergeWidgetSecretsIntoWidgets(normalizedWidgets, window.localStorage)
+      : stripWidgetSecretsFromWidgets(normalizedWidgets);
 
   if (!sections.length && !widgets.length) {
     return {
@@ -1179,31 +1237,54 @@ export function saveDashboardLayout(
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides = {},
   responsiveLayouts: DashboardResponsiveLayouts = {},
   widgetLayoutOverrides: WidgetLayoutOverrides = {},
-) {
+  runtimeMode: DashboardRuntimeMode = 'real',
+): DashboardLayoutSaveResult {
+  const attemptedAt = Date.now();
   if (typeof window === 'undefined') {
-    return;
+    return {
+      ok: false,
+      attemptedAt,
+      code: 'storage_unavailable',
+    };
   }
 
   const payload: StoredLayout = {
     version: STORAGE_VERSION,
     sections,
-    widgets: stripWidgetSecretsFromWidgets(widgets),
+    widgets: stripWidgetSecretsFromWidgets(
+      widgets.map((widget) => stripWidgetRuntimeState(widget, true)),
+    ),
     widgetTypeLayoutOverrides: normalizeWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides),
     widgetLayoutOverrides: normalizeWidgetLayoutOverrides(widgetLayoutOverrides),
     responsiveLayouts: normalizeResponsiveLayouts(responsiveLayouts),
   };
 
+  const storageKey = getDashboardLayoutStorageKey(runtimeMode);
+
   try {
-    persistWidgetSecretsFromWidgets(widgets, window.localStorage);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore storage failures
+    if (runtimeMode === 'real') {
+      persistWidgetSecretsFromWidgets(widgets, window.localStorage);
+    }
+    const serializedPayload = JSON.stringify(payload);
+    window.localStorage.setItem(storageKey, serializedPayload);
+    return {
+      ok: true,
+      savedAt: Date.now(),
+      storageKey,
+      bytes: new Blob([serializedPayload]).size,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      attemptedAt,
+      code: classifyDashboardStorageError(error),
+    };
   }
 }
 
-export function clearDashboardLayout() {
+export function clearDashboardLayout(runtimeMode: DashboardRuntimeMode = 'real') {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(getDashboardLayoutStorageKey(runtimeMode));
 }

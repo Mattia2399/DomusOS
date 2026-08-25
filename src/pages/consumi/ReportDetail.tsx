@@ -23,7 +23,7 @@ export function ReportDetail({
   onBack: () => void;
 }) {
   const left = (
-    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.14)_0%,transparent_72%)]">
+    <div className="relative h-full w-full overflow-hidden rounded-[1.5rem] bg-[#07131f] bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.2)_0%,#07131f_74%)]">
       <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.07)_0%,rgba(255,255,255,0.02)_44%,rgba(15,23,42,0.22)_100%)]" />
 
       <motion.div
@@ -41,21 +41,21 @@ export function ReportDetail({
   );
 
   const right = (
-    <div className="rounded-[2rem] border border-white/5 bg-white/5 p-5 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_34px_rgba(0,0,0,0.26)]">
-      <p className="mb-4 text-sm font-medium uppercase tracking-[0.14em] text-white/55">PDF Disponibili</p>
+    <div className="rounded-[2rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-bg-elevated)] p-5 backdrop-blur-2xl shadow-[var(--ui-shadow-card)]">
+      <p className="mb-4 text-sm font-medium uppercase tracking-[0.14em] text-[color:var(--ui-text-tertiary)]">PDF Disponibili</p>
       <div className="space-y-3">
         {PDF_REPORTS.map((report) => (
           <button
             key={report.id}
             type="button"
-            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10"
+            className="w-full rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-4 py-3 text-left transition-colors hover:bg-[color:var(--ui-fill-secondary)]"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-white">{report.name}</p>
-                <p className="text-xs text-white/50">{report.date}</p>
+                <p className="text-sm font-medium text-[color:var(--ui-text-primary)]">{report.name}</p>
+                <p className="text-xs text-[color:var(--ui-text-tertiary)]">{report.date}</p>
               </div>
-              <Download size={16} className="text-white/70" />
+              <Download size={16} className="text-[color:var(--ui-text-secondary)]" />
             </div>
           </button>
         ))}

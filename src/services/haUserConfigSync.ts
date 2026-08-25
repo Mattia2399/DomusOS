@@ -3,9 +3,18 @@ import {
   isBackupExcludedStorageKey,
   sanitizeDashboardLayoutValue,
 } from './configBackup';
+import {
+  DASHBOARD_RUNTIME_MODE_STORAGE_KEY,
+  DEMO_DASHBOARD_RECOVERY_STORAGE_KEY,
+  REAL_DASHBOARD_RECOVERY_STORAGE_KEY,
+} from './dashboardRuntime';
 
 const DASHBOARD_STORAGE_PREFIX = 'ha.dashboard.';
 const EXCLUDED_SYNC_KEYS = new Set([
+  // Runtime selection and Demo workspace are local to this browser.
+  DASHBOARD_RUNTIME_MODE_STORAGE_KEY,
+  REAL_DASHBOARD_RECOVERY_STORAGE_KEY,
+  DEMO_DASHBOARD_RECOVERY_STORAGE_KEY,
   // Device-specific toggle, should not leak across phones/tablets.
   'ha.dashboard.assistant.mic.enabled.v1',
   // Local dashboard fallback PIN, device/browser-bound.
@@ -14,6 +23,9 @@ const EXCLUDED_SYNC_KEYS = new Set([
   'ha.dashboard.security.biometricCredentialId',
 ]);
 const EXCLUDED_SYNC_KEY_PREFIXES = [
+  'ha.dashboard.demo.',
+  // The HA-backed document cache is not a second source of truth.
+  'ha.dashboard.cache.',
   // WebAuthn credential ids are origin/device-bound.
   'ha.dashboard.deviceAuth.credentialId.',
 ];

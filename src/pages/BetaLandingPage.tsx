@@ -1,27 +1,38 @@
-import { ActionSections } from '../components/landing/Action';
+import { BentoFeatures } from '../components/landing/BentoFeatures';
+import { Editions } from '../components/landing/Editions';
 import { FAQ } from '../components/landing/FAQ';
-import { Features } from '../components/landing/Features';
+import { FinalCTA } from '../components/landing/FinalCTA';
 import { Footer } from '../components/landing/Footer';
 import { Header } from '../components/landing/Header';
 import { Hero } from '../components/landing/Hero';
 import { InteractiveDemo } from '../components/landing/InteractiveDemo';
-import { SocialProof } from '../components/landing/SocialProof';
-import { Technical } from '../components/landing/Technical';
-import { UserStories } from '../components/landing/UserStories';
+import { PlansMobile } from '../components/landing/PlansMobile';
+import { Pricing } from '../components/landing/Pricing';
+import { TrustBar } from '../components/landing/TrustBar';
+import { useIsDesktop } from '../components/landing/useIsDesktop';
 import './BetaLandingPage.css';
 
 export function BetaLandingPage() {
+  const isDesktop = useIsDesktop();
+
   return (
-    <main className="landing-site min-h-screen overflow-x-hidden bg-[#05070d] text-white selection:bg-cyan-500/30">
+    <main className="landing-site dashboard-theme-dark min-h-screen overflow-x-hidden bg-[#05070d] text-white selection:bg-cyan-500/30">
       <Header />
       <Hero />
-      <Features />
+      <TrustBar />
+      <BentoFeatures />
       <InteractiveDemo />
-      <UserStories />
-      <Technical />
-      <SocialProof />
+      {/* Desktop: two full sections. Mobile: one combined tabbed card (Gratis/Pro). */}
+      {isDesktop ? (
+        <>
+          <Editions />
+          <Pricing />
+        </>
+      ) : (
+        <PlansMobile />
+      )}
       <FAQ />
-      <ActionSections />
+      <FinalCTA />
       <Footer />
     </main>
   );

@@ -1,32 +1,31 @@
 import React from 'react';
 import {
-  BarChart3,
   ChevronDown,
-  DoorOpen,
-  HelpCircle,
-  Home,
-  LayoutGrid,
-  Lightbulb,
   LogOut,
-  MonitorSmartphone,
-  Music2,
   PencilLine,
   Plus,
-  Rocket,
   Settings,
-  ShieldCheck,
-  Thermometer,
 } from 'lucide-react';
-import type { SidebarQuickPath, SidebarQuickPathIconKey } from '../../hooks/useProfileSettings';
+import type { SidebarQuickPath } from '../../hooks/useProfileSettings';
 import type { HaConnectionStatus } from '../../hooks/useHaLiveConnection';
-import { isPathActiveForCurrentLocation } from '../../utils/navigationPathMatch';
+import {
+  getDashboardNavigationIcon,
+  isDashboardNavigationEntryActive,
+  PRIMARY_DASHBOARD_ROUTE_IDS,
+  resolveDashboardNavigationEntries,
+  TOOL_DASHBOARD_ROUTE_IDS,
+} from './dashboardNavigation';
+import { DashboardProfileAvatar } from './DashboardProfileAvatar';
 
 type MobileSidebarDrawerProps = {
   isOpen: boolean;
   isEditMode: boolean;
+  isEditTourActive?: boolean;
   canToggleEditMode: boolean;
   quickPaths: SidebarQuickPath[];
   selectedPathId?: string | null;
+  activeRoute?: string;
+  isSettingsActive?: boolean;
   userAvatarUrl?: string;
   userAvatarAlt?: string;
   userEmail?: string;
@@ -37,66 +36,19 @@ type MobileSidebarDrawerProps = {
   onOpenSettings: () => void;
   onDisconnectHomeAssistant: () => void | Promise<void>;
   onClose: () => void;
+  onPrefetchRoute?: (path: string) => void;
+  onPrefetchEditMode?: () => void;
 };
-
-const PATH_ICONS: Record<SidebarQuickPathIconKey, typeof LayoutGrid> = {
-  dashboard: LayoutGrid,
-  devices: MonitorSmartphone,
-  settings: Settings,
-  automation: Rocket,
-  security: ShieldCheck,
-  help: HelpCircle,
-  home: Home,
-  rooms: DoorOpen,
-  chart: BarChart3,
-  light: Lightbulb,
-  climate: Thermometer,
-  media: Music2,
-};
-
-const DEFAULT_MOBILE_SIDEBAR_PATHS: SidebarQuickPath[] = [
-  { id: 'mobile-dashboard', label: 'Dashboard', path: '/home', icon: 'home' },
-  { id: 'mobile-rooms', label: 'Stanze', path: '/rooms', icon: 'rooms' },
-  { id: 'mobile-security', label: 'Sicurezza', path: '/security', icon: 'security' },
-  { id: 'mobile-consumi', label: 'Consumi', path: '/consumi', icon: 'chart' },
-  { id: 'mobile-appgallery', label: 'App Gallery', path: '/appgallery', icon: 'dashboard' },
-  { id: 'mobile-automations', label: 'Automazioni', path: '/automations', icon: 'automation' },
-];
-
-type MobileSidebarRouteConfig = Pick<SidebarQuickPath, 'id' | 'label' | 'path' | 'icon'>;
-
-const MOBILE_HOME_PATH_CONFIG: MobileSidebarRouteConfig[] = [
-  { id: 'mobile-home-dashboard', label: 'Dashboard', path: '/home', icon: 'home' },
-  { id: 'mobile-home-rooms', label: 'Stanze', path: '/rooms', icon: 'rooms' },
-  { id: 'mobile-home-security', label: 'Sicurezza', path: '/security', icon: 'security' },
-  { id: 'mobile-home-consumi', label: 'Consumi', path: '/consumi', icon: 'chart' },
-];
-
-const MOBILE_TOOLS_PATH_CONFIG: MobileSidebarRouteConfig[] = [
-  { id: 'mobile-tools-automations', label: 'Automazioni', path: '/automations', icon: 'automation' },
-  { id: 'mobile-tools-appgallery', label: 'App Gallery', path: '/appgallery', icon: 'dashboard' },
-];
-
-const DEFAULT_PROFILE_AVATAR_URL =
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop';
-
-function normalizeMobileSidebarPath(path: string) {
-  const trimmed = path.trim().toLowerCase();
-  if (!trimmed) {
-    return '/';
-  }
-  if (trimmed.length > 1 && trimmed.endsWith('/')) {
-    return trimmed.slice(0, -1);
-  }
-  return trimmed;
-}
 
 export function MobileSidebarDrawer({
   isOpen,
   isEditMode,
+  isEditTourActive = false,
   canToggleEditMode,
   quickPaths,
   selectedPathId = null,
+  activeRoute,
+  isSettingsActive = false,
   userAvatarUrl,
   userAvatarAlt,
   userEmail,
@@ -107,41 +59,20 @@ export function MobileSidebarDrawer({
   onOpenSettings,
   onDisconnectHomeAssistant,
   onClose,
+  onPrefetchRoute,
+  onPrefetchEditMode,
 }: MobileSidebarDrawerProps) {
   const drawerRef = React.useRef<HTMLElement | null>(null);
-  const [avatarSrc, setAvatarSrc] = React.useState(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
+  const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = React.useRef<HTMLElement | null>(null);
   const [isAccountChipOpen, setIsAccountChipOpen] = React.useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
-  const effectiveQuickPaths = quickPaths.length > 0 ? quickPaths : DEFAULT_MOBILE_SIDEBAR_PATHS;
-  const quickPathByNormalizedPath = new Map(
-    effectiveQuickPaths.map((entry) => [normalizeMobileSidebarPath(entry.path), entry] as const),
-  );
-  const resolveConfiguredEntries = (configEntries: MobileSidebarRouteConfig[]) =>
-    configEntries.map((configEntry) => {
-      const matchedEntry = quickPathByNormalizedPath.get(normalizeMobileSidebarPath(configEntry.path));
-      return matchedEntry
-        ? {
-            ...matchedEntry,
-            label: configEntry.label,
-            icon: configEntry.icon,
-          }
-        : configEntry;
-    });
   const routeGroups = [
-    { id: 'home', label: 'Casa', entries: resolveConfiguredEntries(MOBILE_HOME_PATH_CONFIG) },
-    { id: 'tools', label: 'Strumenti', entries: resolveConfiguredEntries(MOBILE_TOOLS_PATH_CONFIG) },
+    { id: 'home', label: 'Casa', entries: resolveDashboardNavigationEntries(quickPaths, PRIMARY_DASHBOARD_ROUTE_IDS) },
+    { id: 'tools', label: 'Strumenti', entries: resolveDashboardNavigationEntries(quickPaths, TOOL_DASHBOARD_ROUTE_IDS) },
   ];
   const displayUserName = userAvatarAlt?.trim() || 'Utente';
   const displayUserEmail = userEmail?.trim() || 'Email non disponibile';
-  const statusDotClass =
-    haStatus === 'connected'
-      ? 'bg-emerald-400 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]'
-      : haStatus === 'connecting'
-        ? 'bg-amber-300 animate-pulse shadow-[0_0_0_2px_rgba(245,158,11,0.2)]'
-        : haStatus === 'error'
-          ? 'bg-rose-400 shadow-[0_0_0_2px_rgba(244,63,94,0.22)]'
-          : 'bg-white/45 shadow-[0_0_0_2px_rgba(255,255,255,0.14)]';
-
   const handlePathClick = (entry: SidebarQuickPath) => {
     onPathClick(entry);
     onClose();
@@ -172,10 +103,6 @@ export function MobileSidebarDrawer({
   };
 
   React.useEffect(() => {
-    setAvatarSrc(userAvatarUrl ?? DEFAULT_PROFILE_AVATAR_URL);
-  }, [userAvatarUrl]);
-
-  React.useEffect(() => {
     if (!isOpen) {
       setIsAccountChipOpen(false);
       setIsLogoutConfirmOpen(false);
@@ -183,16 +110,63 @@ export function MobileSidebarDrawer({
   }, [isOpen]);
 
   React.useEffect(() => {
+    if (!isOpen || !isEditTourActive) return undefined;
+    const timer = window.setTimeout(() => {
+      editButtonRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [isEditTourActive, isOpen]);
+
+  React.useEffect(() => {
     if (!isOpen) {
       return;
     }
-    const handleEscape = (event: KeyboardEvent) => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => {
+      drawerRef.current?.querySelector<HTMLElement>('button:not([disabled]), a[href]')?.focus();
+    }, 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
+        return;
+      }
+      if (event.key !== 'Tab') {
+        return;
+      }
+      const drawer = drawerRef.current;
+      if (!drawer) {
+        return;
+      }
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [isOpen, onClose]);
 
   return (
@@ -200,50 +174,55 @@ export function MobileSidebarDrawer({
       <button
         type="button"
         onClick={onClose}
+        tabIndex={isOpen ? 0 : -1}
+        aria-hidden={!isOpen}
         aria-label="Chiudi menu laterale"
-        className={`fixed inset-0 z-[176] bg-[color:var(--profile-sheet-overlay)] backdrop-blur-md transition-opacity duration-200 md:hidden ${
+        className={`fixed inset-0 z-[176] bg-[color:var(--ui-scrim)] backdrop-blur-md transition-opacity duration-200 md:hidden ${
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       />
 
       <aside
         ref={drawerRef}
-        className={`fixed left-0 top-0 z-[181] flex h-[100dvh] w-[min(84vw,21rem)] max-w-[21rem] flex-col overflow-hidden border-r border-[color:var(--profile-sheet-border)] bg-[var(--profile-sheet-bg)] px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] text-[color:var(--profile-sheet-text)] shadow-[24px_0_70px_var(--profile-sheet-shadow)] backdrop-blur-3xl transition-transform duration-250 ease-out md:hidden ${
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu principale"
+        tabIndex={-1}
+        inert={!isOpen}
+        className={`liquid-glass-panel fixed left-0 top-0 z-[181] flex h-[100dvh] w-[min(84vw,21rem)] max-w-[21rem] flex-col overflow-hidden rounded-none border-y-0 border-l-0 px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] text-[color:var(--ui-text-primary)] shadow-[24px_0_70px_var(--ui-glass-shadow)] transition-transform duration-250 ease-out md:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-[105%]'
         }`}
         aria-hidden={!isOpen}
       >
-        <div className="rounded-[1.35rem] border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] p-1.5 shadow-[0_14px_34px_var(--profile-sheet-shadow-soft)]">
+        <div className="rounded-[1.35rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-1.5 shadow-[0_14px_34px_var(--ui-shadow-soft)]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
+              onPointerEnter={() => onPrefetchRoute?.('/profile')}
+              onPointerDown={() => onPrefetchRoute?.('/profile')}
+              onFocus={() => onPrefetchRoute?.('/profile')}
               onClick={handleOpenProfile}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[1.05rem] p-1 text-left transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)]"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-[1.05rem] p-1 text-left transition-colors hover:bg-[color:var(--ui-surface-glass-strong)]"
               aria-label="Apri profilo"
             >
-              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-full border border-[color:var(--profile-sheet-border-strong)] bg-[color:var(--profile-sheet-surface-strong)] shadow-[0_10px_22px_var(--profile-sheet-shadow)]">
-                <img
-                  src={avatarSrc}
-                  alt={displayUserName ? `Profilo ${displayUserName}` : 'Profilo utente'}
-                  onError={() => setAvatarSrc(DEFAULT_PROFILE_AVATAR_URL)}
-                  className="h-full w-full rounded-full object-cover"
-                />
-                <span
-                  className={`absolute -right-0.5 -bottom-0.5 z-10 h-3 w-3 rounded-full border border-[color:var(--profile-sheet-surface)] ${statusDotClass}`}
-                  aria-hidden="true"
+              <span className="relative flex h-10 w-10 shrink-0">
+                <DashboardProfileAvatar
+                  userAvatarUrl={userAvatarUrl}
+                  userName={displayUserName}
+                  haStatus={haStatus}
                 />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold leading-tight text-[color:var(--profile-sheet-title)]">
+                <span className="block truncate text-sm font-semibold leading-tight text-[color:var(--ui-text-primary)]">
                   {displayUserName}
                 </span>
-                <span className="mt-0.5 block truncate text-[10.5px] font-medium leading-tight text-[color:var(--profile-sheet-muted)]">{displayUserEmail}</span>
+                <span className="mt-0.5 block truncate text-[10.5px] font-medium leading-tight text-[color:var(--ui-text-secondary)]">{displayUserEmail}</span>
               </span>
             </button>
             <button
               type="button"
               onClick={() => setIsAccountChipOpen((current) => !current)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-title)] transition-colors hover:bg-[color:var(--profile-sheet-surface-soft)]"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-surface-glass-soft)]"
               aria-label={isAccountChipOpen ? 'Chiudi menu account' : 'Apri menu account'}
               aria-expanded={isAccountChipOpen}
             >
@@ -262,9 +241,9 @@ export function MobileSidebarDrawer({
             <div className="min-h-0 overflow-hidden">
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm font-semibold text-[color:var(--profile-sheet-title)] transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)]"
+                className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm font-semibold text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-surface-glass-strong)]"
               >
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.14)] text-[color:rgb(var(--profile-sheet-accent-rgb)/0.98)]">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[color:rgb(var(--ui-accent-rgb)/0.14)] text-[color:rgb(var(--ui-accent-rgb)/0.98)]">
                   <Plus size={16} />
                 </span>
                 Aggiungi account
@@ -273,44 +252,50 @@ export function MobileSidebarDrawer({
           </div>
         </div>
 
-        <div className="mt-5 h-px bg-[color:var(--profile-sheet-border)]" />
+        <div className="mt-5 h-px bg-[color:var(--ui-border)]" />
 
         <div className="mt-5 flex min-h-0 flex-1 flex-col">
           <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 glass-scrollbar">
             {routeGroups.map((group, groupIndex) => (
               <section key={group.id} className={groupIndex === 0 ? '' : 'mt-6'}>
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--profile-sheet-muted)]">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--ui-text-secondary)]">
                   {group.label}
                 </p>
                 <div className="space-y-1">
                   {group.entries.map((entry) => {
-                    const Icon = PATH_ICONS[entry.icon] ?? LayoutGrid;
-                    const active = isEditMode
-                      ? selectedPathId === entry.id
-                      : isPathActiveForCurrentLocation(entry.path);
+                    const Icon = getDashboardNavigationIcon(entry.icon);
+                    const active = isDashboardNavigationEntryActive({
+                      entry,
+                      isEditMode,
+                      selectedPathId,
+                      activeRoute,
+                    });
                     return (
                       <button
                         key={entry.id}
                         type="button"
+                        onPointerEnter={() => onPrefetchRoute?.(entry.path)}
+                        onPointerDown={() => onPrefetchRoute?.(entry.path)}
+                        onFocus={() => onPrefetchRoute?.(entry.path)}
                         onClick={() => handlePathClick(entry)}
                         className={`group relative flex w-full min-w-0 items-center gap-3 rounded-xl px-0 py-3 text-left transition-colors ${
                           active
-                            ? 'text-[color:var(--profile-sheet-title)]'
-                            : 'text-[color:var(--profile-sheet-muted)] hover:text-[color:var(--profile-sheet-title)]'
+                            ? 'text-[color:var(--ui-text-primary)]'
+                            : 'text-[color:var(--ui-text-secondary)] hover:text-[color:var(--ui-text-primary)]'
                         }`}
                         aria-current={active ? 'page' : undefined}
                       >
                         <span
                           className={`absolute -left-5 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full transition-opacity ${
-                            active ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.9)] opacity-100' : 'opacity-0'
+                            active ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.9)] opacity-100' : 'opacity-0'
                           }`}
                           aria-hidden
                         />
                         <span
                           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
                             active
-                              ? 'text-[color:rgb(var(--profile-sheet-accent-rgb)/0.98)]'
-                              : 'text-[color:var(--profile-sheet-muted)] group-hover:text-[color:var(--profile-sheet-title)]'
+                              ? 'text-[color:rgb(var(--ui-accent-rgb)/0.98)]'
+                              : 'text-[color:var(--ui-text-secondary)] group-hover:text-[color:var(--ui-text-primary)]'
                           }`}
                         >
                           <Icon size={19} strokeWidth={active ? 1.85 : 2} />
@@ -324,25 +309,25 @@ export function MobileSidebarDrawer({
             ))}
           </nav>
 
-          <div className="mt-5 border-t border-[color:var(--profile-sheet-border)] pt-4">
+          <div className="mt-5 border-t border-[color:var(--ui-border)] pt-4">
             {isLogoutConfirmOpen ? (
-              <div className="mb-3 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] p-3 shadow-[0_14px_36px_var(--profile-sheet-shadow-soft)]">
-                <p className="text-sm font-semibold text-[color:var(--profile-sheet-title)]">Disconnettere Home Assistant?</p>
-                <p className="mt-1 text-xs font-medium text-[color:var(--profile-sheet-muted)]">
+              <div className="mb-3 rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] p-3 shadow-[0_14px_36px_var(--ui-shadow-soft)]">
+                <p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Disconnettere Home Assistant?</p>
+                <p className="mt-1 text-xs font-medium text-[color:var(--ui-text-secondary)]">
                   La dashboard perdera la connessione finche non effettui un nuovo accesso.
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setIsLogoutConfirmOpen(false)}
-                    className="rounded-xl border border-[color:var(--profile-sheet-border)] px-3 py-2 text-xs font-bold text-[color:var(--profile-sheet-title)] transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)]"
+                    className="rounded-xl border border-[color:var(--ui-border)] px-3 py-2 text-xs font-bold text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-surface-glass-strong)]"
                   >
                     Annulla
                   </button>
                   <button
                     type="button"
                     onClick={handleLogoutConfirm}
-                    className="rounded-xl bg-red-500/90 px-3 py-2 text-xs font-bold text-white shadow-[0_10px_22px_rgba(220,38,38,0.28)] transition-colors hover:bg-red-500"
+                    className="rounded-xl bg-[color:var(--ui-danger)] px-3 py-2 text-xs font-bold text-[color:var(--ui-danger-contrast)] shadow-[0_10px_22px_color-mix(in_srgb,var(--ui-danger)_28%,transparent)] transition-colors hover:brightness-110"
                   >
                     Esci
                   </button>
@@ -350,13 +335,18 @@ export function MobileSidebarDrawer({
               </div>
             ) : null}
             <button
+              ref={editButtonRef}
               type="button"
+              data-tour-target="edit-mode"
+              onPointerEnter={onPrefetchEditMode}
+              onPointerDown={onPrefetchEditMode}
+              onFocus={onPrefetchEditMode}
               onClick={handleToggleEditMode}
               disabled={!canToggleEditMode}
               className={`mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                 isEditMode
-                  ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.42)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.18)] text-[color:var(--profile-sheet-title)]'
-                  : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] hover:bg-[color:var(--profile-sheet-surface-strong)]'
+                  ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.18)] text-[color:var(--ui-text-primary)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] text-[color:var(--ui-text-primary)] hover:bg-[color:var(--ui-surface-glass-strong)]'
               }`}
             >
               <PencilLine size={17} />
@@ -364,8 +354,16 @@ export function MobileSidebarDrawer({
             </button>
             <button
               type="button"
+              onPointerEnter={() => onPrefetchRoute?.('/settings')}
+              onPointerDown={() => onPrefetchRoute?.('/settings')}
+              onFocus={() => onPrefetchRoute?.('/settings')}
               onClick={handleOpenSettings}
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-4 py-3 text-sm font-bold text-[color:var(--profile-sheet-title)] transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)]"
+              className={`mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition-colors ${
+                isSettingsActive
+                  ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.18)] text-[color:var(--ui-text-primary)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] text-[color:var(--ui-text-primary)] hover:bg-[color:var(--ui-surface-glass-strong)]'
+              }`}
+              aria-current={isSettingsActive ? 'page' : undefined}
             >
               <Settings size={17} />
               Impostazioni

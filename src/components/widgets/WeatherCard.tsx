@@ -1,4 +1,5 @@
 ﻿import React from 'react';
+import { CloudOff } from 'lucide-react';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
 import { getWeatherVisual } from '../../utils/weatherVisual';
 import type { ForecastDensity, WeatherSecondaryInfo } from '../../types/dashboardModels';
@@ -167,6 +168,30 @@ export function WeatherCard({
   const isCompactCard = !isTinyCard && hasCardSize && (cardDensity === 'compact' || cardHeight <= 220 || cardWidth <= 460);
 
   const condition = conditionOverride ?? weather.condition;
+
+  if (!weather.available) {
+    const isOffline = weather.source === 'offline';
+    return (
+      <div
+        ref={cardRef}
+        className="flex h-full w-full min-h-0 min-w-0 items-center justify-center gap-2.5 overflow-hidden text-[color:var(--ui-text-secondary)]"
+        role="status"
+      >
+        <CloudOff size={mode === 'chip' ? 24 : 30} strokeWidth={1.6} aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">
+            {isOffline ? 'Meteo non disponibile' : 'Meteo non configurato'}
+          </p>
+          {mode === 'card' ? (
+            <p className="mt-0.5 truncate text-xs text-[color:var(--ui-text-tertiary)]">
+              {isOffline ? 'Home Assistant è offline' : 'Seleziona un’entità weather.*'}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   const visual = getWeatherVisual(condition);
   const displayTemp = unit === 'F' ? toFahrenheit(weather.temperature) : weather.temperature;
   const displayHigh = unit === 'F' ? toFahrenheit(weather.high) : weather.high;
@@ -236,35 +261,7 @@ export function WeatherCard({
   });
 
   const safeForecastDays = Math.max(1, Math.min(8, forecastDays));
-  const sourceForecast = weather.forecast.slice(0, safeForecastDays);
-  const fallbackForecast = [
-    {
-      label: 'Oggi',
-      condition,
-      high: weather.high,
-      low: weather.low,
-      precipitation: weather.precipitation,
-      precipitationAmount: weather.precipitationAmount,
-      precipitationProbability: weather.precipitation,
-    },
-  ];
-  const forecastEntries = (sourceForecast.length > 0 ? sourceForecast : fallbackForecast).slice(0, safeForecastDays);
-  for (let index = forecastEntries.length; index < safeForecastDays; index += 1) {
-    const offset = index % 3 === 0 ? 0 : index % 3 === 1 ? 1 : -1;
-    const fallbackHigh = Math.round(weather.high + offset);
-    const fallbackLow = Math.round(weather.low + (offset < 0 ? -1 : 0));
-    forecastEntries.push({
-      label: '',
-      datetime: undefined,
-      isDaytime: forecastType === 'twice_daily' ? index % 2 === 0 : undefined,
-      condition,
-      high: fallbackHigh,
-      low: forecastType === 'hourly' ? fallbackHigh : fallbackLow,
-      precipitation: weather.precipitation,
-      precipitationAmount: weather.precipitationAmount,
-      precipitationProbability: weather.precipitation,
-    });
-  }
+  const forecastEntries = weather.forecast.slice(0, safeForecastDays);
 
   const requestedForecastCount = Math.min(forecastEntries.length, safeForecastDays);
   const dailySlotMinWidth = compactForecast ? (isTinyCard ? 50 : 54) : isTinyCard ? 54 : isCompactCard ? 58 : 62;
@@ -295,6 +292,7 @@ export function WeatherCard({
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
   };
+  const forecastUnavailable = forecastEntries.length === 0;
 
   if (mode === 'chip') {
     const chipTempClass = isTinyCard ? 'text-[1.84rem]' : isCompactCard ? 'text-[2.08rem]' : 'text-[2.3rem]';
@@ -324,18 +322,18 @@ export function WeatherCard({
         <div className={`min-w-0 flex w-full flex-col justify-center ${chipContentAlignClass}`}>
           <div className={`min-w-0 flex items-center gap-2 ${chipRowAlignClass}`}>
             <p
-              className={`${chipTempClass} shrink-0 leading-none font-semibold tracking-tight text-white drop-shadow-[0_2px_7px_rgba(0,0,0,0.22)]`}
+              className={`${chipTempClass} shrink-0 leading-none font-semibold tracking-tight text-[color:var(--ui-text-primary)] drop-shadow-[0_2px_7px_var(--ui-shadow-soft)]`}
               style={chipTempStyle}
             >
               {`${temperature}\u00B0`}
             </p>
-            <span className="shrink-0 leading-none text-white/55">|</span>
-            <span className="shrink-0 text-white/90 leading-none">
+            <span className="shrink-0 leading-none text-[color:var(--ui-text-disabled)]">|</span>
+            <span className="shrink-0 text-[color:var(--ui-text-primary)] leading-none">
               <AnimatedWeatherIcon condition={condition} size={chipIconSize} />
             </span>
           </div>
           <div className="min-w-0 flex flex-col">
-            <p className={`${chipInfoClass} mt-1 min-w-0 leading-tight font-medium text-white/80 ${chipTextAlignClass}`} style={chipInfoStyle}>
+            <p className={`${chipInfoClass} mt-1 min-w-0 leading-tight font-medium text-[color:var(--ui-text-secondary)] ${chipTextAlignClass}`} style={chipInfoStyle}>
               {primaryInfo}
             </p>
           </div>
@@ -365,61 +363,67 @@ export function WeatherCard({
         <div className="min-w-0 flex items-center justify-between gap-2">
           <div className="min-w-0 flex items-center gap-1.5">
             <p
-              className="shrink-0 leading-none font-semibold tracking-tight text-white drop-shadow-[0_2px_7px_rgba(0,0,0,0.22)]"
+              className="shrink-0 leading-none font-semibold tracking-tight text-[color:var(--ui-text-primary)] drop-shadow-[0_2px_7px_var(--ui-shadow-soft)]"
               style={{ fontSize: 'clamp(1.05rem,1.85vw,1.5rem)' }}
             >
               {`${temperature}\u00B0`}
             </p>
-            <span className="shrink-0 leading-none text-white/55">|</span>
-            <span className="shrink-0 text-white/90 leading-none">
+            <span className="shrink-0 leading-none text-[color:var(--ui-text-disabled)]">|</span>
+            <span className="shrink-0 text-[color:var(--ui-text-primary)] leading-none">
               <AnimatedWeatherIcon condition={condition} size={compactHeaderIconSize} />
             </span>
           </div>
-          <p className="min-w-0 text-right leading-tight font-medium text-white/80" style={compactHeaderInfoStyle}>
+          <p className="min-w-0 text-right leading-tight font-medium text-[color:var(--ui-text-secondary)]" style={compactHeaderInfoStyle}>
             {primaryInfo}
           </p>
         </div>
 
-        <div
-          className={`grid min-w-0 items-end ${compactForecastCount >= 7 ? 'gap-x-0.5' : 'gap-x-1'} gap-y-0.5`}
-          style={{ gridTemplateColumns: `repeat(${compactForecastCount}, minmax(0, 1fr))` }}
-        >
-          {compactForecastEntries.map((entry, index) => {
-            const high = unit === 'F' ? toFahrenheit(entry.high) : entry.high;
-            const isToday = index === 0;
-            return (
-              <div
-                key={`${entry.label}-${index}`}
-                className={`min-w-0 flex flex-col items-center rounded-md ${
-                  isToday ? 'bg-white/10 px-1 py-0.5' : 'py-0.5'
-                }`}
-              >
-                <p
-                  className={`max-w-full truncate leading-none font-medium uppercase tracking-[0.02em] ${
-                    isToday ? `${compactTodayLabelClass} text-white/92` : `${compactDayLabelClass} text-white/66`
+        {forecastUnavailable ? (
+          <p className="truncate text-[10px] font-medium text-[color:var(--ui-text-tertiary)]">
+            Previsioni non disponibili
+          </p>
+        ) : (
+          <div
+            className={`grid min-w-0 items-end ${compactForecastCount >= 7 ? 'gap-x-0.5' : 'gap-x-1'} gap-y-0.5`}
+            style={{ gridTemplateColumns: `repeat(${compactForecastCount}, minmax(0, 1fr))` }}
+          >
+            {compactForecastEntries.map((entry, index) => {
+              const high = unit === 'F' ? toFahrenheit(entry.high) : entry.high;
+              const isToday = index === 0;
+              return (
+                <div
+                  key={`${entry.label}-${index}`}
+                  className={`min-w-0 flex flex-col items-center rounded-md ${
+                    isToday ? 'bg-[color:var(--ui-fill-tertiary)] px-1 py-0.5' : 'py-0.5'
                   }`}
                 >
-                  {normalizeForecastLabel(entry.label, entry.datetime, entry.isDaytime, index, forecastType)}
-                </p>
-                <div className={`mt-0.5 flex items-center ${isToday ? 'gap-1' : 'gap-0.5'}`}>
-                  <span className="shrink-0 text-white/90 leading-none">
-                    <AnimatedWeatherIcon
-                      condition={entry.condition}
-                      size={isToday ? compactForecastTodayIconSize : compactForecastIconSize}
-                    />
-                  </span>
                   <p
-                    className={`shrink-0 leading-none font-semibold ${
-                      isToday ? `${compactTodayTempClass} text-white` : `${compactDayTempClass} text-white/80`
+                    className={`max-w-full truncate leading-none font-medium uppercase tracking-[0.02em] ${
+                      isToday ? `${compactTodayLabelClass} text-[color:var(--ui-text-primary)]` : `${compactDayLabelClass} text-[color:var(--ui-text-tertiary)]`
                     }`}
                   >
-                    {`${Math.round(high)}\u00B0`}
+                    {normalizeForecastLabel(entry.label, entry.datetime, entry.isDaytime, index, forecastType)}
                   </p>
+                  <div className={`mt-0.5 flex items-center ${isToday ? 'gap-1' : 'gap-0.5'}`}>
+                    <span className="shrink-0 text-[color:var(--ui-text-primary)] leading-none">
+                      <AnimatedWeatherIcon
+                        condition={entry.condition}
+                        size={isToday ? compactForecastTodayIconSize : compactForecastIconSize}
+                      />
+                    </span>
+                    <p
+                      className={`shrink-0 leading-none font-semibold ${
+                        isToday ? `${compactTodayTempClass} text-[color:var(--ui-text-primary)]` : `${compactDayTempClass} text-[color:var(--ui-text-secondary)]`
+                      }`}
+                    >
+                      {`${Math.round(high)}\u00B0`}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -513,39 +517,45 @@ export function WeatherCard({
     <div ref={cardRef} className="relative h-full w-full min-h-0 min-w-0 overflow-hidden flex flex-col justify-between">
       <div className={`min-w-0 flex items-center ${headerGapClass}`}>
         <div className="min-w-0 flex flex-col">
-          <p className={`${cardTempClass} shrink-0 leading-none font-semibold tracking-tight text-white drop-shadow-[0_2px_7px_rgba(0,0,0,0.22)]`}>
+          <p className={`${cardTempClass} shrink-0 leading-none font-semibold tracking-tight text-[color:var(--ui-text-primary)] drop-shadow-[0_2px_7px_var(--ui-shadow-soft)]`}>
             {`${temperature}\u00B0`}
           </p>
-          <p className={`${cardInfoClass} mt-1 min-w-0 leading-tight font-medium text-white/80`} style={infoClampStyle}>
+          <p className={`${cardInfoClass} mt-1 min-w-0 leading-tight font-medium text-[color:var(--ui-text-secondary)]`} style={infoClampStyle}>
             {primaryInfo}
           </p>
         </div>
-        <span className="shrink-0 text-white/90">
+        <span className="shrink-0 text-[color:var(--ui-text-primary)]">
           <AnimatedWeatherIcon condition={condition} size={headerIconSize} />
         </span>
       </div>
 
-      <div
-        className={`${forecastMarginTopClass} grid min-w-0 ${forecastGapXClass} ${forecastGapYClass}`}
-        style={{ gridTemplateColumns: `repeat(${forecastColumnCount}, minmax(0, 1fr))` }}
-      >
-        {visibleForecast.map((entry, index) => {
-          const high = unit === 'F' ? toFahrenheit(entry.high) : entry.high;
-          const low = unit === 'F' ? toFahrenheit(entry.low) : entry.low;
-          return (
-            <div key={`${entry.label}-${index}`} className="min-w-0 flex flex-1 flex-col items-center text-center">
-              <p className={`${forecastLabelClass} font-medium text-white/72`}>
-                {normalizeForecastLabel(entry.label, entry.datetime, entry.isDaytime, index, forecastType)}
-              </p>
-              <span className="mt-1 text-white/90">
-                <AnimatedWeatherIcon condition={entry.condition} size={forecastIconSize} />
-              </span>
-              <p className={`mt-1 font-semibold text-white/84 ${forecastHighClass}`}>{`${Math.round(high)}\u00B0`}</p>
-              <p className={`${forecastLowClass} text-white/58`}>{`${Math.round(low)}\u00B0`}</p>
-            </div>
-          );
-        })}
-      </div>
+      {forecastUnavailable ? (
+        <p className={`${forecastMarginTopClass} text-xs font-medium text-[color:var(--ui-text-tertiary)]`}>
+          Previsioni non disponibili
+        </p>
+      ) : (
+        <div
+          className={`${forecastMarginTopClass} grid min-w-0 ${forecastGapXClass} ${forecastGapYClass}`}
+          style={{ gridTemplateColumns: `repeat(${forecastColumnCount}, minmax(0, 1fr))` }}
+        >
+          {visibleForecast.map((entry, index) => {
+            const high = unit === 'F' ? toFahrenheit(entry.high) : entry.high;
+            const low = unit === 'F' ? toFahrenheit(entry.low) : entry.low;
+            return (
+              <div key={`${entry.label}-${index}`} className="min-w-0 flex flex-1 flex-col items-center text-center">
+                <p className={`${forecastLabelClass} font-medium text-[color:var(--ui-text-secondary)]`}>
+                  {normalizeForecastLabel(entry.label, entry.datetime, entry.isDaytime, index, forecastType)}
+                </p>
+                <span className="mt-1 text-[color:var(--ui-text-primary)]">
+                  <AnimatedWeatherIcon condition={entry.condition} size={forecastIconSize} />
+                </span>
+                <p className={`mt-1 font-semibold text-[color:var(--ui-text-primary)] ${forecastHighClass}`}>{`${Math.round(high)}\u00B0`}</p>
+                <p className={`${forecastLowClass} text-[color:var(--ui-text-tertiary)]`}>{`${Math.round(low)}\u00B0`}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

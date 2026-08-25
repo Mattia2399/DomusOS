@@ -1,5 +1,6 @@
 import React from 'react';
-import { Activity, Clock3, Sparkles } from 'lucide-react';
+import { Activity, Clock3, Sparkles, Workflow } from 'lucide-react';
+import FeatureAvailabilityPage from '../components/ui/FeatureAvailabilityPage';
 import AiComposerPanel from './automations/AiComposerPanel';
 import BuilderPanel from './automations/BuilderPanel';
 import HaAutomationsPanel from './automations/HaAutomationsPanel';
@@ -39,6 +40,25 @@ function isValidTimeValue(value) {
 }
 
 const HA_MISSING_GRACE_MS = 60_000;
+export const AUTOMATIONS_WORKSPACE_AVAILABLE = false;
+
+function AutomationsComingSoon() {
+  return (
+    <FeatureAvailabilityPage
+      title="Costruttore Automazioni"
+      headline="Questa pagina sta evolvendo"
+      description="Il nuovo Costruttore Automazioni sarà disponibile in un prossimo aggiornamento. Le altre funzioni della dashboard restano utilizzabili normalmente."
+      icon={Workflow}
+    />
+  );
+}
+
+export function AutomationsBuilder(props) {
+  if (!AUTOMATIONS_WORKSPACE_AVAILABLE) {
+    return <AutomationsComingSoon />;
+  }
+  return <AutomationsWorkspace {...props} />;
+}
 
 async function readHaErrorResponse(response) {
   let payload = null;
@@ -61,7 +81,7 @@ async function readHaErrorResponse(response) {
   return `HTTP ${response.status}`;
 }
 
-export function AutomationsBuilder({
+function AutomationsWorkspace({
   haStates = {},
   haStatus = 'disconnected',
   haUrl = '',
@@ -890,7 +910,7 @@ export function AutomationsBuilder({
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }
             }}
-            className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-5 py-2 text-sm text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
           >
             Nuova Automazione
           </button>
@@ -955,44 +975,44 @@ export function AutomationsBuilder({
 
           <aside className="space-y-4 xl:sticky xl:top-4">
             <section className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-              <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
+              <div className="rounded-[1.6rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 backdrop-blur-2xl">
                 <div className="flex items-center justify-between">
-                  <Activity size={16} className="text-emerald-300" />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/45">
+                  <Activity size={16} className="text-[color:var(--ui-success)]" />
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                     Create da noi
                   </span>
                 </div>
-                <p className="mt-2 text-2xl font-semibold text-white">{savedActiveCount}/{savedCount}</p>
-                <p className="mt-1 text-xs text-white/50">attive adesso</p>
+                <p className="mt-2 text-2xl font-semibold text-[color:var(--ui-text-primary)]">{savedActiveCount}/{savedCount}</p>
+                <p className="mt-1 text-xs text-[color:var(--ui-text-tertiary)]">attive adesso</p>
               </div>
-              <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
+              <div className="rounded-[1.6rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 backdrop-blur-2xl">
                 <div className="flex items-center justify-between">
-                  <Sparkles size={16} className="text-sky-300" />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/45">
+                  <Sparkles size={16} className="text-[color:var(--ui-info)]" />
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                     Home Assistant
                   </span>
                 </div>
-                <p className="mt-2 text-2xl font-semibold text-white">{haActiveCount}/{haCount}</p>
-                <p className="mt-1 text-xs text-white/50">automation.* attive</p>
+                <p className="mt-2 text-2xl font-semibold text-[color:var(--ui-text-primary)]">{haActiveCount}/{haCount}</p>
+                <p className="mt-1 text-xs text-[color:var(--ui-text-tertiary)]">automation.* attive</p>
               </div>
-              <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
+              <div className="rounded-[1.6rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 backdrop-blur-2xl">
                 <div className="flex items-center justify-between">
-                  <Clock3 size={16} className="text-amber-300" />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/45">
+                  <Clock3 size={16} className="text-[color:var(--ui-warning)]" />
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                     Pianificate
                   </span>
                 </div>
-                <p className="mt-2 text-2xl font-semibold text-white">{scheduledCount}</p>
-                <p className="mt-1 text-xs text-white/50">con trigger orario</p>
+                <p className="mt-2 text-2xl font-semibold text-[color:var(--ui-text-primary)]">{scheduledCount}</p>
+                <p className="mt-1 text-xs text-[color:var(--ui-text-tertiary)]">con trigger orario</p>
               </div>
             </section>
 
-            <section className="space-y-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-2xl">
+            <section className="space-y-4 rounded-[2rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-4 backdrop-blur-2xl">
               <div className="px-2">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/55">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                   Archivio Automazioni
                 </h2>
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-[color:var(--ui-text-tertiary)]">
                   Sezione secondaria per ricerca, monitoraggio e manutenzione.
                 </p>
               </div>

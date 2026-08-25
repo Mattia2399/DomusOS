@@ -32,6 +32,7 @@ type WidgetCardRendererProps = {
   widget: Widget;
   dashboardState: DashboardStateShape;
   isEditMode: boolean;
+  isInteractive?: boolean;
   isSelected: boolean;
   value?: number;
   sensorHistory?: number[];
@@ -61,11 +62,15 @@ type WidgetCardRendererProps = {
   onAlarmDisarm?: (widget: Widget) => void;
   onAlarmArm?: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onVacuumStartPause?: (widget: Widget) => void;
+  onVacuumStop?: (widget: Widget) => void;
   onVacuumReturnToBase?: (widget: Widget) => void;
   onLockToggle?: (widget: Widget) => boolean | void;
   onLockOpen?: (widget: Widget) => void;
   onCoverPositionChange?: (widget: Widget, position: number) => void;
   onCoverTiltPositionChange?: (widget: Widget, position: number) => void;
+  onCoverOpen?: (widget: Widget) => void;
+  onCoverStop?: (widget: Widget) => void;
+  onCoverClose?: (widget: Widget) => void;
   onMembersOpenPanel?: (widget: Widget) => void;
   liveEntity?: MockEntityState;
   gridBreakpoint?: GridEngineBreakpoint;
@@ -77,6 +82,7 @@ function WidgetCardRendererComponent({
   widget,
   dashboardState,
   isEditMode,
+  isInteractive = true,
   isSelected,
   value,
   sensorHistory,
@@ -106,17 +112,22 @@ function WidgetCardRendererComponent({
   onAlarmDisarm,
   onAlarmArm,
   onVacuumStartPause,
+  onVacuumStop,
   onVacuumReturnToBase,
   onLockToggle,
   onLockOpen,
   onCoverPositionChange,
   onCoverTiltPositionChange,
+  onCoverOpen,
+  onCoverStop,
+  onCoverClose,
   onMembersOpenPanel,
   liveEntity,
   gridBreakpoint,
   houseMembers,
   onDisplayMetricsChange,
 }: WidgetCardRendererProps) {
+  const controlsEnabled = !isEditMode && isInteractive;
   const displayVariant = resolveWidgetDisplayVariant({
     kind: widget.kind,
     breakpoint: gridBreakpoint,
@@ -133,15 +144,15 @@ function WidgetCardRendererComponent({
         isEditMode={isEditMode}
         onClick={onClick}
         liveEntity={liveEntity}
-        onTemperatureChange={(nextValue) => onClimateTargetTempChange?.(widget, nextValue)}
-        onTargetRangeChange={(low, high) => onClimateTargetRangeChange?.(widget, low, high)}
-        onTargetHumidityChange={(nextValue) => onClimateTargetHumidityChange?.(widget, nextValue)}
-        onPowerToggle={() => onClimatePowerToggle?.(widget)}
-        onModeChange={(mode) => onClimateModeChange?.(widget, mode)}
-        onFanModeChange={(mode) => onClimateFanModeChange?.(widget, mode)}
-        onPresetModeChange={(mode) => onClimatePresetModeChange?.(widget, mode)}
-        onSwingModeChange={(mode) => onClimateSwingModeChange?.(widget, mode)}
-        onSwingHorizontalModeChange={(mode) => onClimateSwingHorizontalModeChange?.(widget, mode)}
+        onTemperatureChange={controlsEnabled && onClimateTargetTempChange ? (nextValue) => onClimateTargetTempChange(widget, nextValue) : undefined}
+        onTargetRangeChange={controlsEnabled && onClimateTargetRangeChange ? (low, high) => onClimateTargetRangeChange(widget, low, high) : undefined}
+        onTargetHumidityChange={controlsEnabled && onClimateTargetHumidityChange ? (nextValue) => onClimateTargetHumidityChange(widget, nextValue) : undefined}
+        onPowerToggle={controlsEnabled && onClimatePowerToggle ? () => onClimatePowerToggle(widget) : undefined}
+        onModeChange={controlsEnabled && onClimateModeChange ? (mode) => onClimateModeChange(widget, mode) : undefined}
+        onFanModeChange={controlsEnabled && onClimateFanModeChange ? (mode) => onClimateFanModeChange(widget, mode) : undefined}
+        onPresetModeChange={controlsEnabled && onClimatePresetModeChange ? (mode) => onClimatePresetModeChange(widget, mode) : undefined}
+        onSwingModeChange={controlsEnabled && onClimateSwingModeChange ? (mode) => onClimateSwingModeChange(widget, mode) : undefined}
+        onSwingHorizontalModeChange={controlsEnabled && onClimateSwingHorizontalModeChange ? (mode) => onClimateSwingHorizontalModeChange(widget, mode) : undefined}
         gridBreakpoint={gridBreakpoint}
         displayVariant={displayVariant}
         onDisplayMetricsChange={onDisplayMetricsChange}
@@ -157,11 +168,9 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onBrightnessChange={(nextValue) => onLightBrightnessChange?.(widget, nextValue)}
-        onColorChange={(nextHs) => onLightColorChange?.(widget, nextHs)}
+        onBrightnessChange={controlsEnabled && onLightBrightnessChange ? (nextValue) => onLightBrightnessChange(widget, nextValue) : undefined}
+        onColorChange={controlsEnabled && onLightColorChange ? (nextHs) => onLightColorChange(widget, nextHs) : undefined}
         liveLightState={liveEntity}
-        gridBreakpoint={gridBreakpoint}
-        displayVariant={displayVariant}
         onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
@@ -174,11 +183,9 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onToggleSwitch={onSwitchToggle ? () => onSwitchToggle(widget) : undefined}
+        onToggleSwitch={controlsEnabled && onSwitchToggle ? () => onSwitchToggle(widget) : undefined}
         liveEntity={liveEntity}
         consumptionEntity={switchConsumptionEntity}
-        gridBreakpoint={gridBreakpoint}
-        displayVariant={displayVariant}
         onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
@@ -192,6 +199,9 @@ function WidgetCardRendererComponent({
         isEditMode={isEditMode}
         onClick={onClick}
         liveEntity={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -203,13 +213,13 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onTogglePlayback={() => onMediaToggle?.(widget)}
-        onPreviousTrack={() => onMediaPrevious?.(widget)}
-        onNextTrack={() => onMediaNext?.(widget)}
-        onSeek={(position) => onMediaSeek?.(widget, position)}
-        onShuffle={() => onMediaShuffle?.(widget)}
-        onRepeat={() => onMediaRepeat?.(widget)}
-        onSelectSource={(source) => onMediaSelectSource?.(widget, source)}
+        onTogglePlayback={controlsEnabled && onMediaToggle ? () => onMediaToggle(widget) : undefined}
+        onPreviousTrack={controlsEnabled && onMediaPrevious ? () => onMediaPrevious(widget) : undefined}
+        onNextTrack={controlsEnabled && onMediaNext ? () => onMediaNext(widget) : undefined}
+        onSeek={controlsEnabled && onMediaSeek ? (position) => onMediaSeek(widget, position) : undefined}
+        onShuffle={controlsEnabled && onMediaShuffle ? () => onMediaShuffle(widget) : undefined}
+        onRepeat={controlsEnabled && onMediaRepeat ? () => onMediaRepeat(widget) : undefined}
+        onSelectSource={controlsEnabled && onMediaSelectSource ? (source) => onMediaSelectSource(widget, source) : undefined}
         hideHeader={mediaHideHeader}
         liveEntity={liveEntity}
         gridBreakpoint={gridBreakpoint}
@@ -226,8 +236,8 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onQuickDisarm={() => onAlarmDisarm?.(widget)}
-        onQuickArm={(mode) => onAlarmArm?.(widget, mode)}
+        onQuickDisarm={controlsEnabled && onAlarmDisarm ? () => onAlarmDisarm(widget) : undefined}
+        onQuickArm={controlsEnabled && onAlarmArm ? (mode) => onAlarmArm(widget, mode) : undefined}
         liveEntity={liveEntity}
         gridBreakpoint={gridBreakpoint}
         displayVariant={displayVariant}
@@ -243,9 +253,13 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onStartPause={() => onVacuumStartPause?.(widget)}
-        onReturnToBase={() => onVacuumReturnToBase?.(widget)}
+        onStartPause={controlsEnabled && onVacuumStartPause ? () => onVacuumStartPause(widget) : undefined}
+        onStop={controlsEnabled && onVacuumStop ? () => onVacuumStop(widget) : undefined}
+        onReturnToBase={controlsEnabled && onVacuumReturnToBase ? () => onVacuumReturnToBase(widget) : undefined}
         liveEntity={liveEntity}
+        gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
+        onDisplayMetricsChange={onDisplayMetricsChange}
       />
     );
   }
@@ -257,8 +271,8 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onToggleLock={() => onLockToggle?.(widget)}
-        onOpenDoor={() => onLockOpen?.(widget)}
+        onToggleLock={controlsEnabled && onLockToggle ? () => onLockToggle(widget) : undefined}
+        onOpenDoor={controlsEnabled && onLockOpen ? () => onLockOpen(widget) : undefined}
         liveEntity={liveEntity}
         gridBreakpoint={gridBreakpoint}
         displayVariant={displayVariant}
@@ -278,8 +292,11 @@ function WidgetCardRendererComponent({
         gridBreakpoint={gridBreakpoint}
         displayVariant={displayVariant}
         onDisplayMetricsChange={onDisplayMetricsChange}
-        onPositionChange={(position) => onCoverPositionChange?.(widget, position)}
-        onTiltPositionChange={(position) => onCoverTiltPositionChange?.(widget, position)}
+        onPositionChange={controlsEnabled && onCoverPositionChange ? (position) => onCoverPositionChange(widget, position) : undefined}
+        onTiltPositionChange={controlsEnabled && onCoverTiltPositionChange ? (position) => onCoverTiltPositionChange(widget, position) : undefined}
+        onOpenCover={controlsEnabled && onCoverOpen ? () => onCoverOpen(widget) : undefined}
+        onStopCover={controlsEnabled && onCoverStop ? () => onCoverStop(widget) : undefined}
+        onCloseCover={controlsEnabled && onCoverClose ? () => onCoverClose(widget) : undefined}
       />
     );
   }
@@ -291,9 +308,10 @@ function WidgetCardRendererComponent({
         isSelected={isSelected}
         isEditMode={isEditMode}
         onClick={onClick}
-        onOpenMembersPanel={() => onMembersOpenPanel?.(widget)}
+        onOpenMembersPanel={controlsEnabled && onMembersOpenPanel ? () => onMembersOpenPanel(widget) : undefined}
         houseMembers={houseMembers}
         gridBreakpoint={gridBreakpoint}
+        displayVariant={displayVariant}
       />
     );
   }
@@ -308,8 +326,6 @@ function WidgetCardRendererComponent({
       isEditMode={isEditMode}
       onClick={onClick}
       liveEntity={liveEntity}
-      gridBreakpoint={gridBreakpoint}
-      displayVariant={displayVariant}
       onDisplayMetricsChange={onDisplayMetricsChange}
     />
   );
@@ -389,6 +405,15 @@ function areWidgetCardRendererPropsEqual(prevProps: WidgetCardRendererProps, nex
     return false;
   }
   if (prevProps.onCoverTiltPositionChange !== nextProps.onCoverTiltPositionChange) {
+    return false;
+  }
+  if (prevProps.onCoverOpen !== nextProps.onCoverOpen) {
+    return false;
+  }
+  if (prevProps.onCoverStop !== nextProps.onCoverStop) {
+    return false;
+  }
+  if (prevProps.onCoverClose !== nextProps.onCoverClose) {
     return false;
   }
   if (!areWidgetEntitiesEqual(prevProps.liveEntity, nextProps.liveEntity)) {

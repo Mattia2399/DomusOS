@@ -76,7 +76,7 @@ function renderField(
   const isEntityField = item.kind === 'entity';
   return (
     <label key={item.field} className="block">
-      <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/50">{item.label}</p>
+      <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">{item.label}</p>
       {isEntityField ? (
         <GlassCombobox
           value={value}
@@ -89,7 +89,7 @@ function renderField(
           value={value}
           onChange={(event) => onUpdate(item.field, event.target.value)}
           placeholder={item.placeholder}
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-300/60"
+          className="ui-input w-full rounded-xl px-3 py-2.5 text-sm"
         />
       )}
     </label>
@@ -133,19 +133,19 @@ export function ConsumptionEditorSidebar({
       className={
         isSheet
           ? 'flex h-full min-h-0 w-full flex-col p-3 pt-1 sm:p-4'
-          : 'h-full min-h-0 w-[clamp(17rem,28vw,25rem)] shrink-0 rounded-[2rem] border border-white/8 bg-white/5 p-5 backdrop-blur-xl'
+          : 'liquid-glass-panel h-full min-h-0 w-[clamp(17rem,28vw,25rem)] shrink-0 rounded-[2rem] p-5'
       }
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-white/50">Configurazione</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--ui-text-tertiary)]">Configurazione</p>
           <h3 className="mt-2 text-xl font-semibold">Dettagli consumi</h3>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onResetConfig}
-            className="rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.16em] text-white/70 transition-colors hover:bg-white/10"
+            className="glass-button rounded-xl px-3 py-2 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)] transition-colors"
           >
             Ripristina
           </button>
@@ -153,7 +153,7 @@ export function ConsumptionEditorSidebar({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              className="glass-button inline-flex h-9 w-9 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
               aria-label="Chiudi configurazione consumi"
               title="Chiudi"
             >
@@ -173,8 +173,8 @@ export function ConsumptionEditorSidebar({
               onClick={() => onSelectCard(item.id)}
               className={`rounded-xl border px-3 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
                 active
-                  ? 'border-blue-300/45 bg-blue-500/20 text-blue-100'
-                  : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                  ? 'liquid-glass-selection border-[color:var(--ui-border-strong)] text-[color:var(--ui-text-primary)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
               }`}
             >
               {item.label}
@@ -185,26 +185,26 @@ export function ConsumptionEditorSidebar({
 
       <div className="mt-5 flex h-[calc(100%-9.5rem)] min-h-0 flex-col">
         <div className="glass-scrollbar space-y-5 overflow-y-auto pr-1">
-            <div className="liquid-glass-card space-y-4 p-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Scheda</p>
+            <div className="dashboard-content-surface space-y-4 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Scheda</p>
             {cardMetaFields.map((item) => renderField(item, config[item.field], onUpdateConfigField, entitySuggestions))}
             </div>
 
           {fields.length > 0 ? (
-            <div className="liquid-glass-card space-y-4 p-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">Sorgenti dati</p>
+            <div className="dashboard-content-surface space-y-4 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Sorgenti dati</p>
               {fields.map((item) => renderField(item, config[item.field], onUpdateConfigField, entitySuggestions))}
             </div>
           ) : (
-            <div className="liquid-glass-card rounded-2xl border-dashed p-4">
-              <p className="text-sm text-white/65">
+            <div className="dashboard-content-surface rounded-2xl border-dashed p-4">
+              <p className="text-sm text-[color:var(--ui-text-secondary)]">
                 Nessuna entita da configurare per questa scheda. Puoi personalizzare titolo e percorso.
               </p>
             </div>
           )}
         </div>
 
-        <p className="mt-4 text-[11px] text-white/45">
+        <p className="mt-4 text-[11px] text-[color:var(--ui-text-tertiary)]">
           {haConnected && entitySuggestions.length > 0
             ? 'Suggerimenti da Home Assistant disponibili.'
             : 'Nessun suggerimento live: collega Home Assistant o inserisci manualmente le entita.'}

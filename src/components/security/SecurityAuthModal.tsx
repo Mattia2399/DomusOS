@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Delete, Fingerprint, KeyRound, Loader2, RotateCcw, ShieldCheck, X } from 'lucide-react';
+import { Check, Delete, Fingerprint, KeyRound, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getAlarmStateLabel } from '../../utils/alarmUtils';
+import GlassLoader from '../ui/GlassLoader';
 
 type DeviceAuthPhase = 'idle' | 'verifying' | 'failed' | 'success';
 
@@ -47,7 +48,7 @@ export function SecurityAuthModal({
   alarmCodeTypeLabel,
   authPinInput,
   preferDeviceAuth = false,
-  deviceAuthLabel = 'Autenticazione dispositivo',
+  deviceAuthLabel = 'Conferma dispositivo',
   onVerifyWithDevice,
   onPinInputChange,
   onVerifyWithPin,
@@ -61,7 +62,10 @@ export function SecurityAuthModal({
   const panelTransition = { duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const;
   const [devicePhase, setDevicePhase] = useState<DeviceAuthPhase>('idle');
   const [showPinFallback, setShowPinFallback] = useState(false);
+  const [deviceAttemptNonce, setDeviceAttemptNonce] = useState(0);
   const hasAttemptedDeviceAuthRef = useRef(false);
+  const verifyWithDeviceRef = useRef(onVerifyWithDevice);
+  verifyWithDeviceRef.current = onVerifyWithDevice;
   const canTryDeviceAuth = preferDeviceAuth && Boolean(onVerifyWithDevice);
   const shouldShowDeviceStage = canTryDeviceAuth && !showPinFallback;
   const shouldShowPinStage = pendingStateRequiresCode && (!canTryDeviceAuth || showPinFallback);
@@ -70,7 +74,7 @@ export function SecurityAuthModal({
   const resolvedDescription = description ?? (
     pendingStateRequiresCode
       ? `${alarmCodeTypeLabel} richiesto per autorizzare l'azione.`
-      : 'Autenticazione dispositivo richiesta per continuare.'
+      : 'Conferma dispositivo richiesta per continuare.'
   );
 
   useEffect(() => {
@@ -98,7 +102,7 @@ export function SecurityAuthModal({
       if (!isMounted) {
         return;
       }
-      void Promise.resolve(onVerifyWithDevice?.())
+      void Promise.resolve(verifyWithDeviceRef.current?.())
         .then((verified) => {
           if (!isMounted) {
             return;
@@ -126,12 +130,13 @@ export function SecurityAuthModal({
     return () => {
       isMounted = false;
     };
-  }, [canTryDeviceAuth, isOpen, onVerifyWithDevice, pendingStateRequiresCode]);
+  }, [canTryDeviceAuth, deviceAttemptNonce, isOpen, pendingStateRequiresCode]);
 
   const retryDeviceAuth = () => {
     setShowPinFallback(false);
     setDevicePhase('verifying');
     hasAttemptedDeviceAuthRef.current = false;
+    setDeviceAttemptNonce((current) => current + 1);
   };
 
   const deviceSubtitle =
@@ -160,20 +165,18 @@ export function SecurityAuthModal({
             type="button"
             onClick={onClose}
             aria-label="Chiudi autenticazione"
-            className="absolute inset-0 bg-black/76 backdrop-blur-3xl"
+            className="absolute inset-0 bg-[color:var(--ui-scrim)] backdrop-blur-3xl"
           />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.10),transparent_30%),radial-gradient(circle_at_52%_100%,rgba(96,165,250,0.10),transparent_38%),linear-gradient(180deg,rgba(6,12,24,0.38),rgba(0,0,0,0.62))]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgb(var(--ui-glass-highlight-rgb)/0.10),transparent_30%),radial-gradient(circle_at_52%_100%,rgb(var(--ui-accent-rgb)/0.08),transparent_38%)]" />
 
           <motion.div
-            className="liquid-glass-panel relative z-10 isolate w-full max-w-[24rem] transform-gpu overflow-hidden rounded-[2.2rem] border-white/[0.16] bg-slate-950/72 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.18)] sm:p-6"
+            className="liquid-glass-panel relative z-10 isolate w-full max-w-[24rem] transform-gpu overflow-hidden rounded-[2.2rem] p-5 sm:p-6"
             initial={{ y: -8, opacity: 0, scale: 0.985 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 8, opacity: 0, scale: 0.985 }}
             transition={panelTransition}
             style={{ willChange: 'transform, opacity' }}
           >
-            <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.16),transparent_34%),radial-gradient(circle_at_90%_92%,rgba(125,178,255,0.10),transparent_38%),linear-gradient(145deg,rgba(30,41,59,0.86),rgba(15,23,42,0.82)_46%,rgba(3,7,18,0.76)_100%)]" />
-            <div className="pointer-events-none absolute inset-x-8 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-white/42 to-transparent" />
             <button
               type="button"
               onClick={onClose}
@@ -184,9 +187,9 @@ export function SecurityAuthModal({
             </button>
 
             <div className="pr-10">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/42">Conferma sicura</p>
-              <h3 className="mt-1 text-xl font-semibold leading-tight tracking-[-0.04em] text-white">{resolvedTitle}</h3>
-              <p className="mt-2 text-sm leading-snug text-white/55">{resolvedDescription}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[color:var(--ui-text-tertiary)]">Conferma sicura</p>
+              <h3 className="mt-1 text-xl font-semibold leading-tight tracking-[-0.04em] text-[color:var(--ui-text-primary)]">{resolvedTitle}</h3>
+              <p className="mt-2 text-sm leading-snug text-[color:var(--ui-text-secondary)]">{resolvedDescription}</p>
             </div>
 
             <AnimatePresence mode="wait">
@@ -216,7 +219,7 @@ export function SecurityAuthModal({
                     ) : null}
                     <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.22] bg-black/42 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_16px_36px_rgba(0,0,0,0.32)]">
                       {devicePhase === 'verifying' ? (
-                        <Loader2 className="h-8 w-8 animate-spin text-white/86" strokeWidth={1.7} />
+                        <GlassLoader size="sm" ariaLabel="Conferma dispositivo in corso" />
                       ) : devicePhase === 'success' ? (
                         <Check className="h-8 w-8 text-emerald-100" strokeWidth={2.1} />
                       ) : devicePhase === 'failed' ? (

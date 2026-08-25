@@ -1,6 +1,7 @@
 import type { AuthData, HassEntities } from 'home-assistant-js-websocket';
 import type { MockEntityStateMap, MockWeatherForecastEntry } from '../types/ha';
 import { translateMediaPlayerState } from '../utils/mediaPlayerState';
+import { sanitizeDynamicUrl } from '../security/safeUrl';
 
 const STORAGE_KEY = 'ha-external-dashboard:ha-live:v1';
 export const HASS_TOKENS_KEY = 'hass_auth_tokens';
@@ -96,14 +97,97 @@ export function persistOAuthTokensAsAuthData(params: {
   return data;
 }
 
+export function persistHaOAuthSession(params: {
+  hassUrl: string;
+  clientId: string;
+  tokens: HaOAuthTokenResponse;
+}) {
+  const authData = persistOAuthTokensAsAuthData(params);
+  // OAuth uses HA's refreshable auth store. Keeping its short-lived access
+  // token in the manual-token configuration would disable refresh handling
+  // and could persist the token when "remember token" was previously enabled.
+  saveHaLiveConfig({
+    url: authData.hassUrl,
+    token: '',
+    rememberToken: false,
+  });
+  return authData;
+}
+
 export const defaultHaLiveConfig: HaLiveConfig = {
   url: 'http://homeassistant.local:8123',
   token: '',
   rememberToken: false,
 };
 
+export type HassUrlValidation =
+  | { ok: true; url: string; warning?: string }
+  | { ok: false; error: string };
+
+function isPrivateIpv4(hostname: string) {
+  const parts = hostname.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  return (
+    parts[0] === 10 ||
+    parts[0] === 127 ||
+    (parts[0] === 169 && parts[1] === 254) ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168)
+  );
+}
+
+export function isLocalHassHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return (
+    normalized === 'localhost' ||
+    normalized === '::1' ||
+    normalized.endsWith('.local') ||
+    (!normalized.includes('.') && !normalized.includes(':')) ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80:') ||
+    isPrivateIpv4(normalized)
+  );
+}
+
+export function validateHassUrl(rawUrl: string): HassUrlValidation {
+  const candidate = rawUrl.trim();
+  if (!candidate) {
+    return { ok: false, error: 'URL Home Assistant obbligatorio.' };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return { ok: false, error: 'Usa un URL Home Assistant completo con http:// o https://.' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: 'Sono ammessi soltanto URL http o https.' };
+  }
+  if (parsed.username || parsed.password) {
+    return { ok: false, error: 'L’URL non può contenere credenziali.' };
+  }
+  if (parsed.search || parsed.hash) {
+    return { ok: false, error: 'L’URL non può contenere query o fragment.' };
+  }
+  if (parsed.protocol === 'http:' && !isLocalHassHostname(parsed.hostname)) {
+    return { ok: false, error: 'Per host pubblici è obbligatorio HTTPS.' };
+  }
+  const normalized = parsed.toString().replace(/\/+$/, '');
+  return {
+    ok: true,
+    url: normalized,
+    ...(parsed.protocol === 'http:'
+      ? { warning: 'Connessione HTTP locale: il traffico non è cifrato.' }
+      : null),
+  };
+}
+
 export function normalizeHassUrl(url: string) {
-  return url.trim().replace(/\/+$/, '');
+  const validation = validateHassUrl(url);
+  return validation.ok ? validation.url : '';
 }
 
 export function buildHaOAuthAuthorizeUrl({
@@ -318,15 +402,12 @@ function resolveEntityPicture(hassUrl: string, picture: string | undefined) {
     return undefined;
   }
 
-  if (/^https?:\/\//i.test(picture)) {
-    return picture;
-  }
-
-  if (picture.startsWith('/')) {
-    return `${normalizeHassUrl(hassUrl)}${picture}`;
-  }
-
-  return `${normalizeHassUrl(hassUrl)}/${picture}`;
+  const normalizedHassUrl = normalizeHassUrl(hassUrl);
+  if (!normalizedHassUrl) return undefined;
+  return sanitizeDynamicUrl(picture, 'image', {
+    baseUrl: `${normalizedHassUrl}/`,
+    allowedOrigins: [normalizedHassUrl],
+  });
 }
 
 function toForecastEntries(value: unknown): MockWeatherForecastEntry[] | undefined {
@@ -634,7 +715,10 @@ export function mapHassEntitiesToMock(
         : toNumberOrUndefined(attributes.current_temperature);
     const targetTemperature =
       domain === 'climate'
-        ? toNumberOrUndefined(attributes.temperature)
+        ? toNumberOrUndefined(attributes.temperature) ??
+          toNumberOrUndefined(attributes.target_temperature) ??
+          toNumberOrUndefined(attributes.target_temp) ??
+          toNumberOrUndefined(attributes.setpoint)
         : undefined;
     const unit = unitOfMeasurement ?? (domain === 'weather' ? weatherTemperatureUnit : undefined);
     const brightness = toPercentFromBrightness(attributes.brightness);

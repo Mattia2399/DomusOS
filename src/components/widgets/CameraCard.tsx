@@ -1,25 +1,16 @@
-import React, { useMemo } from 'react';
-import { HaCameraCard } from './HaCameraCard';
+import { useEffect, useMemo } from 'react';
+import { useObservedElementSize } from '../../hooks/useObservedElementSize';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
-
-function toTrimmedString(value: unknown) {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-  return undefined;
-}
-
-function isCameraOfflineState(value: string | undefined) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (!normalized) {
-    return false;
-  }
-  return ['off', 'offline', 'idle', 'unavailable', 'unknown', 'error', 'problem', 'disconnected'].includes(
-    normalized,
-  );
-}
+import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
+import { CameraCardView } from './CameraCardView';
+import { buildCameraCardModel } from './cameraCardModel';
+import {
+  resolveCameraPixelDisplayVariant,
+  resolveWidgetDisplayVariant,
+  type WidgetDisplayMetrics,
+  type WidgetDisplayVariant,
+} from './widgetDisplayVariant';
 
 type CameraCardProps = {
   widget: Widget;
@@ -27,59 +18,52 @@ type CameraCardProps = {
   isEditMode: boolean;
   onClick: () => void;
   liveEntity?: MockEntityState;
+  gridBreakpoint?: GridEngineBreakpoint;
+  displayVariant?: WidgetDisplayVariant;
+  onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
 };
 
-export function CameraCard({ widget, isSelected, isEditMode, onClick, liveEntity }: CameraCardProps) {
-  const liveAttributes = liveEntity?.rawAttributes;
-  const resolvedName = toTrimmedString(liveAttributes?.friendly_name) ?? widget.title;
-  const livePicture = toTrimmedString(liveEntity?.imageUrl) ?? toTrimmedString(liveAttributes?.entity_picture);
-  const isLive = !isCameraOfflineState(
-    toTrimmedString(liveEntity?.stateLabel) ?? toTrimmedString(liveEntity?.state) ?? widget.status,
-  );
-  const cardAttributes = useMemo(
-    () => ({
-      ...(liveAttributes ?? {}),
-      entity_id: widget.entityId,
-      camera_entity_id: widget.entityId,
-      entity_picture: livePicture ?? toTrimmedString(liveAttributes?.entity_picture),
-    }),
-    [liveAttributes, livePicture, widget.entityId],
-  );
+export function CameraCard({
+  widget,
+  isSelected,
+  isEditMode,
+  onClick,
+  liveEntity,
+  gridBreakpoint,
+  displayVariant,
+  onDisplayMetricsChange,
+}: CameraCardProps) {
+  const fallbackVariant = displayVariant ?? resolveWidgetDisplayVariant({
+    kind: 'camera',
+    breakpoint: gridBreakpoint,
+    layout: widget.layout,
+    parentSectionId: widget.parentSectionId,
+  });
+  const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
+  const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
+  const layoutVariant = measuredSize
+    ? resolveCameraPixelDisplayVariant({ width: measuredSize.width, height: measuredSize.height })
+    : fallbackVariant;
+  const model = useMemo(() => buildCameraCardModel(widget, liveEntity), [liveEntity, widget]);
+
+  useEffect(() => {
+    if (!measuredSize || !onDisplayMetricsChange) return;
+    onDisplayMetricsChange({
+      widgetId: widget.id,
+      width: measuredSize.width,
+      height: measuredSize.height,
+      variant: layoutVariant,
+    });
+  }, [layoutVariant, measuredSize, onDisplayMetricsChange, widget.id]);
 
   return (
-    <div
-      className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl ${
-        isSelected ? 'selection-corners' : ''
-      }`}
-    >
-      <div className="pointer-events-none h-full w-full min-h-0 min-w-0">
-        <HaCameraCard
-          entityId={widget.entityId}
-          name={resolvedName}
-          attributes={cardAttributes}
-          compact={false}
-          isLive={isLive}
-        />
-      </div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            event.stopPropagation();
-            onClick();
-          }
-        }}
-        className={`absolute inset-0 rounded-3xl widget-card-handle ${
-          isEditMode ? 'cursor-grab' : 'cursor-pointer'
-        }`}
-        aria-label={`Apri ${widget.title}`}
-      />
-    </div>
+    <CameraCardView
+      model={model}
+      layoutVariant={layoutVariant}
+      isSelected={isSelected}
+      isEditMode={isEditMode}
+      rootRef={cardRef}
+      onOpen={onClick}
+    />
   );
 }

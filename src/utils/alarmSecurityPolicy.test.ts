@@ -93,6 +93,7 @@ describe('alarm security policy', () => {
       resolveAlarmManualCodeSubmission({
         inputCode: '123499',
         localExtraCode: '99',
+        storedHaCode: '1234',
         requiresCode: true,
       }),
     ).toEqual({ ok: true, haCode: '1234' });
@@ -103,8 +104,19 @@ describe('alarm security policy', () => {
       resolveAlarmManualCodeSubmission({
         inputCode: '123488',
         localExtraCode: '99',
+        storedHaCode: '1234',
         requiresCode: true,
       }),
-    ).toEqual({ ok: false, reason: 'local_extra_mismatch' });
+    ).toEqual({ ok: false, reason: 'credential_mismatch' });
+  });
+
+  it('rejects a different Home Assistant PIN before sending the service call', () => {
+    expect(
+      resolveAlarmManualCodeSubmission({
+        inputCode: '9999',
+        storedHaCode: '1234',
+        requiresCode: true,
+      }),
+    ).toEqual({ ok: false, reason: 'credential_mismatch' });
   });
 });

@@ -1,0 +1,886 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  Bot,
+  Camera,
+  Check,
+  ChevronRight,
+  CloudSun,
+  DoorClosed,
+  Gauge,
+  Lightbulb,
+  Layers3,
+  LockKeyhole,
+  Network,
+  PanelsTopLeft,
+  Play,
+  RefreshCw,
+  Server,
+  Shapes,
+  ShieldCheck,
+  Thermometer,
+  ToggleLeft,
+  Users,
+  Sparkles,
+  WandSparkles,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
+import { useHaLiveConnection } from '../../hooks/useHaLiveConnection';
+import { useHaPanelBridgeConnection } from '../../hooks/useHaPanelBridgeConnection';
+import {
+  buildHaOAuthAuthorizeUrl,
+  clearHassAuthTokensStorage,
+  exchangeHaOAuthCode,
+  loadHaLiveConfig,
+  persistHaOAuthSession,
+  saveHaLiveConfig,
+  validateHassUrl,
+} from '../../services/haLive';
+import {
+  saveSetupJourney,
+  type SetupJourney,
+  type SetupScanSummary,
+} from '../../services/setupJourney';
+import {
+  resolveOAuthReturnPath,
+  validateHaOAuthCallbackState,
+  type HaOAuthStatePayload,
+} from '../../security/oauthState';
+import {
+  buildSetupEntityGroupCounts,
+  buildSetupEntityGroupCountsFromRegistry,
+  groupLegacySetupDomains,
+  listSetupEntityGroups,
+  type SetupEntityGroupId,
+} from '../../services/setupEntityGroups';
+import { GlassLoader } from '../ui/GlassLoader';
+import {
+  SetupActionButton,
+  SetupBackdrop,
+  SetupBackButton,
+  SetupNotice,
+  SetupSecondaryButton,
+  ReconnectShell,
+  WizardActions,
+  WizardShell,
+} from './OnboardingGlass';
+import { OnboardingOrganizer } from './OnboardingOrganizer';
+
+const HA_OAUTH_CALLBACK_PARAM = 'ha_oauth_callback';
+const HA_OAUTH_SESSION_STATE_KEY = 'ha.dashboard.oauth.state';
+const SETUP_REQUEST_TIMEOUT_MS = 6000;
+const DISCOVERY_MINIMUM_VISIBLE_MS = 900;
+const PANEL_DISCOVERY_TIMEOUT_MS = 5000;
+const DIRECT_DISCOVERY_TIMEOUT_MS = 1400;
+
+const SETUP_GROUP_ICONS: Record<SetupEntityGroupId, LucideIcon> = {
+  lights: Lightbulb,
+  locks: LockKeyhole,
+  covers: PanelsTopLeft,
+  climate: Thermometer,
+  security: ShieldCheck,
+  cameras: Camera,
+  energy: Zap,
+  sensors: Gauge,
+  controls: ToggleLeft,
+  media: Play,
+  cleaning: Bot,
+  presence: Users,
+  scenes: WandSparkles,
+  weather: CloudSun,
+  updates: RefreshCw,
+  other: Shapes,
+};
+
+type Props = {
+  journey: SetupJourney;
+  onJourneyChange: (journey: SetupJourney) => void;
+  forceConfiguration?: boolean;
+};
+
+function createOAuthNonce() {
+  if (window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(18);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function persistJourney(
+  journey: Omit<SetupJourney, 'version' | 'updatedAt'>,
+  onJourneyChange: (journey: SetupJourney) => void,
+) {
+  const next = saveSetupJourney(journey, window.localStorage);
+  onJourneyChange(next);
+  return next;
+}
+
+function settleSetupRequest<T>(request: Promise<T | null>, timeoutMs = SETUP_REQUEST_TIMEOUT_MS) {
+  return new Promise<T | null>((resolve) => {
+    let settled = false;
+    const finish = (value: T | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      resolve(value);
+    };
+    const timeoutId = window.setTimeout(() => finish(null), timeoutMs);
+    void request.then(finish).catch(() => finish(null));
+  });
+}
+
+function WelcomeStep({ onContinue }: { onContinue: () => void }) {
+  return (
+    <SetupBackdrop>
+      <section className="onboarding-window grid w-full max-w-6xl !min-h-0 gap-0 lg:grid-cols-[0.88fr_1.12fr]">
+        <div className="flex flex-col justify-center p-6 sm:p-9 lg:p-12">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:rgb(var(--ui-accent-rgb))]">
+            La tua casa, finalmente personale
+          </p>
+          <h1 className="mt-4 text-[clamp(2.45rem,7vw,4.5rem)] font-semibold leading-[0.94] tracking-[-0.06em] text-[color:var(--ui-text-primary)]">
+            Tutta la casa.<br />Un solo gesto.
+          </h1>
+          <p className="mt-5 max-w-lg text-sm leading-6 text-[color:var(--ui-text-secondary)] sm:text-base sm:leading-7">
+            Un&apos;esperienza Home Assistant fluida e adattiva, progettata intorno alle tue stanze e ai dispositivi che usi davvero.
+          </p>
+          <div className="mt-8 max-w-xs sm:max-w-none">
+            <SetupActionButton onClick={onContinue}>Inizia ora</SetupActionButton>
+          </div>
+        </div>
+
+        <div className="border-t border-[color:var(--ui-border)] p-3 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
+          <div className="onboarding-card relative h-full min-h-[310px] overflow-hidden p-4 sm:min-h-[420px] sm:p-5">
+            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_70%_12%,rgb(var(--ui-accent-rgb)/0.16),transparent_35%),radial-gradient(circle_at_16%_90%,rgb(var(--ui-accent-secondary-rgb)/0.12),transparent_38%)]" />
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[11px] font-medium text-[color:var(--ui-text-secondary)]">Buon pomeriggio</div>
+                <div className="mt-0.5 truncate text-xl font-semibold tracking-[-0.035em] text-[color:var(--ui-text-primary)] sm:text-2xl">La tua casa è pronta</div>
+              </div>
+              <div className="onboarding-pill shrink-0 gap-2 px-3 py-2 text-xs font-semibold text-[color:var(--ui-text-primary)]"><CloudSun size={15} /> 22°</div>
+            </div>
+
+            <div className="relative mt-6 flex gap-2 overflow-hidden">
+              {['Arrivo', 'Relax', 'Notte'].map((scene, index) => (
+                <div key={scene} className="onboarding-pill min-w-0 flex-1 gap-1.5 px-2.5 py-2 text-[11px] font-medium text-[color:var(--ui-text-primary)]">
+                  <Sparkles size={12} style={{ color: `rgb(var(--ui-accent-rgb${index === 2 ? '-2' : ''}))` }} />
+                  <span className="truncate">{scene}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="relative mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
+              {[
+                { title: 'Luci soggiorno', value: 'Accese · 64%', icon: Lightbulb, tone: 'rgb(61 90 254 / 0.3)' },
+                { title: 'Porta ingresso', value: 'Chiusa', icon: DoorClosed, tone: 'rgb(45 212 191 / 0.22)' },
+                { title: 'Temperatura', value: '21,5°', icon: CloudSun, tone: 'rgb(251 146 60 / 0.28)' },
+                { title: 'Sicurezza', value: 'Protetta', icon: ShieldCheck, tone: 'rgb(52 211 153 / 0.22)' },
+              ].map(({ title, value, icon: Icon, tone }) => (
+                <div key={title} className="onboarding-card min-h-[92px] p-3 sm:min-h-[118px] sm:p-4" style={{ background: `linear-gradient(145deg, ${tone}, var(--ui-surface-glass-soft))` }}>
+                  <span className="onboarding-choice-icon !h-8 !w-8 !rounded-full"><Icon size={15} /></span>
+                  <div className="mt-3 truncate text-xs font-semibold text-[color:var(--ui-text-primary)] sm:mt-5 sm:text-sm">{title}</div>
+                  <div className="mt-0.5 truncate text-[10px] text-[color:var(--ui-text-secondary)] sm:text-xs">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </SetupBackdrop>
+  );
+}
+
+function ChoiceStep({ onDemo, onConfigure, onBack }: { onDemo: () => void; onConfigure: () => void; onBack: () => void }) {
+  return (
+    <SetupBackdrop>
+      <section className="onboarding-window w-full max-w-4xl !min-h-0 flex-col p-5 sm:p-8 lg:p-10">
+        <div className="flex items-center justify-start">
+          <SetupBackButton onClick={onBack} />
+        </div>
+        <div className="mt-8 max-w-2xl">
+          <h1 className="text-[clamp(2rem,6vw,3.15rem)] font-semibold leading-none tracking-[-0.05em] text-[color:var(--ui-text-primary)]">Come vuoi iniziare?</h1>
+          <p className="mt-3 text-sm leading-6 text-[color:var(--ui-text-secondary)] sm:text-base">Esplora subito l&apos;esperienza oppure collega la tua casa reale.</p>
+        </div>
+        <div className="mt-7 grid gap-3 md:grid-cols-2">
+          <button type="button" onClick={onDemo} className="onboarding-choice-card group">
+            <span className="onboarding-choice-icon"><Sparkles size={20} /></span>
+            <h2 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-[color:var(--ui-text-primary)]">Esplora la Demo</h2>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--ui-text-secondary)]">Home e Stanze già pronte, con dispositivi simulati e nessun server necessario.</p>
+            <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:rgb(var(--ui-accent-rgb))]">Apri la casa Demo <ChevronRight size={15} /></span>
+          </button>
+          <button type="button" onClick={onConfigure} className="onboarding-choice-card onboarding-choice-card-active group">
+            <span className="onboarding-choice-icon"><Network size={20} /></span>
+            <h2 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-[color:var(--ui-text-primary)]">Collega la tua casa</h2>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--ui-text-secondary)]">Cerchiamo prima una sessione Home Assistant disponibile, poi analizziamo i dispositivi e prepariamo il tuo spazio.</p>
+            <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:rgb(var(--ui-accent-rgb))]">Cerca Home Assistant <ChevronRight size={15} /></span>
+          </button>
+        </div>
+      </section>
+    </SetupBackdrop>
+  );
+}
+
+function countRegistryEntries(payload: unknown, key: 'entities' | 'devices') {
+  if (Array.isArray(payload)) return payload.length;
+  if (!payload || typeof payload !== 'object') return 0;
+  const list = (payload as Record<string, unknown>)[key];
+  return Array.isArray(list) ? list.length : 0;
+}
+
+function hasCategorizedSetupSummary(summary: SetupScanSummary | undefined) {
+  if (!summary) return false;
+  if (summary.entities === 0) return true;
+  const groupCount = Object.values(summary.groups ?? {}).reduce((total, count) => total + count, 0);
+  const domainCount = Object.values(summary.domains ?? {}).reduce((total, count) => total + count, 0);
+  return groupCount > 0 || domainCount > 0;
+}
+
+export function OnboardingExperience({ journey, onJourneyChange, forceConfiguration = false }: Props) {
+  const navigate = useNavigate();
+  const isEmbedded = useMemo(() => window.parent !== window, []);
+  const navigateInsideApp = useCallback(
+    (path: string) => {
+      if (!isEmbedded) {
+        navigate(path, { replace: true });
+      }
+    },
+    [isEmbedded, navigate],
+  );
+  const initialConfig = useMemo(loadHaLiveConfig, []);
+  const [hassUrl, setHassUrl] = useState(journey.hassUrl || initialConfig.url);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanProgress, setScanProgress] = useState(8);
+  const [scanStage, setScanStage] = useState('Connessione sicura a Home Assistant…');
+  const oauthExchangePromiseRef = useRef<ReturnType<typeof exchangeHaOAuthCode> | null>(null);
+  const connection = useHaLiveConnection({ url: hassUrl, token: '' });
+  const panelConnection = useHaPanelBridgeConnection();
+  const panelReady =
+    panelConnection.isManagedByParent && panelConnection.status === 'connected';
+  const panelReadyRef = useRef(panelReady);
+  const panelConnectRef = useRef(panelConnection.connect);
+  panelReadyRef.current = panelReady;
+  panelConnectRef.current = panelConnection.connect;
+  const [discoveryMinimumElapsed, setDiscoveryMinimumElapsed] = useState(false);
+  const usesPanelConnection = journey.connectionMethod === 'panel';
+  const activeConnection = usesPanelConnection ? panelConnection : connection;
+  const latestHaStatesRef = useRef(activeConnection.haStates);
+  const latestHaAreasRef = useRef(activeConnection.haAreas);
+  latestHaStatesRef.current = activeConnection.haStates;
+  latestHaAreasRef.current = activeConnection.haAreas;
+  const effectivePhase =
+    forceConfiguration && journey.phase === 'done'
+      ? usesPanelConnection
+        ? 'discover'
+        : 'server'
+      : journey.phase;
+  const isDiscoveryPhase = effectivePhase === 'discover' || effectivePhase === 'detected';
+
+  const updateJourney = (patch: Partial<SetupJourney>) => {
+    persistJourney(
+      {
+        ...journey,
+        ...patch,
+        phase: patch.phase ?? journey.phase,
+        mode: patch.mode === undefined ? journey.mode : patch.mode,
+      },
+      onJourneyChange,
+    );
+  };
+
+  const returnToConnection = () => {
+    activeConnection.disconnect();
+    if (usesPanelConnection) {
+      setFlowError(null);
+      setUrlError(null);
+      setScanBusy(false);
+      persistJourney(
+        {
+          phase: 'discover',
+          mode: 'real',
+          hassUrl: panelConnection.hassUrl,
+          connectionMethod: 'panel',
+        },
+        onJourneyChange,
+      );
+      navigateInsideApp('/setup?panel=1');
+      return;
+    }
+    clearHassAuthTokensStorage();
+    window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+    oauthExchangePromiseRef.current = null;
+    setFlowError(null);
+    setUrlError(null);
+    setScanBusy(false);
+    persistJourney({ phase: 'server', mode: 'real', hassUrl, connectionMethod: 'direct' }, onJourneyChange);
+    navigateInsideApp('/setup?reconnect=1');
+  };
+
+  useEffect(() => {
+    if (!isDiscoveryPhase) {
+      setDiscoveryMinimumElapsed(false);
+      return;
+    }
+
+    setDiscoveryMinimumElapsed(false);
+    void panelConnectRef.current();
+    const minimumId = window.setTimeout(
+      () => setDiscoveryMinimumElapsed(true),
+      DISCOVERY_MINIMUM_VISIBLE_MS,
+    );
+    const fallbackId = window.setTimeout(() => {
+      if (panelReadyRef.current) {
+        return;
+      }
+      persistJourney(
+        {
+          phase: 'server',
+          mode: 'real',
+          connectionMethod: 'direct',
+        },
+        onJourneyChange,
+      );
+      navigateInsideApp('/setup?manual=1');
+    }, isEmbedded ? PANEL_DISCOVERY_TIMEOUT_MS : DIRECT_DISCOVERY_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(minimumId);
+      window.clearTimeout(fallbackId);
+    };
+  }, [isDiscoveryPhase, isEmbedded, navigateInsideApp, onJourneyChange]);
+
+  useEffect(() => {
+    const callbackUrl = new URL(window.location.href);
+    if (callbackUrl.searchParams.get(HA_OAUTH_CALLBACK_PARAM) !== '1') return;
+    const code = callbackUrl.searchParams.get('code');
+    const receivedState = callbackUrl.searchParams.get('state');
+    const expectedState = window.sessionStorage.getItem(HA_OAUTH_SESSION_STATE_KEY);
+    const validation = validateHaOAuthCallbackState(receivedState, expectedState);
+    const cleanup = (path = '/setup') => {
+      window.history.replaceState({}, '', isEmbedded ? window.location.pathname : path);
+    };
+
+    if (!validation.ok || !code) {
+      window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+      setFlowError('La verifica OAuth è scaduta o non valida. Avvia nuovamente l’accesso.');
+      cleanup();
+      return;
+    }
+
+    let cancelled = false;
+    const exchange = async () => {
+      try {
+        const promise = oauthExchangePromiseRef.current ?? exchangeHaOAuthCode({
+          hassUrl: validation.payload.hassUrl,
+          clientId: window.location.origin,
+          code,
+        });
+        oauthExchangePromiseRef.current = promise;
+        const tokens = await promise;
+        if (cancelled) return;
+        persistHaOAuthSession({ hassUrl: validation.payload.hassUrl, clientId: window.location.origin, tokens });
+        window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+        setHassUrl(validation.payload.hassUrl);
+        setFlowError(null);
+        const returnPath = resolveOAuthReturnPath(validation.payload.returnTo);
+        if (returnPath !== '/setup') {
+          persistJourney({
+            phase: 'done',
+            mode: 'real',
+            hassUrl: validation.payload.hassUrl,
+            connectionMethod: 'direct',
+          }, onJourneyChange);
+          cleanup(returnPath);
+          navigateInsideApp(returnPath);
+          return;
+        }
+        persistJourney({
+          phase: 'scan',
+          mode: 'real',
+          hassUrl: validation.payload.hassUrl,
+          connectionMethod: 'direct',
+        }, onJourneyChange);
+        cleanup();
+      } catch (error) {
+        if (!cancelled) {
+          window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+          setFlowError(error instanceof Error ? error.message : 'Accesso Home Assistant non riuscito.');
+          persistJourney({
+            phase: 'server',
+            mode: 'real',
+            hassUrl: validation.payload.hassUrl,
+            connectionMethod: 'direct',
+          }, onJourneyChange);
+          cleanup();
+        }
+      }
+    };
+    void exchange();
+    return () => { cancelled = true; };
+  }, [isEmbedded, navigateInsideApp, onJourneyChange]);
+
+  useEffect(() => {
+    if (!scanBusy) return;
+    const progressId = window.setInterval(() => {
+      setScanProgress((current) => (current < 88 ? Math.min(88, current + 2) : current));
+    }, 450);
+    return () => window.clearInterval(progressId);
+  }, [scanBusy]);
+
+  useEffect(() => {
+    if (
+      effectivePhase !== 'scan' ||
+      hasCategorizedSetupSummary(journey.summary) ||
+      activeConnection.status !== 'disconnected'
+    ) return;
+    const startId = window.setTimeout(() => {
+      void activeConnection.connect();
+    }, 0);
+    return () => {
+      window.clearTimeout(startId);
+    };
+  }, [activeConnection.connect, activeConnection.status, effectivePhase, journey.summary]);
+
+  useEffect(() => {
+    if (
+      effectivePhase !== 'scan' ||
+      hasCategorizedSetupSummary(journey.summary) ||
+      activeConnection.status !== 'connected'
+    ) return;
+    setScanBusy(true);
+    setScanProgress(18);
+    setScanStage('Lettura dei registri di Home Assistant…');
+    let cancelled = false;
+    const scan = async () => {
+      const [currentUserPayload, entityRegistryDisplay, deviceRegistryDisplay, areaRegistry] = await Promise.all([
+        settleSetupRequest(activeConnection.callApi<unknown>({ type: 'auth/current_user' }, { reportError: false })),
+        settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/entity_registry/list_for_display' }, { reportError: false })),
+        settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/device_registry/list_for_display' }, { reportError: false })),
+        settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/area_registry/list' }, { reportError: false })),
+      ]);
+      if (cancelled) return;
+      setScanProgress((current) => Math.max(current, 58));
+      setScanStage('Verifica di entità, dispositivi e stanze…');
+      const [entityRegistry, deviceRegistry] = await Promise.all([
+        countRegistryEntries(entityRegistryDisplay, 'entities') > 0
+          ? Promise.resolve(entityRegistryDisplay)
+          : settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/entity_registry/list' }, { reportError: false })),
+        countRegistryEntries(deviceRegistryDisplay, 'devices') > 0
+          ? Promise.resolve(deviceRegistryDisplay)
+          : settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/device_registry/list' }, { reportError: false })),
+      ]);
+      if (cancelled) return;
+      setScanProgress((current) => Math.max(current, 82));
+      setScanStage('Classificazione dei dispositivi per categoria…');
+      const currentUser = currentUserPayload && typeof currentUserPayload === 'object'
+        ? currentUserPayload as Record<string, unknown>
+        : {};
+      const entityEntries = Object.entries(latestHaStatesRef.current);
+      const domains: Record<string, number> = {};
+      entityEntries.forEach(([entityId]) => {
+        const domain = entityId.split('.')[0] || 'other';
+        domains[domain] = (domains[domain] ?? 0) + 1;
+      });
+      const areas = Array.isArray(areaRegistry) ? areaRegistry.length : latestHaAreasRef.current.length;
+      const registryGroups = buildSetupEntityGroupCountsFromRegistry(entityRegistry);
+      const liveGroups = buildSetupEntityGroupCounts(entityEntries);
+      const summary: SetupScanSummary = {
+        entities: countRegistryEntries(entityRegistry, 'entities') || entityEntries.length,
+        devices: countRegistryEntries(deviceRegistry, 'devices'),
+        areas,
+        unavailable: entityEntries.filter(([, entity]) => entity.state === 'unavailable').length,
+        domains,
+        groups: Object.keys(registryGroups).length > 0 ? registryGroups : liveGroups,
+        userName: typeof currentUser.name === 'string' ? currentUser.name : undefined,
+        canManageHa: currentUser.is_owner === true || currentUser.is_admin === true,
+      };
+      setScanProgress(100);
+      setScanStage('Riepilogo completato');
+      persistJourney({
+        phase: 'scan',
+        mode: 'real',
+        hassUrl: usesPanelConnection ? panelConnection.hassUrl : hassUrl,
+        connectionMethod: usesPanelConnection ? 'panel' : 'direct',
+        summary,
+      }, onJourneyChange);
+      setScanBusy(false);
+    };
+    const scanId = window.setTimeout(() => void scan(), 0);
+    return () => {
+      window.clearTimeout(scanId);
+      cancelled = true;
+    };
+  }, [
+    activeConnection.callApi,
+    activeConnection.status,
+    effectivePhase,
+    hassUrl,
+    journey.summary,
+    onJourneyChange,
+    panelConnection.hassUrl,
+    usesPanelConnection,
+  ]);
+
+  if (effectivePhase === 'welcome') {
+    return <WelcomeStep onContinue={() => updateJourney({ phase: 'choice' })} />;
+  }
+
+  if (effectivePhase === 'choice') {
+    return (
+      <ChoiceStep
+        onBack={() => updateJourney({ phase: 'welcome' })}
+        onDemo={() => {
+          persistJourney({ phase: 'done', mode: 'demo' }, onJourneyChange);
+          navigateInsideApp('/home');
+        }}
+        onConfigure={() => {
+          persistJourney({
+            phase: 'discover',
+            mode: 'real',
+            connectionMethod: isEmbedded ? 'panel' : 'direct',
+          }, onJourneyChange);
+          navigateInsideApp('/setup');
+        }}
+      />
+    );
+  }
+
+  if (isDiscoveryPhase) {
+    const showDetectedHome = panelReady && discoveryMinimumElapsed;
+    const detectedEntityCount = Object.keys(panelConnection.haStates).length;
+    const detectedAreaCount = panelConnection.haAreas.length;
+    const chooseManualConnection = () => {
+      panelConnection.disconnect();
+      persistJourney(
+        {
+          phase: 'server',
+          mode: 'real',
+          connectionMethod: 'direct',
+        },
+        onJourneyChange,
+      );
+      navigateInsideApp('/setup?manual=1');
+    };
+    const confirmDetectedHome = () => {
+      const detectedUrl = panelConnection.hassUrl || window.location.origin;
+      setHassUrl(detectedUrl);
+      persistJourney(
+        {
+          phase: 'scan',
+          mode: 'real',
+          hassUrl: detectedUrl,
+          connectionMethod: 'panel',
+        },
+        onJourneyChange,
+      );
+      navigateInsideApp('/setup');
+    };
+
+    return (
+      <WizardShell
+        stepIndex={0}
+        title={showDetectedHome ? 'Abbiamo trovato la tua casa' : 'Cerchiamo la tua casa'}
+        description={
+          showDetectedHome
+            ? 'Il pannello ha già verificato questa sessione. Conferma la casa rilevata per continuare con analisi, layout e organizzazione.'
+            : 'Controlliamo automaticamente se questa installazione dispone già di una sessione Home Assistant sicura.'
+        }
+        onBack={() => updateJourney({
+          phase: 'choice',
+          mode: null,
+          connectionMethod: undefined,
+        })}
+      >
+        <div className="onboarding-card p-5 sm:p-6">
+          {showDetectedHome ? (
+            <>
+              <div className="flex items-start gap-4">
+                <span className="onboarding-choice-icon !h-12 !w-12 !rounded-full">
+                  <Server size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-[color:var(--ui-text-primary)]">
+                    Casa collegata tramite pannello
+                  </div>
+                  <div className="mt-1 truncate text-xs text-[color:var(--ui-text-secondary)]">
+                    {panelConnection.hassUrl || window.location.origin}
+                  </div>
+                </div>
+                <span className="onboarding-pill shrink-0 gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ui-text-primary)]">
+                  <Check size={13} />
+                  Verificata
+                </span>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="onboarding-card p-3.5">
+                  <div className="text-xl font-semibold text-[color:var(--ui-text-primary)]">{detectedEntityCount}</div>
+                  <div className="mt-1 text-[11px] text-[color:var(--ui-text-secondary)]">Entità rilevate</div>
+                </div>
+                <div className="onboarding-card p-3.5">
+                  <div className="text-xl font-semibold text-[color:var(--ui-text-primary)]">{detectedAreaCount}</div>
+                  <div className="mt-1 text-[11px] text-[color:var(--ui-text-secondary)]">Stanze rilevate</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <SetupNotice icon={<ShieldCheck size={16} />} title="Sessione gestita da Home Assistant">
+                  La dashboard userà il bridge del pannello e non salverà un token manuale.
+                </SetupNotice>
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-56 flex-col items-center justify-center text-center">
+              <GlassLoader
+                size="md"
+                label="Rilevamento della casa"
+                description="Cerchiamo una sessione Home Assistant già disponibile."
+              />
+            </div>
+          )}
+        </div>
+        <WizardActions>
+          <SetupSecondaryButton onClick={chooseManualConnection}>
+            Configura manualmente
+          </SetupSecondaryButton>
+          {showDetectedHome ? (
+            <SetupActionButton onClick={confirmDetectedHome}>Usa questa casa</SetupActionButton>
+          ) : null}
+        </WizardActions>
+      </WizardShell>
+    );
+  }
+
+  if (effectivePhase === 'server' || effectivePhase === 'authorize') {
+    const startOAuth = () => {
+      const validation = validateHassUrl(hassUrl);
+      if (validation.ok === false) {
+        setUrlError(validation.error);
+        return;
+      }
+      const normalizedUrl = validation.url;
+      const state: HaOAuthStatePayload = {
+        nonce: createOAuthNonce(),
+        hassUrl: normalizedUrl,
+        returnTo: forceConfiguration ? '/home' : '/setup',
+        issuedAt: Date.now(),
+      };
+      const serializedState = JSON.stringify(state);
+      const callbackUrl = new URL(
+        isEmbedded ? window.location.pathname : '/setup',
+        window.location.origin,
+      );
+      callbackUrl.searchParams.set(HA_OAUTH_CALLBACK_PARAM, '1');
+      saveHaLiveConfig({ url: normalizedUrl, token: '', rememberToken: false });
+      persistJourney({
+        phase: 'authorize',
+        mode: 'real',
+        hassUrl: normalizedUrl,
+        connectionMethod: 'direct',
+      }, onJourneyChange);
+      window.sessionStorage.setItem(HA_OAUTH_SESSION_STATE_KEY, serializedState);
+      window.location.assign(buildHaOAuthAuthorizeUrl({
+        hassUrl: normalizedUrl,
+        clientId: window.location.origin,
+        redirectUri: callbackUrl.toString(),
+        state: serializedState,
+      }));
+    };
+    const handleConnectionBack = () => {
+      if (forceConfiguration) {
+        navigateInsideApp('/home');
+        return;
+      }
+      updateJourney({ phase: 'choice', mode: null });
+    };
+    const connectionContent = (
+      <>
+        <label htmlFor="onboarding-ha-url" className="block text-xs font-semibold text-[color:var(--ui-text-secondary)]">Indirizzo del server</label>
+        <div className="onboarding-input-shell mt-2">
+          <Server size={17} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--ui-text-secondary)]" />
+          <input
+            id="onboarding-ha-url"
+            value={hassUrl}
+            onChange={(event) => { setHassUrl(event.target.value); setUrlError(null); setFlowError(null); }}
+            className="onboarding-input pl-11 pr-4 text-sm"
+            placeholder="http://homeassistant.local:8123"
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </div>
+        {urlError || flowError ? (
+          <div className="mt-3">
+            <SetupNotice icon={<LockKeyhole size={15} />} tone="danger">{urlError || flowError}</SetupNotice>
+          </div>
+        ) : null}
+        <div className="mt-4">
+          <SetupNotice icon={<ShieldCheck size={16} />} title="Accesso protetto da Home Assistant">
+            La password resta sul tuo server. L’app riceve soltanto una sessione revocabile.
+          </SetupNotice>
+        </div>
+        <WizardActions>
+          <SetupActionButton onClick={startOAuth}>{forceConfiguration ? 'Accedi di nuovo' : 'Continua su Home Assistant'}</SetupActionButton>
+        </WizardActions>
+      </>
+    );
+    if (forceConfiguration) {
+      return (
+        <ReconnectShell
+          title="Riconnetti Home Assistant"
+          description="La sessione non è più valida. Effettua nuovamente l’accesso: dashboard, layout e preferenze resteranno invariati."
+          onBack={handleConnectionBack}
+        >
+          {connectionContent}
+        </ReconnectShell>
+      );
+    }
+    return (
+      <WizardShell
+        stepIndex={0}
+        title="Collega Home Assistant"
+        description="Inserisci l’indirizzo del server. L’accesso avverrà direttamente sulla pagina sicura del tuo Home Assistant."
+        onBack={handleConnectionBack}
+      >
+        {connectionContent}
+      </WizardShell>
+    );
+  }
+
+  if (effectivePhase === 'scan') {
+    const summary = hasCategorizedSetupSummary(journey.summary) ? journey.summary : undefined;
+    const connectionHasFailed =
+      activeConnection.status === 'error' ||
+      activeConnection.status === 'offline' ||
+      activeConnection.status === 'reauth_required';
+    const requiresNewAccess =
+      !usesPanelConnection && activeConnection.status === 'reauth_required';
+    const entityGroups = summary
+      ? listSetupEntityGroups(summary.groups ?? groupLegacySetupDomains(summary.domains))
+      : [];
+    return (
+      <WizardShell stepIndex={1} title={summary ? `Casa trovata${summary.userName ? `, ${summary.userName}` : ''}` : 'Prepariamo la tua casa'} description={summary ? 'Questo è un riepilogo in sola lettura: nulla è stato rinominato o spostato.' : 'Verifichiamo account, stanze, dispositivi ed entità disponibili.'}>
+        {!summary ? (
+          <div className="onboarding-card flex min-h-60 flex-col items-center justify-center p-6 text-center">
+            {connectionHasFailed ? (
+              <span className="onboarding-choice-icon !h-14 !w-14 !rounded-full"><LockKeyhole size={23} /></span>
+            ) : (
+              <GlassLoader size="md" ariaLabel="Preparazione della casa in corso" />
+            )}
+            <div className="mt-5 text-sm font-semibold text-[color:var(--ui-text-primary)]">{requiresNewAccess ? 'Sessione scaduta' : connectionHasFailed ? 'Connessione interrotta' : 'Preparazione della casa'}</div>
+            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--ui-text-secondary)]">{activeConnection.error || scanStage}</div>
+            {!connectionHasFailed ? (
+              <div className="mt-6 w-full max-w-md">
+                <div
+                  role="progressbar"
+                  aria-label="Avanzamento analisi Home Assistant"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(scanProgress)}
+                  className="h-2 overflow-hidden rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-soft)] p-px shadow-[inset_0_1px_3px_rgb(0_0_0/0.16)]"
+                >
+                  <span
+                    className="block h-full rounded-full bg-[linear-gradient(90deg,rgb(var(--ui-accent-rgb)),rgb(var(--ui-accent-secondary-rgb)))] shadow-[0_0_16px_rgb(var(--ui-accent-rgb)/0.38)] transition-[width] duration-500 ease-out"
+                    style={{ width: `${scanProgress}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ui-text-secondary)]">
+                  <span>Analisi in corso</span>
+                  <span className="text-[color:var(--ui-text-primary)]">{Math.round(scanProgress)}%</span>
+                </div>
+              </div>
+            ) : null}
+            {connectionHasFailed ? (
+              <div className="mt-5 flex w-full max-w-sm flex-col gap-2 sm:flex-row sm:justify-center">
+                {!requiresNewAccess ? <SetupSecondaryButton onClick={() => void activeConnection.connect()} className="w-full sm:w-auto"><RefreshCw size={14} /> Riprova</SetupSecondaryButton> : null}
+                <SetupActionButton onClick={returnToConnection} trailingArrow={false} className="w-full sm:w-auto"><LockKeyhole size={14} /> Torna alla connessione</SetupActionButton>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                ['Entità', summary.entities],
+                ['Dispositivi', summary.devices],
+                ['Stanze', summary.areas],
+                ['Non disponibili', summary.unavailable],
+              ].map(([label, value]) => <div key={label} className="onboarding-card min-w-0 p-3.5 sm:p-4"><div className="truncate text-2xl font-semibold tracking-[-0.035em] text-[color:var(--ui-text-primary)]">{value}</div><div className="mt-1 truncate text-[11px] text-[color:var(--ui-text-secondary)] sm:text-xs">{label}</div></div>)}
+            </div>
+            {entityGroups.length ? (
+              <div className="mt-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Entità per gruppo</h2>
+                  <span className="text-[11px] text-[color:var(--ui-text-secondary)]">{entityGroups.length} categorie</span>
+                </div>
+                <div className="onboarding-summary-groups glass-scrollbar grid gap-2 pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {entityGroups.map((group) => {
+                    const GroupIcon = SETUP_GROUP_ICONS[group.id];
+                    return (
+                      <div key={group.id} className="onboarding-card flex min-w-0 items-center gap-3 px-3.5 py-3">
+                        <span className="onboarding-choice-icon !h-8 !w-8 !rounded-[0.7rem]">
+                          <GroupIcon size={15} strokeWidth={2} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-[color:var(--ui-text-primary)]">{group.label}</span>
+                        <span className="onboarding-pill min-w-8 shrink-0 px-2 py-1 text-[11px] font-semibold text-[color:var(--ui-text-primary)]">{group.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <WizardActions><SetupActionButton onClick={() => updateJourney({ phase: 'compose' })}>Continua</SetupActionButton></WizardActions>
+          </>
+        )}
+      </WizardShell>
+    );
+  }
+
+  if (effectivePhase === 'compose') {
+    return (
+      <WizardShell stepIndex={2} title="Scegli il punto di partenza" description="Parti da una base curata e personalizzala in Edit Mode. La composizione automatica arriverà in un aggiornamento dedicato." onBack={() => updateJourney({ phase: 'scan' })}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="onboarding-choice-card onboarding-choice-card-active"><span className="onboarding-choice-icon"><Layers3 size={18} /></span><div className="mt-5 font-semibold text-[color:var(--ui-text-primary)]">Layout iniziale</div><div className="mt-1 text-sm leading-6 text-[color:var(--ui-text-secondary)]">Una base pronta da personalizzare in Edit Mode.</div><div className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-[color:rgb(var(--ui-accent-rgb))]"><Check size={14} /> Selezionato</div></div>
+          <div aria-disabled="true" className="onboarding-choice-card opacity-60"><span className="onboarding-step-chip absolute right-4 top-4">Prossimamente</span><span className="onboarding-choice-icon"><WandSparkles size={18} /></span><div className="mt-5 font-semibold text-[color:var(--ui-text-primary)]">Crea automaticamente</div><div className="mt-1 text-sm leading-6 text-[color:var(--ui-text-secondary)]">Genererà stanze, stack e varianti in base ai dispositivi.</div></div>
+        </div>
+        <WizardActions><SetupActionButton onClick={() => updateJourney({ phase: journey.summary?.canManageHa ? 'organize' : 'complete' })}>Continua</SetupActionButton></WizardActions>
+      </WizardShell>
+    );
+  }
+
+  if (effectivePhase === 'organize') {
+    return (
+      <WizardShell stepIndex={3} title="Organizza la tua casa" description="Prepara piani, stanze ed entità in una bozza. Home Assistant verrà modificato soltanto dopo la conferma finale." onBack={() => updateJourney({ phase: 'compose' })}>
+        <OnboardingOrganizer
+          callApi={activeConnection.callApi}
+          canManage={journey.summary?.canManageHa === true}
+          onBack={() => updateJourney({ phase: 'compose' })}
+          onComplete={() => updateJourney({ phase: 'complete' })}
+          onReconnect={returnToConnection}
+        />
+      </WizardShell>
+    );
+  }
+
+  return (
+    <WizardShell stepIndex={4} stepLabel="Completato" title="La tua casa è pronta" description="Connessione verificata e spazio reale separato dalla Demo. Ora puoi iniziare a personalizzare la dashboard." compact>
+      <div className="onboarding-card flex flex-col items-center px-5 py-8 text-center"><span className="flex h-20 w-20 items-center justify-center rounded-full border border-emerald-200/24 bg-emerald-400/14 text-emerald-100 shadow-[0_20px_70px_rgba(16,185,129,0.18)]"><Check size={34} /></span><div className="mt-6 text-lg font-semibold text-[color:var(--ui-text-primary)]">Connessione completata</div><div className="mt-2 max-w-sm text-sm leading-6 text-[color:var(--ui-text-secondary)]">Troverai il Builder in Edit Mode e potrai cambiare ogni dettaglio in qualsiasi momento.</div></div>
+      <WizardActions><SetupActionButton onClick={() => { persistJourney({ ...journey, phase: 'done', mode: 'real' }, onJourneyChange); navigateInsideApp('/home'); }}>Apri la dashboard</SetupActionButton></WizardActions>
+    </WizardShell>
+  );
+}
+
+export function DemoLockedRoute({ pathname, onConnect }: { pathname: string; onConnect: () => void }) {
+  return (
+    <SetupBackdrop>
+      <section className="onboarding-window w-full max-w-xl !min-h-0 flex-col items-center p-6 text-center sm:p-10">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-amber-200/22 bg-amber-400/12 text-amber-100"><LockKeyhole size={25} /></span>
+        <div className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-100/72">Modalità Demo</div>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[color:var(--ui-text-primary)]">Questa sezione richiede una casa collegata</h1>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--ui-text-secondary)]">Nella Demo puoi esplorare Home e Stanze. Collega Home Assistant per sbloccare {pathname.replace('/', '') || 'questa funzione'}.</p>
+        <div className="mt-8 flex w-full flex-col-reverse justify-center gap-2 sm:w-auto sm:flex-row"><SetupSecondaryButton onClick={() => window.location.assign('/home')}>Torna a Home</SetupSecondaryButton><SetupActionButton onClick={onConnect}>Collega Home Assistant</SetupActionButton></div>
+      </section>
+    </SetupBackdrop>
+  );
+}

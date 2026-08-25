@@ -23,6 +23,9 @@ type CoverCardProps = {
   onDisplayMetricsChange?: (metrics: WidgetDisplayMetrics) => void;
   onPositionChange?: (position: number) => void;
   onTiltPositionChange?: (position: number) => void;
+  onOpenCover?: () => void;
+  onStopCover?: () => void;
+  onCloseCover?: () => void;
 };
 
 export function CoverCard({
@@ -36,6 +39,9 @@ export function CoverCard({
   onDisplayMetricsChange,
   onPositionChange,
   onTiltPositionChange,
+  onOpenCover,
+  onStopCover,
+  onCloseCover,
 }: CoverCardProps) {
   const fallbackVariant = displayVariant ?? resolveWidgetDisplayVariant({
     kind: 'cover',
@@ -72,6 +78,9 @@ export function CoverCard({
       onOpen={onClick}
       onPositionChange={onPositionChange}
       onTiltPositionChange={onTiltPositionChange}
+      onOpenCover={onOpenCover}
+      onStopCover={onStopCover}
+      onCloseCover={onCloseCover}
     />
   );
 }

@@ -378,8 +378,8 @@ export function ScenesCard({
     ? 'mb-1.5 flex items-center justify-between px-3 pt-2'
     : 'mb-3 flex items-center justify-between px-3 pt-3 sm:px-4 sm:pt-4';
   const titleClass = isShortCard
-    ? 'text-[0.92rem] font-semibold text-white/70 tracking-tight'
-    : 'text-base font-semibold text-white/70 tracking-tight';
+    ? 'text-[0.92rem] font-semibold text-[color:var(--ui-text-secondary)] tracking-tight'
+    : 'text-base font-semibold text-[color:var(--ui-text-secondary)] tracking-tight';
   const carouselClass = isShortCard
     ? 'flex min-w-0 gap-2 overflow-x-auto overscroll-x-contain pl-3 pr-3 pb-2 snap-x snap-mandatory scroll-pl-3 [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden'
     : 'flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain pl-3 pr-4 pb-3 snap-x snap-mandatory scroll-pl-3 [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:px-4 sm:pb-4 sm:scroll-pl-4';
@@ -388,8 +388,8 @@ export function ScenesCard({
     : 'w-[4.75rem] gap-2 rounded-2xl p-2.5';
   const iconShellClass = isShortCard ? 'w-7 h-7' : 'w-8 h-8';
   const labelClass = isShortCard
-    ? 'text-[0.76rem] font-semibold text-white/90 truncate leading-none'
-    : 'text-[0.85rem] font-semibold text-white/90 truncate leading-tight';
+    ? 'text-[0.76rem] font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)] truncate leading-none'
+    : 'text-[0.85rem] font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)] truncate leading-tight';
 
   return (
     <div
@@ -444,9 +444,9 @@ export function ScenesCard({
               key={`add-${scene.id}`}
               type="button"
               onClick={() => onAddScene?.(scene.id)}
-              className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.08] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden ${tileClass}`}
+              className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:bg-[color:var(--ui-fill-secondary)] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden ${tileClass}`}
             >
-              <span className={`relative flex-shrink-0 rounded-full bg-white/10 flex items-center justify-center overflow-hidden text-white/80 group-hover:text-white transition-colors ${iconShellClass}`}>
+              <span className={`relative flex-shrink-0 rounded-full bg-[color:var(--ui-fill-secondary)] flex items-center justify-center overflow-hidden text-[color:var(--ui-text-secondary)] group-hover:text-[color:var(--ui-text-primary)] transition-colors ${iconShellClass}`}>
                 <Plus size={iconSize} />
               </span>
               <span className={`w-full min-w-0 text-center ${labelClass}`}>
@@ -523,7 +523,7 @@ function SceneButton({
       aria-busy={isRunning}
       whileTap={{ scale: 0.96 }}
       style={tileStyle}
-      className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-white/[0.04] bg-white/[0.03] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden hover:bg-white/[0.065] ${tileClass} ${
+      className={`widget-action group relative flex shrink-0 snap-start flex-col items-center justify-center border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] active:scale-[0.96] transition-all duration-200 cursor-pointer overflow-hidden hover:bg-[color:var(--ui-fill-secondary)] ${tileClass} ${
         isRunning ? 'cursor-wait' : ''
       }`}
     >

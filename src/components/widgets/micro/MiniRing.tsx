@@ -88,10 +88,10 @@ export function MiniRing({ widget, state }: MiniRingProps) {
 
   return (
     <div
-      className={`group min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`group min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-[color:var(--ui-text-primary)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)] ${
         active
           ? 'border-blue-300/35 bg-blue-500/12 shadow-[0_0_22px_rgba(59,130,246,0.22)]'
-          : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'
+          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)]'
       }`}
     >
       <div className="flex h-full min-w-0 items-center gap-3">
@@ -102,7 +102,7 @@ export function MiniRing({ widget, state }: MiniRingProps) {
               cy={ringSize / 2}
               r={radius}
               fill="none"
-              stroke="rgba(255,255,255,0.2)"
+              stroke="var(--ui-fill-primary)"
               strokeWidth={strokeWidth}
             />
             <circle
@@ -118,13 +118,13 @@ export function MiniRing({ widget, state }: MiniRingProps) {
               style={{ transition: 'stroke-dashoffset 260ms ease-out' }}
             />
           </svg>
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-white/90">
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-[color:var(--ui-text-primary)]">
             {progressRounded}%
           </span>
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-white/55">{valueLabel}</p>
+          <p className="truncate text-sm font-medium leading-tight text-[color:var(--ui-text-primary)]">{label}</p>
+          <p className="mt-0.5 truncate text-[11px] leading-tight text-[color:var(--ui-text-tertiary)]">{valueLabel}</p>
         </div>
       </div>
     </div>

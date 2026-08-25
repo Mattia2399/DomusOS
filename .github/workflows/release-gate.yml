@@ -1,0 +1,74 @@
+name: Release gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'release/**'
+
+concurrency:
+  group: release-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: TypeScript, test, build, audit ed E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: npm
+
+      - name: Installa dipendenze
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run check
+
+      - name: Unit test
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle budget
+        run: npm run build:budget
+
+      - name: Audit dipendenze release
+        run: npm run audit:release
+
+      - name: Installa Chromium per Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end test
+        run: npm run test:e2e
+
+      - name: Crea pacchetto beta
+        run: node scripts/package-release.mjs
+
+      - name: Salva pacchetto beta verificato
+        uses: actions/upload-artifact@v4
+        with:
+          name: domusos-${{ github.sha }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Salva diagnostica Playwright in caso di errore
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

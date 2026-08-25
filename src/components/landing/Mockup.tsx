@@ -4,6 +4,15 @@ import { useDashboardState } from '../../hooks/useDashboardState';
 import type { Widget } from '../../types/dashboardModels';
 import type { MockEntityState } from '../../types/ha';
 
+/**
+ * Hero preview board.
+ *
+ * Rendered at the production grid geometry (48px row units, 16px gaps) so every
+ * card keeps its real aspect ratio instead of being stretched. The five cards
+ * tile a 6×5 board with zero gaps on desktop and reflow into a tidy 2-column
+ * stack on mobile.
+ */
+
 const previewWidgets = {
   alarm: {
     id: 'landing.alarm',
@@ -15,6 +24,17 @@ const previewWidgets = {
     alarmRequireAuthToDisarm: true,
     layout: { i: 'landing.alarm', x: 0, y: 0, w: 3, h: 3 },
   },
+  climate: {
+    id: 'climate.air_conditioner',
+    kind: 'climate',
+    title: 'Clima soggiorno',
+    entityId: 'climate.air_conditioner',
+    status: 'heat',
+    isOn: true,
+    value: 22,
+    unit: 'C',
+    layout: { i: 'climate.air_conditioner', x: 3, y: 0, w: 3, h: 3 },
+  },
   light: {
     id: 'light.living_room_lamp',
     kind: 'light',
@@ -24,7 +44,7 @@ const previewWidgets = {
     isOn: true,
     value: 72,
     unit: '%',
-    layout: { i: 'light.living_room_lamp', x: 3, y: 0, w: 3, h: 3 },
+    layout: { i: 'light.living_room_lamp', x: 0, y: 3, w: 2, h: 2 },
   },
   sensor: {
     id: 'landing.energy',
@@ -36,7 +56,7 @@ const previewWidgets = {
     value: 420,
     unit: 'W',
     sensorDisplayPrecision: 0,
-    layout: { i: 'landing.energy', x: 6, y: 0, w: 2, h: 2 },
+    layout: { i: 'landing.energy', x: 2, y: 3, w: 2, h: 2 },
   },
   lock: {
     id: 'landing.lock',
@@ -46,28 +66,7 @@ const previewWidgets = {
     status: 'locked',
     isOn: true,
     lockRequireAuthToUnlock: true,
-    layout: { i: 'landing.lock', x: 8, y: 0, w: 2, h: 2 },
-  },
-  climate: {
-    id: 'climate.air_conditioner',
-    kind: 'climate',
-    title: 'Clima soggiorno',
-    entityId: 'climate.air_conditioner',
-    status: 'heat',
-    isOn: true,
-    value: 22,
-    unit: 'C',
-    layout: { i: 'climate.air_conditioner', x: 0, y: 3, w: 3, h: 3 },
-  },
-  switch: {
-    id: 'landing.switch',
-    kind: 'switch',
-    title: 'Presa cucina',
-    entityId: 'switch.kitchen_outlet',
-    status: 'on',
-    isOn: true,
-    switchConsumptionEntityId: 'sensor.kitchen_outlet_power',
-    layout: { i: 'landing.switch', x: 3, y: 3, w: 3, h: 2 },
+    layout: { i: 'landing.lock', x: 4, y: 3, w: 2, h: 2 },
   },
 } satisfies Record<string, Widget>;
 
@@ -140,39 +139,27 @@ const previewEntities: Record<string, MockEntityState> = {
       target_temp_step: 0.5,
       min_temp: 16,
       max_temp: 30,
-      temperature_unit: '\u00B0C',
+      temperature_unit: '°C',
       current_humidity: 48,
       humidity: 45,
       supported_features: 1023,
     },
   },
-  switch: {
-    state: 'on',
-    toggleOn: true,
-    rawAttributes: {
-      device_class: 'outlet',
-      friendly_name: 'Presa cucina',
-      power: 128,
-      power_unit: 'W',
-    },
-  },
-  switchConsumption: {
-    state: '128',
-    numericValue: 128,
-    unit: 'W',
-  },
 };
 
 const sensorHistory = [320, 348, 336, 392, 410, 384, 420];
 
-function PreviewCard({
-  className,
-  children,
-}: {
-  className: string;
-  children: React.ReactNode;
-}) {
-  return <div className={`min-h-0 min-w-0 ${className}`}>{children}</div>;
+/** Explicit placement per card. Base = 2-col mobile stack; md = gapless 6×5 board. */
+const PLACEMENT = {
+  alarm: 'col-span-2 row-span-3 md:col-start-1 md:col-span-3 md:row-start-1 md:row-span-3',
+  climate: 'col-span-2 row-span-3 md:col-start-4 md:col-span-3 md:row-start-1 md:row-span-3',
+  light: 'col-span-1 row-span-2 md:col-start-1 md:col-span-2 md:row-start-4 md:row-span-2',
+  sensor: 'col-span-1 row-span-2 md:col-start-3 md:col-span-2 md:row-start-4 md:row-span-2',
+  lock: 'col-span-2 row-span-2 md:col-start-5 md:col-span-2 md:row-start-4 md:row-span-2',
+} as const;
+
+function Cell({ area, children }: { area: keyof typeof PLACEMENT; children: React.ReactNode }) {
+  return <div className={`min-h-0 min-w-0 ${PLACEMENT[area]}`}>{children}</div>;
 }
 
 export const DashboardMockup = () => {
@@ -192,15 +179,15 @@ export const DashboardMockup = () => {
         <div className="relative z-10 mb-6 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h3 className="truncate text-2xl font-semibold text-white">Buongiorno, Mattia</h3>
-            <p className="truncate text-sm text-white/50">Casa - dashboard live</p>
+            <p className="truncate text-sm text-white/50">Casa · dashboard live</p>
           </div>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white/70 backdrop-blur-md">
             M
           </div>
         </div>
 
-        <div className="relative z-10 grid grid-cols-2 gap-3 md:grid-cols-6 md:gap-4">
-          <PreviewCard className="col-span-2 h-[13.5rem] md:h-[15rem]">
+        <div className="relative z-10 grid grid-flow-row-dense auto-rows-[48px] grid-cols-2 gap-4 md:grid-cols-6">
+          <Cell area="alarm">
             <WidgetCardRenderer
               widget={previewWidgets.alarm}
               dashboardState={state}
@@ -212,51 +199,9 @@ export const DashboardMockup = () => {
               liveEntity={previewEntities.alarm}
               gridBreakpoint="lg"
             />
-          </PreviewCard>
+          </Cell>
 
-          <PreviewCard className="col-span-2 h-[13.5rem] md:h-[15rem]">
-            <WidgetCardRenderer
-              widget={previewWidgets.light}
-              dashboardState={state}
-              isEditMode={false}
-              isSelected={false}
-              onClick={actions.toggleLamp}
-              onLightBrightnessChange={(_, value) => actions.setLampBrightness(value)}
-              onLightColorChange={(_, hs) => actions.setLampHsColor(hs)}
-              liveEntity={previewEntities.light}
-              gridBreakpoint="lg"
-            />
-          </PreviewCard>
-
-          <PreviewCard className="col-span-1 h-[13.5rem] md:h-[15rem]">
-            <WidgetCardRenderer
-              widget={previewWidgets.sensor}
-              dashboardState={state}
-              isEditMode={false}
-              isSelected={false}
-              value={420}
-              sensorHistory={sensorHistory}
-              onClick={openCard}
-              liveEntity={previewEntities.sensor}
-              gridBreakpoint="lg"
-            />
-          </PreviewCard>
-
-          <PreviewCard className="col-span-1 h-[13.5rem] md:h-[15rem]">
-            <WidgetCardRenderer
-              widget={previewWidgets.lock}
-              dashboardState={state}
-              isEditMode={false}
-              isSelected={false}
-              onClick={openCard}
-              onLockToggle={openCard}
-              onLockOpen={openCard}
-              liveEntity={previewEntities.lock}
-              gridBreakpoint="lg"
-            />
-          </PreviewCard>
-
-          <PreviewCard className="col-span-2 h-[15.5rem] md:col-span-3 md:h-[16rem]">
+          <Cell area="climate">
             <WidgetCardRenderer
               widget={previewWidgets.climate}
               dashboardState={state}
@@ -269,21 +214,49 @@ export const DashboardMockup = () => {
               liveEntity={previewEntities.climate}
               gridBreakpoint="lg"
             />
-          </PreviewCard>
+          </Cell>
 
-          <PreviewCard className="col-span-2 h-[15.5rem] md:col-span-3 md:h-[16rem]">
+          <Cell area="light">
             <WidgetCardRenderer
-              widget={previewWidgets.switch}
+              widget={previewWidgets.light}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              onClick={actions.toggleLamp}
+              onLightBrightnessChange={(_, value) => actions.setLampBrightness(value)}
+              onLightColorChange={(_, hs) => actions.setLampHsColor(hs)}
+              liveEntity={previewEntities.light}
+              gridBreakpoint="lg"
+            />
+          </Cell>
+
+          <Cell area="sensor">
+            <WidgetCardRenderer
+              widget={previewWidgets.sensor}
+              dashboardState={state}
+              isEditMode={false}
+              isSelected={false}
+              value={420}
+              sensorHistory={sensorHistory}
+              onClick={openCard}
+              liveEntity={previewEntities.sensor}
+              gridBreakpoint="lg"
+            />
+          </Cell>
+
+          <Cell area="lock">
+            <WidgetCardRenderer
+              widget={previewWidgets.lock}
               dashboardState={state}
               isEditMode={false}
               isSelected={false}
               onClick={openCard}
-              onSwitchToggle={openCard}
-              liveEntity={previewEntities.switch}
-              switchConsumptionEntity={previewEntities.switchConsumption}
+              onLockToggle={openCard}
+              onLockOpen={openCard}
+              liveEntity={previewEntities.lock}
               gridBreakpoint="lg"
             />
-          </PreviewCard>
+          </Cell>
         </div>
 
         <div className="pointer-events-none absolute inset-0 z-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LCAyNTUsIDI1NSwgMC4wNSkiLz48L3N2Zz4=')] opacity-50 [mask-image:linear-gradient(to_bottom,white,transparent)]" />

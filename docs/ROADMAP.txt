@@ -1,0 +1,126 @@
+Problemi da risolvere prima della vendita
+1. Sicurezza: priorità assoluta
+Il punto più importante è chiarire che l’autenticazione dispositivo attuale è una barriera locale di UX, non un confine di sicurezza completo.
+In [useDeviceAuth.ts (line 181)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/hooks/useDeviceAuth.ts:181) viene eseguito navigator.credentials.get(), ma il risultato viene considerato valido semplicemente se esiste. Non c’è un server che genera la challenge e verifica firma, challenge, origin e contatore. La specifica WebAuthn prevede invece una verifica da parte della Relying Party. Specifica WebAuthn W3C.
+Quindi:
+va bene presentarla come “conferma rapida sul dispositivo”;
+non va presentata come autenticazione crittografica server-side;
+per una protezione reale servirebbe un backend/add-on oppure affidarsi completamente ai permessi e all’autenticazione HA.
+Inoltre:
+I codici Alarm/Lock sono separati dal layout e dai backup, ottimo, ma restano in chiaro nel localStorage in [widgetSecrets.ts (line 64)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/services/widgetSecrets.ts:64).
+Il rate limit è locale e può essere azzerato con refresh o manipolazione del browser.
+Il security audit log è locale e modificabile: è una cronologia UX, non un audit immutabile.
+Manca una CSP nella pagina principale.
+L’edit mode è abilitato in base alla route, non al ruolo HA: [MainBoard.tsx (line 4807)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/dashboard/MainBoard.tsx:4807). Un utente normale non dovrebbe poter modificare dashboard, connessioni o configurazioni sensibili.
+Il sistema multiutente e i relativi permessi sono già abbozzati, ma esplicitamente disabilitati in [ProfilePanel.tsx (line 720)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/settings/ProfilePanel.tsx:720).
+Per la versione commerciale renderei panel_custom/bridge il metodo consigliato, usando l’utente e la sessione HA. Per le installazioni esterne, OAuth deve restare la scelta primaria. Home Assistant documenta OAuth come flusso per applicazioni terze e associa i token all’utente autorizzato. Home Assistant Authentication API.
+2. Modalità demo e dati reali non sono abbastanza separati
+Quando HA è disconnesso vengono inseriti automaticamente mock di climate, alarm, media, cover, camera e vacuum in [MainBoard.tsx (line 4166)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/dashboard/MainBoard.tsx:4166).
+Questo è molto utile per sviluppare, ma per un utente può far sembrare reale uno stato simulato.
+Serve una separazione netta:
+“Modalità demo” esplicita con badge permanente.
+Nessun mock automatico nella modalità reale.
+In assenza di connessione: ultimo valore noto, timestamp e badge “Dati non aggiornati”.
+Comandi disabilitati quando non esiste una connessione affidabile.
+3. Stati dei comandi e connessione
+La gestione ottimistica esiste, ma è distribuita dentro MainBoard.
+Serve un unico “command coordinator” che gestisca:
+idle → invio → in attesa conferma HA → confermato
+                                ↘ timeout / rifiutato / rollback
+Ogni card dovrebbe ricevere lo stesso stato pending/success/error/stale.
+Il bridge e la connessione WebSocket non hanno un vero watchdog dello stato: se non arrivano più messaggi, l’interfaccia potrebbe continuare a risultare connessa. Aggiungerei:
+timestamp ultimo aggiornamento;
+heartbeat/watchdog;
+stato reconnecting;
+timeout visibile;
+ultima lettura conosciuta;
+rollback dei comandi non confermati.
+4. Editor e griglia
+La griglia ha fatto un grosso salto e gli E2E attuali passano. Tuttavia non coprono ancora tutte le combinazioni che hanno prodotto i problemi visivi visti durante lo sviluppo.
+Aggiungerei test geometrici per:
+pannello builder aperto e chiuso;
+2XL, XL, MD, SM e XS;
+stack molto pieni e molto vuoti;
+scrollbar del browser;
+zoom 80%, 100%, 125% e 150%;
+testi lunghi;
+cambio breakpoint e reload;
+card selezionata sul bordo destro.
+Nell’editor mostrerei anche un selettore esplicito del viewport: Auto | Desktop | Tablet | Mobile. Il breakpoint modificato non dovrebbe cambiare accidentalmente quando si apre l’inspector.
+5. Architettura troppo concentrata
+La maggiore fragilità tecnica è qui:
+MainBoard.tsx: 13.882 righe e 116 hook.
+RightSidebarManager.tsx: 4.594 righe.
+GridCanvas.tsx: 3.327 righe.
+StackGrid.tsx: 2.155 righe.
+[MainBoard.tsx (line 3950)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/dashboard/MainBoard.tsx:3950) contiene navigazione, connessione HA, mock, comandi, cronologie, sicurezza, OAuth, backup, pannelli e griglia.
+Non lo riscriverei tutto insieme. Lo dividerei progressivamente in:
+HomeShell
+DashboardRouter
+HaConnectionProvider
+DeviceCommandProvider
+SecurityProvider
+DashboardPersistenceProvider
+adapter separato per ogni tipo di dispositivo
+registry unico di card, capability, dimensioni e skeleton
+Questo ridurrà drasticamente le regressioni come quella precedente sull’ordine degli hook.
+6. Prestazioni
+La build attuale contiene:
+bundle principale: circa 2,58 MB;
+MapLibre: circa 1,06 MB;
+CSS: circa 588 KB.
+In [App.tsx (line 23)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/App.tsx:23) tutte le route applicative finiscono nello stesso componente principale. Occorre lazy loading per:
+Rooms;
+Security;
+Consumption;
+Automations;
+App Gallery;
+impostazioni avanzate Camera/Vacuum/Media;
+mappa membri.
+La Home iniziale non dovrebbe caricare MapLibre, builder automazioni e pannelli secondari prima che servano.
+7. Accessibilità e rifiniture
+Ci sono buone fondamenta, ma farei un audit completo:
+html dichiara ancora lang="en" nonostante la UI italiana: [index.html (line 2)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/index.html:2).
+Molti controlli sono da 32–40 px; per mobile punterei a 44 px.
+prefers-reduced-motion è implementato solo su alcuni componenti.
+Drag, reorder e resize non hanno ancora un equivalente completo da tastiera.
+Contrasto dei testi white/40–45 da verificare su ogni tema.
+Nella Light compaiono due azioni accessibili identiche per cambiare modalità: [LightCardView.tsx (line 123)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/widgets/LightCardView.tsx:123).
+Funzioni che aggiungerei per una vera esperienza DomusOS
+Non altre card, almeno inizialmente. Aggiungerei un livello superiore alle card:
+Home Summary adattivo
+In alto: “Casa protetta”, “3 luci accese”, “finestra aperta”, “consumi sopra la media”. Non un elenco fisso, ma informazioni rilevanti per ora, presenza e stato.
+
+Centro Attenzione
+Una sola sezione per batteria bassa, dispositivi offline, perdite, porte aperte, allarme e anomalie energetiche.
+
+Cronologia unificata
+Alarm, Lock e Camera hanno già cronologie dedicate. Le unirei in una timeline della casa con filtri per stanza, persona e dispositivo.
+
+Undo delle azioni recenti
+Dopo “Spegni tutte le luci” o una scena: piccolo feedback con “Annulla”. È una caratteristica percepita immediatamente come premium.
+
+Device Health
+Batteria, ultimo contatto, disponibilità, qualità connessione e problemi di configurazione in una pagina unica.
+
+Personalizzazione per utente e dispositivo
+Layout differenti per admin, membro, ospite, tablet a muro e telefono. Il codice è parzialmente predisposto, ma va collegato realmente ai ruoli HA.
+
+Ricerca globale e command palette
+Ricerca per stanza, dispositivo, entità, scena e azione. L’assistente vocale esiste già: dovrebbe usare lo stesso motore di comandi.
+
+Azioni contestuali verso le automazioni
+Dal pannello di una luce: “Crea automazione da questa azione” oppure “Avvisami se resta accesa per 30 minuti”.
+
+Roadmap che consiglio
+Fase	Obiettivo
+1. Freeze	Commit di sicurezza dello stato attuale: ci sono 43 file modificati e 31 non tracciati.
+2. Release gate	Sistemare i 3 test unitari falliti, rimuovere il doppio controllo Light e portare tutto a verde.
+3. Security	Ruoli edit mode, CSP, distinzione sicurezza locale/server, token, Alarm/Lock e modalità demo.
+4. Affidabilità	Watchdog HA, stati stale, command coordinator e rollback.
+5. Editor	Eliminare clipping, viewport espliciti, undo/redo e indicatore di salvataggio.
+6. Performance	Route lazy, caricamento differito dei pannelli e bundle budget.
+7. Premium layer	Home Summary, Centro Attenzione, Device Health e timeline globale.
+8. Distribuzione	Panel bridge stabile, pacchetto /local, poi HACS e vera PWA.
+
+La mia raccomandazione netta è: non aggiungerei una nuova card adesso. Porterei queste otto aree a uno standard beta vendibile. Visivamente il prodotto ha già personalità; ciò che farà pagare e restare gli utenti sarà la sensazione che ogni stato sia reale, ogni comando affidabile e nulla possa rompersi cambiando dispositivo o connessione.

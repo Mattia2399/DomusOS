@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Blinds, DoorOpen, SlidersHorizontal, Square } from 'lucide-react';
+import GlassSlider from '../ui/GlassSlider';
 import type { CoverCardModel } from './coverCardModel';
 import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 import './CoverCard.css';
@@ -13,6 +14,9 @@ type CoverCardViewProps = {
   onOpen: () => void;
   onPositionChange?: (position: number) => void;
   onTiltPositionChange?: (position: number) => void;
+  onOpenCover?: () => void;
+  onStopCover?: () => void;
+  onCloseCover?: () => void;
 };
 
 type CoverCardControlMode = 'position' | 'tilt';
@@ -60,6 +64,9 @@ export function CoverCardView({
   onOpen,
   onPositionChange,
   onTiltPositionChange,
+  onOpenCover,
+  onStopCover,
+  onCloseCover,
 }: CoverCardViewProps) {
   const [controlMode, setControlMode] = useState<CoverCardControlMode>('position');
   const [draftPosition, setDraftPosition] = useState<number | null>(null);
@@ -68,8 +75,16 @@ export function CoverCardView({
   const DeviceIcon = resolveDeviceIcon(model);
   const canUsePosition = model.isAvailable && model.supportsSetPosition && Boolean(onPositionChange);
   const canUseTilt = model.isAvailable && model.hasTilt && model.supportsSetTiltPosition && Boolean(onTiltPositionChange);
+  const usesStackedControls = canUseTilt && (layoutVariant === 'standard' || layoutVariant === 'full');
+  const usesQuickActions = layoutVariant === 'full';
+  const canOpenCover = model.isAvailable && model.supportsOpen && Boolean(onOpenCover);
+  const canStopCover = model.isAvailable && model.supportsStop && Boolean(onStopCover);
+  const canCloseCover = model.isAvailable && model.supportsClose && Boolean(onCloseCover);
   const activeTiltPreset = findNearestTiltPreset(model.tiltPosition);
   const sliderValue = draftPosition ?? snapPosition(model.position);
+  const sliderCoverage = clamp(100 - sliderValue, 0, 100);
+  const sliderInputValue = sliderCoverage;
+  const positionFromSliderInput = (value: number) => snapPosition(100 - value);
   const visualMovementClass = model.state === 'opening'
     ? 'cover-card__blind--moving cover-card__blind--opening'
     : model.state === 'closing'
@@ -80,13 +95,13 @@ export function CoverCardView({
       '--cover-card-position': `${model.position}%`,
       '--cover-card-coverage': `${model.coverage}%`,
       '--cover-card-tilt': `${model.tiltPosition}%`,
-      '--cover-slider-progress': `${sliderValue}%`,
+      '--cover-slider-coverage': `${sliderCoverage}%`,
     }) as React.CSSProperties,
-    [model.coverage, model.position, model.tiltPosition, sliderValue],
+    [model.coverage, model.position, model.tiltPosition, sliderCoverage],
   );
   const subtitle =
     model.isAvailable
-      ? `${model.stateLabel} - ${model.deviceClassLabel}`
+      ? `${model.stateLabel} • ${model.position}% apertura`
       : model.stateLabel;
 
   useEffect(() => {
@@ -106,6 +121,121 @@ export function CoverCardView({
     setDraftPosition(nextPosition);
     onPositionChange?.(nextPosition);
   };
+
+  const renderTiltSegments = () => (
+    <div className="cover-card__tilt-segments" role="group" aria-label={`Inclinazione lamelle ${model.title}`}>
+      {TILT_PRESETS.map((option) => {
+        const active = option.value === activeTiltPreset.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={`cover-card__tilt-option ${active ? 'cover-card__tilt-option--active' : ''}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTiltPositionChange?.(option.value);
+            }}
+            aria-pressed={active}
+            aria-label={`Imposta inclinazione lamelle a ${option.ariaLabel}`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderPositionSlider = () => (
+    <div className="cover-card__cover-slider">
+      <span className={`cover-card__cover-slider-fill ${visualMovementClass}`} aria-hidden="true" />
+      <span className="cover-card__cover-slider-handle" aria-hidden="true" />
+      <GlassSlider
+        variant="overlay"
+        className="cover-card__cover-range"
+        min={0}
+        max={100}
+        step={COVER_POSITION_STEP}
+        value={sliderInputValue}
+        disabled={!canUsePosition}
+        aria-label={`Posizione ${model.title}`}
+        aria-valuetext={`${sliderValue}% apertura`}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          pointerActiveRef.current = true;
+          setDraftPosition(positionFromSliderInput(Number(event.currentTarget.value)));
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation();
+          pointerActiveRef.current = false;
+          commitPosition(positionFromSliderInput(Number(event.currentTarget.value)));
+          skipNextBlurCommitRef.current = true;
+        }}
+        onPointerCancel={(event) => {
+          event.stopPropagation();
+          pointerActiveRef.current = false;
+          setDraftPosition(null);
+        }}
+        onChange={(event) => setDraftPosition(positionFromSliderInput(Number(event.currentTarget.value)))}
+        onClick={(event) => event.stopPropagation()}
+        onKeyUp={(event) => {
+          if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+            commitPosition(positionFromSliderInput(Number(event.currentTarget.value)));
+          }
+        }}
+        onBlur={(event) => {
+          if (skipNextBlurCommitRef.current) {
+            skipNextBlurCommitRef.current = false;
+            return;
+          }
+          if (draftPosition !== null && !pointerActiveRef.current) {
+            commitPosition(positionFromSliderInput(Number(event.currentTarget.value)));
+          }
+        }}
+      />
+    </div>
+  );
+
+  const renderQuickActions = () => (
+    <div className="cover-card__quick-actions" role="group" aria-label={`Comandi rapidi ${model.title}`}>
+      <button
+        type="button"
+        className="cover-card__quick-action"
+        disabled={!canOpenCover}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenCover?.();
+        }}
+      >
+        Apri
+      </button>
+      <button
+        type="button"
+        className="cover-card__quick-action cover-card__quick-action--stop"
+        disabled={!canStopCover}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onStopCover?.();
+        }}
+      >
+        Stop
+      </button>
+      <button
+        type="button"
+        className="cover-card__quick-action"
+        disabled={!canCloseCover}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onCloseCover?.();
+        }}
+      >
+        Chiudi
+      </button>
+    </div>
+  );
 
   return (
     <div
@@ -138,7 +268,7 @@ export function CoverCardView({
           <span className="cover-card__subtitle" title={subtitle}>{subtitle}</span>
         </span>
 
-        {canUseTilt ? (
+        {canUseTilt && !usesStackedControls ? (
           <button
             type="button"
             className="cover-card__mode-button"
@@ -158,77 +288,25 @@ export function CoverCardView({
           </button>
         ) : null}
 
-        <div className="cover-card__controls" onClick={(event) => event.stopPropagation()}>
-          {controlMode === 'tilt' && canUseTilt ? (
-            <div className="cover-card__tilt-segments" role="group" aria-label={`Inclinazione lamelle ${model.title}`}>
-              {TILT_PRESETS.map((option) => {
-                const active = option.value === activeTiltPreset.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`cover-card__tilt-option ${active ? 'cover-card__tilt-option--active' : ''}`}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onTiltPositionChange?.(option.value);
-                    }}
-                    aria-pressed={active}
-                    aria-label={`Imposta inclinazione lamelle a ${option.ariaLabel}`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+        <div
+          className={`cover-card__controls ${usesStackedControls ? 'cover-card__controls--stacked' : ''} ${
+            usesQuickActions ? 'cover-card__controls--with-actions' : ''
+          }`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {usesStackedControls ? (
+            <>
+              {renderTiltSegments()}
+              {renderPositionSlider()}
+              {usesQuickActions ? renderQuickActions() : null}
+            </>
+          ) : controlMode === 'tilt' && canUseTilt ? (
+            renderTiltSegments()
           ) : (
-            <div className="cover-card__cover-slider">
-              <span className={`cover-card__cover-slider-fill ${visualMovementClass}`} aria-hidden="true" />
-              <span className="cover-card__cover-slider-handle" aria-hidden="true" />
-              <input
-                className="cover-card__cover-range"
-                type="range"
-                min={0}
-                max={100}
-                step={COVER_POSITION_STEP}
-                value={sliderValue}
-                disabled={!canUsePosition}
-                aria-label={`Posizione ${model.title}`}
-                aria-valuetext={`${sliderValue}%`}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  pointerActiveRef.current = true;
-                  setDraftPosition(snapPosition(Number(event.currentTarget.value)));
-                }}
-                onPointerUp={(event) => {
-                  event.stopPropagation();
-                  pointerActiveRef.current = false;
-                  commitPosition(Number(event.currentTarget.value));
-                  skipNextBlurCommitRef.current = true;
-                }}
-                onPointerCancel={(event) => {
-                  event.stopPropagation();
-                  pointerActiveRef.current = false;
-                  setDraftPosition(null);
-                }}
-                onChange={(event) => setDraftPosition(snapPosition(Number(event.currentTarget.value)))}
-                onClick={(event) => event.stopPropagation()}
-                onKeyUp={(event) => {
-                  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
-                    commitPosition(Number(event.currentTarget.value));
-                  }
-                }}
-                onBlur={(event) => {
-                  if (skipNextBlurCommitRef.current) {
-                    skipNextBlurCommitRef.current = false;
-                    return;
-                  }
-                  if (draftPosition !== null && !pointerActiveRef.current) {
-                    commitPosition(Number(event.currentTarget.value));
-                  }
-                }}
-              />
-            </div>
+            <>
+              {renderPositionSlider()}
+              {usesQuickActions ? renderQuickActions() : null}
+            </>
           )}
         </div>
       </div>

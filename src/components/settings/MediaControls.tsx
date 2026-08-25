@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowLeft,
   Bell,
   Cast,
   Check,
@@ -27,6 +25,8 @@ import {
 } from 'lucide-react';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
+import { ContextSecondaryPage } from './ContextSecondaryPage';
+import GlassSlider from '../ui/GlassSlider';
 import { translateMediaPlayerState } from '../../utils/mediaPlayerState';
 
 interface MediaOutputDevice {
@@ -118,6 +118,7 @@ interface MediaControlsProps {
   onPlayMedia?: (request: MediaPlayRequest) => void;
   onSelectOutputDevice?: (deviceId: string) => void;
   onToggleMultiroomDevice?: (deviceId: string, shouldJoin: boolean) => void;
+  onSecondaryPageChange?: (open: boolean) => void;
 }
 
 const DEFAULT_ALBUM_ART =
@@ -305,8 +306,8 @@ function SecondaryAction({
     <button
       type="button"
       disabled={disabled}
-      className={`h-12 w-12 min-[420px]:h-14 min-[420px]:w-14 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white/90 flex items-center justify-center transition-colors ${
-        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/15'
+      className={`glass-button flex h-12 w-12 items-center justify-center rounded-full text-[color:var(--ui-text-primary)] transition-colors min-[420px]:h-14 min-[420px]:w-14 ${
+        disabled ? 'cursor-not-allowed opacity-50' : ''
       }`}
       aria-label={label}
       title={label}
@@ -368,6 +369,7 @@ export function MediaControlsPanel({
   onPlayMedia,
   onSelectOutputDevice,
   onToggleMultiroomDevice,
+  onSecondaryPageChange,
 }: MediaControlsProps) {
   const VOLUME_DEBOUNCE_MS = 120;
   const volumeDebounceRef = useRef<number | null>(null);
@@ -386,7 +388,11 @@ export function MediaControlsPanel({
     selectedOutputDeviceIdProp ?? availableOutputDevices[0]?.id ?? '',
   );
   const [localGroupedDeviceIds, setLocalGroupedDeviceIds] = useState<string[]>([]);
-  const [multiroomOverlayOpen, setMultiroomOverlayOpen] = useState(false);
+  const [multiroomPageOpen, setMultiroomPageOpen] = useState(false);
+  useEffect(() => {
+    onSecondaryPageChange?.(multiroomPageOpen);
+    return () => onSecondaryPageChange?.(false);
+  }, [multiroomPageOpen, onSecondaryPageChange]);
   const selectedOutputDeviceId = selectedOutputDeviceIdProp ?? localOutputDeviceId;
   const resolvedShuffleEnabled = Boolean(shuffleEnabled);
   const resolvedRepeatMode: MediaRepeatMode = repeatMode === 'one' || repeatMode === 'all' ? repeatMode : 'off';
@@ -486,7 +492,7 @@ export function MediaControlsPanel({
 
   useEffect(() => {
     if (!supportsGrouping || availableMultiroomDevices.length === 0) {
-      setMultiroomOverlayOpen(false);
+      setMultiroomPageOpen(false);
     }
   }, [availableMultiroomDevices.length, supportsGrouping]);
 
@@ -560,6 +566,63 @@ export function MediaControlsPanel({
     onToggleMultiroomDevice?.(deviceId, shouldJoin);
   };
 
+  if (multiroomPageOpen) {
+    return (
+      <ContextSecondaryPage
+        title="Riproduci anche su"
+        subtitle={multiroomSummary}
+        backLabel="Player"
+        icon={<Speaker size={18} />}
+        iconClassName="text-cyan-200"
+        onBack={() => setMultiroomPageOpen(false)}
+      >
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} min-w-0 max-w-full overflow-hidden`}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span>
+              <p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Dispositivi disponibili</p>
+              <p className="mt-0.5 text-[11px] text-[color:var(--ui-text-tertiary)]">Scegli speaker, TV o cast da collegare</p>
+            </span>
+            <span className="text-xs font-semibold text-[color:var(--ui-text-tertiary)]">{availableMultiroomDevices.length}</span>
+          </div>
+          <div className="grid max-h-[min(56dvh,32rem)] min-w-0 max-w-full gap-2.5 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:none] [touch-action:pan-y] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+            {availableMultiroomDevices.map((device) => {
+              const isGrouped = groupedDeviceIds.has(device.id);
+              const DeviceIcon = device.kind === 'tv' ? Tv2 : device.kind === 'cast' ? Cast : Speaker;
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => toggleMultiroomDevice(device.id, !isGrouped)}
+                  className={`flex w-full min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.98] ${
+                    isGrouped
+                      ? 'border-[color:rgb(var(--ui-accent-rgb)/0.34)] bg-[color:rgb(var(--ui-accent-rgb)/0.14)] text-[color:var(--ui-text-primary)]'
+                      : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
+                  }`}
+                  aria-pressed={isGrouped}
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${isGrouped ? 'border-[color:rgb(var(--ui-accent-rgb)/0.34)] bg-[color:rgb(var(--ui-accent-rgb)/0.15)] text-[color:var(--ui-accent)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'}`}>
+                      <DeviceIcon size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1 overflow-hidden">
+                      <span className="block truncate text-sm font-semibold">{device.name}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-[color:var(--ui-text-tertiary)]">{isGrouped ? 'Collegato' : device.subtitle ?? 'Disponibile'}</span>
+                    </span>
+                  </span>
+                  {isGrouped ? <Check size={16} className="shrink-0 text-[color:var(--ui-accent)]" /> : <ChevronRight size={15} className="shrink-0 text-[color:var(--ui-text-tertiary)]" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+          <p className="text-xs leading-relaxed text-[color:var(--ui-text-tertiary)]">Il player corrente rimane il leader del gruppo. Puoi aggiungere o rimuovere dispositivi in qualsiasi momento.</p>
+        </div>
+      </ContextSecondaryPage>
+    );
+  }
+
   return (
     <div className={`${CONTEXT_PANEL_LAYOUT.shell} relative`}>
       <ContextPanelHeader title={name} subtitle={translatedStatus} icon={<Speaker size={22} />} fallbackTitle="Diffusore" />
@@ -579,14 +642,14 @@ export function MediaControlsPanel({
           />
 
           <div className="mt-4 text-center">
-            <p className="text-white text-lg font-medium">{resolvedTrackTitle}</p>
-            <p className="text-gray-400 text-sm font-light mt-1">{resolvedTrackArtist}</p>
+            <p className="text-lg font-medium text-[color:var(--ui-text-primary)]">{resolvedTrackTitle}</p>
+            <p className="mt-1 text-sm font-light text-[color:var(--ui-text-secondary)]">{resolvedTrackArtist}</p>
             {metadataDetails.length > 0 ? (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                 {metadataDetails.slice(0, 7).map((detail) => (
                   <span
                     key={detail}
-                    className="max-w-[10rem] truncate rounded-full border border-white/8 bg-white/[0.07] px-2.5 py-1 text-[10px] font-semibold text-white/55"
+                    className="max-w-[10rem] truncate rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--ui-text-tertiary)]"
                     title={detail}
                   >
                     {detail}
@@ -597,23 +660,23 @@ export function MediaControlsPanel({
           </div>
 
           <div className="mt-4">
-            <div className="h-1 rounded-full bg-white/20 overflow-hidden">
-              <div className="h-full bg-white rounded-full transition-[width]" style={{ width: `${displayProgress}%` }} />
+            <div className="h-1 overflow-hidden rounded-full bg-[color:var(--ui-fill-secondary)]">
+              <div className="h-full rounded-full bg-[color:var(--ui-accent)] transition-[width]" style={{ width: `${displayProgress}%` }} />
             </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-white/60">
+            <div className="mt-2 flex items-center justify-between text-xs text-[color:var(--ui-text-tertiary)]">
               <span>{elapsed}</span>
               <span>{total}</span>
             </div>
           </div>
 
-          <div className="mt-4 rounded-full bg-white/[0.04] backdrop-blur-md border border-white/5 p-2 flex items-center justify-center gap-2.5">
+          <div className="dashboard-content-surface-soft mt-4 flex items-center justify-center gap-2.5 rounded-full p-2">
             <button
               type="button"
-              className={`w-9 h-9 rounded-full border text-white flex items-center justify-center transition-colors ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full border text-[color:var(--ui-text-primary)] transition-colors ${
                 resolvedShuffleEnabled
-                  ? 'bg-white/22 border-white/30 text-white'
-                  : 'bg-white/10 border-white/10'
-              } ${supportsShuffle ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'}`}
+                  ? 'liquid-glass-selection border-[color:var(--ui-border-strong)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)]'
+              } ${supportsShuffle ? 'hover:bg-[color:var(--ui-fill-secondary)]' : 'cursor-not-allowed opacity-45'}`}
               disabled={!supportsShuffle}
               aria-label="Riproduzione casuale"
               title={resolvedShuffleEnabled ? 'Casuale attivo' : 'Casuale disattivato'}
@@ -630,8 +693,8 @@ export function MediaControlsPanel({
 
             <button
               type="button"
-              className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
-                supportsPreviousTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
+              className={`flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)] transition-colors ${
+                supportsPreviousTrack ? 'hover:bg-[color:var(--ui-fill-secondary)]' : 'cursor-not-allowed opacity-45'
               }`}
               aria-label="Traccia precedente"
               disabled={!supportsPreviousTrack}
@@ -642,7 +705,7 @@ export function MediaControlsPanel({
 
             <button
               type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/24 bg-white/18 text-white shadow-[0_0_18px_rgba(255,255,255,0.12)] backdrop-blur-xl transition-colors hover:bg-white/24"
+              className="liquid-glass-selection flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] text-[color:var(--ui-accent)] shadow-[0_0_18px_rgb(var(--ui-accent-rgb)/0.12)] transition-colors"
               onClick={onTogglePlayback}
               aria-label={isPlaying ? 'Metti in pausa' : 'Riproduci'}
             >
@@ -651,8 +714,8 @@ export function MediaControlsPanel({
 
             <button
               type="button"
-              className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
-                supportsNextTrack ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
+              className={`flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)] transition-colors ${
+                supportsNextTrack ? 'hover:bg-[color:var(--ui-fill-secondary)]' : 'cursor-not-allowed opacity-45'
               }`}
               aria-label="Traccia successiva"
               disabled={!supportsNextTrack}
@@ -663,11 +726,11 @@ export function MediaControlsPanel({
 
             <button
               type="button"
-              className={`relative w-9 h-9 rounded-full border text-white flex items-center justify-center transition-colors ${
+              className={`relative flex h-9 w-9 items-center justify-center rounded-full border text-[color:var(--ui-text-primary)] transition-colors ${
                 resolvedRepeatMode !== 'off'
-                  ? 'bg-white/22 border-white/30 text-white'
-                  : 'bg-white/10 border-white/10'
-              } ${supportsRepeat ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'}`}
+                  ? 'liquid-glass-selection border-[color:var(--ui-border-strong)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)]'
+              } ${supportsRepeat ? 'hover:bg-[color:var(--ui-fill-secondary)]' : 'cursor-not-allowed opacity-45'}`}
               disabled={!supportsRepeat}
               aria-label={repeatButtonLabel}
               title={repeatButtonLabel}
@@ -681,7 +744,7 @@ export function MediaControlsPanel({
             >
               <Repeat size={15} />
               {resolvedRepeatMode === 'one' ? (
-                <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white/25 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
+                <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-bg-elevated)] px-1 text-[9px] font-semibold leading-none text-[color:var(--ui-text-primary)]">
                   1
                 </span>
               ) : null}
@@ -690,8 +753,8 @@ export function MediaControlsPanel({
             {supportsStop ? (
               <button
                 type="button"
-                className={`w-9 h-9 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center transition-colors ${
-                  onStop ? 'hover:bg-white/15' : 'opacity-45 cursor-not-allowed'
+                className={`flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)] transition-colors ${
+                  onStop ? 'hover:bg-[color:var(--ui-fill-secondary)]' : 'cursor-not-allowed opacity-45'
                 }`}
                 aria-label="Interrompi riproduzione"
                 disabled={!onStop}
@@ -709,8 +772,8 @@ export function MediaControlsPanel({
                 disabled={!onClearPlaylist}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                   onClearPlaylist
-                    ? 'border-white/12 bg-white/[0.08] text-white/78 hover:bg-white/[0.13]'
-                    : 'cursor-not-allowed border-white/8 bg-white/[0.04] text-white/38'
+                    ? 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
+                    : 'cursor-not-allowed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
                 }`}
                 onClick={() => onClearPlaylist?.()}
               >
@@ -723,9 +786,9 @@ export function MediaControlsPanel({
       </div>
 
       {showMediaLibrary ? (
-        <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 w-full`}>
           <div className="px-3 pb-2 pt-1">
-            <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-text-tertiary)]">
               Libreria media
             </p>
           </div>
@@ -733,11 +796,11 @@ export function MediaControlsPanel({
           <div className="space-y-2 px-1 pb-1">
             {supportsSearchMedia ? (
               <label className="relative block">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/42" />
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--ui-text-tertiary)]" />
                 <input
                   value={mediaSearchQuery}
                   onChange={(event) => setMediaSearchQuery(event.target.value)}
-                  className="h-10 w-full rounded-2xl border border-white/8 bg-white/[0.07] pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/32 focus:border-white/18 focus:bg-white/[0.1]"
+                  className="ui-input h-10 w-full rounded-2xl pl-9 pr-3 text-sm"
                   placeholder="Cerca media"
                   aria-label="Cerca media"
                 />
@@ -750,7 +813,7 @@ export function MediaControlsPanel({
                   filteredMediaLibraryItems.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.055] px-3 py-2"
+                      className="dashboard-content-surface flex items-center justify-between gap-3 rounded-2xl px-3 py-2"
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
                         {item.thumbnailUrl ? (
@@ -760,13 +823,13 @@ export function MediaControlsPanel({
                             className="h-8 w-8 shrink-0 rounded-xl object-cover"
                           />
                         ) : (
-                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-white/[0.07] text-white/62">
+                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
                             <Music size={15} />
                           </span>
                         )}
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-white/84">{item.title}</span>
-                          <span className="block truncate text-[11px] text-white/42">
+                          <span className="block truncate text-sm font-medium text-[color:var(--ui-text-primary)]">{item.title}</span>
+                          <span className="block truncate text-[11px] text-[color:var(--ui-text-tertiary)]">
                             {item.subtitle ?? formatMediaContentTypeLabel(item.mediaContentType)}
                           </span>
                         </span>
@@ -776,7 +839,7 @@ export function MediaControlsPanel({
                           type="button"
                           disabled={!canPlayMedia}
                           onClick={() => submitPlayMedia(item, 'play')}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.07] text-white/68 transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:text-white/25"
+                          className="glass-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:text-[color:var(--ui-text-disabled)]"
                           aria-label={`Riproduci ${item.title}`}
                           title="Riproduci"
                         >
@@ -787,7 +850,7 @@ export function MediaControlsPanel({
                             type="button"
                             disabled={!canPlayMedia}
                             onClick={() => submitPlayMedia(item, 'enqueue')}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.07] text-white/68 transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:text-white/25"
+                            className="glass-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:text-[color:var(--ui-text-disabled)]"
                             aria-label={`Aggiungi alla coda ${item.title}`}
                             title="Aggiungi alla coda"
                           >
@@ -799,7 +862,7 @@ export function MediaControlsPanel({
                             type="button"
                             disabled={!canPlayMedia}
                             onClick={() => submitPlayMedia(item, 'announce')}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.07] text-white/68 transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:text-white/25"
+                            className="glass-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:text-[color:var(--ui-text-disabled)]"
                             aria-label={`Annuncia ${item.title}`}
                             title="Annuncia"
                           >
@@ -810,7 +873,7 @@ export function MediaControlsPanel({
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.035] px-3 py-3 text-sm text-white/42">
+                  <div className="dashboard-content-surface rounded-2xl px-3 py-3 text-sm text-[color:var(--ui-text-tertiary)]">
                     Nessun media disponibile.
                   </div>
                 )}
@@ -820,8 +883,8 @@ export function MediaControlsPanel({
         </div>
       ) : null}
 
-      <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
-        <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase px-3 pb-2 pt-1">
+      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 w-full`}>
+        <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-text-tertiary)]">
           Dispositivo di uscita
         </p>
 
@@ -848,39 +911,39 @@ export function MediaControlsPanel({
                   }}
                   className={`flex items-center justify-between w-full rounded-2xl py-3 px-4 transition-all duration-200 active:scale-[0.98] ${
                     !supportsSelectSource
-                      ? 'opacity-45 cursor-not-allowed text-white/65'
+                      ? 'cursor-not-allowed text-[color:var(--ui-text-disabled)] opacity-45'
                       : isSelected
-                        ? 'bg-white/15 text-white cursor-pointer'
-                        : 'text-white/85 hover:bg-white/10 cursor-pointer'
+                        ? 'liquid-glass-selection cursor-pointer text-[color:var(--ui-text-primary)]'
+                        : 'cursor-pointer text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
                   }`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <DeviceIcon
                       size={18}
-                      className={isSelected ? 'text-white' : 'text-white/75'}
+                      className={isSelected ? 'text-[color:var(--ui-accent)]' : 'text-[color:var(--ui-text-secondary)]'}
                     />
                     <span className="text-sm font-medium truncate">{device.name}</span>
                   </span>
 
                   {isSelected ? (
-                    <Check size={16} className="ml-auto text-white" />
+                    <Check size={16} className="ml-auto text-[color:var(--ui-accent)]" />
                   ) : (
-                    <span className="text-xs text-white/45 ml-3 shrink-0">{device.subtitle ?? ''}</span>
+                    <span className="ml-3 shrink-0 text-xs text-[color:var(--ui-text-tertiary)]">{device.subtitle ?? ''}</span>
                   )}
                 </button>
               );
             })}
           </div>
         ) : (
-          <p className="px-3 py-3 text-sm text-white/55">
+          <p className="px-3 py-3 text-sm text-[color:var(--ui-text-tertiary)]">
             Nessun dispositivo di uscita disponibile.
           </p>
         )}
       </div>
 
       {supportsSelectSoundMode || soundModes.length > 0 ? (
-        <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
-          <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase px-3 pb-2 pt-1">
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 w-full`}>
+          <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-text-tertiary)]">
             Modalita audio
           </p>
 
@@ -899,10 +962,10 @@ export function MediaControlsPanel({
                     }}
                     className={`rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
                       !supportsSelectSoundMode
-                          ? 'cursor-not-allowed border-white/8 bg-white/[0.04] text-white/38'
+                          ? 'cursor-not-allowed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
                         : active
-                          ? 'border-white/22 bg-white/16 text-white'
-                          : 'border-white/10 bg-white/[0.07] text-white/68 hover:bg-white/[0.12] hover:text-white'
+                          ? 'liquid-glass-selection border-[color:var(--ui-border-strong)] text-[color:var(--ui-text-primary)]'
+                          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]'
                     }`}
                     aria-pressed={active}
                   >
@@ -912,40 +975,40 @@ export function MediaControlsPanel({
               })}
             </div>
           ) : (
-            <p className="px-3 py-3 text-sm text-white/55">
+            <p className="px-3 py-3 text-sm text-[color:var(--ui-text-tertiary)]">
               Nessuna modalita audio disponibile.
             </p>
           )}
         </div>
       ) : null}
 
-      <div className="w-full rounded-[clamp(1.15rem,4vw,1.8rem)] bg-white/5 backdrop-blur-xl border border-white/5 p-2 sm:p-3 mb-1">
-        <p className="text-[10px] text-white/40 font-semibold tracking-wider uppercase px-3 pb-2 pt-1">
+      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 w-full`}>
+        <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ui-text-tertiary)]">
           Riproduci anche su
         </p>
 
         <button
           type="button"
           disabled={!supportsGrouping || availableMultiroomDevices.length === 0}
-          onClick={() => setMultiroomOverlayOpen(true)}
+          onClick={() => setMultiroomPageOpen(true)}
           className={`flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-all active:scale-[0.98] ${
             supportsGrouping && availableMultiroomDevices.length > 0
-              ? 'bg-white/[0.07] text-white hover:bg-white/[0.12]'
-              : 'cursor-not-allowed bg-white/[0.035] text-white/45'
+              ? 'bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)] hover:bg-[color:var(--ui-fill-secondary)]'
+              : 'cursor-not-allowed bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
           }`}
           aria-label="Gestisci gruppo multiroom"
         >
           <span className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-white/72">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
               <Speaker size={17} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-white/86">{multiroomSummary}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-white/42">{multiroomDetail}</span>
+              <span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">{multiroomSummary}</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[color:var(--ui-text-tertiary)]">{multiroomDetail}</span>
             </span>
           </span>
           {supportsGrouping && availableMultiroomDevices.length > 0 ? (
-            <ChevronRight size={17} className="shrink-0 text-white/48" />
+            <ChevronRight size={17} className="shrink-0 text-[color:var(--ui-text-tertiary)]" />
           ) : null}
         </button>
 
@@ -972,7 +1035,7 @@ export function MediaControlsPanel({
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs uppercase tracking-[0.18em] text-white/55">Volume</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--ui-text-secondary)]">Volume</p>
           <div className="flex items-center gap-1.5">
             {supportsVolumeStep ? (
               <>
@@ -980,7 +1043,7 @@ export function MediaControlsPanel({
                   type="button"
                   disabled={!supportsVolume || !onVolumeChange}
                   onClick={() => stepVolume(-1)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="glass-button inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold text-[color:var(--ui-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="Abbassa volume"
                   title={`-${volumeStepPercent}%`}
                 >
@@ -990,7 +1053,7 @@ export function MediaControlsPanel({
                   type="button"
                   disabled={!supportsVolume || !onVolumeChange}
                   onClick={() => stepVolume(1)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-sm font-semibold text-white/70 transition-colors hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="glass-button inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold text-[color:var(--ui-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="Alza volume"
                   title={`+${volumeStepPercent}%`}
                 >
@@ -1002,8 +1065,8 @@ export function MediaControlsPanel({
               type="button"
               className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
                 muted
-                  ? 'bg-white/16 border-white/18 text-white'
-                  : 'bg-white/[0.08] border-white/10 text-white/70 hover:bg-white/[0.12]'
+                  ? 'liquid-glass-selection border-[color:var(--ui-border-strong)] text-[color:var(--ui-accent)]'
+                  : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'
               } ${supportsMute ? '' : 'opacity-45 cursor-not-allowed'}`}
               aria-label={muted ? 'Riattiva audio' : 'Silenzia audio'}
               title={muted ? 'Riattiva audio' : 'Silenzia audio'}
@@ -1016,29 +1079,29 @@ export function MediaControlsPanel({
         </div>
 
         <div
-          className={`relative w-full h-14 rounded-3xl bg-white/10 backdrop-blur-md border border-white/5 overflow-hidden cursor-pointer active:scale-[0.98] transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-10px_18px_rgba(0,0,0,0.24)] ${
+          className={`relative h-14 w-full cursor-pointer overflow-hidden rounded-3xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] shadow-[inset_0_1px_0_rgb(var(--ui-accent-rgb)/0.08),inset_0_-10px_18px_var(--ui-shadow-soft)] transition-transform active:scale-[0.98] ${
             supportsVolume ? '' : 'opacity-55'
           }`}
         >
           <div
-            className="absolute inset-y-0 left-0 h-full bg-white/68 shadow-[0_0_18px_rgba(255,255,255,0.16)] transition-[width] duration-200"
+            className="absolute inset-y-0 left-0 h-full bg-[color:var(--ui-accent)] opacity-75 shadow-[0_0_18px_rgb(var(--ui-accent-rgb)/0.16)] transition-[width] duration-200"
             style={{ width: `${safeVolumePercent}%` }}
           />
 
           <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
             {muted ? (
-              <VolumeX size={18} className="text-white/90 mix-blend-difference" />
+              <VolumeX size={18} className="text-[color:var(--ui-text-primary)]" />
             ) : (
-              <Volume2 size={18} className="text-white/90 mix-blend-difference" />
+              <Volume2 size={18} className="text-[color:var(--ui-text-primary)]" />
             )}
           </div>
 
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none text-sm font-semibold text-white/90 mix-blend-difference">
+          <div className="pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 text-sm font-semibold text-[color:var(--ui-text-primary)]">
             {`${safeVolumePercent}%`}
           </div>
 
-          <input
-            type="range"
+          <GlassSlider
+            variant="overlay"
             min={0}
             max={100}
             step={1}
@@ -1076,77 +1139,6 @@ export function MediaControlsPanel({
         </div>
       </div>
 
-      <AnimatePresence>
-        {multiroomOverlayOpen ? (
-          <motion.div
-            key="media-multiroom-panel-page"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="media-multiroom-title"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-0 z-[240] flex flex-col overflow-hidden border-[color:var(--profile-sheet-border)] [background:var(--profile-sheet-page-bg)] text-[color:var(--profile-sheet-text)] shadow-[-24px_0_70px_var(--profile-sheet-shadow)] backdrop-blur-3xl md:left-auto md:w-[clamp(18rem,34vw,24rem)] md:border-l"
-          >
-            <header className="flex shrink-0 items-center gap-3 border-b border-[color:var(--profile-sheet-border)] px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.9rem)] md:px-5 md:pt-5">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_8px_20px_var(--profile-sheet-shadow)] transition-colors hover:bg-[color:var(--profile-sheet-surface-strong)]"
-                onClick={() => setMultiroomOverlayOpen(false)}
-                aria-label="Torna indietro"
-                title="Torna indietro"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p id="media-multiroom-title" className="truncate text-lg font-semibold tracking-[-0.01em] text-[color:var(--profile-sheet-title)]">
-                  Riproduci anche su
-                </p>
-                <p className="mt-1 truncate text-xs font-medium text-[color:var(--profile-sheet-muted)]">{multiroomSummary}</p>
-              </div>
-            </header>
-
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] md:px-5">
-              <div className="space-y-2">
-                {availableMultiroomDevices.map((device) => {
-                  const isGrouped = groupedDeviceIds.has(device.id);
-                  const DeviceIcon =
-                    device.kind === 'tv' ? Tv2 : device.kind === 'cast' ? Cast : Speaker;
-                  return (
-                    <button
-                      key={device.id}
-                      type="button"
-                      onClick={() => toggleMultiroomDevice(device.id, !isGrouped)}
-                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-all duration-200 active:scale-[0.98] ${
-                        isGrouped
-                          ? 'bg-white/15 text-white'
-                          : 'text-white/85 hover:bg-white/10'
-                      }`}
-                      aria-pressed={isGrouped}
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <DeviceIcon size={18} className={isGrouped ? 'text-white' : 'text-white/75'} />
-                        <span className="truncate text-sm font-medium">{device.name}</span>
-                      </span>
-
-                      {isGrouped ? (
-                        <Check size={16} className="ml-auto text-white" />
-                      ) : (
-                        <span className="ml-3 shrink-0 text-xs text-white/45">{device.subtitle ?? 'Disponibile'}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <p className="px-1 pb-[calc(env(safe-area-inset-bottom)+0.3rem)] pt-4 text-[11px] font-medium leading-snug text-[color:var(--profile-sheet-muted)]">
-                Seleziona uno o piu dispositivi compatibili. Home Assistant usera il player corrente come leader del gruppo.
-              </p>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }

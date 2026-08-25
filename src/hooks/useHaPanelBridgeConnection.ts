@@ -3,6 +3,14 @@ import type { HassEntities } from 'home-assistant-js-websocket';
 import { mapHassEntitiesToMock, normalizeHassUrl } from '../services/haLive';
 import type { MockEntityStateMap } from '../types/ha';
 import type { HaArea, HaConnectionStatus } from './useHaLiveConnection';
+import {
+  HA_SHARED_HOUSE_CONFIGURATION_KEY,
+  parseSharedHouseConfiguration,
+} from '../services/dashboardConfigurationRepository';
+import {
+  HA_DASHBOARD_REVISION_HISTORY_KEY,
+  parseDashboardRevisionHistory,
+} from '../services/dashboardRevisionHistory';
 
 type HaPanelPayloadBase = {
   type: string;
@@ -13,6 +21,8 @@ type HaPanelContextPayload = HaPanelPayloadBase & {
   hassUrl?: unknown;
   user?: unknown;
   locale?: unknown;
+  bridgeProtocolVersion?: unknown;
+  capabilities?: unknown;
 };
 
 type HaPanelSnapshotPayload = HaPanelPayloadBase & {
@@ -20,6 +30,8 @@ type HaPanelSnapshotPayload = HaPanelPayloadBase & {
   hassUrl?: unknown;
   user?: unknown;
   locale?: unknown;
+  bridgeProtocolVersion?: unknown;
+  capabilities?: unknown;
   states?: unknown;
   areas?: unknown;
 };
@@ -52,16 +64,120 @@ type PendingRequestRecord = {
 };
 
 const REQUEST_TIMEOUT_MS = 15000;
+const BRIDGE_HEARTBEAT_INTERVAL_MS = 10_000;
+const BRIDGE_RECONNECTING_AFTER_MS = 20_000;
+const BRIDGE_OFFLINE_AFTER_MS = 40_000;
+const HA_NAME_PATTERN = /^[a-z0-9_]+$/;
+const HA_ENTITY_ID_PATTERN = /^[a-z0-9_]+\.[a-z0-9_]+$/;
+const REQUEST_ID_PATTERN = /^ha-panel-call-(?:service|api)-\d{10,}-[a-z0-9]+$/;
+const MAX_BRIDGE_STATES = 20_000;
+const PANEL_BRIDGE_CAPABILITIES = new Set(['shared_configuration', 'revision_history']);
+
+export function parsePanelBridgeCapabilities(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (entry): entry is string => typeof entry === 'string' && PANEL_BRIDGE_CAPABILITIES.has(entry),
+  );
+}
+
+export const HA_PANEL_ALLOWED_API_TYPES = new Set([
+  'auth/current_user',
+  'auth/list',
+  'config/auth/list',
+  'get_services',
+  'weather/get_forecasts',
+  'call_service',
+  'history/history_during_period',
+  'logbook/get_events',
+  'config/entity_registry/list',
+  'config/entity_registry/list_for_display',
+  'config/entity_registry/update',
+  'config/device_registry/list',
+  'config/device_registry/list_for_display',
+  'config/device_registry/update',
+  'config/label_registry/list',
+  'config/label_registry/list_for_display',
+  'config/area_registry/list',
+  'config/area_registry/create',
+  'config/area_registry/update',
+  'config/area_registry/delete',
+  'config/floor_registry/list',
+  'config/floor_registry/create',
+  'config/floor_registry/update',
+  'config/floor_registry/reorder',
+  'config/floor_registry/delete',
+  'frontend/get_system_data',
+  'frontend/set_system_data',
+]);
+
+export function resolvePanelBridgeHeartbeatStatus(elapsedMs: number): 'connected' | 'reconnecting' | 'offline' {
+  if (elapsedMs >= BRIDGE_OFFLINE_AFTER_MS) {
+    return 'offline';
+  }
+  if (elapsedMs >= BRIDGE_RECONNECTING_AFTER_MS) {
+    return 'reconnecting';
+  }
+  return 'connected';
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function isValidPanelRequestId(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 160 && REQUEST_ID_PATTERN.test(value);
+}
+
+export function validatePanelServiceRequest(
+  domain: unknown,
+  service: unknown,
+  serviceData: unknown,
+) {
+  return (
+    typeof domain === 'string' && HA_NAME_PATTERN.test(domain) &&
+    typeof service === 'string' && HA_NAME_PATTERN.test(service) &&
+    isRecord(serviceData)
+  );
+}
+
+export function validatePanelApiMessage(message: unknown): message is Record<string, unknown> {
+  if (!isRecord(message) || typeof message.type !== 'string' || !HA_PANEL_ALLOWED_API_TYPES.has(message.type)) {
+    return false;
+  }
+  if (message.type === 'call_service') {
+    return validatePanelServiceRequest(message.domain, message.service, message.service_data ?? {});
+  }
+  if (message.type === 'frontend/get_system_data') {
+    return message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY ||
+      message.key === HA_DASHBOARD_REVISION_HISTORY_KEY;
+  }
+  if (message.type === 'frontend/set_system_data') {
+    if (message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY) {
+      return parseSharedHouseConfiguration(message.value) !== null;
+    }
+    if (message.key === HA_DASHBOARD_REVISION_HISTORY_KEY) {
+      return isRecord(message.value) &&
+        Array.isArray(message.value.entries) &&
+        message.value.entries.length <= 4 &&
+        parseDashboardRevisionHistory(message.value) !== null;
+    }
+    return false;
+  }
+  return true;
 }
 
 function toObjectMap(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) {
     return null;
   }
-  return value;
+  const entries = Object.entries(value);
+  if (entries.length > MAX_BRIDGE_STATES) {
+    return null;
+  }
+  const safeEntries = entries.filter(
+    ([entityId, state]) => HA_ENTITY_ID_PATTERN.test(entityId) && isRecord(state),
+  );
+  return Object.fromEntries(safeEntries);
 }
 
 function parseAreaRegistryPayload(payload: unknown): HaArea[] {
@@ -116,11 +232,15 @@ export function useHaPanelBridgeConnection() {
   const [error, setError] = useState<string | null>(null);
   const [haStates, setHaStates] = useState<MockEntityStateMap>({});
   const [haAreas, setHaAreas] = useState<HaArea[]>([]);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [isManagedByParent, setIsManagedByParent] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [bridgeProtocolVersion, setBridgeProtocolVersion] = useState<number | null>(null);
+  const [bridgeCapabilities, setBridgeCapabilities] = useState<string[]>([]);
   const hassUrlRef = useRef<string>(typeof window !== 'undefined' ? window.location.origin : '');
   const rawStatesRef = useRef<Record<string, unknown>>({});
   const pendingRequestsRef = useRef<Map<string, PendingRequestRecord>>(new Map());
+  const lastBridgeMessageAtRef = useRef(Date.now());
 
   const isInIframe = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -165,8 +285,14 @@ export function useHaPanelBridgeConnection() {
       type: 'ha-panel-call-service' | 'ha-panel-call-api',
       payload: Record<string, unknown>,
     ) => {
-      if (!isInIframe || !isManagedByParent || isPaused) {
+      if (!isInIframe || !isManagedByParent || isPaused || status !== 'connected') {
         return Promise.reject(new Error('Bridge Home Assistant non disponibile.'));
+      }
+      const validPayload = type === 'ha-panel-call-service'
+        ? validatePanelServiceRequest(payload.domain, payload.service, payload.serviceData)
+        : validatePanelApiMessage(payload.message);
+      if (!validPayload) {
+        return Promise.reject(new Error('Richiesta bridge Home Assistant non ammessa.'));
       }
 
       const requestId = createRequestId(type);
@@ -190,7 +316,7 @@ export function useHaPanelBridgeConnection() {
         }
       });
     },
-    [isInIframe, isManagedByParent, isPaused, postToParent, rejectPendingRequest],
+    [isInIframe, isManagedByParent, isPaused, postToParent, rejectPendingRequest, status],
   );
 
   const applySnapshot = useCallback((payload: HaPanelSnapshotPayload) => {
@@ -210,11 +336,12 @@ export function useHaPanelBridgeConnection() {
     if (payload.areas !== undefined) {
       setHaAreas(parseAreaRegistryPayload(payload.areas));
     }
+    setLastUpdatedAt(Date.now());
   }, []);
 
   const applyStateChanged = useCallback((payload: HaPanelStateChangedPayload) => {
     const entityId = typeof payload.entityId === 'string' ? payload.entityId.trim() : '';
-    if (!entityId) {
+    if (!HA_ENTITY_ID_PATTERN.test(entityId)) {
       return;
     }
 
@@ -228,6 +355,7 @@ export function useHaPanelBridgeConnection() {
         delete next[entityId];
         return next;
       });
+      setLastUpdatedAt(Date.now());
       return;
     }
 
@@ -247,6 +375,7 @@ export function useHaPanelBridgeConnection() {
         ...mapped,
       };
     });
+    setLastUpdatedAt(Date.now());
   }, []);
 
   useEffect(() => {
@@ -272,6 +401,7 @@ export function useHaPanelBridgeConnection() {
       }
 
       const payload = event.data as HaPanelPayloadBase;
+      lastBridgeMessageAtRef.current = Date.now();
 
       if (payload.type === 'ha-panel-context') {
         const contextPayload = payload as HaPanelContextPayload;
@@ -282,6 +412,12 @@ export function useHaPanelBridgeConnection() {
         if (urlCandidate) {
           hassUrlRef.current = urlCandidate;
         }
+        setBridgeProtocolVersion(
+          Number.isSafeInteger(contextPayload.bridgeProtocolVersion) && Number(contextPayload.bridgeProtocolVersion) > 0
+            ? Number(contextPayload.bridgeProtocolVersion)
+            : null,
+        );
+        setBridgeCapabilities(parsePanelBridgeCapabilities(contextPayload.capabilities));
         setIsManagedByParent(true);
         if (!isPaused) {
           setStatus('connecting');
@@ -295,7 +431,14 @@ export function useHaPanelBridgeConnection() {
           return;
         }
         setIsManagedByParent(true);
-        applySnapshot(payload as HaPanelSnapshotPayload);
+        const snapshotPayload = payload as HaPanelSnapshotPayload;
+        setBridgeProtocolVersion(
+          Number.isSafeInteger(snapshotPayload.bridgeProtocolVersion) && Number(snapshotPayload.bridgeProtocolVersion) > 0
+            ? Number(snapshotPayload.bridgeProtocolVersion)
+            : null,
+        );
+        setBridgeCapabilities(parsePanelBridgeCapabilities(snapshotPayload.capabilities));
+        applySnapshot(snapshotPayload);
         setStatus('connected');
         setError(null);
         return;
@@ -314,8 +457,8 @@ export function useHaPanelBridgeConnection() {
 
       if (payload.type === 'ha-panel-call-service-result') {
         const resultPayload = payload as HaPanelCallServiceResultPayload;
-        const requestId = typeof resultPayload.requestId === 'string' ? resultPayload.requestId : '';
-        if (!requestId) {
+        const requestId = resultPayload.requestId;
+        if (!isValidPanelRequestId(requestId) || !pendingRequestsRef.current.has(requestId)) {
           return;
         }
         const ok = resultPayload.ok === true;
@@ -333,8 +476,8 @@ export function useHaPanelBridgeConnection() {
 
       if (payload.type === 'ha-panel-call-api-result') {
         const resultPayload = payload as HaPanelCallApiResultPayload;
-        const requestId = typeof resultPayload.requestId === 'string' ? resultPayload.requestId : '';
-        if (!requestId) {
+        const requestId = resultPayload.requestId;
+        if (!isValidPanelRequestId(requestId) || !pendingRequestsRef.current.has(requestId)) {
           return;
         }
         const ok = resultPayload.ok === true;
@@ -366,6 +509,26 @@ export function useHaPanelBridgeConnection() {
   ]);
 
   useEffect(() => {
+    if (!isInIframe || !isManagedByParent || isPaused || typeof window === 'undefined') {
+      return;
+    }
+    const checkBridge = () => {
+      const elapsed = Date.now() - lastBridgeMessageAtRef.current;
+      const heartbeatStatus = resolvePanelBridgeHeartbeatStatus(elapsed);
+      if (heartbeatStatus === 'offline') {
+        setStatus('offline');
+        setError('Il bridge Home Assistant non risponde. I controlli sono temporaneamente bloccati.');
+      } else if (heartbeatStatus === 'reconnecting') {
+        setStatus('reconnecting');
+        setError('Riconnessione al pannello Home Assistant in corso.');
+      }
+      postToParent({ type: 'ha-panel-request-sync' });
+    };
+    const intervalId = window.setInterval(checkBridge, BRIDGE_HEARTBEAT_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [isInIframe, isManagedByParent, isPaused, postToParent]);
+
+  useEffect(() => {
     return () => {
       pendingRequestsRef.current.forEach((pending, requestId) => {
         pendingRequestsRef.current.delete(requestId);
@@ -384,19 +547,27 @@ export function useHaPanelBridgeConnection() {
     setIsPaused(false);
     setStatus('connecting');
     setError(null);
+    lastBridgeMessageAtRef.current = Date.now();
     postToParent({ type: 'ha-panel-request-sync' });
   }, [isInIframe, isManagedByParent, postToParent]);
 
   const disconnect = useCallback(() => {
     setIsPaused(true);
-    setStatus('disconnected');
+    setStatus('disconnected_by_user');
     setError(null);
     setHaStates({});
     setHaAreas([]);
+    setLastUpdatedAt(null);
+    setBridgeProtocolVersion(null);
+    setBridgeCapabilities([]);
   }, []);
 
   const callService = useCallback(
     async (domain: string, service: string, serviceData: Record<string, unknown>) => {
+      if (!validatePanelServiceRequest(domain, service, serviceData)) {
+        setError('Richiesta servizio Home Assistant non valida.');
+        return false;
+      }
       try {
         await sendRequest<boolean>('ha-panel-call-service', {
           domain,
@@ -416,8 +587,18 @@ export function useHaPanelBridgeConnection() {
   const callApi = useCallback(
     async <TResponse = unknown,>(
       message: Record<string, unknown>,
-      options?: { reportError?: boolean },
+      options?: { reportError?: boolean; throwOnError?: boolean },
     ) => {
+      if (!validatePanelApiMessage(message)) {
+        const validationError = new Error('Tipo richiesta Home Assistant non ammesso dal bridge.');
+        if (options?.reportError !== false) {
+          setError(validationError.message);
+        }
+        if (options?.throwOnError) {
+          throw validationError;
+        }
+        return null;
+      }
       try {
         const response = await sendRequest<TResponse>('ha-panel-call-api', { message });
         if (options?.reportError !== false) {
@@ -428,6 +609,9 @@ export function useHaPanelBridgeConnection() {
         if (options?.reportError !== false) {
           setError(requestError instanceof Error ? requestError.message : 'Richiesta Home Assistant fallita.');
         }
+        if (options?.throwOnError) {
+          throw requestError;
+        }
         return null;
       }
     },
@@ -436,11 +620,15 @@ export function useHaPanelBridgeConnection() {
 
   return {
     isManagedByParent,
+    bridgeProtocolVersion,
+    bridgeCapabilities,
+    supportsSharedConfiguration: bridgeCapabilities.includes('shared_configuration'),
     hassUrl: hassUrlRef.current,
     status,
     error,
     haStates,
     haAreas,
+    lastUpdatedAt,
     connect,
     disconnect,
     callService,

@@ -1,90 +1,105 @@
-# HA Dashboard Builder
+<div align="center">
+  <img src="brand/icon.png" width="112" alt="Logo DomusOS" />
+  <h1>DomusOS</h1>
+  <p><strong>Una nuova esperienza Home Assistant, progettata per desktop, tablet e smartphone.</strong></p>
+  <p>Dashboard reattiva, builder visuale e controlli avanzati con un'interfaccia coerente e premium.</p>
 
-Project focused on two views:
-- `/home`
-- `/consumi` (including detail routes `/consumi/energia`, `/consumi/acqua`, `/consumi/gas`, `/consumi/report`)
+  [![Release](https://img.shields.io/github/v/release/Mattia2399/DomusOS?include_prereleases&style=flat-square)](https://github.com/Mattia2399/DomusOS/releases)
+  [![Release gate](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusOS/release-gate.yml?branch=main&label=release%20gate&style=flat-square)](https://github.com/Mattia2399/DomusOS/actions/workflows/release-gate.yml)
+  [![HACS validation](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusOS/hacs.yml?branch=main&label=HACS&style=flat-square)](https://github.com/Mattia2399/DomusOS/actions/workflows/hacs.yml)
+  ![Beta](https://img.shields.io/badge/status-public%20beta-f5a623?style=flat-square)
+</div>
 
-## Current scope
+![DomusOS su desktop](docs/images/domusos-desktop.jpg)
 
-- Example dashboard page
-- Consumi dashboard + detail pages
-- Live data mapping from Home Assistant entities (WebSocket)
+## Perché DomusOS
 
-## Beta roadmap
+- Layout condiviso dalla casa e sincronizzato tra i dispositivi.
+- Griglie diverse per desktop, tablet e mobile, con drag and drop e undo/redo.
+- Card responsive e pannelli contestuali per le principali entità Home Assistant.
+- Onboarding guidato, Demo isolata e connessione tramite la sessione Home Assistant.
+- Builder visuale con catalogo, stack, dimensioni per breakpoint e configurazione correlati.
+- Temi chiari e scuri, superfici glass e controlli ottimizzati per touch.
+- Permessi centralizzati: Home Assistant resta l'autorità per identità, ruoli e comandi.
 
-- Release/security/go-to-market plan: [`docs/beta-roadmap.md`](docs/beta-roadmap.md)
-- Security beta checklist: [`docs/security-beta-checklist.md`](docs/security-beta-checklist.md)
+<div align="center">
+  <img src="docs/images/domusos-mobile.jpg" width="390" alt="DomusOS su smartphone" />
+</div>
 
-## Tech stack
+## Installazione con HACS
 
-- React + TypeScript
-- Vite
-- Tailwind CSS
-- home-assistant-js-websocket
+HACS è l'unico metodo di installazione distribuito per la beta. La futura app ufficiale sarà il secondo canale supportato.
 
-## Run locally
+[![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusOS&category=integration)
 
-Prerequisites: Node.js 20+
+1. Installa e configura [HACS](https://www.hacs.xyz/) in Home Assistant.
+2. Apri il collegamento qui sopra oppure aggiungi `Mattia2399/DomusOS` come repository personalizzato di tipo **Integration**.
+3. Scarica **DomusOS** e riavvia Home Assistant.
+4. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
+5. Cerca **DomusOS**, conferma e apri la nuova voce nella barra laterale.
 
-1. `npm install`
-2. `npm run dev`
-3. Open `http://localhost:3000`
+Non servono modifiche a `configuration.yaml`, token manuali o copie dentro `/www`. Consulta la [guida completa](docs/installation-beta.md) per aggiornamento, rollback e risoluzione problemi.
 
-## Build and typecheck
+> Una release HACS deve contenere l'asset `domusos.zip`. I tag Git senza una GitHub Release pubblicata non sono installabili da HACS.
 
-- Typecheck: `npm run check`
-- Production build: `npm run build`
+## Stato delle funzioni
 
-## Home Assistant live connection
+| Area | Stato beta | Note |
+| --- | --- | --- |
+| Home e Builder | Operativa | Layout condiviso, edit mode, catalogo, stack, versioni e ripristino |
+| Stanze | Operativa | Piani, stanze, dispositivi e controlli autorizzati da HA |
+| Sicurezza | Operativa | Alarm, camere e sensori; non sostituisce un sistema certificato |
+| Consumi | Operativa | Riepiloghi e dati disponibili dalle entità HA |
+| Profilo e Impostazioni | Operativa | Preferenze personali separate dalla configurazione della casa |
+| App Gallery | Parziale | Irrigazione disponibile; Locale Tecnico e Piscina & Spa in preparazione |
+| Automazioni | Prossimamente | L'interfaccia incompleta non è esposta come funzione utilizzabile |
+| Calendar, Mappa e Liste | Pianificata | Previste dopo la prima beta |
 
-The dashboards support two authentication flows:
+Lo stato dettagliato e i limiti hardware verificati sono mantenuti in [Stato funzionalità](docs/feature-status.md).
 
-1. OAuth (recommended)
-   - Open Profile panel
-   - Insert your HA URL
-   - Click `Accedi con OAuth`
-   - Complete HA authorization flow and return to the app
-2. Manual token (fallback)
-   - Home Assistant -> user profile -> create Long-Lived Access Token
-   - Insert HA URL and token in Profile panel
-   - Click `Connetti`
+## Card disponibili
 
-3. Embedded panel bridge (automatic)
-   - If the app is loaded inside a Home Assistant `panel_custom` iframe with the bridge protocol, live states and service/API calls are proxied by the parent HA frontend session.
-   - In this mode, manual OAuth/token setup is not required inside the iframe.
-   - Reference panel implementation: `docs/home-assistant-panel-bridge.md`
+Sensor, Light, Switch, Climate, Alarm, Lock, Cover, Camera, Media Player, Vacuum e Members. Le card usano dimensioni e contenuti adattivi; alcune capability dipendono dagli attributi e dai servizi realmente esposti dall'integrazione Home Assistant del dispositivo.
 
-When connected, widgets read live entity states.
+## Sicurezza e privacy
 
-## Privacy and backup notes
+- Token, PIN, codici Alarm/Lock e passkey non entrano in layout, backup o sincronizzazione.
+- Demo e casa reale usano spazi separati.
+- Le modifiche strutturali sono riservate a Owner/Admin e funzionano in modalità fail-closed.
+- I comandi finali vengono comunque autorizzati dal server Home Assistant.
+- La conferma dispositivo WebAuthn è una protezione locale, non un secondo fattore server certificato.
+- DomusOS beta non è un sistema di allarme, sicurezza o safety certificato.
 
-- Configuration backup/restore/reset is available in Profile panel.
-- Backup JSON excludes Home Assistant authentication secrets by default.
+Leggi [Sicurezza e privacy](docs/security-and-privacy.md) e la [checklist beta](docs/security-beta-checklist.md) prima dell'uso su una casa reale.
 
-## Troubleshooting (Windows)
+## Sviluppo
 
-### Build error with `fileName ../../Desktop/.../index.html`
+Richiede Node.js 22.22.0 o superiore.
 
-If the project folder is a Junction/Symlink, Vite may resolve mixed real/symlink paths.
+```bash
+npm ci
+npm run dev
+```
 
-Mitigations applied in this project:
+Verifica completa prima di una release:
 
-- `resolve.preserveSymlinks: true` in `vite.config.ts`
+```bash
+npm run release:gate
+npm run release:package
+```
 
-If you still see issues:
+Il packaging produce sia l'archivio diagnostico della web app sia `release-artifacts/domusos.zip`, pronto per una GitHub Release HACS.
 
-1. Close any running `vite`/`node` process from other copies of the project
-2. Remove `node_modules`
-3. Reinstall with `npm ci`
-4. Retry `npm run build`
+## Documentazione
 
-### `npm ci` fails with `EPERM ... .node`
+- [Installazione HACS](docs/installation-beta.md)
+- [Aggiornamento e rollback](docs/update-and-rollback.md)
+- [Roadmap](docs/domusos-roadmap.md)
+- [Checklist di rilascio](docs/release-checklist.md)
+- [Changelog](CHANGELOG.md)
 
-Usually the native module is locked by an active dev process or antivirus scan.
+## Licenza e supporto
 
-1. Stop running `node`/`vite` processes
-2. Retry `npm ci`
+DomusOS è distribuito con licenza [GNU GPL-3.0](LICENSE). Può essere usato, studiato, modificato e ridistribuito nel rispetto della licenza. L'app ufficiale, eventuali servizi ospitati e il supporto commerciale potranno essere offerti separatamente.
 
-## Notes
-
-Legacy premium/editor-external files have been removed to keep the repository aligned with `/home` and `/consumi` only.
+Per contribuire consulta [CONTRIBUTING.md](CONTRIBUTING.md). Le vulnerabilità devono essere inviate tramite il canale privato descritto in [SECURITY.md](SECURITY.md), mai tramite issue pubbliche.

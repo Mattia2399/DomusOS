@@ -4,12 +4,21 @@ import { Map, Marker, type MapProps, type MapRef } from '@vis.gl/react-maplibre'
 import { ActiveDevice } from './types';
 import { ClimateControls } from './ClimateControls';
 import { LightControls } from './LightControls';
-import { CameraControls, type CameraPtzDirection } from './CameraControls';
+import {
+  CameraControls,
+  type CameraDeviceInfo,
+  type CameraHistoryEntry,
+  type CameraHistoryStatus,
+  type CameraPtzDirection,
+  type CameraRelatedEntityActionRequest,
+  type CameraRelatedEntityInfo,
+} from './CameraControls';
 import { MediaControls, type MediaPlayRequest } from './MediaControls';
 import { SensorControls } from './SensorControls';
 import { WeatherControls } from './WeatherControls';
 import { AlarmControls } from './AlarmControls';
-import { VacuumControls } from './VacuumControls';
+import { VacuumControls, type VacuumRelatedEntityActionRequest } from './VacuumControls';
+import type { VacuumDeviceInfo, VacuumMappedArea, VacuumRelatedEntityInfo } from '../widgets/vacuumDeviceModel';
 import { LockControls } from './LockControls';
 import { CoverControls } from './CoverControls';
 import { SwitchControls } from './SwitchControls';
@@ -24,7 +33,7 @@ import { MicroSuperChart } from '../widgets/micro/MicroSuperChart';
 import { MicroStep } from '../widgets/micro/MicroStep';
 import { MicroSlider } from '../widgets/micro/MicroSlider';
 import type { DashboardStateShape } from '../../hooks/useDashboardState';
-import type { DashboardTheme } from '../../hooks/useProfileSettings';
+import type { DashboardAppearance } from '../../theme/dashboardTheme';
 import type { MockEntityStateMap } from '../../types/ha';
 import type { AlarmActionAuthOptions } from '../../utils/alarmSecurityPolicy';
 
@@ -42,9 +51,11 @@ function resolveEntityStateById(haStates: MockEntityStateMap, entityId: string |
 interface ContextSidebarProps {
   activeDevice: ActiveDevice | null;
   isEditMode?: boolean;
-  theme?: DashboardTheme;
+  commandsEnabled?: boolean;
+  theme?: DashboardAppearance;
   onClose?: () => void;
   showCloseButton?: boolean;
+  onSecondaryPageChange?: (open: boolean) => void;
   externalScrollContainer?: boolean;
   haStates?: MockEntityStateMap;
   microChartHistoryByEntity?: Record<string, number[]>;
@@ -116,7 +127,13 @@ interface ContextSidebarProps {
     snapshotUrl?: string;
     isOffline?: boolean;
     supportsPtz?: boolean;
+    deviceInfo?: CameraDeviceInfo;
+    relatedEntities?: CameraRelatedEntityInfo[];
     rawAttributes?: Record<string, unknown>;
+    historyEntries?: CameraHistoryEntry[];
+    historyStatus?: CameraHistoryStatus;
+    historyError?: string;
+    onRefreshHistory?: () => void;
   };
   speaker: {
     isPlaying: boolean;
@@ -191,12 +208,11 @@ interface ContextSidebarProps {
     supportsFanSpeed?: boolean;
     supportsMap?: boolean;
     supportsSendCommand?: boolean;
+    deviceInfo?: VacuumDeviceInfo;
+    relatedEntities?: VacuumRelatedEntityInfo[];
     rawAttributes?: Record<string, unknown>;
   };
-  vacuumAreas?: Array<{
-    id: string;
-    name: string;
-  }>;
+  vacuumAreas?: VacuumMappedArea[];
   weather: DashboardStateShape['weather'];
   alarm: {
     name: string;
@@ -317,6 +333,9 @@ interface ContextSidebarProps {
     cleanVacuumArea: (areaIds: string[]) => void;
     setVacuumFanSpeed: (fanSpeed: string) => void;
     sendVacuumCommand: (command: string, params?: unknown) => void;
+    controlVacuumRelatedEntity?: (
+      request: VacuumRelatedEntityActionRequest,
+    ) => boolean | void | Promise<boolean | void>;
     lockDoor: (code?: string) => void;
     unlockDoor: (code?: string) => boolean | void;
     openDoor: (code?: string) => void;
@@ -330,6 +349,9 @@ interface ContextSidebarProps {
     setCoverTiltPosition?: (position: number) => void;
     moveCameraPtz?: (direction: CameraPtzDirection) => void;
     stopCameraPtz?: () => void;
+    runCameraRelatedEntityAction?: (
+      request: CameraRelatedEntityActionRequest,
+    ) => boolean | void | Promise<boolean | void>;
   };
 }
 
@@ -392,9 +414,11 @@ function buildMembersMapInitialViewState(points: MembersMapPoint[]): MembersMapI
 export function ContextSidebar({
   activeDevice,
   isEditMode = false,
+  commandsEnabled = true,
   theme = 'dark',
   onClose,
   showCloseButton = true,
+  onSecondaryPageChange,
   externalScrollContainer = false,
   haStates = {},
   microChartHistoryByEntity = {},
@@ -413,8 +437,19 @@ export function ContextSidebar({
   onSetMicroSliderValue,
   onNavigateMicroWidgetPage,
   onAuthorizeAlarmDeviceAuth,
-  actions,
+  actions: providedActions,
 }: ContextSidebarProps) {
+  const actions = useMemo<ContextSidebarProps['actions']>(() => {
+    if (commandsEnabled) {
+      return providedActions;
+    }
+    return new Proxy(providedActions, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? () => false : value;
+      },
+    });
+  }, [commandsEnabled, providedActions]);
   const activeDeviceLayoutClass = externalScrollContainer
     ? 'overflow-visible pb-3 pt-2'
     : 'overflow-y-auto overscroll-contain glass-scrollbar [touch-action:pan-y] [-webkit-overflow-scrolling:touch] pb-4 lg:pb-6';
@@ -480,13 +515,13 @@ export function ContextSidebar({
       ) : null}
 
       {!activeDevice ? (
-        <div className="liquid-glass-panel h-full min-h-0 flex items-center justify-center p-8 text-center">
+        <div className="context-content-surface flex h-full min-h-0 items-center justify-center rounded-[2rem] p-8 text-center">
           <div>
-            <span className="mx-auto w-14 h-14 rounded-full bg-white/8 border border-white/12 flex items-center justify-center text-white/85 mb-4">
+            <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
               <Lightbulb size={22} />
             </span>
-            <p className="text-lg font-semibold text-white/95">Nessuna card selezionata</p>
-            <p className="text-sm text-white/55 mt-2">Clicca una card per vedere le informazioni</p>
+            <p className="text-lg font-semibold text-[color:var(--ui-text-primary)]">Nessuna card selezionata</p>
+            <p className="mt-2 text-sm text-[color:var(--ui-text-secondary)]">Clicca una card per vedere le informazioni</p>
           </div>
         </div>
       ) : null}
@@ -550,9 +585,18 @@ export function ContextSidebar({
           snapshotUrl={camera.snapshotUrl}
           isOffline={camera.isOffline}
           supportsPtz={camera.supportsPtz}
+          deviceInfo={camera.deviceInfo}
+          relatedEntities={camera.relatedEntities}
+          historyEntries={camera.historyEntries}
+          historyStatus={camera.historyStatus}
+          historyError={camera.historyError}
+          onRefreshHistory={camera.onRefreshHistory}
           onPtzMove={actions.moveCameraPtz}
           onPtzStop={actions.stopCameraPtz}
+          onRelatedEntityAction={actions.runCameraRelatedEntityAction}
           rawAttributes={camera.rawAttributes}
+          onSecondaryPageChange={onSecondaryPageChange}
+          commandsEnabled={commandsEnabled && !isEditMode}
         />
       ) : null}
 
@@ -612,6 +656,7 @@ export function ContextSidebar({
           onPlayMedia={actions.playSpeakerMedia}
           onSelectOutputDevice={actions.selectSpeakerOutputDevice}
           onToggleMultiroomDevice={actions.toggleSpeakerGroupMember}
+          onSecondaryPageChange={onSecondaryPageChange}
         />
       ) : null}
 
@@ -671,6 +716,8 @@ export function ContextSidebar({
           onCleanArea={actions.cleanVacuumArea}
           onSetFanSpeed={actions.setVacuumFanSpeed}
           onSendCommand={actions.sendVacuumCommand}
+          onRelatedEntityAction={actions.controlVacuumRelatedEntity}
+          onSecondaryPageChange={onSecondaryPageChange}
         />
       ) : null}
 
@@ -707,9 +754,9 @@ export function ContextSidebar({
             iconClassName="border-cyan-300/25 bg-cyan-500/12 text-cyan-100"
           />
 
-          <div className="liquid-glass-panel mb-1 p-[clamp(0.9rem,3vw,1.6rem)]">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Mappa Presenze</p>
-            <div className="liquid-glass-card relative mt-2 h-56 overflow-hidden rounded-xl">
+          <div className="context-content-surface mb-1 rounded-[clamp(1.25rem,4.6vw,2rem)] p-[clamp(0.9rem,3vw,1.6rem)]">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">Mappa Presenze</p>
+            <div className="dashboard-content-surface-soft relative mt-2 h-56 overflow-hidden rounded-xl">
               {membersMapPoints.length > 0 ? (
                 <Map
                   ref={membersMapRef}
@@ -732,18 +779,18 @@ export function ContextSidebar({
                           <img
                             src={point.avatarUrl}
                             alt={`Profilo ${point.name}`}
-                            className="h-9 w-9 rounded-full border-2 border-white/95 bg-white/[0.08] object-cover shadow-[0_6px_16px_rgba(15,23,42,0.4)]"
+                            className="h-9 w-9 rounded-full border-2 border-[#fff]/95 bg-[#fff]/[0.08] object-cover shadow-[0_6px_16px_rgba(15,23,42,0.4)]"
                           />
                         ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] text-[11px] font-semibold text-white shadow-[0_6px_16px_rgba(15,23,42,0.4)] backdrop-blur-xl">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#fff]/80 bg-[#fff]/[0.08] text-[11px] font-semibold text-[#fff] shadow-[0_6px_16px_rgba(15,23,42,0.4)] backdrop-blur-xl">
                             {(point.name.trim().charAt(0) || '?').toUpperCase()}
                           </span>
                         )}
-                        <span className="pointer-events-none absolute -inset-1 rounded-full border border-white/35" />
+                        <span className="pointer-events-none absolute -inset-1 rounded-full border border-[#fff]/35" />
                         {point.isCurrent ? (
                           <>
                             <span className="pointer-events-none absolute -inset-1.5 rounded-full border border-emerald-300/80" />
-                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white bg-emerald-400" />
+                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[#fff] bg-emerald-400" />
                           </>
                         ) : null}
                       </span>
@@ -751,7 +798,7 @@ export function ContextSidebar({
                   ))}
                 </Map>
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-white/65">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-[color:var(--ui-text-secondary)]">
                   <MapPin size={18} />
                   <p className="text-xs">Nessuna coordinata disponibile per i membri.</p>
                 </div>
@@ -774,21 +821,21 @@ export function ContextSidebar({
           </div>
 
           {membersMapPoints.length > 0 ? (
-            <div className="liquid-glass-card p-[clamp(0.8rem,2.4vw,1.15rem)]">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Membri</p>
+            <div className="context-content-surface rounded-[clamp(1.25rem,4.6vw,2rem)] p-[clamp(0.8rem,2.4vw,1.15rem)]">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">Membri</p>
               <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 glass-scrollbar">
                 {membersMapPoints.map((point) => (
-                  <div key={point.id} className="liquid-glass-card flex items-center justify-between gap-3 rounded-xl px-3 py-2">
+                  <div key={point.id} className="context-content-surface-soft flex items-center justify-between gap-3 rounded-xl px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="relative shrink-0">
                         {point.avatarUrl ? (
                           <img
                             src={point.avatarUrl}
                             alt={`Profilo ${point.name}`}
-                            className="h-9 w-9 rounded-full border border-white/80 object-cover"
+                            className="h-9 w-9 rounded-full border border-[color:var(--ui-border-strong)] object-cover"
                           />
                         ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/[0.08] text-[11px] font-semibold text-white backdrop-blur-xl">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] text-[11px] font-semibold text-[color:var(--ui-text-primary)]">
                             {(point.name.trim().charAt(0) || '?').toUpperCase()}
                           </span>
                         )}
@@ -800,33 +847,33 @@ export function ContextSidebar({
                         ) : null}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white/90">{point.name}</p>
-                        <p className="truncate text-[11px] text-white/58">
+                        <p className="truncate text-sm font-medium text-[color:var(--ui-text-primary)]">{point.name}</p>
+                        <p className="truncate text-[11px] text-[color:var(--ui-text-secondary)]">
                           {point.locationLabel?.trim() || 'Posizione sconosciuta'}
                         </p>
                       </div>
                     </div>
                     <div className="flex max-w-[10.5rem] shrink-0 flex-wrap justify-end gap-1.5">
                       {(point.devices?.smartwatch ?? 0) > 0 ? (
-                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
+                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]">
                           <Watch size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-bg-elevated)] px-1 text-[9px] font-semibold leading-none text-[color:var(--ui-text-primary)]">
                             {point.devices?.smartwatch}
                           </span>
                         </span>
                       ) : null}
                       {(point.devices?.tablet ?? 0) > 0 ? (
-                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
+                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]">
                           <Tablet size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-bg-elevated)] px-1 text-[9px] font-semibold leading-none text-[color:var(--ui-text-primary)]">
                             {point.devices?.tablet}
                           </span>
                         </span>
                       ) : null}
                       {(point.devices?.smartphone ?? 0) > 0 ? (
-                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-white/90">
+                        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]">
                           <Smartphone size={16} />
-                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-white/70 bg-white/[0.08] px-1 text-[9px] font-semibold leading-none text-white">
+                          <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-bg-elevated)] px-1 text-[9px] font-semibold leading-none text-[color:var(--ui-text-primary)]">
                             {point.devices?.smartphone}
                           </span>
                         </span>
@@ -842,8 +889,8 @@ export function ContextSidebar({
 
       {activeDevice ? (
         <div className="px-[clamp(0.75rem,2.8vw,1.5rem)] pb-1">
-          <div className="mb-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg backdrop-blur-xl">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/55">Dispositivi correlati</p>
+          <div className="context-content-surface mb-1 rounded-2xl p-[clamp(0.8rem,2.4vw,1.15rem)] shadow-lg">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">Dispositivi correlati</p>
             <div className={`mt-3 ${CONTEXT_PANEL_LAYOUT.adaptiveGridTwo}`}>
               {microWidgets.map((microWidget) => {
                 const state = resolveEntityStateById(haStates, microWidget.entity);
@@ -938,7 +985,7 @@ export function ContextSidebar({
                 <button
                   type="button"
                   onClick={() => console.log('Open Widget Box')}
-                  className="min-h-[4.25rem] rounded-2xl border border-dashed border-white/22 bg-white/[0.03] text-white/65 transition-colors hover:border-white/35 hover:bg-white/[0.07] hover:text-white"
+                  className="min-h-11 rounded-2xl border border-dashed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
                   aria-label="Aggiungi dispositivo correlato"
                   title="Aggiungi dispositivo correlato"
                 >
@@ -948,7 +995,7 @@ export function ContextSidebar({
                 </button>
               ) : null}
               {microWidgets.length === 0 && !isEditMode ? (
-                <div className="col-span-full rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/45">
+                <div className="context-content-surface-soft col-span-full rounded-2xl px-3 py-3 text-sm text-[color:var(--ui-text-tertiary)]">
                   Nessun dispositivo correlato.
                 </div>
               ) : null}

@@ -16,6 +16,8 @@ export interface DashboardStateShape {
   userName: string;
   wifiDownloadMbps: number;
   weather: {
+    available: boolean;
+    source: 'ha' | 'mock' | 'unavailable' | 'offline';
     location: string;
     condition: string;
     temperature: number;
@@ -269,15 +271,21 @@ const USER_NAME_STORAGE_KEY = 'ha.dashboard.userName';
 
 function readStoredUserName() {
   if (typeof window === 'undefined') {
-    return 'Ahang';
+    return '';
   }
   const stored = window.localStorage.getItem(USER_NAME_STORAGE_KEY);
-  return stored && stored.trim().length > 0 ? stored : 'Ahang';
+  const normalized = stored?.trim() ?? '';
+  if (!normalized || normalized === 'Ahang') {
+    window.localStorage.removeItem(USER_NAME_STORAGE_KEY);
+    return '';
+  }
+  return normalized;
 }
 
 type UseDashboardStateOptions = {
   haStates?: MockEntityStateMap;
   haStatus?: HaConnectionStatus;
+  allowMockFallback?: boolean;
   weatherEntityId?: string;
   weatherForecastType?: 'daily' | 'hourly' | 'twice_daily';
   haCallApi?: <TResponse = unknown>(
@@ -586,6 +594,7 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
   const [favorites, setFavorites] = useState<FavoriteDevice[]>(FAVORITES_SEED);
   const haStates = options?.haStates ?? {};
   const haConnected = options?.haStatus === 'connected';
+  const allowMockFallback = options?.allowMockFallback ?? options === undefined;
   const preferredWeatherEntityId = options?.weatherEntityId?.trim();
   const weatherForecastType = normalizeForecastType(options?.weatherForecastType);
   const callHaApi = options?.haCallApi;
@@ -622,10 +631,14 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
   };
 
   const setUserName = (name: string) => {
-    const next = name.trim().length ? name : 'Ahang';
+    const next = name.trim();
     setUserNameState(next);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(USER_NAME_STORAGE_KEY, next);
+      if (next) {
+        window.localStorage.setItem(USER_NAME_STORAGE_KEY, next);
+      } else {
+        window.localStorage.removeItem(USER_NAME_STORAGE_KEY);
+      }
     }
   };
 
@@ -1002,6 +1015,15 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
     const liveClimate = haConnected ? haStates['climate.air_conditioner'] : undefined;
     const liveWifi = haConnected ? haStates['sensor.nest_wifi_download'] : undefined;
     const liveWeather = resolvedWeatherEntityId ? haStates[resolvedWeatherEntityId] : undefined;
+    const hasLiveWeather = Boolean(resolvedWeatherEntityId && liveWeather);
+    const useMockWeather = !hasLiveWeather && allowMockFallback;
+    const weatherSource: DashboardStateShape['weather']['source'] = hasLiveWeather
+      ? 'ha'
+      : useMockWeather
+        ? 'mock'
+        : haConnected
+          ? 'unavailable'
+          : 'offline';
     const liveLampOn =
       typeof liveLamp?.toggleOn === 'boolean' ? liveLamp.toggleOn : undefined;
     const liveClimateOn = liveClimate?.state ? liveClimate.state !== 'off' : undefined;
@@ -1251,7 +1273,9 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
             windSpeed: entry.windSpeed,
           };
         })
-      : weatherForecastType === 'hourly'
+      : !useMockWeather
+        ? []
+        : weatherForecastType === 'hourly'
         ? Array.from({ length: 5 }, (_, index) => {
             const baseline = Math.round(weatherTemp) + (index === 0 ? 0 : index % 2 === 0 ? 1 : -1);
             const precipitationProbability = Math.max(0, 8 + index * 3);
@@ -1295,11 +1319,17 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
           });
     const weatherHigh = weatherForecast[0]?.high ?? 31;
     const weatherLow = weatherForecast[0]?.low ?? 22;
-    const weatherCondition = liveWeather?.state ?? weatherForecast[0]?.condition ?? 'partlycloudy';
+    const weatherCondition =
+      liveWeather?.state ?? weatherForecast[0]?.condition ?? (useMockWeather ? 'partlycloudy' : 'unavailable');
     const weatherLocation =
       (typeof liveWeather?.rawAttributes?.friendly_name === 'string'
         ? liveWeather.rawAttributes.friendly_name
-        : undefined) ?? 'San Francisco';
+        : undefined) ??
+      (useMockWeather
+        ? 'San Francisco'
+        : weatherSource === 'offline'
+          ? 'Home Assistant offline'
+          : 'Meteo non configurato');
     const weatherPrecipitation =
       toNumberOrUndefined(liveWeather?.rawAttributes?.precipitation_probability) ??
       toNumberOrUndefined(liveWeather?.rawAttributes?.rain_probability) ??
@@ -1357,6 +1387,8 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
       userName,
       wifiDownloadMbps: wifiValue,
       weather: {
+        available: hasLiveWeather || useMockWeather,
+        source: weatherSource,
         location: weatherLocation,
         condition: weatherCondition,
         temperature: weatherTemp,
@@ -1534,6 +1566,7 @@ function useDashboardStateInternal(options?: UseDashboardStateOptions) {
     resolvedWeatherEntityId,
     liveWeatherForecast,
     weatherForecastType,
+    allowMockFallback,
   ]);
 
   return {

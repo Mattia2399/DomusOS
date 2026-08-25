@@ -6,6 +6,10 @@ const BASE_URL = process.env.TEST_BASE_URL || `http://127.0.0.1:${PORT}`;
 module.exports = defineConfig({
   testDir: './tests',
   testMatch: ['**/*.spec.cjs'],
+  // Vite transforms the large, lazy Home workspace on first demand. Running
+  // multiple cold browser contexts against that transform makes timing tests
+  // nondeterministic and does not reflect the production build.
+  workers: 1,
   timeout: 120_000,
   expect: {
     timeout: 10_000,

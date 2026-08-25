@@ -5,6 +5,19 @@ import {
   type WidgetTypeBreakpointLayoutOverride,
   type WidgetTypeLayoutOverrides,
 } from '../../types/widgetTypeLayout';
+import {
+  ALARM_CARD_CAPABILITY,
+  CAMERA_CARD_CAPABILITY,
+  CLIMATE_CARD_CAPABILITY,
+  COVER_CARD_CAPABILITY,
+  LIGHT_CARD_CAPABILITY,
+  LOCK_CARD_CAPABILITY,
+  MEMBERS_CARD_CAPABILITY,
+  MEDIA_CARD_CAPABILITY,
+  SENSOR_CARD_CAPABILITY,
+  SWITCH_CARD_CAPABILITY,
+  VACUUM_CARD_CAPABILITY,
+} from '../widgets/cardCapabilityRegistry';
 
 export type GridEngineBreakpoint = keyof typeof GRID_ENGINE_BREAKPOINTS;
 export type BreakpointCardDensity = 'tiny' | 'compact' | 'regular';
@@ -40,6 +53,14 @@ function toPositiveInt(value: unknown) {
 function resolveLockMinimumHeight(breakpoint: GridEngineBreakpoint) {
   void breakpoint;
   return 1;
+}
+
+function isMobileGridBreakpoint(breakpoint: GridEngineBreakpoint) {
+  return breakpoint === 'xs' || breakpoint === 'sm';
+}
+
+function resolveMinimumWidth(kind: WidgetKind, breakpoint: GridEngineBreakpoint) {
+  return kind === 'cover' && !isMobileGridBreakpoint(breakpoint) ? 2 : 1;
 }
 
 function clampLockHeight(height: number | undefined, breakpoint: GridEngineBreakpoint) {
@@ -95,7 +116,11 @@ export function normalizeWidgetTypeLayoutOverrides(overrides: WidgetTypeLayoutOv
         };
         return;
       }
-      nextByBreakpoint[breakpoint] = next;
+      const minimumWidth = resolveMinimumWidth(kind, breakpoint);
+      nextByBreakpoint[breakpoint] = {
+        ...next,
+        ...(next.w ? { w: Math.max(minimumWidth, next.w) } : null),
+      };
     });
     if (Object.keys(nextByBreakpoint).length > 0) {
       normalized[kind] = nextByBreakpoint;
@@ -151,104 +176,38 @@ export function resolveCardDensityByBreakpoint(
 
 // ─── DEFINIZIONI LAYOUT DEFAULT ─────────────────────────────────────────────
 
-const DEFAULT_LIGHT_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, LightWidgetSpan> = {
-  '2xl': { w: 2, hOff: 1, hOn: 2 },
-  xl: { w: 2, hOff: 1, hOn: 2 },
-  lg: { w: 2, hOff: 1, hOn: 2 },
-  md: { w: 2, hOff: 1, hOn: 2 },
-  sm: { w: 1, hOff: 1, hOn: 2 },
-  xs: { w: 1, hOff: 1, hOn: 2 }, // Luce sta bene a w=1 per affiancarsi su mobile
-};
+const DEFAULT_LIGHT_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, LightWidgetSpan> =
+  { ...LIGHT_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_SWITCH_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 1 },
-  xl: { w: 2, h: 1 },
-  lg: { w: 2, h: 1 },
-  md: { w: 2, h: 1 },
-  sm: { w: 2, h: 1 },
-  xs: { w: 2, h: 1 },
-};
+const DEFAULT_SWITCH_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...SWITCH_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_CLIMATE_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 3, h: 3 },
-  xl: { w: 3, h: 3 },
-  lg: { w: 3, h: 3 },
-  md: { w: 3, h: 3 },
-  sm: { w: 2, h: 3 },
-  xs: { w: 2, h: 3 }, // AGGIORNATO: Il termostato deve occupare tutto lo schermo mobile
-};
+const DEFAULT_CLIMATE_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...CLIMATE_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_MEDIA_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 3 },
-  xl: { w: 2, h: 3 },
-  lg: { w: 2, h: 3 },
-  md: { w: 2, h: 3 },
-  sm: { w: 1, h: 3 },
-  xs: { w: 2, h: 3 }, // AGGIORNATO: I controlli media richiedono larghezza
-};
+const DEFAULT_MEDIA_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...MEDIA_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_VACUUM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 3 },
-  xl: { w: 2, h: 3 },
-  lg: { w: 2, h: 3 },
-  md: { w: 2, h: 3 },
-  sm: { w: 2, h: 3 },
-  xs: { w: 2, h: 3 }, // AGGIORNATO: Controlli aspirapolvere a larghezza intera
-};
+const DEFAULT_VACUUM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...VACUUM_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_COVER_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 3 },
-  xl: { w: 2, h: 3 },
-  lg: { w: 2, h: 3 },
-  md: { w: 2, h: 3 },
-  sm: { w: 1, h: 3 },
-  xs: { w: 1, h: 2 }, // Cover può stare affiancata
-};
+const DEFAULT_COVER_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...COVER_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_CAMERA_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 4, h: 3 },
-  xl: { w: 4, h: 3 },
-  lg: { w: 4, h: 3 },
-  md: { w: 4, h: 3 },
-  sm: { w: 1, h: 3 },
-  xs: { w: 2, h: 2 }, // AGGIORNATO: Il flusso video ha bisogno di tutto lo spazio orizzontale
-};
+const DEFAULT_CAMERA_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...CAMERA_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_SENSOR_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 3 },
-  xl: { w: 2, h: 3 },
-  lg: { w: 2, h: 2 },
-  md: { w: 2, h: 3 },
-  sm: { w: 1, h: 2 },
-  xs: { w: 1, h: 1 }, // I sensori devono affiancarsi
-};
+const DEFAULT_SENSOR_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...SENSOR_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_MEMBERS_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 3, h: 2 },
-  xl: { w: 3, h: 2 },
-  lg: { w: 3, h: 2 },
-  md: { w: 2, h: 2 },
-  sm: { w: 2, h: 2 },
-  xs: { w: 2, h: 2 }, // AGGIORNATO: Lista membri allineata in orizzontale
-};
+const DEFAULT_MEMBERS_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...MEMBERS_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_LOCK_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 2, h: 3 },
-  xl: { w: 2, h: 3 },
-  lg: { w: 2, h: 2 },
-  md: { w: 2, h: 2 },
-  sm: { w: 1, h: 2 },
-  xs: { w: 1, h: 1 }, // Serratura può stare affiancata
-};
+const DEFAULT_LOCK_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...LOCK_CARD_CAPABILITY.defaultSpans };
 
-const DEFAULT_ALARM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> = {
-  '2xl': { w: 3, h: 3 },
-  xl: { w: 3, h: 3 },
-  lg: { w: 3, h: 3 },
-  md: { w: 3, h: 3 },
-  sm: { w: 2, h: 3 },
-  xs: { w: 2, h: 3 },
-};
+const DEFAULT_ALARM_WIDGET_SPAN_BY_BREAKPOINT: Record<GridEngineBreakpoint, WidgetSpan> =
+  { ...ALARM_CARD_CAPABILITY.defaultSpans };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -271,15 +230,17 @@ function resolveSimpleWidgetSpanWithOverrides(
 ) {
   const base = DEFAULT_WIDGET_SPANS_BY_KIND[kind][breakpoint];
   const override = activeWidgetTypeLayoutOverrides[kind]?.[breakpoint];
+  const minimumWidth = resolveMinimumWidth(kind, breakpoint);
   const minimumHeight = kind === 'lock' ? resolveLockMinimumHeight(breakpoint) : 1;
   if (!override) {
     return {
       ...base,
+      w: Math.max(minimumWidth, base.w),
       h: Math.max(minimumHeight, base.h),
     };
   }
   return {
-    w: toPositiveInt(override.w) ?? base.w,
+    w: Math.max(minimumWidth, toPositiveInt(override.w) ?? base.w),
     h: Math.max(minimumHeight, toPositiveInt(override.h ?? override.hOn ?? override.hOff) ?? base.h),
   };
 }
@@ -347,9 +308,10 @@ export function resolveWidgetTypeLayoutSpan(
   }
   const base = DEFAULT_WIDGET_SPANS_BY_KIND[kind][breakpoint];
   const override = overrides?.[kind]?.[breakpoint];
+  const minimumWidth = resolveMinimumWidth(kind, breakpoint);
   const minimumHeight = kind === 'lock' ? resolveLockMinimumHeight(breakpoint) : 1;
   return {
-    w: toPositiveInt(override?.w) ?? base.w,
+    w: Math.max(minimumWidth, toPositiveInt(override?.w) ?? base.w),
     h: Math.max(minimumHeight, toPositiveInt(override?.h ?? override?.hOn ?? override?.hOff) ?? base.h),
   };
 }

@@ -53,7 +53,15 @@ import {
   type GridEngineBreakpoint,
 } from '../components/dashboard/dashboardBreakpointConfig';
 import { RoomClimateCard } from '../components/settings/ClimateControls';
+import GlassDropdown, { type GlassDropdownOption } from '../components/ui/GlassDropdown';
+import GlassLoader from '../components/ui/GlassLoader';
+import GlassSlider from '../components/ui/GlassSlider';
+import GlassModal from '../components/ui/GlassModal';
+import GlassBottomSheet from '../components/ui/GlassBottomSheet';
 import { SectionCardRenderer, WidgetCardRenderer } from '../components/widgets/CardRenderer';
+import { buildCameraCardModel } from '../components/widgets/cameraCardModel';
+import CameraViewer from '../components/camera/CameraViewer';
+import type { CameraPtzDirection } from '../components/camera/CameraPtzJoystick';
 import { useDashboardState } from '../hooks/useDashboardState';
 import type { HaArea } from '../hooks/useHaLiveConnection';
 import type { DashboardSection, SceneKey, Widget, WidgetKind } from '../types/dashboardModels';
@@ -66,21 +74,21 @@ const ROOM_ENTITY_VISIBILITY_STORAGE_KEY = 'ha.dashboard.rooms.hiddenEntitiesByR
 const ROOM_ID_CUSTOM_PREFIX = 'custom:';
 const ROOM_TITLE_TRANSITION = { duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const;
 const ROOM_MODAL_INPUT_CLASS =
-  'min-h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 text-sm text-white backdrop-blur-md transition-all placeholder:text-white/30 focus:border-white/20 focus:outline-none';
+  'ui-input min-h-10 w-full rounded-xl px-4 py-2.5 text-sm transition-all focus:outline-none';
 const ROOM_MODAL_PRIMARY_BUTTON_CLASS =
-  'btn-premium inline-flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/10 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-white/15 active:scale-95 disabled:cursor-wait disabled:opacity-60';
+  'glass-button glass-button-primary min-h-11 rounded-full px-5 text-xs font-semibold active:scale-95 disabled:cursor-wait disabled:opacity-60';
 const ROOM_MODAL_SECONDARY_BUTTON_CLASS =
-  'inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-5 py-2.5 text-xs font-semibold text-white/68 backdrop-blur-md transition-all duration-200 hover:bg-white/[0.07] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-60';
+  'glass-button min-h-11 rounded-full px-5 text-xs font-semibold active:scale-95 disabled:cursor-wait disabled:opacity-60';
 const ROOM_MODAL_ROW_CLASS =
-  'flex items-center justify-between gap-3 p-3.5 transition-all border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]';
+  'flex items-center justify-between gap-3 border-b border-[color:var(--ui-separator)] p-3.5 transition-all last:border-0 hover:bg-[color:var(--ui-fill-tertiary)]';
 const FLOOR_LAYER_BACKGROUND_OPEN_CLASS =
   'scale-95 blur-xl opacity-40 pointer-events-none transition-all duration-500 ease-out';
 const FLOOR_LAYER_BACKGROUND_CLOSED_CLASS =
   'scale-100 blur-none opacity-100 transition-all duration-500 ease-out';
 const FLOOR_CARD_CLASS =
-  'snap-center flex-shrink-0 w-64 h-80 rounded-[2rem] border border-white/[0.08] border-t border-t-white/14 bg-[#1C1C1E]/60 backdrop-blur-3xl p-6 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] flex flex-col justify-between transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer';
+  'dashboard-content-surface snap-center flex h-80 w-64 flex-shrink-0 cursor-pointer flex-col justify-between rounded-[2rem] p-6 shadow-[0_25px_50px_-12px_var(--ui-shadow)] transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]';
 const FLOOR_ADD_CARD_CLASS =
-  'snap-center flex-shrink-0 w-64 h-80 rounded-[2rem] border border-dashed border-white/10 border-t border-t-white/14 bg-white/[0.01] hover:bg-white/[0.03] p-6 flex flex-col items-center justify-center gap-3 group transition-all duration-200 active:scale-[0.98]';
+  'snap-center flex h-80 w-64 flex-shrink-0 flex-col items-center justify-center gap-3 rounded-[2rem] border border-dashed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-6 transition-all duration-200 hover:bg-[color:var(--ui-fill-secondary)] active:scale-[0.98]';
 const FLOOR_CAROUSEL_DRAG_THRESHOLD_PX = 6;
 const ROOM_TITLE_DRAG_THRESHOLD_PX = 3;
 const ROOM_SWIPER_ANIMATION_MS = 280;
@@ -353,6 +361,7 @@ type SectionDeviceSheetMode = 'add' | 'move' | null;
 type HiddenRoomEntitiesByRoom = Record<string, string[]>;
 
 type RoomsDashboardProps = {
+  isEditMode?: boolean;
   suppressBrowserNavigation?: boolean;
   navigationRoute?: string;
   isLoading?: boolean;
@@ -369,6 +378,9 @@ type RoomsDashboardProps = {
     message: Record<string, unknown>,
     options?: { reportError?: boolean },
   ) => Promise<unknown | null>;
+  cameraPtzEntityIds?: string[];
+  onCameraPtzMove?: (entityId: string, direction: CameraPtzDirection) => void;
+  onCameraPtzStop?: (entityId: string) => void;
 };
 
 const DEMO_ROOM_TABS: RoomTab[] = [
@@ -1684,8 +1696,8 @@ function RoomsTopTab({
       className={cn(
         'group relative inline-block rounded-lg px-3 pb-1 text-sm font-semibold leading-none tracking-normal transition-colors sm:px-4 sm:text-base',
         isActive
-          ? 'text-white'
-          : 'text-white/55 hover:text-white/80',
+          ? 'text-[color:var(--ui-text-primary)]'
+          : 'text-[color:var(--ui-text-tertiary)] hover:text-[color:var(--ui-text-primary)]',
       )}
     >
       <span className="truncate">{tab.name}</span>
@@ -1713,7 +1725,7 @@ function RoomIconButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'flex h-12 w-12 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white',
+        'flex h-12 w-12 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]',
         className ?? GLASS_CARD_CLASS,
       )}
     >
@@ -1766,6 +1778,7 @@ function ClimateAction({
 }
 
 export function RoomsDashboard({
+  isEditMode = false,
   isLoading = false,
   haConnected,
   canManageRooms = false,
@@ -1773,6 +1786,9 @@ export function RoomsDashboard({
   haStates,
   onCallApi,
   onCallService,
+  cameraPtzEntityIds = [],
+  onCameraPtzMove,
+  onCameraPtzStop,
 }: RoomsDashboardProps) {
   const prefersReducedMotion = useReducedMotion();
   const roomTitleScrollerRef = React.useRef<HTMLDivElement | null>(null);
@@ -1795,6 +1811,7 @@ export function RoomsDashboard({
   const [createdHaAreas, setCreatedHaAreas] = React.useState<HaArea[]>([]);
   const [deletedHaAreaIds, setDeletedHaAreaIds] = React.useState<string[]>([]);
   const [activeRoomId, setActiveRoomId] = React.useState<string>(readStoredActiveRoomId);
+  const [activeCameraViewerEntityId, setActiveCameraViewerEntityId] = React.useState<string | null>(null);
   const [selectedFloorId, setSelectedFloorId] = React.useState<string>('all');
   const [selectedClimateEntityId, setSelectedClimateEntityId] = React.useState('');
   const [selectedMediaEntityId, setSelectedMediaEntityId] = React.useState('');
@@ -1849,6 +1866,23 @@ export function RoomsDashboard({
     'demo-monitoring': true,
   });
   const [sceneByRoomId, setSceneByRoomId] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    if (canManageRooms) {
+      return;
+    }
+    setIsManageOpen(false);
+    setIsAddingFloor(false);
+    setEditingFloorId(null);
+    setFloorDeleteCandidate(null);
+    setEditingRoom(null);
+    setEditingRoomSection(null);
+    setIsSectionTargetSelectionMode(false);
+    setSelectedSectionTargetIds({});
+    setSelectedSectionAddTargetIds({});
+    setSectionDeviceSheetMode(null);
+    setSectionActionError(null);
+  }, [canManageRooms]);
 
   React.useEffect(() => {
     const entries = Object.entries(optimisticRoomToggleByEntityId);
@@ -2071,18 +2105,18 @@ export function RoomsDashboard({
   }, [isManageOpen, resetRoomForm]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (!canManageRooms || typeof window === 'undefined') {
       return;
     }
     window.localStorage.setItem(CUSTOM_ROOMS_STORAGE_KEY, JSON.stringify(customRooms));
-  }, [customRooms]);
+  }, [canManageRooms, customRooms]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (!canManageRooms || typeof window === 'undefined') {
       return;
     }
     window.localStorage.setItem(ROOM_ENTITY_VISIBILITY_STORAGE_KEY, JSON.stringify(hiddenRoomEntitiesByRoom));
-  }, [hiddenRoomEntitiesByRoom]);
+  }, [canManageRooms, hiddenRoomEntitiesByRoom]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') {
@@ -2194,6 +2228,9 @@ export function RoomsDashboard({
   }, [haConnected, onCallApi]);
 
   const addCustomRoom = async () => {
+    if (!canManageRooms) {
+      return;
+    }
     const normalized = normalizeRoomName(newRoomName);
     if (!normalized) {
       return;
@@ -2261,6 +2298,9 @@ export function RoomsDashboard({
   };
 
   const startEditRoom = (tab: RoomTab, haArea?: HaArea | null) => {
+    if (!canManageRooms) {
+      return;
+    }
     if (tab.source === 'ha' && !haArea) {
       return;
     }
@@ -2287,7 +2327,7 @@ export function RoomsDashboard({
   };
 
   const saveRoomEdit = async () => {
-    if (!editingRoom) {
+    if (!canManageRooms || !editingRoom) {
       return;
     }
     const nextName = normalizeRoomName(newRoomName);
@@ -2356,6 +2396,9 @@ export function RoomsDashboard({
   };
 
   const submitRoomForm = async () => {
+    if (!canManageRooms) {
+      return;
+    }
     if (editingRoom) {
       await saveRoomEdit();
       return;
@@ -2364,6 +2407,9 @@ export function RoomsDashboard({
   };
 
   const removeCustomRoom = (roomId: string, roomName: string) => {
+    if (!canManageRooms) {
+      return;
+    }
     const confirmed =
       typeof window === 'undefined' ||
       window.confirm(`Vuoi eliminare la stanza "${roomName}"?`);
@@ -2381,7 +2427,7 @@ export function RoomsDashboard({
   };
 
   const removeHaArea = async (areaId: string, areaName: string) => {
-    if (!onCallApi) {
+    if (!canManageRooms || !onCallApi) {
       return;
     }
     const confirmed =
@@ -2440,6 +2486,9 @@ export function RoomsDashboard({
   };
 
   const startEditFloor = (floor: HaFloorEntry) => {
+    if (!canManageRooms) {
+      return;
+    }
     setEditingFloorId(floor.floor_id);
     setFloorDraftById((current) => ({ ...current, [floor.floor_id]: buildFloorDraft(floor) }));
     setFloorErrorById((current) => {
@@ -2450,7 +2499,7 @@ export function RoomsDashboard({
   };
 
   const createHaFloor = async () => {
-    if (!onCallApi) {
+    if (!canManageRooms || !onCallApi) {
       setFloorCreateError('Home Assistant non e disponibile in questo momento.');
       return;
     }
@@ -2502,7 +2551,7 @@ export function RoomsDashboard({
   };
 
   const saveHaFloor = async (floorId: string) => {
-    if (!onCallApi) {
+    if (!canManageRooms || !onCallApi) {
       return;
     }
     const draft = floorDraftById[floorId];
@@ -2566,7 +2615,7 @@ export function RoomsDashboard({
   };
 
   const reorderHaFloor = async (floorId: string, direction: -1 | 1) => {
-    if (!onCallApi) {
+    if (!canManageRooms || !onCallApi) {
       return;
     }
     const currentIndex = effectiveHaFloors.findIndex((floor) => floor.floor_id === floorId);
@@ -2606,7 +2655,7 @@ export function RoomsDashboard({
   };
 
   const removeHaFloor = async (floor: HaFloorEntry) => {
-    if (!onCallApi) {
+    if (!canManageRooms || !onCallApi) {
       return;
     }
 
@@ -2690,7 +2739,9 @@ export function RoomsDashboard({
     () => new Map(registryDeviceEntries.map((entry) => [entry.id, entry])),
     [registryDeviceEntries],
   );
-  const canOpenActiveHaRoomSection = Boolean(activeRoomTab?.source === 'ha' && haConnected && onCallApi);
+  const canOpenActiveHaRoomSection = Boolean(
+    canManageRooms && activeRoomTab?.source === 'ha' && haConnected && onCallApi,
+  );
   const canEditActiveHaRoom = Boolean(canOpenActiveHaRoomSection && canManageRooms);
   const isDemoSeedRoom = Boolean(activeRoomTab?.id.startsWith('demo-'));
 
@@ -3212,6 +3263,7 @@ export function RoomsDashboard({
   const { state: roomDashboardState } = useDashboardState({
     haStates,
     haStatus: haConnected ? 'connected' : 'disconnected',
+    allowMockFallback: isDemoSeedRoom,
     weatherEntityId: weatherEntityId ?? undefined,
     weatherForecastType: 'hourly',
     haCallApi: callHaApiForDashboard,
@@ -3915,7 +3967,7 @@ export function RoomsDashboard({
 
   const assignSectionTargetsToArea = React.useCallback(
     async (targets: RoomSectionDeviceTarget[], nextAreaId: string | null) => {
-      if (!onCallApi || targets.length === 0) {
+      if (!canManageRooms || !onCallApi || targets.length === 0) {
         return false;
       }
       setSectionActionBusy(true);
@@ -4002,6 +4054,7 @@ export function RoomsDashboard({
     [
       activeRoomTab,
       applyOptimisticRegistryAreaUpdate,
+      canManageRooms,
       onCallApi,
       refreshRegistrySnapshot,
       registryEntityByEntityId,
@@ -4009,7 +4062,7 @@ export function RoomsDashboard({
   );
 
   const toggleRoomEntityVisibility = React.useCallback((entityId: string) => {
-    if (!activeRoomTab || activeRoomTab.source !== 'ha') {
+    if (!canManageRooms || !activeRoomTab || activeRoomTab.source !== 'ha') {
       return;
     }
     const roomId = activeRoomTab.id;
@@ -4028,7 +4081,7 @@ export function RoomsDashboard({
       return next;
     });
     setSectionActionError(null);
-  }, [activeRoomTab]);
+  }, [activeRoomTab, canManageRooms]);
 
   const clearSectionTargetLongPress = React.useCallback(() => {
     const longPress = sectionTargetLongPressRef.current;
@@ -4063,6 +4116,9 @@ export function RoomsDashboard({
   }, [clearSectionTargetLongPress]);
 
   const toggleSectionTargetSelection = React.useCallback((targetId: string) => {
+    if (!canManageRooms) {
+      return;
+    }
     setSelectedSectionTargetIds((current) => {
       const next = { ...current };
       if (next[targetId]) {
@@ -4073,9 +4129,12 @@ export function RoomsDashboard({
       return next;
     });
     setSectionActionError(null);
-  }, []);
+  }, [canManageRooms]);
 
   const toggleSectionAddTargetSelection = React.useCallback((targetId: string) => {
+    if (!canManageRooms) {
+      return;
+    }
     setSelectedSectionAddTargetIds((current) => {
       const next = { ...current };
       if (next[targetId]) {
@@ -4086,7 +4145,7 @@ export function RoomsDashboard({
       return next;
     });
     setSectionActionError(null);
-  }, []);
+  }, [canManageRooms]);
 
   const beginSectionTargetLongPress = React.useCallback(
     (targetId: string, event: React.PointerEvent<HTMLDivElement>) => {
@@ -4173,6 +4232,10 @@ export function RoomsDashboard({
       }
       onClick={() => {
         const domain = widget.entityId.split('.')[0];
+        if (domain === 'camera') {
+          setActiveCameraViewerEntityId(widget.entityId);
+          return;
+        }
         if (domain === 'media_player') {
           void onCallService?.('media_player', 'media_play_pause', { entity_id: widget.entityId });
           return;
@@ -4373,7 +4436,7 @@ export function RoomsDashboard({
     return (
       <div
         className={cn(
-          'scrollbar-none flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-white/[0.06] bg-white/[0.02] p-0.5',
+          'scrollbar-none flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-0.5',
           options?.fillOnDesktop && 'lg:w-full lg:overflow-visible lg:p-1',
         )}
       >
@@ -4390,8 +4453,8 @@ export function RoomsDashboard({
                 'max-w-[10rem] shrink-0 truncate rounded-full px-3 py-1.5 text-center text-[11px] font-semibold transition-all active:scale-95',
                 options?.fillOnDesktop && 'lg:min-w-0 lg:flex-1 lg:basis-0 lg:px-4 lg:py-2 lg:max-w-none',
                 isSelected
-                  ? 'bg-white/[0.12] text-white shadow-sm'
-                  : 'text-white/48 hover:bg-white/[0.06] hover:text-white/78',
+                  ? 'bg-[color:var(--ui-segment-active)] text-[color:var(--ui-text-primary)] shadow-sm'
+                  : 'text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]',
               )}
               title={label}
             >
@@ -4421,17 +4484,17 @@ export function RoomsDashboard({
           aria-label={`Mostra tutti i dispositivi in ${label}`}
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-semibold leading-tight tracking-normal text-white/86">{label}</span>
-            <ChevronRight size={14} className="shrink-0 text-white/32 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
+            <span className="truncate text-sm font-semibold leading-tight tracking-normal text-[color:var(--ui-text-primary)]">{label}</span>
+            <ChevronRight size={14} className="shrink-0 text-[color:var(--ui-text-tertiary)] transition-transform group-hover:translate-x-0.5 group-hover:text-[color:var(--ui-text-primary)]" />
           </span>
-          <span className="mt-0.5 block text-[0.72rem] font-medium leading-tight text-white/36">
+          <span className="mt-0.5 block text-[0.72rem] font-medium leading-tight text-[color:var(--ui-text-tertiary)]">
             {formatRoomDeviceCount(count)}
           </span>
         </button>
       ) : (
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold leading-tight tracking-normal text-white/86">{label}</h2>
-          <p className="mt-0.5 text-[0.72rem] font-medium leading-tight text-white/36">
+          <h2 className="truncate text-sm font-semibold leading-tight tracking-normal text-[color:var(--ui-text-primary)]">{label}</h2>
+          <p className="mt-0.5 text-[0.72rem] font-medium leading-tight text-[color:var(--ui-text-tertiary)]">
             {formatRoomDeviceCount(count)}
           </p>
         </div>
@@ -4441,7 +4504,7 @@ export function RoomsDashboard({
           type="button"
           onClick={options.onEdit}
           disabled={options.editDisabled}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/42 transition-all hover:bg-white/[0.06] hover:text-white/78 active:scale-95 disabled:cursor-not-allowed disabled:opacity-25"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[color:var(--ui-text-tertiary)] transition-all hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-25"
           aria-label={`Modifica sezione ${label}`}
           title={options.editDisabled ? 'Disponibile con una stanza Home Assistant connessa' : `Modifica ${label}`}
         >
@@ -4512,9 +4575,9 @@ export function RoomsDashboard({
             })}
           </div>
         ) : (
-          <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/38">Non configurato</p>
+          <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">Non configurato</p>
         )}
-        <div className="relative flex min-h-[8.5rem] flex-1 items-center justify-center overflow-hidden rounded-[1.25rem] border border-white/[0.035] bg-white/[0.018] px-4 py-5 text-center">
+        <div className="relative flex min-h-[8.5rem] flex-1 items-center justify-center overflow-hidden rounded-[1.25rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-4 py-5 text-center">
           <div aria-hidden="true" className="absolute inset-0 opacity-45">
             <div className="absolute left-4 right-4 top-4 h-8 rounded-2xl border border-white/[0.035] bg-white/[0.025]" />
             <div className="absolute left-4 top-16 h-12 w-[34%] rounded-2xl border border-white/[0.03] bg-white/[0.018]" />
@@ -4523,14 +4586,13 @@ export function RoomsDashboard({
             <div className="absolute bottom-4 right-6 h-2 w-14 rounded-full bg-white/[0.025]" />
           </div>
           <div className="relative z-10 flex max-w-xs flex-col items-center">
-            <h2 className="text-sm font-semibold leading-snug text-white/82">{title}</h2>
-            <p className="mt-1.5 text-xs leading-relaxed text-white/38">{description}</p>
-            {editTarget ? (
+            <h2 className="text-sm font-semibold leading-snug text-[color:var(--ui-text-primary)]">{title}</h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-[color:var(--ui-text-secondary)]">{description}</p>
+            {editTarget && canOpenEmptySection ? (
               <button
                 type="button"
                 onClick={() => openSectionDeviceAddSheet(editTarget)}
-                disabled={!canOpenEmptySection}
-                className="mt-4 inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.075] px-3.5 py-2 text-xs font-semibold text-white/76 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+                className="mt-4 inline-flex items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] px-3.5 py-2 text-xs font-semibold text-[color:var(--ui-text-primary)] shadow-sm backdrop-blur-md transition-all hover:bg-[color:var(--ui-fill-primary)] active:scale-95"
                 title="Aggiungi dispositivi"
               >
                 Aggiungi dispositivi
@@ -4622,6 +4684,24 @@ export function RoomsDashboard({
   const switchesCluster = roomWidgetClusters.find((cluster) => cluster.id === 'switches');
   const sensorsCluster = roomWidgetClusters.find((cluster) => cluster.id === 'sensors');
   const securityCluster = roomWidgetClusters.find((cluster) => cluster.id === 'security');
+  const roomCameraViewerItems = React.useMemo(
+    () => visibleActiveBuckets.cameras.map((entityId) => {
+      const liveEntity = haStates[entityId];
+      const widget = buildRoomWidget(entityId, 'camera', liveEntity, { i: entityId, x: 0, y: 0, w: 2, h: 2 });
+      const model = buildCameraCardModel(widget, liveEntity);
+      return {
+        entityId,
+        name: model.title,
+        statusLabel: model.statusLabel,
+        subtitle: model.subtitle,
+        streamUrl: model.streamUrl,
+        snapshotUrl: model.imageUrl,
+        isOffline: !model.isAvailable,
+        supportsPtz: cameraPtzEntityIds.includes(entityId),
+      };
+    }),
+    [cameraPtzEntityIds, haStates, visibleActiveBuckets.cameras],
+  );
   const renderWidgetCluster = (
     cluster: RoomWidgetCluster | undefined,
     options?: {
@@ -4680,7 +4760,7 @@ export function RoomsDashboard({
                     })
                 : undefined,
             })}
-            <p className="text-xs font-medium text-white/38">
+            <p className="text-xs font-medium text-[color:var(--ui-text-tertiary)]">
               {hiddenDeviceCount === 1 ? '1 dispositivo nascosto' : `${hiddenDeviceCount} dispositivi nascosti`}
             </p>
           </section>
@@ -5398,8 +5478,8 @@ export function RoomsDashboard({
               className="pointer-events-none absolute inset-y-0 left-0 z-0 transition-[width]"
               style={{ width: `${sliderPct}%`, background: slider.accent }}
             />
-            <input
-              type="range"
+            <GlassSlider
+              variant="overlay"
               data-quick-control="true"
               data-quick-slider="true"
               min={slider.min}
@@ -5505,7 +5585,7 @@ export function RoomsDashboard({
   };
 
   const renderSectionDeviceSheet = () => {
-    if (!editingRoomSection || !sectionDeviceSheetMode) {
+    if (!canManageRooms || !editingRoomSection || !sectionDeviceSheetMode) {
       return null;
     }
     const selectedCount = selectedSectionTargets.length;
@@ -5521,41 +5601,42 @@ export function RoomsDashboard({
           : `Aggiungi ${selectedAddCount} dispositivi`;
 
     return (
-      <div className="absolute inset-0 z-30 flex items-end justify-center bg-[color:var(--profile-sheet-overlay)] p-0 backdrop-blur-md sm:p-6">
-        <button
-          type="button"
-          className="absolute inset-0"
-          onClick={() => {
-            if (!sectionActionBusy) {
-              setSectionDeviceSheetMode(null);
-              setSelectedSectionAddTargetIds({});
-            }
-          }}
-          aria-label="Chiudi pannello dispositivi"
-        />
-        <div className="relative z-10 w-full max-w-md rounded-t-[2rem] border border-[color:var(--profile-sheet-border)] bg-[var(--profile-sheet-bg)] p-4 text-[color:var(--profile-sheet-text)] shadow-[0_-24px_80px_var(--profile-sheet-shadow)] backdrop-blur-3xl sm:rounded-[2rem]">
-          <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[color:var(--profile-sheet-border-strong)]" />
+      <GlassBottomSheet
+        isOpen
+        onClose={() => {
+          if (!sectionActionBusy) {
+            setSectionDeviceSheetMode(null);
+            setSelectedSectionAddTargetIds({});
+          }
+        }}
+        title={sectionDeviceSheetMode === 'add' ? 'Aggiungi dispositivo' : 'Sposta dispositivi'}
+        position="container"
+        usePortal={false}
+        dismissible={!sectionActionBusy}
+        showHeader={false}
+        zIndex={30}
+      >
           {sectionDeviceSheetMode === 'add' ? (
             <>
               <div className="text-center">
-                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-title)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]">
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-primary)] shadow-[0_12px_24px_var(--ui-shadow-soft)]">
                   <Plus size={22} />
                 </span>
-                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--profile-sheet-title)]">Aggiungi dispositivo</h3>
-                <p className="mt-0.5 text-sm font-medium text-[color:var(--profile-sheet-muted)]">{editingRoomSection.label}</p>
+                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--ui-text-primary)]">Aggiungi dispositivo</h3>
+                <p className="mt-0.5 text-sm font-medium text-[color:var(--ui-text-secondary)]">{editingRoomSection.label}</p>
               </div>
-              <label className="mt-5 flex items-center gap-2 rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] px-3.5 py-2 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
-                <Search size={15} className="text-[color:var(--profile-sheet-muted)]" />
+              <label className="mt-5 flex items-center gap-2 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] px-3.5 py-2 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+                <Search size={15} className="text-[color:var(--ui-text-secondary)]" />
                 <input
                   value={sectionDeviceSearch}
                   onChange={(event) => setSectionDeviceSearch(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[color:var(--profile-sheet-title)] outline-none placeholder:text-[color:var(--profile-sheet-muted)]"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[color:var(--ui-text-primary)] outline-none placeholder:text-[color:var(--ui-text-secondary)]"
                   placeholder="Cerca dispositivo"
                 />
               </label>
               {selectedAddCount > 0 ? (
                 <div className="mt-3 flex items-center justify-between gap-3 px-1">
-                  <p className="truncate text-xs font-semibold text-[color:rgb(var(--profile-sheet-accent-rgb)/0.96)]">
+                  <p className="truncate text-xs font-semibold text-[color:rgb(var(--ui-accent-rgb)/0.96)]">
                     {formatSelectedDeviceCount(selectedAddCount)}
                   </p>
                   <button
@@ -5565,7 +5646,7 @@ export function RoomsDashboard({
                       setSectionActionError(null);
                     }}
                     disabled={sectionActionBusy}
-                    className="shrink-0 text-xs font-semibold text-[color:var(--profile-sheet-muted)] transition-colors hover:text-[color:var(--profile-sheet-title)] disabled:cursor-wait disabled:opacity-55"
+                    className="shrink-0 text-xs font-semibold text-[color:var(--ui-text-secondary)] transition-colors hover:text-[color:var(--ui-text-primary)] disabled:cursor-wait disabled:opacity-55"
                   >
                     Cancella
                   </button>
@@ -5587,26 +5668,26 @@ export function RoomsDashboard({
                           className={cn(
                             'flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left shadow-sm transition-all active:scale-[0.99] disabled:cursor-wait disabled:opacity-60',
                             isSelected
-                              ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.6)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.22)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.14)_100%)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]'
-                              : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] hover:bg-[color:var(--profile-sheet-surface-strong)]',
+                              ? 'border-[color:rgb(var(--ui-accent-rgb)/0.6)] bg-[linear-gradient(135deg,rgb(var(--ui-accent-rgb)/0.22)_0%,rgb(var(--ui-accent-secondary-rgb)/0.14)_100%)] shadow-[0_12px_24px_var(--ui-shadow-soft)]'
+                              : 'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] hover:bg-[color:var(--ui-surface-glass-strong)]',
                           )}
                         >
                           <span
                             className={cn(
                               'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-colors',
                               isSelected
-                                ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.54)] bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.2)] text-[color:rgb(var(--profile-sheet-accent-rgb)/0.98)]'
-                                : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]',
+                                ? 'border-[color:rgb(var(--ui-accent-rgb)/0.54)] bg-[color:rgb(var(--ui-accent-rgb)/0.2)] text-[color:rgb(var(--ui-accent-rgb)/0.98)]'
+                                : 'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-secondary)]',
                             )}
                           >
                             {renderSectionDeviceIcon(target)}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold text-[color:var(--profile-sheet-title)]">{target.name}</span>
+                            <span className="block truncate text-sm font-bold text-[color:var(--ui-text-primary)]">{target.name}</span>
                             {hasDistinctDeviceName(target) ? (
-                              <span className="mt-0.5 block truncate text-xs font-semibold text-[color:var(--profile-sheet-text)]">{target.deviceName}</span>
+                              <span className="mt-0.5 block truncate text-xs font-semibold text-[color:var(--ui-text-primary)]">{target.deviceName}</span>
                             ) : null}
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-[color:var(--profile-sheet-muted)]">
+                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-[color:var(--ui-text-secondary)]">
                               {areaLabel} - {target.subtitle}
                             </span>
                           </span>
@@ -5614,8 +5695,8 @@ export function RoomsDashboard({
                             className={cn(
                               'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors',
                               isSelected
-                                ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.9)] text-slate-950'
-                                : 'bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]',
+                                ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.9)] text-slate-950'
+                                : 'bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-secondary)]',
                             )}
                           >
                             {isSelected ? <Check size={14} strokeWidth={3} /> : <Plus size={16} />}
@@ -5626,8 +5707,8 @@ export function RoomsDashboard({
                   </div>
                 ) : (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm font-bold text-[color:var(--profile-sheet-title)]">Nessun dispositivo disponibile</p>
-                    <p className="mt-1 text-xs font-semibold text-[color:var(--profile-sheet-muted)]">
+                    <p className="text-sm font-bold text-[color:var(--ui-text-primary)]">Nessun dispositivo disponibile</p>
+                    <p className="mt-1 text-xs font-semibold text-[color:var(--ui-text-secondary)]">
                       Prova con un'altra ricerca o verifica le entita disponibili.
                     </p>
                   </div>
@@ -5646,7 +5727,7 @@ export function RoomsDashboard({
                   }
                 }}
                 disabled={!canAddSelectedTargets || sectionActionBusy}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--profile-sheet-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.88)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--profile-sheet-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--profile-sheet-border)] disabled:bg-[color:var(--profile-sheet-surface)] disabled:text-[color:var(--profile-sheet-muted)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--ui-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--ui-accent-rgb)/0.88)_0%,rgb(var(--ui-accent-secondary-rgb)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--ui-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--ui-border)] disabled:bg-[color:var(--ui-surface-glass)] disabled:text-[color:var(--ui-text-secondary)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
               >
                 <Plus size={16} />
                 {sectionActionBusy ? 'Aggiungo...' : addLabel}
@@ -5655,26 +5736,26 @@ export function RoomsDashboard({
           ) : (
             <>
               <div className="text-center">
-                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-title)] shadow-[0_12px_24px_var(--profile-sheet-shadow-soft)]">
+                <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-primary)] shadow-[0_12px_24px_var(--ui-shadow-soft)]">
                   <Move size={22} />
                 </span>
-                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--profile-sheet-title)]">Sposta</h3>
-                <p className="mt-0.5 text-sm font-medium text-[color:var(--profile-sheet-muted)]">{formatSelectedDeviceCount(selectedCount)}</p>
+                <h3 className="mt-3 text-lg font-bold tracking-normal text-[color:var(--ui-text-primary)]">Sposta</h3>
+                <p className="mt-0.5 text-sm font-medium text-[color:var(--ui-text-secondary)]">{formatSelectedDeviceCount(selectedCount)}</p>
               </div>
               {selectedSectionTargets.length > 0 ? (
                 <div className="mt-5 flex justify-center gap-2 overflow-hidden">
                   {selectedSectionTargets.slice(0, 3).map((target) => (
                     <div
                       key={target.id}
-                      className="flex w-20 flex-col items-center gap-2 rounded-2xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] p-3 text-center shadow-sm"
+                      className="flex w-20 flex-col items-center gap-2 rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] p-3 text-center shadow-sm"
                       title={hasDistinctDeviceName(target) ? `${target.name} - ${target.deviceName}` : target.name}
                     >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface-strong)] text-[color:var(--profile-sheet-muted)]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] text-[color:var(--ui-text-secondary)]">
                         {renderSectionDeviceIcon(target)}
                       </span>
-                      <span className="max-w-full truncate text-[11px] font-bold text-[color:var(--profile-sheet-title)]">{target.name}</span>
+                      <span className="max-w-full truncate text-[11px] font-bold text-[color:var(--ui-text-primary)]">{target.name}</span>
                       {hasDistinctDeviceName(target) ? (
-                        <span className="max-w-full truncate text-[10px] font-semibold text-[color:var(--profile-sheet-muted)]">{target.deviceName}</span>
+                        <span className="max-w-full truncate text-[10px] font-semibold text-[color:var(--ui-text-secondary)]">{target.deviceName}</span>
                       ) : null}
                     </div>
                   ))}
@@ -5698,8 +5779,8 @@ export function RoomsDashboard({
                       className={cn(
                         'rounded-full border px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.99] disabled:cursor-not-allowed',
                         isSelectedArea
-                          ? 'border-[color:rgb(var(--profile-sheet-accent-rgb)/0.55)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.24)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.16)_100%)] text-[color:var(--profile-sheet-title)]'
-                          : 'border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-muted)] hover:bg-[color:var(--profile-sheet-surface-strong)] hover:text-[color:var(--profile-sheet-title)]',
+                          ? 'border-[color:rgb(var(--ui-accent-rgb)/0.55)] bg-[linear-gradient(135deg,rgb(var(--ui-accent-rgb)/0.24)_0%,rgb(var(--ui-accent-secondary-rgb)/0.16)_100%)] text-[color:var(--ui-text-primary)]'
+                          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-surface-glass-strong)] hover:text-[color:var(--ui-text-primary)]',
                         isCurrentRoom && 'opacity-45',
                       )}
                     >
@@ -5722,7 +5803,7 @@ export function RoomsDashboard({
                   }
                 }}
                 disabled={!canMove || sectionActionBusy}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--profile-sheet-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--profile-sheet-accent-rgb)/0.88)_0%,rgb(var(--profile-sheet-accent-rgb-2)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--profile-sheet-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--profile-sheet-border)] disabled:bg-[color:var(--profile-sheet-surface)] disabled:text-[color:var(--profile-sheet-muted)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--ui-accent-rgb)/0.45)] bg-[linear-gradient(135deg,rgb(var(--ui-accent-rgb)/0.88)_0%,rgb(var(--ui-accent-secondary-rgb)/0.72)_100%)] px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_var(--ui-shadow-soft)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-[color:var(--ui-border)] disabled:bg-[color:var(--ui-surface-glass)] disabled:text-[color:var(--ui-text-secondary)] disabled:shadow-none disabled:brightness-100 disabled:opacity-60"
               >
                 <Move size={16} />
                 {sectionActionBusy ? 'Sposto...' : moveLabel}
@@ -5730,13 +5811,12 @@ export function RoomsDashboard({
             </>
           )}
           {sectionActionError ? <p className="mt-3 text-center text-xs font-semibold text-rose-400">{sectionActionError}</p> : null}
-        </div>
-      </div>
+      </GlassBottomSheet>
     );
   };
 
   const renderSectionEditOverlay = () => {
-    if (!editingRoomSection) {
+    if (!canManageRooms || !editingRoomSection) {
       return null;
     }
     const selectedCount = selectedSectionTargets.length;
@@ -6027,7 +6107,7 @@ export function RoomsDashboard({
   const isRoomFormBusy = editingRoom?.source === 'ha'
     ? areaActionById[editingRoom.id] === 'saving'
     : isCreatingRoom;
-  const canUseHaAreaForm = Boolean(haConnected && onCallApi);
+  const canUseHaAreaForm = Boolean(canManageRooms && haConnected && onCallApi);
   const showAreaDetailsControl = canUseHaAreaForm && (!isEditingRoom || isEditingHaRoom);
   const roomFormTitle = isEditingRoom ? 'Modifica stanza' : 'Nuova stanza';
   const roomFormBadge = isEditingRoom
@@ -6489,7 +6569,7 @@ export function RoomsDashboard({
                 </>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            {canManageRooms ? <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={(event) => {
@@ -6514,7 +6594,7 @@ export function RoomsDashboard({
               >
                 <MinusCircle size={16} />
               </button>
-            </div>
+            </div> : null}
           </div>
           {floorError ? <p className="mt-3 text-xs leading-relaxed text-rose-200/80">{floorError}</p> : null}
         </div>
@@ -6524,7 +6604,7 @@ export function RoomsDashboard({
             <p className="text-4xl font-semibold leading-none text-white/90">{floorRoomCount}</p>
             <p className="mt-1 text-xs font-medium text-white/36">{floorRoomCount === 1 ? 'stanza' : 'stanze'}</p>
           </div>
-          <div className="flex items-center gap-2">
+          {canManageRooms ? <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={(event) => {
@@ -6549,7 +6629,7 @@ export function RoomsDashboard({
               >
                 <ChevronRight size={20} />
               </button>
-          </div>
+          </div> : null}
         </div>
       </div>
     );
@@ -6562,17 +6642,11 @@ export function RoomsDashboard({
     return (
       <div className="rooms-dashboard dashboard-page-scroll" aria-busy="true">
         <div className="dashboard-page-content dashboard-page-content-wide flex min-h-[calc(100dvh-5rem)] items-center justify-center">
-          <div className="flex min-w-0 flex-col items-center gap-4 text-center">
-            <div className="relative h-16 w-16">
-              <div className="absolute inset-0 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-2xl" />
-              <div className="absolute inset-3 rounded-full border-2 border-white/12 border-t-white/70 animate-spin" />
-              <House className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-white/82" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/82">Carico stanze</p>
-              <p className="mt-1 text-xs text-white/42">Sincronizzo aree e dispositivi</p>
-            </div>
-          </div>
+          <GlassLoader
+            size="lg"
+            label="Carico stanze"
+            description="Sincronizzo aree e dispositivi"
+          />
         </div>
       </div>
     );
@@ -6598,7 +6672,7 @@ export function RoomsDashboard({
                 onClickCapture={handleRoomTitleClickCapture}
                 className="flex min-w-0 flex-1 cursor-grab touch-pan-y select-none items-baseline overflow-x-auto overscroll-x-contain pb-1 pl-1 pr-5 active:cursor-grabbing hide-scrollbar sm:pl-0 sm:pr-4"
               >
-                <h1 className="shrink-0 text-[2rem] font-bold leading-none tracking-normal text-white sm:text-[2.65rem] lg:text-[3rem]">
+                <h1 className="dashboard-page-title shrink-0">
                   <AnimatePresence initial={false} mode="wait">
                     <motion.span
                       key={activeRoomTitleKey}
@@ -6628,16 +6702,16 @@ export function RoomsDashboard({
               <button
                 type="button"
                 onClick={() => setIsFloorLayerOpen(true)}
-                className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] p-0 text-xs font-semibold tracking-tight text-white/90 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.08] active:scale-95 sm:h-auto sm:w-auto sm:gap-1 sm:px-4 sm:py-1.5"
+                className="liquid-glass-control inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center p-0 text-xs font-semibold tracking-tight transition-all active:scale-95 sm:w-auto sm:gap-1 sm:px-4"
                 aria-label={`Apri lista piani: ${currentFloorLabel}`}
                 title={currentFloorLabel}
               >
                 <CurrentFloorIcon className="h-3.5 w-3.5 shrink-0 sm:h-3 sm:w-3" />
                 <span className="hidden max-w-[12rem] truncate sm:inline lg:max-w-none">{currentFloorLabel}</span>
-                <ChevronDown className="hidden h-3 w-3 text-white/30 sm:block" />
+                <ChevronDown className="hidden h-3 w-3 text-[color:var(--ui-text-tertiary)] sm:block" />
               </button>
             </div>
-            <p className="mt-0.5 pl-1 text-xs font-medium text-apple-gray text-white/40 sm:pl-0">
+            <p className="mt-0.5 pl-1 text-xs font-medium text-[color:var(--ui-text-secondary)] sm:pl-0">
               {roomAmbientSubtitle}
             </p>
             {roomStatusChips.length > 0 ? (
@@ -6646,14 +6720,14 @@ export function RoomsDashboard({
                   <span
                     key={chip.id}
                     className={cn(
-                      'inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.04] px-3.5 py-1.5 shadow-sm backdrop-blur-md transition-all duration-200 hover:bg-white/[0.08] active:scale-95',
+                      'rooms-chip inline-flex cursor-pointer items-center gap-2 rounded-full border border-[color:var(--ui-border)] px-3.5 py-1.5 shadow-sm transition-all duration-200 active:scale-95',
                       chip.className,
                     )}
                   >
                     {chip.icon}
                     <span className="flex select-none flex-col leading-none">
-                      <span className="text-xs font-semibold tracking-tight text-white">{chip.label}</span>
-                      <span className="mt-0.5 text-[10px] font-semibold tracking-tight text-white/48">{chip.status}</span>
+                      <span className="text-xs font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{chip.label}</span>
+                      <span className="mt-0.5 text-[10px] font-semibold tracking-tight text-[color:var(--ui-text-tertiary)]">{chip.status}</span>
                     </span>
                   </span>
                 ))}
@@ -6961,7 +7035,7 @@ export function RoomsDashboard({
 
               {effectiveHaFloors.map((floor) => renderFloorCard(floor))}
 
-              <div className={FLOOR_ADD_CARD_CLASS}>
+              {canManageRooms ? <div className={FLOOR_ADD_CARD_CLASS}>
                 {isAddingFloor ? (
                   <div className="w-full" onClick={(event) => event.stopPropagation()}>
                     <p className="text-[11px] uppercase tracking-[0.22em] text-white/36">Nuovo piano</p>
@@ -7032,70 +7106,68 @@ export function RoomsDashboard({
                     </span>
                   </button>
                 )}
-              </div>
+              </div> : null}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setIsFloorLayerOpen(false);
-              setIsManageOpen(true);
-            }}
-            className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white/70 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.08] hover:text-white active:scale-95"
-          >
-            <Plus size={14} />
-            Gestisci o Aggiungi Stanza
-          </button>
+          {canManageRooms ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsFloorLayerOpen(false);
+                setIsManageOpen(true);
+              }}
+              className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white/70 shadow-sm backdrop-blur-md transition-all hover:bg-white/[0.08] hover:text-white active:scale-95"
+            >
+              <Plus size={14} />
+              Gestisci o Aggiungi Stanza
+            </button>
+          ) : null}
           {floorDeleteCandidate ? (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-5 backdrop-blur-md">
-              <button
-                type="button"
-                className="absolute inset-0"
-                onClick={() => {
-                  if (floorActionById[floorDeleteCandidate.floor_id] !== 'deleting') {
-                    setFloorDeleteCandidate(null);
-                  }
-                }}
-                aria-label="Annulla eliminazione piano"
-              />
-              <div className="relative z-10 w-full max-w-sm rounded-[2rem] border border-white/[0.08] bg-[#1C1C1E]/70 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-white/36">Elimina piano</p>
-                <h3 className="mt-2 text-xl font-semibold tracking-normal text-white">{floorDeleteCandidate.name}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/52">
-                  Il piano verra rimosso da Home Assistant. Le stanze associate non verranno eliminate.
-                </p>
-                {floorErrorById[floorDeleteCandidate.floor_id] ? (
-                  <p className="mt-3 text-xs leading-relaxed text-rose-200/80">
-                    {floorErrorById[floorDeleteCandidate.floor_id]}
-                  </p>
-                ) : null}
-                <div className="mt-5 flex gap-2">
+            <GlassModal
+              isOpen
+              onClose={() => setFloorDeleteCandidate(null)}
+              eyebrow="Elimina piano"
+              title={floorDeleteCandidate.name}
+              description="Il piano verrà rimosso da Home Assistant. Le stanze associate non verranno eliminate."
+              size="sm"
+              zIndex={70}
+              usePortal={false}
+              showCloseButton={false}
+              dismissible={floorActionById[floorDeleteCandidate.floor_id] !== 'deleting'}
+              backdropClassName="bg-black/45 backdrop-blur-md"
+              panelClassName="bg-[#1C1C1E]/70 shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+              bodyClassName="mt-3 overflow-visible"
+              footerClassName="grid grid-cols-2"
+              footer={
+                <>
                   <button
                     type="button"
                     onClick={() => setFloorDeleteCandidate(null)}
                     disabled={floorActionById[floorDeleteCandidate.floor_id] === 'deleting'}
-                    className="inline-flex flex-1 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-50"
+                    className="inline-flex min-w-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs font-semibold text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:cursor-wait disabled:opacity-50"
                   >
                     Annulla
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      void removeHaFloor(floorDeleteCandidate);
-                    }}
+                    onClick={() => { void removeHaFloor(floorDeleteCandidate); }}
                     disabled={floorActionById[floorDeleteCandidate.floor_id] === 'deleting'}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-red-400/20 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-200 transition-all hover:bg-red-500/15 hover:text-red-100 active:scale-95 disabled:cursor-wait disabled:opacity-55"
+                    className="inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-red-400/20 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-200 transition-all hover:bg-red-500/15 hover:text-red-100 active:scale-95 disabled:cursor-wait disabled:opacity-55"
                   >
                     <MinusCircle size={14} />
                     {floorActionById[floorDeleteCandidate.floor_id] === 'deleting' ? 'Elimino...' : 'Elimina'}
                   </button>
-                </div>
-              </div>
-            </div>
+                </>
+              }
+            >
+              {floorErrorById[floorDeleteCandidate.floor_id] ? (
+                <p className="text-xs leading-relaxed text-rose-200/80">{floorErrorById[floorDeleteCandidate.floor_id]}</p>
+              ) : null}
+            </GlassModal>
           ) : null}
         </div>
       ) : null}
-      {isManageOpen ? (
+      {isManageOpen && canManageRooms ? (
         <div className="fixed inset-0 z-[280] flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-8">
           <button
             type="button"
@@ -7177,23 +7249,25 @@ export function RoomsDashboard({
                   {isAreaCreateDetailsOpen ? (
                     <div className="mt-3 grid gap-3">
                       <div className="grid gap-2 sm:grid-cols-2">
-                        <label className="block min-w-0">
+                        <div className="block min-w-0">
                           <span className="text-[11px] uppercase tracking-[0.14em] text-white/45">Piano</span>
-                          <select
-                            value={areaCreationDraft.floorId}
-                            onChange={(event) =>
-                              setAreaCreationDraft((current) => ({ ...current, floorId: event.target.value }))
+                          <GlassDropdown
+                            ariaLabel="Piano"
+                            options={[
+                              { id: '', name: 'Nessun piano' },
+                              ...effectiveHaFloors.map<GlassDropdownOption>((floor) => ({ id: floor.floor_id, name: floor.name })),
+                            ]}
+                            selected={
+                              areaCreationDraft.floorId
+                                ? { id: areaCreationDraft.floorId, name: effectiveHaFloors.find((floor) => floor.floor_id === areaCreationDraft.floorId)?.name ?? areaCreationDraft.floorId }
+                                : { id: '', name: 'Nessun piano' }
                             }
-                            className={cn(ROOM_MODAL_INPUT_CLASS, 'mt-1')}
-                          >
-                            <option value="">Nessun piano</option>
-                            {effectiveHaFloors.map((floor) => (
-                              <option key={floor.floor_id} value={floor.floor_id}>
-                                {floor.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            onChange={(option) =>
+                              setAreaCreationDraft((current) => ({ ...current, floorId: option.id }))
+                            }
+                            className="mt-1"
+                          />
+                        </div>
                         <label className="block min-w-0">
                           <span className="text-[11px] uppercase tracking-[0.14em] text-white/45">Icona</span>
                           <input
@@ -7412,6 +7486,17 @@ export function RoomsDashboard({
           </section>
         </div>
       ) : null}
+
+      <CameraViewer
+        isOpen={Boolean(activeCameraViewerEntityId)}
+        cameras={roomCameraViewerItems}
+        activeEntityId={activeCameraViewerEntityId}
+        onActiveEntityChange={setActiveCameraViewerEntityId}
+        onClose={() => setActiveCameraViewerEntityId(null)}
+        commandsEnabled={haConnected && !isEditMode}
+        onPtzMove={onCameraPtzMove}
+        onPtzStop={onCameraPtzStop}
+      />
     </div>
   );
 }

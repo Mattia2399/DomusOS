@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Cast, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Speaker, Tv2, Volume2, VolumeX } from 'lucide-react';
+import GlassSlider from '../ui/GlassSlider';
 import './HaMediaCard.css';
 import type { MediaCardCapabilities, MediaPlayerRuntimeState } from './mediaCardModel';
 import type { WidgetDisplayVariant } from './widgetDisplayVariant';
@@ -56,6 +57,7 @@ export interface HaMediaCardProps {
   onSelectSource?: (source: string) => void;
   onLongPress?: (entityId: string) => void;
   hideHeader?: boolean;
+  commandPending?: boolean;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -191,6 +193,7 @@ export function HaMediaCard({
   onSelectSource,
   onLongPress,
   hideHeader = false,
+  commandPending = false,
 }: HaMediaCardProps) {
   const longPressTimerRef = useRef<number | null>(null);
   const coverCandidate = attributes.entity_picture ?? attributes.media_image_url ?? attributes.entity_picture_local;
@@ -312,7 +315,11 @@ export function HaMediaCard({
   );
 
   return (
-    <div className={`ha-media-card ha-media-card--${state} ha-media-card--variant-${layoutVariant}`} data-media-variant={layoutVariant}>
+    <div
+      className={`ha-media-card ha-media-card--${state} ha-media-card--variant-${layoutVariant} ${commandPending ? 'ha-media-card--command-pending' : ''}`}
+      data-media-variant={layoutVariant}
+      aria-busy={commandPending || undefined}
+    >
       <div
         className={`ha-media-card__surface ${isExpanded ? 'ha-media-card__surface--expanded' : 'ha-media-card__surface--compact'}`}
         onPointerDown={startLongPress}
@@ -551,9 +558,9 @@ export function HaMediaCard({
 
                   {showProgress ? (
                     <div className="ha-media-card__progress-block">
-                      <input
+                      <GlassSlider
+                        variant="overlay"
                         className={`ha-media-card__progress ${state === 'buffering' ? 'ha-media-card__progress--buffering' : ''}`}
-                        type="range"
                         min={0}
                         max={duration > 0 ? duration : 100}
                         step={1}

@@ -13,18 +13,17 @@ export function MediaDisplayVariantSkeleton({
   disabled,
 }: MediaDisplayVariantSkeletonProps) {
   const accent = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.76)]'
+    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.76)]'
     : disabled
-      ? 'bg-white/10'
-      : 'bg-white/60';
+      ? 'bg-[color:var(--ui-fill-tertiary)]'
+      : 'bg-[color:var(--ui-fill-primary)]';
   const soft = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb-2)/0.30)]'
+    ? 'bg-[color:rgb(var(--ui-accent-secondary-rgb)/0.30)]'
     : disabled
-      ? 'bg-white/[0.05]'
-      : 'bg-white/[0.13]';
-  const muted = disabled ? 'bg-white/[0.07]' : 'bg-white/[0.22]';
-  const frame =
-    'overflow-hidden rounded-[0.82rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]';
+      ? 'bg-[color:var(--ui-fill-tertiary)]'
+      : 'bg-[color:var(--ui-fill-secondary)]';
+  const muted = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-primary)]';
+  const frame = 'dashboard-content-surface-soft overflow-hidden rounded-[0.82rem] p-2';
 
   const header = (compact = false) => (
     <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5">
@@ -46,7 +45,7 @@ export function MediaDisplayVariantSkeleton({
 
   const progress = (
     <span className="flex min-w-0 flex-col gap-1">
-      <span className="relative h-1.5 overflow-hidden rounded-full bg-white/12">
+      <span className="relative h-1.5 overflow-hidden rounded-full bg-[color:var(--ui-fill-tertiary)]">
         <span className={`absolute inset-y-0 left-0 w-[58%] rounded-full ${accent}`} />
       </span>
       <span className="flex justify-between">

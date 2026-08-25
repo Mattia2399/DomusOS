@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Blinds, Square } from 'lucide-react';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
+import GlassSlider from '../ui/GlassSlider';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 import {
   COVER_FEATURE_CLOSE,
   COVER_FEATURE_OPEN,
@@ -228,8 +230,8 @@ export function CoverControls({
                 <span className={`cover-card__blind ${visualMovementClass}`} />
                 <span className="cover-card__handle-line" />
 
-                <input
-                  type="range"
+                <GlassSlider
+                  variant="overlay"
                   min={0}
                   max={100}
                   value={100 - currentPosition}
@@ -255,8 +257,8 @@ export function CoverControls({
                 onOpen();
               }}
               disabled={!supportsOpen}
-              className={`flex h-12 min-w-0 items-center justify-center rounded-2xl border px-2 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
-                supportsOpen ? 'border-white/12 bg-white/[0.09] text-white hover:bg-white/[0.14]' : 'border-white/8 bg-white/[0.04] text-white/32 cursor-not-allowed'
+              className={`glass-button flex h-12 min-w-0 items-center justify-center rounded-2xl px-2 text-xs font-semibold transition-all active:scale-95 ${
+                supportsOpen ? 'text-[color:var(--ui-text-primary)]' : 'cursor-not-allowed text-[color:var(--ui-text-disabled)]'
               }`}
               aria-label="Apri"
               title="Apri"
@@ -267,10 +269,10 @@ export function CoverControls({
               type="button"
               onClick={onStop}
               disabled={!supportsStop}
-              className={`flex h-12 min-w-0 items-center justify-center rounded-2xl border px-2 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
+              className={`glass-button flex h-12 min-w-0 items-center justify-center rounded-2xl px-2 text-xs font-semibold transition-all active:scale-95 ${
                 supportsStop
-                  ? 'border-white/12 bg-white/[0.09] text-white hover:bg-white/[0.14]'
-                  : 'border-white/8 bg-white/[0.04] text-white/32 cursor-not-allowed'
+                  ? 'text-[color:var(--ui-text-primary)]'
+                  : 'cursor-not-allowed text-[color:var(--ui-text-disabled)]'
               }`}
               aria-label="Stop"
               title="Stop"
@@ -287,8 +289,8 @@ export function CoverControls({
                 onClose();
               }}
               disabled={!supportsClose}
-              className={`flex h-12 min-w-0 items-center justify-center rounded-2xl border px-2 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
-                supportsClose ? 'border-white/12 bg-white/[0.09] text-white hover:bg-white/[0.14]' : 'border-white/8 bg-white/[0.04] text-white/32 cursor-not-allowed'
+              className={`glass-button flex h-12 min-w-0 items-center justify-center rounded-2xl px-2 text-xs font-semibold transition-all active:scale-95 ${
+                supportsClose ? 'text-[color:var(--ui-text-primary)]' : 'cursor-not-allowed text-[color:var(--ui-text-disabled)]'
               }`}
               aria-label="Chiudi"
               title="Chiudi"
@@ -298,16 +300,16 @@ export function CoverControls({
           </div>
 
           {supportsTilt ? (
-            <div className="liquid-glass-card rounded-[1.65rem] p-4">
+            <div className="dashboard-content-surface-soft rounded-[1.65rem] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-white/42">Inclinazione lamelle</p>
+                  <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Inclinazione lamelle</p>
                 </div>
                 {supportsStopTilt ? (
                   <button
                     type="button"
                     onClick={onStopTilt}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-white/72 transition-all hover:bg-white/[0.14] active:scale-95"
+                    className="glass-button flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition-all active:scale-95"
                     aria-label="Stop tilt"
                     title="Stop tilt"
                   >
@@ -316,34 +318,19 @@ export function CoverControls({
                 ) : null}
               </div>
 
-              <div className="liquid-segmented-control">
-                <div
-                  className="segmented-options [grid-auto-columns:auto] [grid-template-columns:repeat(5,minmax(0,1fr))]"
-                  style={{ '--segmented-option-min': '2rem' } as React.CSSProperties}
-                >
-                  {TILT_PRESETS.map((option) => {
-                    const active = option.value === activeTiltPreset.value;
-                    const enabled = canUseTiltPreset(option.value);
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleTiltPresetSelect(option.value)}
-                        disabled={!enabled}
-                        className={`h-10 rounded-full px-2 text-xs font-semibold transition-all active:scale-[0.96] ${
-                          active
-                            ? 'liquid-segmented-option-active'
-                            : 'liquid-segmented-option-inactive'
-                        } ${enabled ? '' : 'cursor-not-allowed opacity-35'}`}
-                        aria-pressed={active}
-                        aria-label={`Imposta inclinazione lamelle a ${option.ariaLabel}`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <GlassSegmentSelect
+                ariaLabel="Inclinazione lamelle"
+                minOptionWidth="2rem"
+                options={TILT_PRESETS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                  ariaLabel: `Imposta inclinazione lamelle a ${option.ariaLabel}`,
+                  disabled: !canUseTiltPreset(option.value),
+                }))}
+                value={activeTiltPreset.value}
+                onChange={handleTiltPresetSelect}
+                optionClassName="px-2"
+              />
             </div>
           ) : null}
         </div>

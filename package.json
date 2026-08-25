@@ -1,16 +1,23 @@
 {
-  "name": "ha-dashboard-builder",
+  "name": "domusos",
   "private": true,
-  "version": "0.1.0",
-  "description": "Visual builder for Home Assistant dashboards",
+  "version": "0.1.0-beta.6",
+  "description": "DomusOS — premium responsive dashboard and visual builder for Home Assistant",
   "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
+    "runtime:check": "node scripts/check-runtime.mjs",
     "check": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "audit:release": "npm audit --omit=dev --audit-level=moderate",
+    "audit:release": "node scripts/audit-release.mjs",
+    "build:budget": "node scripts/check-bundle-budget.mjs",
+    "release:package": "npm run build && node scripts/package-release.mjs",
+    "release:gate": "npm run runtime:check && npm run check && npm run test:unit && npm run build && npm run build:budget && npm run audit:release && npm run test:e2e",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
@@ -27,16 +34,15 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "home-assistant-js-websocket": "^9.6.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.1",
     "lucide-react": "^0.546.0",
     "maplibre-gl": "^5.24.0",
     "matter-js": "^0.20.0",
-    "qrcode.react": "^4.2.0",
-    "react": "^19.0.0",
+    "react": "^19.2.7",
     "react-colorful": "^5.6.1",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.7",
     "react-grid-layout": "^2.2.2",
-    "react-router-dom": "^7.15.1",
+    "react-router": "^8.3.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
     "vite": "^6.2.0"
@@ -46,7 +52,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.14.0",
+    "@types/node": "^22.20.1",
     "@types/react-grid-layout": "^1.3.6",
     "autoprefixer": "^10.4.21",
     "jsdom": "^26.1.0",
@@ -54,5 +60,8 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "tsx": "4.23.1"
   }
 }

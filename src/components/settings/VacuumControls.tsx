@@ -1,7 +1,42 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Home, LocateFixed, Pause, Play, Sparkles, Square } from 'lucide-react';
+import {
+  Battery,
+  Bot,
+  ChevronRight,
+  Home,
+  LocateFixed,
+  Map as MapIcon,
+  Pause,
+  Play,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+  Square,
+  Wrench,
+} from 'lucide-react';
+import {
+  formatVacuumOption,
+  normalizeVacuumState,
+  translateVacuumState,
+} from '../widgets/vacuumCardModel';
+import type {
+  VacuumDeviceInfo,
+  VacuumMappedArea,
+  VacuumRelatedEntityInfo,
+} from '../widgets/vacuumDeviceModel';
+import GlassDropdown, { type GlassDropdownOption } from '../ui/GlassDropdown';
+import GlassToggle from '../ui/GlassToggle';
+import GlassSlider from '../ui/GlassSlider';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
+import { ContextSecondaryPage } from './ContextSecondaryPage';
+
+export type VacuumRelatedEntityActionRequest = {
+  entityId: string;
+  action: 'toggle' | 'select' | 'number' | 'press';
+  value?: string | number | boolean;
+};
 
 type VacuumControlsProps = {
   vacuum: {
@@ -26,12 +61,11 @@ type VacuumControlsProps = {
     supportsFanSpeed?: boolean;
     supportsMap?: boolean;
     supportsSendCommand?: boolean;
+    deviceInfo?: VacuumDeviceInfo;
+    relatedEntities?: VacuumRelatedEntityInfo[];
     rawAttributes?: Record<string, unknown>;
   };
-  areaOptions?: Array<{
-    id: string;
-    name: string;
-  }>;
+  areaOptions?: VacuumMappedArea[];
   onStart: () => void;
   onPause: () => void;
   onStop: () => void;
@@ -41,155 +75,139 @@ type VacuumControlsProps = {
   onCleanArea: (areaIds: string[]) => void;
   onSetFanSpeed: (fanSpeed: string) => void;
   onSendCommand: (command: string, params?: unknown) => void;
+  onRelatedEntityAction?: (request: VacuumRelatedEntityActionRequest) => boolean | void | Promise<boolean | void>;
+  onSecondaryPageChange?: (open: boolean) => void;
 };
 
-type VacuumUiState = 'docked' | 'cleaning' | 'paused' | 'error' | 'returning' | 'idle' | 'unavailable' | 'unknown';
-
-type ZonePreset = {
-  key: string;
-  label: string;
-  areaFallbackId: string;
-  aliases: string[];
-};
-
-const ZONE_PRESETS: ZonePreset[] = [
-  { key: 'kitchen', label: 'Cucina', areaFallbackId: 'kitchen', aliases: ['cucina', 'kitchen'] },
-  { key: 'living', label: 'Salotto', areaFallbackId: 'living_room', aliases: ['salotto', 'living'] },
-  { key: 'bedroom', label: 'Camera', areaFallbackId: 'bedroom', aliases: ['camera', 'bedroom'] },
-  { key: 'bathroom', label: 'Bagno', areaFallbackId: 'bathroom', aliases: ['bagno', 'bathroom'] },
-];
-
-function toFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value.trim().replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
+function formatDuration(minutes: number | undefined) {
+  if (minutes === undefined || !Number.isFinite(minutes)) return 'N/D';
+  const rounded = Math.max(0, Math.round(minutes));
+  if (rounded < 60) return `${rounded} min`;
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
-function toTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+function formatRelatedValue(entity: VacuumRelatedEntityInfo) {
+  const value = entity.stateLabel || entity.state || 'N/D';
+  return entity.unit && !value.endsWith(entity.unit) ? `${value} ${entity.unit}` : value;
 }
 
-function toStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+function VacuumHero({
+  name,
+  state,
+  mapUrl,
+  batteryLevel,
+}: {
+  name: string;
+  state: ReturnType<typeof normalizeVacuumState>;
+  mapUrl?: string;
+  batteryLevel?: number;
+}) {
+  return (
+    <div className="relative aspect-[4/3] min-h-[13rem] overflow-hidden rounded-[1.55rem] border border-white/10 bg-slate-950/30 shadow-[inset_0_18px_44px_rgba(0,0,0,0.25)]">
+      {mapUrl ? <img src={mapUrl} alt={`Mappa di ${name}`} className="absolute inset-0 h-full w-full object-cover opacity-90" /> : null}
+      {!mapUrl ? (
+        <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.07)_1px,transparent_1px)] [background-size:26px_26px]" />
+      ) : null}
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,12,24,0.04),rgba(5,12,24,0.48))]" />
+      <div className={`absolute left-[58%] top-[58%] grid h-[4.4rem] w-[4.4rem] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-gradient-to-br from-teal-200/80 to-cyan-500/60 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.4),0_14px_34px_rgba(0,0,0,.3),0_0_30px_rgba(45,212,191,.2)] ${state === 'cleaning' ? 'animate-[pulse_3.8s_ease-in-out_infinite]' : ''}`}>
+        <span className="absolute top-2 h-2 w-2 rounded-full bg-white/80" />
+        <Bot size={25} />
+      </div>
+      <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-2">
+        <span className="min-w-0 rounded-full border border-white/12 bg-black/28 px-3 py-1.5 text-xs font-semibold text-white/85 backdrop-blur-xl">
+          {translateVacuumState(state)}
+        </span>
+        {batteryLevel !== undefined ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 bg-black/28 px-2.5 py-1.5 text-[11px] font-semibold text-white/75 backdrop-blur-xl">
+            <Battery size={12} /> {Math.round(batteryLevel)}%
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
-function normalizeState(value: string | undefined): VacuumUiState {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (!normalized) {
-    return 'unknown';
-  }
-  if (normalized === 'charging') {
-    return 'docked';
-  }
-  if (normalized === 'returning_to_base') {
-    return 'returning';
-  }
-  if (
-    normalized === 'docked' ||
-    normalized === 'cleaning' ||
-    normalized === 'paused' ||
-    normalized === 'error' ||
-    normalized === 'returning' ||
-    normalized === 'idle' ||
-    normalized === 'unavailable'
-  ) {
-    return normalized;
-  }
-  return 'unknown';
-}
+function RelatedControl({
+  entity,
+  onAction,
+}: {
+  entity: VacuumRelatedEntityInfo;
+  onAction?: VacuumControlsProps['onRelatedEntityAction'];
+}) {
+  const [draftNumber, setDraftNumber] = useState(Number(entity.state) || entity.min || 0);
+  useEffect(() => setDraftNumber(Number(entity.state) || entity.min || 0), [entity.entityId, entity.min, entity.state]);
 
-function translateState(state: VacuumUiState) {
-  if (state === 'docked') {
-    return 'In carica';
+  if (entity.domain === 'switch') {
+    const enabled = entity.state === 'on';
+    return (
+      <div
+        className="dashboard-content-surface flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left"
+      >
+        <span className="min-w-0"><span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">{entity.name}</span><span className="mt-0.5 block text-[11px] text-[color:var(--ui-text-tertiary)]">{enabled ? 'Attivo' : 'Disattivato'}</span></span>
+        <GlassToggle
+          checked={enabled}
+          label={entity.name}
+          onChange={(checked) => onAction?.({ entityId: entity.entityId, action: 'toggle', value: checked })}
+          size="compact"
+          tone="accent"
+        />
+      </div>
+    );
   }
-  if (state === 'cleaning') {
-    return 'In pulizia';
-  }
-  if (state === 'paused') {
-    return 'In pausa';
-  }
-  if (state === 'error') {
-    return 'Errore';
-  }
-  if (state === 'returning') {
-    return 'Ritorno alla base';
-  }
-  if (state === 'idle') {
-    return 'Inattivo';
-  }
-  if (state === 'unavailable') {
-    return 'Non disponibile';
-  }
-  return 'Sconosciuto';
-}
 
-function normalizeToken(value: string | undefined) {
-  return (value ?? '').trim().toLowerCase();
-}
-
-function formatFanSpeedLabel(value: string) {
-  const normalized = value.trim().replace(/[_-]+/g, ' ');
-  if (!normalized) {
-    return 'Auto';
+  if (entity.domain === 'select' && entity.options?.length) {
+    const options: GlassDropdownOption[] = entity.options.map((option) => ({ id: option, name: formatVacuumOption(option) }));
+    const selected = options.find((option) => option.id === entity.state) ?? options[0] ?? null;
+    return (
+      <div className="dashboard-content-surface block rounded-2xl px-3 py-2.5">
+        <span className="mb-2 block text-sm font-semibold text-[color:var(--ui-text-primary)]">{entity.name}</span>
+        <GlassDropdown
+          ariaLabel={entity.name}
+          options={options}
+          selected={selected}
+          onChange={(option) => onAction?.({ entityId: entity.entityId, action: 'select', value: option.id })}
+          size="compact"
+        />
+      </div>
+    );
   }
-  return normalized
-    .split(/\s+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
 
-function resolveAreaIdForZone(zone: ZonePreset, areaOptions: Array<{ id: string; name: string }>) {
-  if (!areaOptions.length) {
-    return zone.areaFallbackId;
+  if (entity.domain === 'number' && entity.min !== undefined && entity.max !== undefined) {
+    return (
+      <label className="dashboard-content-surface block rounded-2xl px-3 py-2.5">
+        <span className="flex items-center justify-between gap-3 text-sm font-semibold text-[color:var(--ui-text-primary)]"><span>{entity.name}</span><span className="text-xs text-[color:var(--ui-text-tertiary)]">{draftNumber}{entity.unit ?? ''}</span></span>
+        <GlassSlider
+          min={entity.min}
+          max={entity.max}
+          step={entity.step ?? 1}
+          value={draftNumber}
+          onChange={(event) => setDraftNumber(Number(event.target.value))}
+          onPointerUp={() => onAction?.({ entityId: entity.entityId, action: 'number', value: draftNumber })}
+          onKeyUp={(event) => {
+            if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) onAction?.({ entityId: entity.entityId, action: 'number', value: draftNumber });
+          }}
+          className="mt-3"
+          tone="accent"
+          aria-label={entity.name}
+        />
+      </label>
+    );
   }
-  const found = areaOptions.find((area) => {
-    const name = area.name.trim().toLowerCase();
-    return zone.aliases.some((alias) => name.includes(alias));
-  });
-  return found?.id ?? zone.areaFallbackId;
-}
 
-function RadarCore({ state, sizeClass }: { state: VacuumUiState; sizeClass: string }) {
-  const isCleaning = state === 'cleaning';
-  const isDocked = state === 'docked';
-  const isError = state === 'error';
+  if (entity.domain === 'button') {
+    return (
+      <button type="button" onClick={() => onAction?.({ entityId: entity.entityId, action: 'press' })} className="glass-button flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-xs font-semibold text-[color:var(--ui-text-secondary)] transition">
+        <RotateCcw size={14} /> {entity.name}
+      </button>
+    );
+  }
 
   return (
-    <div className={`relative ${sizeClass}`}>
-      <div className="absolute inset-0 rounded-full border border-white/[0.08] bg-white/[0.04] shadow-lg backdrop-blur-xl" />
-      {isCleaning ? (
-        <div className="absolute inset-0 rounded-full overflow-hidden">
-          <div
-            className="absolute inset-0 rounded-full animate-spin"
-            style={{
-              animationDuration: '2.1s',
-              background:
-                'conic-gradient(from 0deg, rgba(16,185,129,0) 0deg, rgba(16,185,129,0.68) 120deg, rgba(56,189,248,0.5) 170deg, rgba(16,185,129,0) 250deg, rgba(16,185,129,0) 360deg)',
-            }}
-          />
-        </div>
-      ) : null}
-      <div
-        className={`absolute inset-[9%] rounded-full border ${
-          isError ? 'border-rose-300/35 bg-rose-500/25' : 'border-cyan-300/25 bg-cyan-400/16'
-        } ${isDocked ? 'animate-pulse [animation-duration:2.8s]' : ''}`}
-      />
-      <div className="absolute inset-[34%] rounded-full bg-white/75" />
+    <div className="dashboard-content-surface min-w-0 rounded-2xl p-3">
+      <p className="truncate text-[11px] font-medium text-[color:var(--ui-text-tertiary)]">{entity.name}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">{formatRelatedValue(entity)}</p>
     </div>
   );
 }
@@ -205,271 +223,137 @@ export function VacuumControls({
   onCleanSpot,
   onCleanArea,
   onSetFanSpeed,
-  onSendCommand,
+  onRelatedEntityAction,
+  onSecondaryPageChange,
 }: VacuumControlsProps) {
-  void onSendCommand;
-
-  const state = normalizeState(vacuum.state);
-  const statusLabel = vacuum.status?.trim() || translateState(state);
-  const batteryLevel = Math.round(
-    toFiniteNumber(vacuum.batteryLevel) ??
-      toFiniteNumber(vacuum.rawAttributes?.battery_level) ??
-      toFiniteNumber(vacuum.rawAttributes?.battery) ??
-      85,
+  const state = normalizeVacuumState(vacuum.state);
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
+  const [fanSpeed, setFanSpeed] = useState(vacuum.fanSpeed ?? '');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const fanSpeedOptions = useMemo(
+    () => Array.from(new Set((vacuum.fanSpeedList ?? []).map((item) => item.trim()).filter(Boolean))),
+    [vacuum.fanSpeedList],
   );
-  const cleanedArea =
-    toFiniteNumber(vacuum.cleanedArea) ??
-    toFiniteNumber(vacuum.rawAttributes?.cleaned_area) ??
-    toFiniteNumber(vacuum.rawAttributes?.clean_area);
-  const cleanedAreaUnit =
-    toTrimmedString(vacuum.cleanedAreaUnit) ??
-    toTrimmedString(vacuum.rawAttributes?.cleaned_area_unit) ??
-    toTrimmedString(vacuum.rawAttributes?.area_unit) ??
-    'm2';
-  const cleaningMinutes = Math.round(
-    toFiniteNumber(vacuum.cleaningMinutes) ??
-      toFiniteNumber(vacuum.rawAttributes?.cleaning_time) ??
-      toFiniteNumber(vacuum.rawAttributes?.clean_time) ??
-      0,
+  const relatedControls = useMemo(
+    () => (vacuum.relatedEntities ?? []).filter((entity) => !['image'].includes(entity.domain)),
+    [vacuum.relatedEntities],
   );
+  const configurationEntities = relatedControls.filter((entity) => ['switch', 'select', 'number', 'button'].includes(entity.domain));
+  const diagnosticEntities = relatedControls.filter((entity) => !['switch', 'select', 'number', 'button'].includes(entity.domain));
 
-  const supportsStart = vacuum.supportsStart ?? true;
-  const supportsPause = vacuum.supportsPause ?? true;
-  const supportsStop = vacuum.supportsStop ?? true;
-  const supportsReturnToBase = vacuum.supportsReturnToBase ?? true;
-  const supportsLocate = vacuum.supportsLocate ?? true;
-  const supportsCleanSpot = vacuum.supportsCleanSpot ?? true;
-  const supportsCleanArea = vacuum.supportsCleanArea ?? true;
-  const supportsFanSpeed = vacuum.supportsFanSpeed ?? true;
-  const supportsMap = vacuum.supportsMap ?? true;
-
-  const fanSpeedOptions = useMemo(() => {
-    const options =
-      Array.isArray(vacuum.fanSpeedList) && vacuum.fanSpeedList.length > 0
-        ? vacuum.fanSpeedList
-        : toStringArray(vacuum.rawAttributes?.fan_speed_list).length > 0
-          ? toStringArray(vacuum.rawAttributes?.fan_speed_list)
-          : toStringArray(vacuum.rawAttributes?.fan_speeds).length > 0
-            ? toStringArray(vacuum.rawAttributes?.fan_speeds)
-            : toStringArray(vacuum.rawAttributes?.fan_modes).length > 0
-              ? toStringArray(vacuum.rawAttributes?.fan_modes)
-              : ['quiet', 'balanced', 'turbo'];
-    const unique = new Set<string>();
-    const normalized = options
-      .map((entry) => entry.trim())
-      .filter((entry) => {
-        if (!entry || unique.has(entry.toLowerCase())) {
-          return false;
-        }
-        unique.add(entry.toLowerCase());
-        return true;
-      });
-    return normalized;
-  }, [vacuum.fanSpeedList, vacuum.rawAttributes]);
-
-  const activeFanSpeed =
-    toTrimmedString(vacuum.fanSpeed) ??
-    fanSpeedOptions[0] ??
-    '';
-  const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
-  const [fanMode, setFanMode] = useState<string>(activeFanSpeed);
-
+  useEffect(() => setFanSpeed(vacuum.fanSpeed ?? ''), [vacuum.fanSpeed]);
   useEffect(() => {
-    setFanMode(activeFanSpeed);
-  }, [activeFanSpeed, vacuum.name]);
+    onSecondaryPageChange?.(detailsOpen);
+    return () => onSecondaryPageChange?.(false);
+  }, [detailsOpen, onSecondaryPageChange]);
 
-  const playActive = state === 'docked' || state === 'idle';
-  const pauseActive = state === 'cleaning';
-  const homeActive = state === 'cleaning' || state === 'returning';
+  if (detailsOpen) {
+    return (
+      <ContextSecondaryPage
+        title="Dispositivo e manutenzione"
+        subtitle={`Controlli associati a ${vacuum.name}`}
+        backLabel="Robot"
+        icon={<Wrench size={18} />}
+        iconClassName="text-teal-200"
+        onBack={() => setDetailsOpen(false)}
+      >
+
+        {configurationEntities.length > 0 ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[color:var(--ui-text-primary)]"><SlidersHorizontal size={16} className="text-[color:var(--ui-accent)]" /> Configurazione</div>
+            <div className="grid gap-2.5">{configurationEntities.map((entity) => <RelatedControl key={entity.entityId} entity={entity} onAction={onRelatedEntityAction} />)}</div>
+          </div>
+        ) : null}
+
+        {diagnosticEntities.length > 0 ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <p className="mb-3 text-sm font-semibold text-[color:var(--ui-text-primary)]">Manutenzione e diagnostica</p>
+            <div className="grid grid-cols-2 gap-2">{diagnosticEntities.map((entity) => <RelatedControl key={entity.entityId} entity={entity} onAction={onRelatedEntityAction} />)}</div>
+          </div>
+        ) : null}
+
+        {vacuum.supportsLocate ? (
+          <button type="button" onClick={onLocate} className="glass-button flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-[color:var(--ui-text-primary)] transition"><LocateFixed size={16} /> Localizza robot</button>
+        ) : null}
+
+        {vacuum.deviceInfo ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Informazioni</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <span className="text-[color:var(--ui-text-tertiary)]">Produttore</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{vacuum.deviceInfo.manufacturer ?? 'N/D'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Modello</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{vacuum.deviceInfo.model ?? 'N/D'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Firmware</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{vacuum.deviceInfo.swVersion ?? 'N/D'}</span>
+            </div>
+          </div>
+        ) : null}
+      </ContextSecondaryPage>
+    );
+  }
+
+  const showPrimaryStart = (state === 'docked' || state === 'idle' || state === 'paused') && vacuum.supportsStart;
+  const showPause = state === 'cleaning' && vacuum.supportsPause;
+  const stats = [
+    { label: 'Batteria', value: vacuum.batteryLevel === undefined ? 'N/D' : `${Math.round(vacuum.batteryLevel)}%` },
+    { label: 'Area', value: vacuum.cleanedArea === undefined ? 'N/D' : `${Math.round(vacuum.cleanedArea * 10) / 10} ${vacuum.cleanedAreaUnit ?? 'm²'}` },
+    { label: 'Tempo', value: formatDuration(vacuum.cleaningMinutes) },
+  ];
 
   return (
     <div className={CONTEXT_PANEL_LAYOUT.shell}>
-      <ContextPanelHeader title={vacuum.name} subtitle={statusLabel} icon={<Bot size={21} />} fallbackTitle="Robot Aspirapolvere" />
+      <ContextPanelHeader title={vacuum.name} subtitle={vacuum.status?.trim() || translateVacuumState(state)} icon={<Bot size={21} />} fallbackTitle="Robot aspirapolvere" />
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="mt-4 flex justify-center">
-          <RadarCore state={state} sizeClass="h-[clamp(6.75rem,34vw,8rem)] w-[clamp(6.75rem,34vw,8rem)]" />
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-white/5 bg-white/5 p-4 grid grid-cols-2 min-[380px]:grid-cols-3 gap-3">
-          <div className="text-center">
-            <p className="text-xs text-white/50">Batteria</p>
-            <p className="mt-1 text-lg font-semibold text-white">{Number.isFinite(batteryLevel) ? `${batteryLevel}%` : '--'}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-white/50">Area</p>
-            <p className="mt-1 text-lg font-semibold text-white">
-              {cleanedArea !== undefined ? `${Math.round(cleanedArea * 10) / 10} ${cleanedAreaUnit}` : '--'}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-white/50">Tempo</p>
-            <p className="mt-1 text-lg font-semibold text-white">{cleaningMinutes > 0 ? `${cleaningMinutes} min` : '--'}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={onStart}
-            disabled={!supportsStart}
-            className={`h-14 w-14 rounded-2xl border border-white/10 backdrop-blur-md flex items-center justify-center transition-colors ${
-              !supportsStart
-                ? 'bg-white/5 text-white/35 cursor-not-allowed'
-                : playActive
-                  ? 'bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-            title="Avvia"
-            aria-label="Avvia"
-          >
-            <Play size={20} className="ml-0.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onPause}
-            disabled={!supportsPause}
-            className={`h-14 w-14 rounded-2xl border border-white/10 backdrop-blur-md flex items-center justify-center transition-colors ${
-              !supportsPause
-                ? 'bg-white/5 text-white/35 cursor-not-allowed'
-                : pauseActive
-                  ? 'bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-            title="Pausa"
-            aria-label="Pausa"
-          >
-            <Pause size={20} />
-          </button>
-          <button
-            type="button"
-            onClick={onReturnToBase}
-            disabled={!supportsReturnToBase}
-            className={`h-14 w-14 rounded-2xl border border-white/10 backdrop-blur-md flex items-center justify-center transition-colors ${
-              !supportsReturnToBase
-                ? 'bg-white/5 text-white/35 cursor-not-allowed'
-                : homeActive
-                  ? 'bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-            title="Torna alla base"
-            aria-label="Torna alla base"
-          >
-            <Home size={20} />
-          </button>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 min-[380px]:grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={onStop}
-            disabled={!supportsStop}
-            className={`h-10 rounded-xl border border-white/10 text-xs transition-colors ${
-              supportsStop ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-white/5 text-white/35 cursor-not-allowed'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Square size={13} />
-              Stop
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onLocate}
-            disabled={!supportsLocate}
-            className={`h-10 rounded-xl border border-white/10 text-xs transition-colors ${
-              supportsLocate ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-white/5 text-white/35 cursor-not-allowed'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <LocateFixed size={13} />
-              Locate
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onCleanSpot}
-            disabled={!supportsCleanSpot}
-            className={`h-10 rounded-xl border border-white/10 text-xs transition-colors ${
-              supportsCleanSpot ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-white/5 text-white/35 cursor-not-allowed'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Sparkles size={13} />
-              Spot
-            </span>
-          </button>
-        </div>
-
-        {supportsMap && vacuum.mapUrl ? (
-          <div className="liquid-glass-card mt-4 overflow-hidden">
-            <img
-              src={vacuum.mapUrl}
-              alt="Mappa pulizia"
-              className="h-28 w-full object-cover"
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 ${supportsCleanArea ? '' : 'opacity-60'}`}>
-        <p className="text-xs uppercase text-white/40 tracking-wider mb-3">Pulizia zone</p>
-        <div className="flex flex-wrap gap-2.5">
-          {ZONE_PRESETS.map((zone) => {
-            const active = selectedZoneKey === zone.key;
-            return (
-              <button
-                key={zone.key}
-                type="button"
-                onClick={() => {
-                  if (!supportsCleanArea) {
-                    return;
-                  }
-                  const areaId = resolveAreaIdForZone(zone, areaOptions);
-                  setSelectedZoneKey(zone.key);
-                  onCleanArea([areaId]);
-                }}
-                disabled={!supportsCleanArea}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
-                  !supportsCleanArea
-                    ? 'bg-white/5 border-white/10 text-white/35 cursor-not-allowed'
-                    : active
-                      ? 'bg-white text-neutral-900 border-white'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/15'
-                }`}
-              >
-                {zone.label}
-              </button>
-            );
-          })}
+      <div className={`${CONTEXT_PANEL_LAYOUT.section} p-2 sm:p-2.5`}>
+        <VacuumHero name={vacuum.name} state={state} mapUrl={vacuum.mapUrl} batteryLevel={vacuum.batteryLevel} />
+        <div className="mt-2.5 grid grid-cols-3 gap-2">
+          {stats.map((item) => <div key={item.label} className="dashboard-content-surface min-w-0 rounded-2xl px-2 py-2.5 text-center"><p className="text-[10px] font-medium text-[color:var(--ui-text-tertiary)]">{item.label}</p><p className="mt-1 truncate text-xs font-semibold text-[color:var(--ui-text-primary)]">{item.value}</p></div>)}
         </div>
       </div>
 
-      {supportsFanSpeed && fanSpeedOptions.length > 0 ? (
+      <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+        <p className="mb-3 text-sm font-semibold text-[color:var(--ui-text-primary)]">Controlli</p>
+        <div className="grid grid-flow-col auto-cols-fr gap-2">
+          {showPrimaryStart ? <button type="button" onClick={onStart} className="liquid-glass-selection flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-[color:var(--ui-border-strong)] text-xs font-semibold text-[color:var(--ui-accent)]"><Play size={16} /> <span className="truncate">{state === 'paused' ? 'Riprendi' : 'Avvia'}</span></button> : null}
+          {showPause ? <button type="button" onClick={onPause} className="glass-button flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl text-xs font-semibold text-[color:var(--ui-text-primary)]"><Pause size={16} /> Pausa</button> : null}
+          {vacuum.supportsStop ? <button type="button" onClick={onStop} disabled={!['cleaning', 'paused', 'returning'].includes(state)} className="glass-button flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl text-xs font-semibold text-[color:var(--ui-text-secondary)] disabled:opacity-35"><Square size={14} /> Stop</button> : null}
+          {vacuum.supportsReturnToBase ? <button type="button" onClick={onReturnToBase} disabled={state === 'docked' || state === 'unavailable'} className="glass-button flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl text-xs font-semibold text-[color:var(--ui-text-secondary)] disabled:opacity-35"><Home size={15} /> Base</button> : null}
+        </div>
+      </div>
+
+      {(vacuum.supportsCleanArea || vacuum.supportsCleanSpot) ? (
         <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
-          <p className="text-xs uppercase text-white/40 tracking-wider mb-3">Potenza aspirazione</p>
-          <div className="rounded-2xl bg-white/5 border border-white/8 p-1.5 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(fanSpeedOptions.length, 3)}, minmax(0, 1fr))` }}>
-            {fanSpeedOptions.map((mode) => {
-              const active = normalizeToken(fanMode) === normalizeToken(mode);
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => {
-                    setFanMode(mode);
-                    onSetFanSpeed(mode);
-                  }}
-                  className={`h-10 rounded-xl px-2 text-xs font-medium transition-colors ${
-                    active ? 'bg-white text-neutral-900' : 'text-white/75 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  {formatFanSpeedLabel(mode)}
-                </button>
-              );
-            })}
+          <div className="mb-3 flex items-center justify-between gap-3"><span><p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Pulizia mirata</p><p className="mt-0.5 text-[11px] text-[color:var(--ui-text-tertiary)]">Scegli una o più aree mappate</p></span><MapIcon size={17} className="text-[color:var(--ui-accent)]" /></div>
+          {vacuum.supportsCleanArea && areaOptions.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {areaOptions.map((area) => {
+                const selected = selectedAreas.includes(area.id);
+                return <button key={area.id} type="button" aria-pressed={selected} onClick={() => setSelectedAreas((current) => selected ? current.filter((id) => id !== area.id) : [...current, area.id])} className={`min-w-0 rounded-2xl border px-3 py-3 text-left transition ${selected ? 'border-[color:rgb(var(--ui-accent-rgb)/0.38)] bg-[color:rgb(var(--ui-accent-rgb)/0.16)] text-[color:var(--ui-text-primary)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] hover:bg-[color:var(--ui-fill-secondary)]'}`}><span className="block truncate text-xs font-semibold">{area.name}</span>{area.segmentIds?.length ? <span className="mt-1 block text-[10px] opacity-55">{area.segmentIds.length} {area.segmentIds.length === 1 ? 'segmento' : 'segmenti'}</span> : null}</button>;
+              })}
+            </div>
+          ) : vacuum.supportsCleanArea ? <p className="dashboard-content-surface rounded-2xl p-3 text-xs leading-relaxed text-[color:var(--ui-text-tertiary)]">Configura la mappatura delle aree nell’entità Vacuum di Home Assistant per abilitarne la selezione.</p> : null}
+          <div className="mt-3 grid grid-flow-col auto-cols-fr gap-2">
+            {vacuum.supportsCleanArea && selectedAreas.length > 0 ? <button type="button" onClick={() => onCleanArea(selectedAreas)} className="liquid-glass-selection flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-[color:var(--ui-border-strong)] px-3 text-xs font-semibold text-[color:var(--ui-accent)]"><Sparkles size={15} /><span className="truncate">Pulisci {selectedAreas.length} {selectedAreas.length === 1 ? 'area' : 'aree'}</span></button> : null}
+            {vacuum.supportsCleanSpot ? <button type="button" onClick={onCleanSpot} className="glass-button flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-semibold text-[color:var(--ui-text-secondary)]"><Sparkles size={15} /> Pulizia spot</button> : null}
           </div>
         </div>
       ) : null}
+
+      {vacuum.supportsFanSpeed && fanSpeedOptions.length > 0 ? (
+        <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+          <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Potenza aspirazione</p><span className="text-xs font-semibold text-[color:var(--ui-text-tertiary)]">{formatVacuumOption(fanSpeed) ?? 'N/D'}</span></div>
+          <GlassSegmentSelect
+            ariaLabel="Potenza aspirazione"
+            options={fanSpeedOptions.map((option) => ({ value: option, label: formatVacuumOption(option) }))}
+            value={fanSpeedOptions.find((option) => option.toLowerCase() === fanSpeed.toLowerCase())}
+            onChange={(option) => { setFanSpeed(option); onSetFanSpeed(option); }}
+            minOptionWidth="3.7rem"
+            scrollable
+          />
+        </div>
+      ) : null}
+
+      <button type="button" onClick={() => setDetailsOpen(true)} className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} flex w-full items-center justify-between gap-3 text-left transition hover:bg-[color:var(--ui-fill-secondary)]`}>
+        <span className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-accent)]"><SlidersHorizontal size={16} /></span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">Dispositivo e manutenzione</span><span className="mt-0.5 block truncate text-[11px] text-[color:var(--ui-text-tertiary)]">{relatedControls.length} entità associate</span></span></span><ChevronRight size={17} className="shrink-0 text-[color:var(--ui-text-tertiary)]" />
+      </button>
     </div>
   );
 }

@@ -1,6 +1,31 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy';
-import { LayoutGrid, MoreHorizontal, Plus, X } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Responsive, type ResponsiveLayouts } from 'react-grid-layout/legacy';
+import {
+  Activity,
+  Blinds,
+  Bot,
+  Camera,
+  Check,
+  CloudSun,
+  LayoutGrid,
+  Lightbulb,
+  LockKeyhole,
+  MoreHorizontal,
+  Music2,
+  Plus,
+  Rows3,
+  Shield,
+  Sparkles,
+  Thermometer,
+  ToggleRight,
+  Type,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import GlassModal from '../ui/GlassModal';
+import GlassDropdown from '../ui/GlassDropdown';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
+import GlassSearchFilterBar from '../ui/GlassSearchFilterBar';
 import { SectionCardRenderer, WidgetCardRenderer } from '../widgets/CardRenderer';
 import type { WidgetDisplayMetrics } from '../widgets/widgetDisplayVariant';
 import { SCENES_CATALOG } from '../widgets/ScenesCard';
@@ -19,6 +44,7 @@ import type {
   SceneRunState,
   SectionKind,
   Widget,
+  WidgetCatalogDestination,
   WidgetKind,
   SceneKey,
 } from '../../types/dashboardModels';
@@ -52,15 +78,17 @@ import {
 import {
   adaptToMobileColumns,
   compactLayoutUp,
+  intersects,
   normalizeRuntimeLayout,
   packLayoutDense,
   resolveClosestParentBreakpointWithLayout,
   scaleLayoutColumns,
 } from './gridEngineGeometry';
+import { resolveGridStackContainerSpan } from './gridStackLayoutSolver';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+const ResponsiveGridLayout = Responsive;
 type GridBreakpoint = keyof typeof GRID_ENGINE_BREAKPOINTS;
 type GridLayouts = Partial<Record<GridBreakpoint, GridItem[]>>;
 type HouseMemberCardItem = {
@@ -73,6 +101,8 @@ type HouseMemberCardItem = {
 
 type GridCanvasProps = {
   isEditMode: boolean;
+  layoutRevision?: number;
+  previewGridWidth?: number;
   developerMode: boolean;
   isXsViewport: boolean;
   onActiveBreakpointChange?: (breakpoint: GridBreakpoint) => void;
@@ -87,7 +117,6 @@ type GridCanvasProps = {
   widgetTypeLayoutOverrides: WidgetTypeLayoutOverrides;
   widgetLayoutOverrides: WidgetLayoutOverrides;
   responsiveLayouts: DashboardResponsiveLayouts;
-  onOpenCatalog: () => void;
   onCloseCatalog: () => void;
   onSelectWidget: (id: string | null) => void;
   onSelectSection: (id: string | null) => void;
@@ -117,18 +146,22 @@ type GridCanvasProps = {
   onWidgetAlarmDisarm: (widget: Widget) => void;
   onWidgetAlarmArm: (widget: Widget, mode: 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass') => void;
   onWidgetVacuumStartPause: (widget: Widget) => void;
+  onWidgetVacuumStop: (widget: Widget) => void;
   onWidgetVacuumReturnToBase: (widget: Widget) => void;
   onWidgetLockToggle: (widget: Widget) => boolean | void;
   onWidgetLockOpen: (widget: Widget) => void;
   onWidgetCoverPositionChange: (widget: Widget, position: number) => void;
   onWidgetCoverTiltPositionChange: (widget: Widget, position: number) => void;
+  onWidgetCoverOpen: (widget: Widget) => void;
+  onWidgetCoverStop: (widget: Widget) => void;
+  onWidgetCoverClose: (widget: Widget) => void;
   onOpenMembersPanel: () => void;
   onWidgetLayoutChange: (sectionId: string, next: GridItem[]) => void;
   onSectionsLayoutChange: (next: GridItem[]) => void;
   onRootBreakpointLayoutChange: (breakpoint: GridBreakpoint, next: GridItem[]) => void;
   onStackBreakpointLayoutChange: (sectionId: string, breakpoint: GridBreakpoint, next: GridItem[]) => void;
-  onAddWidget: (kind: WidgetKind) => void;
-  onAddSection: (kind: SectionKind) => void;
+  onAddWidget: (kind: WidgetKind, destination: WidgetCatalogDestination) => string;
+  onAddSection: (kind: SectionKind) => string;
   onRemoveSection: (id: string) => void;
   onUpdateSection: (id: string, updater: (section: DashboardSection) => DashboardSection) => void;
   haConnected: boolean;
@@ -146,7 +179,45 @@ const SECTION_LABELS: Record<SectionKind, string> = {
   'stack-horizontal': 'Horizontal Stack',
   'stack-grid': 'Grid Stack',
 };
-const WIDGET_GROUP_SECTION_KINDS: SectionKind[] = ['greeting', 'weather', 'scenes'];
+type CatalogTab = 'cards' | 'sections';
+type CatalogWidgetFamily = 'Controlli' | 'Comfort' | 'Sicurezza' | 'Intrattenimento' | 'Servizi';
+
+const CATALOG_WIDGET_FAMILIES: CatalogWidgetFamily[] = [
+  'Controlli',
+  'Comfort',
+  'Sicurezza',
+  'Intrattenimento',
+  'Servizi',
+];
+
+const WIDGET_CATALOG_META: Record<
+  WidgetKind,
+  { description: string; family: CatalogWidgetFamily; icon: LucideIcon }
+> = {
+  light: { description: 'Luci, luminosità e colore', family: 'Controlli', icon: Lightbulb },
+  switch: { description: 'Prese, relè e consumi', family: 'Controlli', icon: ToggleRight },
+  cover: { description: 'Tapparelle, tende e aperture', family: 'Controlli', icon: Blinds },
+  lock: { description: 'Serrature e accessi protetti', family: 'Controlli', icon: LockKeyhole },
+  climate: { description: 'Temperatura e climatizzazione', family: 'Comfort', icon: Thermometer },
+  sensor: { description: 'Valori, qualità e misurazioni', family: 'Comfort', icon: Activity },
+  alarm: { description: 'Stato e controllo del sistema', family: 'Sicurezza', icon: Shield },
+  camera: { description: 'Video, eventi e controlli', family: 'Sicurezza', icon: Camera },
+  media: { description: 'Riproduzione e multiroom', family: 'Intrattenimento', icon: Music2 },
+  vacuum: { description: 'Pulizia, mappa e routine', family: 'Servizi', icon: Bot },
+  members: { description: 'Persone e presenza in casa', family: 'Servizi', icon: Users },
+};
+
+const SECTION_CATALOG_META: Record<SectionKind, { description: string; icon: LucideIcon }> = {
+  greeting: { description: 'Titolo, saluto e riepilogo', icon: Type },
+  weather: { description: 'Meteo e previsioni', icon: CloudSun },
+  scenes: { description: 'Azioni e scenari rapidi', icon: Sparkles },
+  'stack-vertical': { description: 'Card ordinate in verticale', icon: Rows3 },
+  'stack-horizontal': { description: 'Card ordinate in orizzontale', icon: MoreHorizontal },
+  'stack-grid': { description: 'Card organizzate in una griglia', icon: LayoutGrid },
+};
+
+const isStackSection = (section: DashboardSection) =>
+  section.kind === 'stack-vertical' || section.kind === 'stack-horizontal' || section.kind === 'stack-grid';
 const GRID_ENGINE_2XL_COLS = GRID_ENGINE_COLS['2xl'];
 const GRID_ENGINE_XL_COLS = GRID_ENGINE_COLS.xl;
 const GRID_ENGINE_XS_COLS = GRID_ENGINE_COLS.xs;
@@ -689,6 +760,7 @@ function enforceWidgetLayoutOverrides(
   cols: number,
   widgetLayoutOverrides: WidgetLayoutOverrides,
   lightWidgetStateById: ReadonlyMap<string, boolean>,
+  coverWidgetIds: ReadonlySet<string> = new Set(),
 ): GridItem[] {
   if (!widgetLayoutOverrides || Object.keys(widgetLayoutOverrides).length === 0) {
     return normalizeRuntimeLayout(layouts, cols);
@@ -710,9 +782,12 @@ function enforceWidgetLayoutOverrides(
             : lightIsOn
             ? override.hOn ?? override.h
             : override.hOff ?? override.h;
+      const minimumW = coverWidgetIds.has(item.i) && breakpoint !== 'xs' && breakpoint !== 'sm'
+        ? Math.min(safeCols, 2)
+        : 1;
       const nextW = override.w
-        ? Math.min(safeCols, Math.max(1, Math.round(override.w)))
-        : Math.min(safeCols, Math.max(1, Math.round(item.w)));
+        ? Math.min(safeCols, Math.max(minimumW, Math.round(override.w)))
+        : Math.min(safeCols, Math.max(minimumW, Math.round(item.w)));
       const nextH = rawH
         ? autoExpand && lightIsOn && rawH <= 1
           ? Math.max(2, Math.round(rawH))
@@ -869,6 +944,7 @@ function enforceRootWidgetSpans(
     cols,
     widgetLayoutOverrides,
     lightWidgetStateById,
+    coverWidgetIds,
   );
 }
 
@@ -931,30 +1007,36 @@ function buildResponsiveLayoutsFromDesktop(
   lockWidgetIds: ReadonlySet<string>,
   coverWidgetIds: ReadonlySet<string>,
 ): GridLayouts {
-  const normalizeForBreakpoint = (layouts: GridItem[], breakpoint: GridBreakpoint, cols: number) =>
-    packLayoutDense(
-      enforceRootWidgetSpans(
-        normalizeRuntimeLayout(layouts, cols),
-        breakpoint,
-        cols,
-        scenesSectionIds,
-        lightWidgetStateById,
-        Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
-        widgetTypeLayoutOverrides,
-        widgetLayoutOverrides,
-        switchWidgetIds,
-        climateWidgetIds,
-        cameraWidgetIds,
-        mediaWidgetIds,
-        sensorWidgetIds,
-        membersWidgetIds,
-        alarmWidgetIds,
-        vacuumWidgetIds,
-        lockWidgetIds,
-        coverWidgetIds,
-      ),
+  const normalizeForBreakpoint = (layouts: GridItem[], breakpoint: GridBreakpoint, cols: number) => {
+    const enforced = enforceRootWidgetSpans(
+      normalizeRuntimeLayout(layouts, cols),
+      breakpoint,
       cols,
+      scenesSectionIds,
+      lightWidgetStateById,
+      Boolean(widgetTypeLayoutOverrides.light?.[breakpoint]),
+      widgetTypeLayoutOverrides,
+      widgetLayoutOverrides,
+      switchWidgetIds,
+      climateWidgetIds,
+      cameraWidgetIds,
+      mediaWidgetIds,
+      sensorWidgetIds,
+      membersWidgetIds,
+      alarmWidgetIds,
+      vacuumWidgetIds,
+      lockWidgetIds,
+      coverWidgetIds,
     );
+    const hasCollisions = enforced.some((item, itemIndex) =>
+      enforced.slice(0, itemIndex).some((previous) => intersects(item, previous)),
+    );
+    // A stored breakpoint layout is an explicit user composition. Preserve
+    // its horizontal positions when it is valid; only repack when a span
+    // change creates a real collision. This matches the live layout path and
+    // prevents route/remount from moving cards into different columns.
+    return hasCollisions ? packLayoutDense(enforced, cols) : compactLayoutUp(enforced, cols);
+  };
   const mergeExplicitWithFallback = (explicit: GridItem[] | undefined, fallback: GridItem[]) => {
     if (!explicit || explicit.length === 0) {
       return fallback;
@@ -1035,6 +1117,8 @@ function buildResponsiveLayoutsFromDesktop(
 
 export function GridCanvas({
   isEditMode,
+  layoutRevision = 0,
+  previewGridWidth,
   developerMode,
   isXsViewport,
   onActiveBreakpointChange,
@@ -1049,7 +1133,6 @@ export function GridCanvas({
   widgetTypeLayoutOverrides,
   widgetLayoutOverrides,
   responsiveLayouts,
-  onOpenCatalog,
   onCloseCatalog,
   onSelectWidget,
   onSelectSection,
@@ -1079,11 +1162,15 @@ export function GridCanvas({
   onWidgetAlarmDisarm,
   onWidgetAlarmArm,
   onWidgetVacuumStartPause,
+  onWidgetVacuumStop,
   onWidgetVacuumReturnToBase,
   onWidgetLockToggle,
   onWidgetLockOpen,
   onWidgetCoverPositionChange,
   onWidgetCoverTiltPositionChange,
+  onWidgetCoverOpen,
+  onWidgetCoverStop,
+  onWidgetCoverClose,
   onOpenMembersPanel,
   onWidgetLayoutChange,
   onSectionsLayoutChange,
@@ -1109,6 +1196,7 @@ export function GridCanvas({
   const canvasDragStartItemRef = useRef<GridItem | null>(null);
   const canvasAutoScrollFrameRef = useRef<number | null>(null);
   const canvasAutoScrollVelocityRef = useRef(0);
+  const catalogWasOpenRef = useRef(false);
   const compactDragHoldTimerRef = useRef<number | null>(null);
   const compactDragHoldStartRef = useRef<CompactDragHoldStart | null>(null);
   const compactDragArmedElementRef = useRef<HTMLElement | null>(null);
@@ -1119,16 +1207,59 @@ export function GridCanvas({
   const [runtimeGridWidth, setRuntimeGridWidth] = useState(0);
   const [isCanvasTouchLocked, setIsCanvasTouchLocked] = useState(false);
   const [compactDragArmedItemId, setCompactDragArmedItemId] = useState<string | null>(null);
-  const [gridEngineActiveBreakpoint, setGridEngineActiveBreakpoint] = useState<GridBreakpoint>(() =>
-    resolveActiveBreakpoint(getViewportWidth()),
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('cards');
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogDestination, setCatalogDestination] = useState<WidgetCatalogDestination>({ type: 'canvas' });
+  const [selectedCatalogWidgetKind, setSelectedCatalogWidgetKind] = useState<WidgetKind | null>(null);
+  const [selectedCatalogSectionKind, setSelectedCatalogSectionKind] = useState<SectionKind | null>(null);
+  const [catalogFeedback, setCatalogFeedback] = useState<string | null>(null);
+  const [keyboardLayoutAnnouncement, setKeyboardLayoutAnnouncement] = useState('');
+  // The canvas content box is the single source of truth for responsive
+  // geometry. Using window.innerWidth here disagrees with RGL whenever a
+  // sidebar, Builder or an embedded shell narrows the actual canvas and can
+  // make the layout bounce between (for example) 2xl and xl on every live
+  // entity update.
+  const gridEngineActiveBreakpoint = useMemo<GridBreakpoint>(
+    () => resolveActiveBreakpoint(runtimeGridWidth > 0 ? runtimeGridWidth : getViewportWidth()),
+    [runtimeGridWidth],
   );
   useEffect(() => {
-    if (!onActiveBreakpointChange) {
+    if (isCatalogOpen && !catalogWasOpenRef.current) {
+      const selectedStack = selectedSectionId
+        ? sections.find((section) => section.id === selectedSectionId && isStackSection(section))
+        : undefined;
+      setCatalogTab('cards');
+      setCatalogQuery('');
+      setCatalogDestination(selectedStack ? { type: 'stack', sectionId: selectedStack.id } : { type: 'canvas' });
+      setSelectedCatalogWidgetKind(null);
+      setSelectedCatalogSectionKind(null);
+      setCatalogFeedback(null);
+    }
+
+    if (!isCatalogOpen && catalogWasOpenRef.current) {
+      setCatalogFeedback(null);
+    }
+
+    catalogWasOpenRef.current = isCatalogOpen;
+  }, [isCatalogOpen, sections, selectedSectionId]);
+
+  useEffect(() => {
+    if (
+      catalogDestination.type === 'stack' &&
+      !sections.some((section) => section.id === catalogDestination.sectionId && isStackSection(section))
+    ) {
+      setCatalogDestination({ type: 'canvas' });
+    }
+  }, [catalogDestination, sections]);
+
+  useEffect(() => {
+    if (!onActiveBreakpointChange || runtimeGridWidth <= 0) {
       return;
     }
     onActiveBreakpointChange(gridEngineActiveBreakpoint);
-  }, [gridEngineActiveBreakpoint, onActiveBreakpointChange]);
+  }, [gridEngineActiveBreakpoint, onActiveBreakpointChange, runtimeGridWidth]);
   const [gridEngineLayouts, setGridEngineLayouts] = useState<GridLayouts>({});
+  const [synchronizedLayoutRevision, setSynchronizedLayoutRevision] = useState(layoutRevision);
   const clearXsLongPressTimer = useCallback(() => {
     if (xsLongPressTimerRef.current !== null) {
       window.clearTimeout(xsLongPressTimerRef.current);
@@ -1462,7 +1593,13 @@ export function GridCanvas({
     }
 
     const applyWidth = () => {
-      const next = Math.max(0, Math.round(host.getBoundingClientRect().width));
+      // RGL lives in the host content box. clientWidth still includes the
+      // responsive horizontal padding, so remove it before calculating both
+      // the root columns and every nested stack width.
+      const hostStyle = window.getComputedStyle(host);
+      const paddingLeft = Number.parseFloat(hostStyle.paddingLeft) || 0;
+      const paddingRight = Number.parseFloat(hostStyle.paddingRight) || 0;
+      const next = Math.max(0, Math.round(host.clientWidth - paddingLeft - paddingRight));
       const previous = stableRuntimeGridWidthRef.current;
       if (previous > 0 && Math.abs(next - previous) < RUNTIME_GRID_WIDTH_JITTER_PX) {
         return;
@@ -1506,8 +1643,6 @@ export function GridCanvas({
       observer.disconnect();
     };
   }, []);
-  const isStackSection = (section: DashboardSection) =>
-    section.kind === 'stack-vertical' || section.kind === 'stack-horizontal' || section.kind === 'stack-grid';
   const rootWidgets = useMemo(() => widgets.filter((widget) => !widget.parentSectionId), [widgets]);
   const rootLightWidgetStateById = useMemo(
     () =>
@@ -1612,6 +1747,10 @@ export function GridCanvas({
     () => new Set(sections.filter((section) => section.kind === 'scenes').map((section) => section.id)),
     [sections],
   );
+  const gridStackSectionIds = useMemo(
+    () => new Set(sections.filter((section) => section.kind === 'stack-grid').map((section) => section.id)),
+    [sections],
+  );
   const desktopLayout = useMemo<GridItem[]>(
     () =>
       normalizeGridItems([
@@ -1679,6 +1818,17 @@ export function GridCanvas({
     () => Math.max(0, runtimeGridWidth),
     [runtimeGridWidth],
   );
+  const hasPendingAuthoritativeLayout = synchronizedLayoutRevision !== layoutRevision;
+  useLayoutEffect(() => {
+    if (!hasPendingAuthoritativeLayout) {
+      return;
+    }
+    isCanvasInteractingRef.current = false;
+    setGridEngineLayouts(derivedGridEngineLayouts);
+    lastLiveGridEngineLayoutsRef.current = derivedGridEngineLayouts;
+    setSynchronizedLayoutRevision(layoutRevision);
+  }, [derivedGridEngineLayouts, hasPendingAuthoritativeLayout, layoutRevision]);
+  const isRuntimeGridReady = isMounted && runtimeGridEffectiveWidth > 0;
   const gridEngineColumnWidth = useMemo(() => {
     const activePadding = GRID_ENGINE_CONTAINER_PADDING[gridEngineActiveBreakpoint] ?? [0, 0];
     const horizontalPadding = activePadding[0] * 2;
@@ -1746,12 +1896,16 @@ export function GridCanvas({
           if (!currentItem) {
             return derivedItem;
           }
+          const preserveRuntimeStackSpan = gridStackSectionIds.has(derivedItem.i);
           const mergedItem: GridItem = {
             ...currentItem,
             // Keep user positioning for this breakpoint, but always consume the
             // latest span generated by the layout engine (type overrides/panel).
-            w: derivedItem.w,
-            h: derivedItem.h,
+            // Grid stacks are the exception: their live span is calculated from
+            // the inner grid. Replacing it here with the derived XL span creates
+            // a resize loop and can collapse a 2xl stack before it is persisted.
+            w: preserveRuntimeStackSpan ? currentItem.w : derivedItem.w,
+            h: preserveRuntimeStackSpan ? currentItem.h : derivedItem.h,
           };
           if (rootScenesSectionIds.has(derivedItem.i)) {
             mergedItem.x = derivedItem.x;
@@ -1768,11 +1922,14 @@ export function GridCanvas({
 
       return changed ? next : current;
     });
-  }, [derivedGridEngineLayouts, normalizeRootLayoutForBreakpoint]);
+  }, [derivedGridEngineLayouts, gridStackSectionIds, normalizeRootLayoutForBreakpoint]);
   const liveGridEngineLayouts = useMemo<GridLayouts>(() => {
     const merged: GridLayouts = {};
     GRID_ENGINE_BREAKPOINT_ORDER.forEach((breakpoint) => {
-      const source = gridEngineLayouts[breakpoint] ?? [];
+      const runtimeSource = hasPendingAuthoritativeLayout ? undefined : gridEngineLayouts[breakpoint];
+      const source = runtimeSource && runtimeSource.length > 0
+        ? runtimeSource
+        : derivedGridEngineLayouts[breakpoint] ?? [];
       merged[breakpoint] = normalizeRootLayoutForBreakpoint(source, breakpoint, GRID_ENGINE_COLS[breakpoint]);
     });
     const previous = lastLiveGridEngineLayoutsRef.current;
@@ -1781,7 +1938,13 @@ export function GridCanvas({
     }
     lastLiveGridEngineLayoutsRef.current = merged;
     return merged;
-  }, [gridEngineLayouts, normalizeRootLayoutForBreakpoint, widgetTypeLayoutOverrides]);
+  }, [
+    derivedGridEngineLayouts,
+    gridEngineLayouts,
+    hasPendingAuthoritativeLayout,
+    normalizeRootLayoutForBreakpoint,
+    widgetTypeLayoutOverrides,
+  ]);
   const liveGridEngineLayout = liveGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
   const liveGridUsedRows = useMemo(
     () =>
@@ -1806,14 +1969,79 @@ export function GridCanvas({
       Math.round(start.h) !== Math.round(next.h)
     );
   }, []);
-  const layoutSections = useMemo(
-    () => SECTION_CATALOG.filter((item) => !WIDGET_GROUP_SECTION_KINDS.includes(item.kind)),
-    [],
+  const stackSections = useMemo(() => sections.filter(isStackSection), [sections]);
+  const catalogDestinationOptions = useMemo(
+    () => [
+      { id: 'canvas', name: 'Dashboard principale' },
+      ...stackSections.map((section) => {
+        const cardsCount = widgets.filter((widget) => widget.parentSectionId === section.id).length;
+        const sectionName = section.title?.trim() || SECTION_LABELS[section.kind];
+        return {
+          id: section.id,
+          name: `${sectionName} · ${cardsCount} card`,
+        };
+      }),
+    ],
+    [stackSections, widgets],
   );
-  const widgetGroupSections = useMemo(
-    () => SECTION_CATALOG.filter((item) => WIDGET_GROUP_SECTION_KINDS.includes(item.kind)),
-    [],
+  const selectedCatalogDestinationOption = useMemo(() => {
+    const destinationId = catalogDestination.type === 'stack' ? catalogDestination.sectionId : 'canvas';
+    return catalogDestinationOptions.find((option) => option.id === destinationId) ?? catalogDestinationOptions[0] ?? null;
+  }, [catalogDestination, catalogDestinationOptions]);
+  const normalizedCatalogQuery = catalogQuery.trim().toLocaleLowerCase('it');
+  const filteredWidgetCatalog = useMemo(
+    () =>
+      WIDGET_CATALOG.filter((item) => {
+        if (!normalizedCatalogQuery) return true;
+        const meta = WIDGET_CATALOG_META[item.kind];
+        return `${item.label} ${meta.description} ${meta.family}`.toLocaleLowerCase('it').includes(normalizedCatalogQuery);
+      }),
+    [normalizedCatalogQuery],
   );
+  const filteredSectionCatalog = useMemo(
+    () =>
+      SECTION_CATALOG.filter((item) => {
+        if (!normalizedCatalogQuery) return true;
+        const meta = SECTION_CATALOG_META[item.kind];
+        return `${item.label} ${meta.description}`.toLocaleLowerCase('it').includes(normalizedCatalogQuery);
+      }),
+    [normalizedCatalogQuery],
+  );
+  const selectedCatalogDestinationName = selectedCatalogDestinationOption?.name ?? 'Dashboard principale';
+  const selectedCatalogItemLabel =
+    catalogTab === 'cards'
+      ? WIDGET_CATALOG.find((item) => item.kind === selectedCatalogWidgetKind)?.label
+      : SECTION_CATALOG.find((item) => item.kind === selectedCatalogSectionKind)?.label;
+  const canConfirmCatalogSelection = catalogTab === 'cards' ? Boolean(selectedCatalogWidgetKind) : Boolean(selectedCatalogSectionKind);
+  const catalogConfirmLabel = catalogTab === 'sections'
+    ? 'Crea sezione nel canvas'
+    : catalogDestination.type === 'stack'
+      ? `Aggiungi a ${selectedCatalogDestinationOption?.name.split(' · ')[0] ?? 'stack'}`
+      : 'Aggiungi al canvas';
+  const confirmCatalogSelection = useCallback(() => {
+    if (catalogTab === 'cards') {
+      if (!selectedCatalogWidgetKind) return;
+      const item = WIDGET_CATALOG.find((entry) => entry.kind === selectedCatalogWidgetKind);
+      onAddWidget(selectedCatalogWidgetKind, catalogDestination);
+      setCatalogFeedback(`${item?.label ?? 'Card'} aggiunta a ${selectedCatalogDestinationName}.`);
+      setSelectedCatalogWidgetKind(null);
+      return;
+    }
+
+    if (!selectedCatalogSectionKind) return;
+    const item = SECTION_CATALOG.find((entry) => entry.kind === selectedCatalogSectionKind);
+    onAddSection(selectedCatalogSectionKind);
+    setCatalogFeedback(`${item?.label ?? 'Sezione'} creata nella dashboard principale.`);
+    setSelectedCatalogSectionKind(null);
+  }, [
+    catalogDestination,
+    catalogTab,
+    onAddSection,
+    onAddWidget,
+    selectedCatalogDestinationName,
+    selectedCatalogSectionKind,
+    selectedCatalogWidgetKind,
+  ]);
   const sectionIdSet = useMemo(() => new Set(sections.map((section) => section.id)), [sections]);
   const sectionById = useMemo(
     () => new Map(sections.map((section) => [section.id, section] as const)),
@@ -1972,8 +2200,8 @@ export function GridCanvas({
       widgetLayoutOverrides,
     ],
   );
-  const handleGridStackUsedRowsChange = useCallback(
-    (sectionId: string, usedRows: number) => {
+  const handleGridStackGeometryChange = useCallback(
+    (sectionId: string, geometry: { usedCols: number; usedRows: number }) => {
       if (sectionKindById.get(sectionId) !== 'stack-grid') {
         return;
       }
@@ -1989,21 +2217,34 @@ export function GridCanvas({
         sectionTitle.trim().length > 0;
       // Stack header is rendered outside StackGrid (in GridCanvas), so
       // add one root row unit when visible to prevent bottom clipping.
-      const safeRows = Math.max(1, Math.round(usedRows) + (headerVisible ? 1 : 0));
       const activeLayout = liveGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
-      const currentItem = activeLayout.find((item) => item.i === sectionId);
+      const derivedActiveLayout = derivedGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
+      const layoutSource = activeLayout.length > 0 ? activeLayout : derivedActiveLayout;
+      const currentItem = layoutSource.find((item) => item.i === sectionId);
       if (!currentItem) {
         return;
       }
+      const nextSpan = resolveGridStackContainerSpan({
+        geometry,
+        availableCols: gridEngineActiveCols,
+        currentCols: currentItem.w,
+        widthMode: section?.stackColumnsMode === 'manual' ? 'manual' : 'auto',
+        headerVisible,
+      });
+      const safeRows = nextSpan.h;
+      const safeCols = nextSpan.w;
       const currentRows = Math.max(1, Math.round(currentItem.h));
-      if (currentRows === safeRows) {
+      const currentCols = Math.max(1, Math.round(currentItem.w));
+      if (currentRows === safeRows && currentCols === safeCols) {
         return;
       }
 
-      const nextActiveLayout = activeLayout.map((item) =>
+      const nextActiveLayout = layoutSource.map((item) =>
         item.i === sectionId
           ? {
               ...item,
+              x: Math.min(Math.max(0, Math.round(item.x)), Math.max(0, gridEngineActiveCols - safeCols)),
+              w: safeCols,
               h: safeRows,
             }
           : item,
@@ -2017,8 +2258,10 @@ export function GridCanvas({
     [
       sectionById,
       sectionKindById,
+      derivedGridEngineLayouts,
       liveGridEngineLayouts,
       gridEngineActiveBreakpoint,
+      gridEngineActiveCols,
       updateGridEngineLayouts,
       commitGridEngineLayouts,
     ],
@@ -2039,6 +2282,73 @@ export function GridCanvas({
       }
     },
     [isCompactEditCardMenuMode, onSelectSection, onSelectWidget, rootWidgetIdSet, sectionIdSet],
+  );
+  const handleCanvasItemKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>, itemId: string, itemLabel: string) => {
+      if (!isEditMode || event.currentTarget !== event.target) {
+        return;
+      }
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        return;
+      }
+
+      const source = liveGridEngineLayouts[gridEngineActiveBreakpoint] ?? [];
+      const current = source.find((item) => item.i === itemId);
+      if (!current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      focusCanvasOverlayItem(itemId);
+
+      const nextItem = { ...current };
+      const isResize = event.shiftKey;
+      if (isResize) {
+        if (event.key === 'ArrowLeft') nextItem.w = Math.max(1, nextItem.w - 1);
+        if (event.key === 'ArrowRight') {
+          nextItem.w = Math.min(gridEngineActiveCols - nextItem.x, nextItem.w + 1);
+        }
+        if (event.key === 'ArrowUp') nextItem.h = Math.max(1, nextItem.h - 1);
+        if (event.key === 'ArrowDown') nextItem.h += 1;
+      } else {
+        if (event.key === 'ArrowLeft') nextItem.x = Math.max(0, nextItem.x - 1);
+        if (event.key === 'ArrowRight') {
+          nextItem.x = Math.min(gridEngineActiveCols - nextItem.w, nextItem.x + 1);
+        }
+        if (event.key === 'ArrowUp') nextItem.y = Math.max(0, nextItem.y - 1);
+        if (event.key === 'ArrowDown') nextItem.y += 1;
+      }
+
+      if (hasGridItemMoved(current, nextItem)) {
+        const nextActiveLayout = source.map((item) => (item.i === itemId ? nextItem : item));
+        const committed = updateGridEngineLayouts({
+          ...liveGridEngineLayouts,
+          [gridEngineActiveBreakpoint]: nextActiveLayout,
+        } as ResponsiveLayouts<GridBreakpoint>);
+        const committedActiveLayout = committed[gridEngineActiveBreakpoint] ?? nextActiveLayout;
+        commitGridEngineLayouts(committed, committedActiveLayout);
+        const resolved = committedActiveLayout.find((item) => item.i === itemId) ?? nextItem;
+        setKeyboardLayoutAnnouncement(
+          isResize
+            ? `${itemLabel}: dimensione ${resolved.w} colonne per ${resolved.h} righe.`
+            : `${itemLabel}: posizione colonna ${resolved.x + 1}, riga ${resolved.y + 1}.`,
+        );
+        return;
+      }
+
+      setKeyboardLayoutAnnouncement(`${itemLabel}: limite della griglia raggiunto.`);
+    },
+    [
+      commitGridEngineLayouts,
+      focusCanvasOverlayItem,
+      gridEngineActiveBreakpoint,
+      gridEngineActiveCols,
+      hasGridItemMoved,
+      isEditMode,
+      liveGridEngineLayouts,
+      updateGridEngineLayouts,
+    ],
   );
   const handleStackCompactDragStart = useCallback(
     (event: Event | null | undefined) => {
@@ -2095,8 +2405,18 @@ export function GridCanvas({
           : isStack
             ? section.stackShowBorder ?? true
             : !isTransparentSection;
-      const backgroundClass = showBackground ? 'bg-white/5' : 'bg-transparent';
-      const borderClass = showBorder ? 'border border-white/10' : 'border border-transparent';
+      const backgroundClass = showBackground
+        ? isStack
+          ? 'bg-white/[0.04] shadow-lg backdrop-blur-xl'
+          : 'bg-white/5'
+        : 'bg-transparent';
+      const borderClass = isStack
+        ? showBorder
+          ? 'ring-1 ring-inset ring-white/[0.06]'
+          : ''
+        : showBorder
+          ? 'border border-white/10'
+          : 'border border-transparent';
       const isWeatherClickable = !isEditMode && section.kind === 'weather';
       const isCompactWeatherSection = isWeatherSection && sectionSpanH <= ROOT_CANVAS_ROW_UNITS;
       const stackHeaderVisible =
@@ -2221,8 +2541,8 @@ export function GridCanvas({
           ) : (
             <div className="flex h-full w-full min-h-0 min-w-0 flex-col">
               {stackHeaderVisible ? (
-                <div className="mb-3 px-3 pt-3 sm:px-4 sm:pt-4 flex items-center justify-between">
-                  <p className="text-base font-semibold text-white/70 tracking-tight">
+                <div className="flex h-16 shrink-0 items-center justify-between px-3 sm:px-4">
+                  <p className="min-w-0 truncate text-base font-semibold tracking-tight text-white/70">
                     {sectionTitle}
                   </p>
                   <div className="flex shrink-0 items-center gap-2">
@@ -2253,6 +2573,7 @@ export function GridCanvas({
                 </div>
               ) : null}
               <StackGrid
+                key={`${section.id}:${layoutRevision}`}
                 isEditMode={isEditMode}
                 isXsViewport={isXsViewport}
                 sectionsMounted={stackMounted}
@@ -2297,18 +2618,22 @@ export function GridCanvas({
                 onWidgetAlarmDisarm={onWidgetAlarmDisarm}
                 onWidgetAlarmArm={onWidgetAlarmArm}
                 onWidgetVacuumStartPause={onWidgetVacuumStartPause}
+                onWidgetVacuumStop={onWidgetVacuumStop}
                 onWidgetVacuumReturnToBase={onWidgetVacuumReturnToBase}
                 onWidgetLockToggle={onWidgetLockToggle}
                 onWidgetLockOpen={onWidgetLockOpen}
                 onWidgetCoverPositionChange={onWidgetCoverPositionChange}
                 onWidgetCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
+                onWidgetCoverOpen={onWidgetCoverOpen}
+                onWidgetCoverStop={onWidgetCoverStop}
+                onWidgetCoverClose={onWidgetCoverClose}
                 onOpenMembersPanel={onOpenMembersPanel}
                 onWidgetLayoutChange={onWidgetLayoutChange}
                 onStackBreakpointLayoutChange={onStackBreakpointLayoutChange}
                 haConnected={haConnected}
                 haStates={haStates}
                 sensorHistoryByEntity={sensorHistoryByEntity}
-                onGridStackUsedRowsChange={handleGridStackUsedRowsChange}
+                onGridStackGeometryChange={handleGridStackGeometryChange}
                 onCompactDragStart={handleStackCompactDragStart}
                 onCompactDragMove={handleStackCompactDragMove}
                 onCompactDragStop={handleStackCompactDragStop}
@@ -2381,8 +2706,9 @@ export function GridCanvas({
       onWidgetMediaSelectSource,
       onWidgetMediaToggle,
       onWidgetVacuumReturnToBase,
+      onWidgetVacuumStop,
       onWidgetVacuumStartPause,
-      handleGridStackUsedRowsChange,
+      handleGridStackGeometryChange,
       onSelectWidget,
       isXsViewport,
       runningSceneBySectionId,
@@ -2409,10 +2735,33 @@ export function GridCanvas({
       >
         <div
           ref={runtimeGridHostRef}
+          data-preview-width={previewGridWidth ?? 'auto'}
           className={`relative behance-canvas-shell rounded-[2rem] pt-0.5 pb-4 md:pt-2 min-h-[48rem] ${
             isEditMode ? 'bg-white/5 border border-white/10' : 'bg-transparent border border-transparent'
           }`}
+          style={
+            previewGridWidth
+              ? {
+                  // The preset targets the RGL content box. Add the shell
+                  // padding while still clipping to the real available width.
+                  // Include the edit border as well, otherwise a preset that
+                  // lands exactly on MD/XL measures two pixels below the
+                  // breakpoint because the project uses border-box sizing.
+                  width: `min(100%, calc(${previewGridWidth}px + 2 * clamp(0.55rem, 1.9vw, 2rem) + 2px))`,
+                }
+              : undefined
+          }
         >
+          {isEditMode ? (
+            <>
+              <p id="dashboard-grid-keyboard-help" className="sr-only">
+                Usa le frecce per spostare. Usa Maiuscole più frecce per ridimensionare.
+              </p>
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {keyboardLayoutAnnouncement}
+              </p>
+            </>
+          ) : null}
           {topRightOverlay ? (
             <div className="absolute right-2 top-2 z-40 sm:right-3 sm:top-3">
               {topRightOverlay}
@@ -2427,12 +2776,15 @@ export function GridCanvas({
             </div>
           ) : null}
 
-          <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`transition-opacity duration-300 ${isRuntimeGridReady ? 'opacity-100' : 'opacity-0'}`}>
+            {isRuntimeGridReady ? (
             <ResponsiveGridLayout
+              key={`dashboard-grid:${layoutRevision}`}
               className={`sections-grid behance-grid relative ${isEditMode ? 'is-editing' : ''} ${
                 isCompactEditCardMenuMode ? 'is-compact-editing' : ''
               }`}
-              measureBeforeMount={true}
+              width={Math.max(runtimeGridEffectiveWidth, 1)}
+              breakpoint={gridEngineActiveBreakpoint}
               breakpoints={GRID_ENGINE_BREAKPOINTS}
               cols={GRID_ENGINE_COLS}
               layouts={liveGridEngineLayouts as ResponsiveLayouts<GridBreakpoint>}
@@ -2443,12 +2795,13 @@ export function GridCanvas({
               compactType="vertical"
               preventCollision={false}
               isDraggable={isEditMode}
-              isResizable={isEditMode}
+              isResizable={false}
+              resizeHandles={[]}
               draggableHandle={isCompactEditCardMenuMode ? '.compact-edit-drag-handle' : undefined}
               draggableCancel=".builder-grid,.widget-action,.section-action,.react-resizable-handle"
-              onBreakpointChange={(nextBreakpoint) => {
-                setGridEngineActiveBreakpoint(nextBreakpoint as GridBreakpoint);
-              }}
+              // Breakpoint selection is derived from the observed canvas
+              // width above. RGL receives that same width, so it will select
+              // the matching layout without maintaining a second authority.
               onDragStart={(_, __, newItem, ___, event) => {
                 if (!isEditMode) {
                   return;
@@ -2500,52 +2853,6 @@ export function GridCanvas({
                 });
                 commitGridEngineLayouts(committed, layout as GridItem[]);
               }}
-              onResizeStart={(_, __, newItem, ___, event) => {
-                if (!isEditMode) {
-                  return;
-                }
-                isCanvasInteractingRef.current = true;
-                if (isCompactEditCardMenuMode) {
-                  setIsCanvasTouchLocked(true);
-                  updateCanvasAutoScroll(getDragEventClientY(event));
-                }
-                canvasDragStartItemRef.current = newItem ? ({ ...(newItem as GridItem) }) : null;
-                hasCanvasDragMovedRef.current = false;
-                if (newItem?.i) {
-                  focusCanvasOverlayItem(newItem.i);
-                }
-              }}
-              onResize={(_, __, newItem, ___, event) => {
-                if (!isEditMode) {
-                  return;
-                }
-                updateCanvasAutoScroll(getDragEventClientY(event));
-                if (hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined)) {
-                  hasCanvasDragMovedRef.current = true;
-                }
-              }}
-              onResizeStop={(layout, _oldItem, newItem) => {
-                if (!isEditMode) {
-                  return;
-                }
-                const hasMoved =
-                  hasCanvasDragMovedRef.current ||
-                  hasGridItemMoved(canvasDragStartItemRef.current, newItem as GridItem | undefined);
-                isCanvasInteractingRef.current = false;
-                setIsCanvasTouchLocked(false);
-                stopCanvasAutoScroll();
-                resetCompactDragHold();
-                canvasDragStartItemRef.current = null;
-                hasCanvasDragMovedRef.current = false;
-                if (!hasMoved) {
-                  return;
-                }
-                const committed = updateGridEngineLayouts({
-                  ...liveGridEngineLayouts,
-                  [gridEngineActiveBreakpoint]: layout as GridItem[],
-                });
-                commitGridEngineLayouts(committed, layout as GridItem[]);
-              }}
               onLayoutChange={(layout, layouts) => {
                 if (!isEditMode || !isCanvasInteractingRef.current || !hasCanvasDragMovedRef.current) {
                   return;
@@ -2567,7 +2874,17 @@ export function GridCanvas({
                 return (
                   <div
                     key={section.id}
-                    className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${
+                    tabIndex={isEditMode ? 0 : undefined}
+                    role={isEditMode ? 'group' : undefined}
+                    aria-label={
+                      isEditMode
+                        ? `Sezione ${section.title?.trim() || SECTION_LABELS[section.kind]}`
+                        : undefined
+                    }
+                    aria-describedby={isEditMode ? 'dashboard-grid-keyboard-help' : undefined}
+                    className={`relative h-full w-full min-h-0 min-w-0 ${
+                      isStackSection(section) ? 'overflow-visible' : 'overflow-hidden'
+                    } ${
                       isCompactEditCardMenuMode ? 'compact-edit-hold-target' : ''
                     } ${compactDragArmedItemId === section.id ? 'compact-edit-drag-handle' : ''}`}
                     onTouchStart={(event) => handleCompactDragTouchStart(event, section.id)}
@@ -2578,6 +2895,14 @@ export function GridCanvas({
                     onMouseMove={handleCompactDragMouseMove}
                     onMouseUp={handleCompactDragHoldEnd}
                     onMouseLeave={handleCompactDragHoldEnd}
+                    onFocus={() => focusCanvasOverlayItem(section.id)}
+                    onKeyDown={(event) =>
+                      handleCanvasItemKeyDown(
+                        event,
+                        section.id,
+                        section.title?.trim() || SECTION_LABELS[section.kind],
+                      )
+                    }
                   >
                     {renderSectionCard(
                       section,
@@ -2616,6 +2941,10 @@ export function GridCanvas({
                 return (
                   <div
                     key={widget.id}
+                    tabIndex={isEditMode ? 0 : undefined}
+                    role={isEditMode ? 'group' : undefined}
+                    aria-label={isEditMode ? `Card ${widget.title?.trim() || widget.id}` : undefined}
+                    aria-describedby={isEditMode ? 'dashboard-grid-keyboard-help' : undefined}
                     className={`relative h-full w-full min-h-0 min-w-0 overflow-hidden ${
                       isCompactEditCardMenuMode ? 'compact-edit-hold-target' : ''
                     } ${compactDragArmedItemId === widget.id ? 'compact-edit-drag-handle' : ''}`}
@@ -2635,6 +2964,10 @@ export function GridCanvas({
                     onMouseMove={handleCompactDragMouseMove}
                     onMouseUp={handleCompactDragHoldEnd}
                     onMouseLeave={handleCompactDragHoldEnd}
+                    onFocus={() => focusCanvasOverlayItem(widget.id)}
+                    onKeyDown={(event) =>
+                      handleCanvasItemKeyDown(event, widget.id, widget.title?.trim() || widget.id)
+                    }
                     onClick={(event) => {
                       event.stopPropagation();
                       if (isEditMode && !isCompactEditCardMenuMode) {
@@ -2680,7 +3013,8 @@ export function GridCanvas({
                     <WidgetCardRenderer
                       widget={runtimeWidget}
                       dashboardState={state}
-                      isEditMode={false}
+                      isEditMode={isEditMode}
+                      isInteractive={haConnected || runtimeWidget.dataSource === 'mock'}
                       isSelected={selectedWidgetId === widget.id}
                       gridBreakpoint={gridEngineActiveBreakpoint}
                       value={value}
@@ -2726,11 +3060,15 @@ export function GridCanvas({
                       onAlarmDisarm={onWidgetAlarmDisarm}
                       onAlarmArm={onWidgetAlarmArm}
                       onVacuumStartPause={onWidgetVacuumStartPause}
+                      onVacuumStop={onWidgetVacuumStop}
                       onVacuumReturnToBase={onWidgetVacuumReturnToBase}
                       onLockToggle={onWidgetLockToggle}
                       onLockOpen={onWidgetLockOpen}
                       onCoverPositionChange={onWidgetCoverPositionChange}
                       onCoverTiltPositionChange={onWidgetCoverTiltPositionChange}
+                      onCoverOpen={onWidgetCoverOpen}
+                      onCoverStop={onWidgetCoverStop}
+                      onCoverClose={onWidgetCoverClose}
                       onMembersOpenPanel={() => onOpenMembersPanel()}
                       liveEntity={haStates[widget.entityId]}
                       switchConsumptionEntity={
@@ -2751,7 +3089,7 @@ export function GridCanvas({
                     {isCompactEditCardMenuMode ? (
                       <button
                         type="button"
-                        className="widget-action absolute right-2 top-2 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
+                        className="widget-action absolute right-2 top-2 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:bg-white/15 hover:text-white active:scale-95"
                         onPointerDown={(event) => {
                           event.stopPropagation();
                         }}
@@ -2770,109 +3108,216 @@ export function GridCanvas({
                 );
               })}
             </ResponsiveGridLayout>
+            ) : null}
           </div>
         </div>
       </div>
 
       {isEditMode ? (
-        <button
-          type="button"
-          onClick={onOpenCatalog}
-          className="absolute bottom-8 right-6 z-20 hidden h-16 w-16 rounded-full border border-blue-300/35 bg-white/15 text-blue-200 shadow-[0_0_0_1px_rgba(147,197,253,0.3),0_16px_45px_rgba(56,189,248,0.35)] backdrop-blur-2xl transition-all hover:scale-105 hover:bg-blue-500/20 md:block sm:right-8"
-          aria-label="Apri catalogo componenti"
-          aria-expanded={isCatalogOpen}
+        <GlassModal
+          isOpen={isCatalogOpen}
+          onClose={onCloseCatalog}
+          eyebrow="Builder"
           title="Aggiungi componenti"
-        >
-          <Plus size={30} className="mx-auto" aria-hidden="true" />
-        </button>
-      ) : null}
-
-      {isEditMode && isCatalogOpen ? (
-        <div
-          className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-3xl flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-6"
-          onClick={onCloseCatalog}
-        >
-          <div
-            className="liquid-glass-panel h-full w-full max-h-none overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] glass-scrollbar md:h-auto md:max-w-3xl md:rounded-[2rem] md:border md:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/50">Builder Catalog</p>
-                <h3 className="text-2xl font-semibold mt-1">Aggiungi Componenti</h3>
+          description="Scegli cosa inserire e dove posizionarlo. Puoi aggiungere più elementi senza chiudere il catalogo."
+          variant="responsive"
+          size="xl"
+          zIndex={120}
+          closeLabel="Chiudi catalogo componenti"
+          backdropClassName="!bg-[color:var(--ui-scrim)] !backdrop-blur-3xl"
+          bodyClassName="space-y-5 pb-1"
+          footerClassName="border-t border-[color:var(--ui-separator)]"
+          footer={
+            <>
+              <div className="mr-auto hidden min-w-0 sm:block">
+                <p className="truncate text-xs font-medium text-[color:var(--ui-text-secondary)]">
+                  {selectedCatalogItemLabel ? `Selezionato: ${selectedCatalogItemLabel}` : 'Seleziona un elemento dal catalogo'}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={onCloseCatalog}
-                className="glass-icon-button h-10 w-10"
+                data-tour-target="catalog-finish"
+                className="liquid-glass-control h-11 rounded-2xl px-5 text-sm font-semibold text-[color:var(--ui-text-secondary)] transition hover:brightness-110 hover:text-[color:var(--ui-text-primary)]"
               >
-                <X size={18} />
+                Fine
               </button>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="liquid-glass-card p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/45 mb-3">Blocchi Dashboard</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {layoutSections.map((item) => (
-                    <button
-                      key={item.kind}
-                      type="button"
-                      onClick={() => onAddSection(item.kind)}
-                      className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                          <LayoutGrid size={14} />
-                        </div>
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              <button
+                type="button"
+                onClick={confirmCatalogSelection}
+                disabled={!canConfirmCatalogSelection}
+                data-tour-target="catalog-confirm"
+                className="liquid-glass-selection h-11 min-w-0 flex-1 rounded-2xl px-5 text-sm font-semibold shadow-[0_8px_24px_var(--ui-shadow-soft)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 sm:flex-none"
+              >
+                <span className="block max-w-[15rem] truncate">{catalogConfirmLabel}</span>
+              </button>
+            </>
+          }
+        >
+          <section className="liquid-glass-card rounded-[1.5rem] p-4 sm:p-5" aria-labelledby="catalog-destination-title">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p id="catalog-destination-title" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
+                  Destinazione
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-[color:var(--ui-text-secondary)]">
+                  {catalogTab === 'cards'
+                    ? 'La card verrà inserita esattamente nella posizione scelta.'
+                    : 'Le nuove sezioni vengono create nella dashboard principale.'}
+                </p>
               </div>
-              <div className="liquid-glass-card p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/45 mb-3">Widget Stack</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {WIDGET_CATALOG.map((item) => (
-                    <button
-                      key={item.kind}
-                      type="button"
-                      onClick={() => onAddWidget(item.kind)}
-                      className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                          {item.label.charAt(0)}
-                        </div>
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 pt-4 border-t border-white/10">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-white/45 mb-3">Sezioni Widget</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {widgetGroupSections.map((item) => (
+            </div>
+            <GlassDropdown
+              options={catalogDestinationOptions}
+              selected={catalogTab === 'sections' ? catalogDestinationOptions[0] ?? null : selectedCatalogDestinationOption}
+              onChange={(option) => {
+                setCatalogDestination(option.id === 'canvas' ? { type: 'canvas' } : { type: 'stack', sectionId: option.id });
+                setCatalogFeedback(null);
+              }}
+              ariaLabel="Destinazione della nuova card"
+              disabled={catalogTab === 'sections'}
+            />
+          </section>
+
+          <div className="space-y-3">
+            <GlassSegmentSelect<CatalogTab>
+              value={catalogTab}
+              onChange={(nextTab) => {
+                setCatalogTab(nextTab);
+                setCatalogFeedback(null);
+              }}
+              options={[
+                { value: 'cards', label: 'Card' },
+                { value: 'sections', label: 'Sezioni' },
+              ]}
+              ariaLabel="Tipo di componente da aggiungere"
+              className="w-full"
+            />
+
+            <GlassSearchFilterBar
+              query={catalogQuery}
+              onQueryChange={setCatalogQuery}
+              filters={[]}
+              resultCount={catalogTab === 'cards' ? filteredWidgetCatalog.length : filteredSectionCatalog.length}
+              onReset={() => setCatalogQuery('')}
+              placeholder={catalogTab === 'cards' ? 'Cerca una card' : 'Cerca una sezione'}
+              resultLabel={(count) => `${count} ${count === 1 ? 'risultato' : 'risultati'}`}
+            />
+          </div>
+
+          <div className="space-y-5" aria-live="polite">
+            {catalogTab === 'cards' ? (
+              CATALOG_WIDGET_FAMILIES.map((family) => {
+                const familyItems = filteredWidgetCatalog.filter((item) => WIDGET_CATALOG_META[item.kind].family === family);
+                if (familyItems.length === 0) return null;
+                return (
+                  <section key={family} aria-labelledby={`catalog-family-${family}`}>
+                    <h3 id={`catalog-family-${family}`} className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
+                      {family}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                      {familyItems.map((item) => {
+                        const meta = WIDGET_CATALOG_META[item.kind];
+                        const Icon = meta.icon;
+                        const isSelected = selectedCatalogWidgetKind === item.kind;
+                        return (
+                          <button
+                            key={item.kind}
+                            type="button"
+                            data-tour-target={item.kind === 'light' ? 'catalog-light' : undefined}
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              setSelectedCatalogWidgetKind(item.kind);
+                              setCatalogFeedback(null);
+                            }}
+                            className={`btn-premium flex min-h-[4.5rem] min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                              isSelected
+                                ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.14)] shadow-[inset_0_1px_0_var(--ui-border),0_8px_22px_var(--ui-shadow-soft)]'
+                                : 'liquid-glass-card hover:bg-[color:var(--ui-surface-glass-strong)]'
+                            }`}
+                          >
+                            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                              isSelected ? 'border-[color:rgb(var(--ui-accent-rgb)/0.36)] bg-[color:rgb(var(--ui-accent-rgb)/0.12)] text-[color:var(--ui-accent)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
+                            }`}>
+                              <Icon size={18} aria-hidden="true" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">{item.label}</span>
+                              <span className="mt-0.5 block truncate text-xs text-[color:var(--ui-text-secondary)]">{meta.description}</span>
+                            </span>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+                              isSelected ? 'border-[color:rgb(var(--ui-accent-rgb)/0.36)] bg-[color:rgb(var(--ui-accent-rgb)/0.14)] text-[color:var(--ui-accent)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-tertiary)]'
+                            }`}>
+                              {isSelected ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })
+            ) : (
+              <section aria-labelledby="catalog-sections-title">
+                <h3 id="catalog-sections-title" className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
+                  Struttura dashboard
+                </h3>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {filteredSectionCatalog.map((item) => {
+                    const meta = SECTION_CATALOG_META[item.kind];
+                    const Icon = meta.icon;
+                    const isSelected = selectedCatalogSectionKind === item.kind;
+                    return (
                       <button
                         key={item.kind}
                         type="button"
-                        onClick={() => onAddSection(item.kind)}
-                        className="liquid-glass-card rounded-xl p-3 text-left hover:bg-white/[0.08]"
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          setSelectedCatalogSectionKind(item.kind);
+                          setCatalogFeedback(null);
+                        }}
+                        className={`btn-premium flex min-h-[4.5rem] min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                          isSelected
+                            ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.14)] shadow-[inset_0_1px_0_var(--ui-border),0_8px_22px_var(--ui-shadow-soft)]'
+                            : 'liquid-glass-card hover:bg-[color:var(--ui-surface-glass-strong)]'
+                        }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                            <LayoutGrid size={14} />
-                          </div>
-                          <span className="text-sm font-medium">{item.label}</span>
-                        </div>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                          isSelected ? 'border-[color:rgb(var(--ui-accent-rgb)/0.36)] bg-[color:rgb(var(--ui-accent-rgb)/0.12)] text-[color:var(--ui-accent)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
+                        }`}>
+                          <Icon size={18} aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">{item.label}</span>
+                          <span className="mt-0.5 block truncate text-xs text-[color:var(--ui-text-secondary)]">{meta.description}</span>
+                        </span>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+                          isSelected ? 'border-[color:rgb(var(--ui-accent-rgb)/0.36)] bg-[color:rgb(var(--ui-accent-rgb)/0.14)] text-[color:var(--ui-accent)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-tertiary)]'
+                        }`}>
+                          {isSelected ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+                        </span>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
+              </section>
+            )}
+
+            {(catalogTab === 'cards' ? filteredWidgetCatalog.length : filteredSectionCatalog.length) === 0 ? (
+              <div className="liquid-glass-card rounded-2xl px-4 py-8 text-center">
+                <p className="text-sm font-medium text-[color:var(--ui-text-primary)]">Nessun risultato</p>
+                <p className="mt-1 text-xs text-[color:var(--ui-text-secondary)]">Prova con un nome o una categoria diversa.</p>
               </div>
-            </div>
+            ) : null}
+
+            {catalogFeedback ? (
+              <div role="status" className="flex items-center gap-2 rounded-2xl border border-[color:color-mix(in_srgb,var(--ui-success)_28%,transparent)] bg-[color:color-mix(in_srgb,var(--ui-success)_12%,transparent)] px-3.5 py-3 text-xs font-medium text-[color:var(--ui-success)]">
+                <Check size={15} aria-hidden="true" />
+                <span className="min-w-0 truncate">{catalogFeedback}</span>
+              </div>
+            ) : null}
           </div>
-        </div>
+        </GlassModal>
       ) : null}
 
       <style

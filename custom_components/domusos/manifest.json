@@ -1,0 +1,12 @@
+{
+  "domain": "domusos",
+  "name": "DomusOS",
+  "version": "0.1.0-beta.6",
+  "codeowners": ["@Mattia2399"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom"],
+  "documentation": "https://github.com/Mattia2399/DomusOS",
+  "integration_type": "service",
+  "issue_tracker": "https://github.com/Mattia2399/DomusOS/issues",
+  "single_config_entry": true
+}

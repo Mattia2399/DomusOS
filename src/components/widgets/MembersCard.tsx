@@ -5,6 +5,7 @@ import {
   resolveCardDensityByBreakpoint,
   type GridEngineBreakpoint,
 } from '../dashboard/dashboardBreakpointConfig';
+import type { WidgetDisplayVariant } from './widgetDisplayVariant';
 
 type HouseMemberCardItem = {
   id: string;
@@ -22,6 +23,7 @@ type MembersCardProps = {
   onOpenMembersPanel?: () => void;
   houseMembers?: HouseMemberCardItem[];
   gridBreakpoint?: GridEngineBreakpoint;
+  displayVariant?: WidgetDisplayVariant;
 };
 
 function initialsFromName(name: string) {
@@ -43,6 +45,7 @@ export function MembersCard({
   onOpenMembersPanel,
   houseMembers = [],
   gridBreakpoint,
+  displayVariant,
 }: MembersCardProps) {
   const canOpenMembersPanel = !isEditMode && typeof onOpenMembersPanel === 'function';
   const cardDensity = resolveCardDensityByBreakpoint(gridBreakpoint);
@@ -63,6 +66,7 @@ export function MembersCard({
 
   return (
     <div
+      data-card-variant={displayVariant}
       className={`relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden ${cardRadiusClass} ${
         isSelected ? 'selection-corners' : ''
       }`}
@@ -74,7 +78,7 @@ export function MembersCard({
       >
         <div className="relative flex h-full min-h-0 flex-col justify-between">
           <div className="flex items-center justify-between gap-3">
-            <p className={`min-w-0 truncate font-semibold text-white ${isTinyCard ? 'text-[0.92rem]' : 'text-base'}`}>
+            <p className={`min-w-0 truncate font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)] ${isTinyCard ? 'text-[0.92rem]' : 'text-base'}`}>
               {titleLabel}
             </p>
             <button
@@ -94,9 +98,9 @@ export function MembersCard({
               onPointerUp={(event) => {
                 event.stopPropagation();
               }}
-              className={`pointer-events-auto relative z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/15 text-white/90 transition-colors ${
+              className={`pointer-events-auto relative z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors ${
                 canOpenMembersPanel
-                  ? 'btn-premium hover:bg-white/[0.08]'
+                  ? 'btn-premium hover:bg-[color:var(--ui-fill-secondary)]'
                   : 'cursor-default opacity-60'
               }`}
               aria-label="Apri pannello membri"
@@ -118,30 +122,30 @@ export function MembersCard({
                     <img
                       src={member.avatarUrl}
                       alt={`Membro ${member.name}`}
-                      className={`${isTinyCard ? 'h-8 w-8' : 'h-9 w-9'} rounded-full border-2 border-white/80 object-cover`}
+                      className={`${isTinyCard ? 'h-8 w-8' : 'h-9 w-9'} rounded-full border-2 border-[color:var(--ui-surface-glass-strong)] object-cover`}
                     />
                   ) : (
                     <span
-                      className={`flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] font-semibold text-white shadow-lg backdrop-blur-xl`}
+                      className={`flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-[color:var(--ui-surface-glass-strong)] bg-[color:var(--ui-fill-secondary)] font-semibold text-[color:var(--ui-text-primary)] shadow-lg backdrop-blur-xl`}
                     >
                       {initialsFromName(member.name)}
                     </span>
                   )}
                   {member.isCurrent ? (
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white/90 bg-emerald-400" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-[color:var(--ui-surface-glass-strong)] bg-emerald-400" />
                   ) : null}
                 </div>
               ))}
               {hiddenMembersCount > 0 ? (
                 <span
-                  className={`-ml-2 flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-white/80 bg-white/[0.08] font-semibold text-white shadow-lg backdrop-blur-xl`}
+                  className={`-ml-2 flex ${isTinyCard ? 'h-8 w-8 text-[10px]' : 'h-9 w-9 text-[11px]'} items-center justify-center rounded-full border-2 border-[color:var(--ui-surface-glass-strong)] bg-[color:var(--ui-fill-secondary)] font-semibold text-[color:var(--ui-text-primary)] shadow-lg backdrop-blur-xl`}
                 >
                   +{hiddenMembersCount}
                 </span>
               ) : null}
             </div>
           ) : (
-            <p className="mt-3 text-xs text-white/70">Nessun membro disponibile.</p>
+            <p className="mt-3 text-xs text-[color:var(--ui-text-secondary)]">Nessun membro disponibile.</p>
           )}
         </div>
       </div>

@@ -1,39 +1,86 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlarmSmoke,
-  ArrowDown,
-  ArrowDownLeft,
-  ArrowDownRight,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowUpLeft,
-  ArrowUpRight,
-  Camera,
+  Activity,
+  BellRing,
+  CarFront,
+  ChevronRight,
   Expand,
-  Mic,
+  Eye,
+  Loader2,
+  MousePointerClick,
   Pause,
   PersonStanding,
   Play,
+  Power,
   RefreshCw,
-  SkipBack,
-  SkipForward,
-  Square,
+  Settings2,
+  SlidersHorizontal,
   Volume2,
+  VolumeX,
   Webcam,
 } from 'lucide-react';
+import CameraPtzJoystick, { type CameraPtzDirection } from '../camera/CameraPtzJoystick';
+import CameraViewer from '../camera/CameraViewer';
+import GlassDropdown, { type GlassDropdownOption } from '../ui/GlassDropdown';
+import GlassLoader from '../ui/GlassLoader';
+import GlassToggle from '../ui/GlassToggle';
+import GlassSlider from '../ui/GlassSlider';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
+import { ContextSecondaryPage } from './ContextSecondaryPage';
 
-export type CameraPtzDirection =
-  | 'up'
-  | 'down'
-  | 'left'
-  | 'right'
-  | 'up_left'
-  | 'up_right'
-  | 'down_left'
-  | 'down_right';
+export type CameraRelatedEntityCategory =
+  | 'detection'
+  | 'diagnostic'
+  | 'control'
+  | 'action'
+  | 'media'
+  | 'other';
+
+export type CameraRelatedEntityInfo = {
+  entityId: string;
+  name: string;
+  domain: string;
+  category: CameraRelatedEntityCategory;
+  state?: string;
+  stateLabel?: string;
+  unit?: string;
+  deviceClass?: string;
+  icon?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
+  numericValue?: number;
+};
+
+export type CameraDeviceInfo = {
+  id?: string;
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  swVersion?: string;
+  hwVersion?: string;
+  areaId?: string;
+  configurationUrl?: string;
+};
+
+export type CameraRelatedEntityActionRequest = {
+  entity: CameraRelatedEntityInfo;
+  action: 'toggle' | 'press' | 'select' | 'set_value';
+  value?: string | number | boolean;
+};
+
+export type CameraHistoryEntry = {
+  entityId: string;
+  state: string;
+  timestampMs: number;
+  attributes?: Record<string, unknown>;
+};
+
+export type CameraHistoryStatus = 'idle' | 'loading' | 'available' | 'empty' | 'error' | 'offline';
+
+export type { CameraPtzDirection } from '../camera/CameraPtzJoystick';
 
 interface CameraControlsProps {
   name: string;
@@ -44,13 +91,24 @@ interface CameraControlsProps {
   isOffline?: boolean;
   rawAttributes?: Record<string, unknown>;
   supportsPtz?: boolean;
+  deviceInfo?: CameraDeviceInfo;
+  relatedEntities?: CameraRelatedEntityInfo[];
+  historyEntries?: CameraHistoryEntry[];
+  historyStatus?: CameraHistoryStatus;
+  historyError?: string;
+  onRefreshHistory?: () => void;
   onPtzMove?: (direction: CameraPtzDirection) => void;
   onPtzStop?: () => void;
+  onRelatedEntityAction?: (
+    request: CameraRelatedEntityActionRequest,
+  ) => boolean | void | Promise<boolean | void>;
+  onSecondaryPageChange?: (open: boolean) => void;
+  commandsEnabled?: boolean;
 }
 
-type CameraEventType = 'sound' | 'motion';
+type CameraEventType = 'sound' | 'motion' | 'person' | 'vehicle' | 'doorbell';
 
-interface CameraEvent {
+export interface CameraEvent {
   id: string;
   type: CameraEventType;
   title: string;
@@ -58,22 +116,40 @@ interface CameraEvent {
   timestampMs?: number;
   clipUrl?: string;
   thumbnailUrl?: string;
+  entityId?: string;
+  source?: 'history' | 'attribute' | 'live';
 }
 
 interface TimelineItem {
   id: string;
   label: string;
   hasClip: boolean;
+  hasSnapshot: boolean;
+  timestampMs?: number;
 }
 
-const FALLBACK_TIMELINE_TIMES = ['09:10', '09:20', '09:30', '09:40'];
+type CameraEventDay = {
+  key: string;
+  label: string;
+};
 
-const FALLBACK_EVENT_LOGS: CameraEvent[] = [
-  { id: 'ev-1', type: 'sound', title: 'Sound Detection', time: '12:30:48' },
-  { id: 'ev-2', type: 'motion', title: 'Motion Detection', time: '12:25:10' },
-  { id: 'ev-3', type: 'sound', title: 'Sound Detection', time: '12:18:02' },
-  { id: 'ev-4', type: 'motion', title: 'Motion Detection', time: '11:57:41' },
-];
+function formatEventDayKey(timestampMs: number | undefined) {
+  if (!timestampMs) return 'unknown';
+  const date = new Date(timestampMs);
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
+}
+
+function formatEventDayLabel(timestampMs: number | undefined) {
+  if (!timestampMs) return 'Data sconosciuta';
+  const date = new Date(timestampMs);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const key = formatEventDayKey(timestampMs);
+  if (key === formatEventDayKey(today.getTime())) return 'Oggi';
+  if (key === formatEventDayKey(yesterday.getTime())) return 'Ieri';
+  return new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }).format(date);
+}
 
 function toTrimmedString(value: unknown) {
   if (typeof value !== 'string') {
@@ -81,25 +157,6 @@ function toTrimmedString(value: unknown) {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function toBoolean(value: unknown) {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return value !== 0;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (['true', 'on', 'yes', 'open', 'online', 'detected'].includes(normalized)) {
-      return true;
-    }
-    if (['false', 'off', 'no', 'closed', 'offline', 'clear', 'idle'].includes(normalized)) {
-      return false;
-    }
-  }
-  return undefined;
 }
 
 function toTimestampMs(value: unknown) {
@@ -135,6 +192,15 @@ function inferEventType(value: unknown): CameraEventType {
   if (normalized.includes('sound') || normalized.includes('audio') || normalized.includes('noise')) {
     return 'sound';
   }
+  if (normalized.includes('person') || normalized.includes('persona') || normalized.includes('human')) {
+    return 'person';
+  }
+  if (normalized.includes('vehicle') || normalized.includes('veicolo') || normalized.includes('car')) {
+    return 'vehicle';
+  }
+  if (normalized.includes('doorbell') || normalized.includes('campanello') || normalized.includes('visitor')) {
+    return 'doorbell';
+  }
   return 'motion';
 }
 
@@ -148,14 +214,14 @@ function firstStringValue(source: Record<string, unknown>, keys: string[]) {
   return undefined;
 }
 
-function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) {
+export function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) {
   const events: CameraEvent[] = [];
   const pushEvent = (event: CameraEvent) => {
     events.push(event);
   };
 
   const liveEventSources = [rawAttributes?.event_log, rawAttributes?.events, rawAttributes?.history];
-  const liveEventArray = liveEventSources.find((value) => Array.isArray(value));
+  const liveEventArray = liveEventSources.find((value) => Array.isArray(value) && value.length > 0);
 
   if (Array.isArray(liveEventArray)) {
     liveEventArray.slice(0, 12).forEach((entry, index) => {
@@ -177,7 +243,6 @@ function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) 
         'playback_url',
         'media_url',
         'clip',
-        'url',
       ]);
       const thumbnailUrl = firstStringValue(source, [
         'thumbnail_url',
@@ -197,30 +262,8 @@ function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) 
         time: formatClockFromTimestamp(timestampMs) ?? '--:--:--',
         clipUrl,
         thumbnailUrl,
+        source: 'attribute',
       });
-    });
-  }
-
-  const motionDetected = toBoolean(rawAttributes?.motion_detected ?? rawAttributes?.motion);
-  if (motionDetected) {
-    const timestampMs = Date.now();
-    pushEvent({
-      id: `live-motion-${timestampMs}`,
-      type: 'motion',
-      title: 'Motion Detection',
-      timestampMs,
-      time: formatClockFromTimestamp(timestampMs) ?? '--:--:--',
-    });
-  }
-  const soundDetected = toBoolean(rawAttributes?.sound_detected ?? rawAttributes?.audio_detected);
-  if (soundDetected) {
-    const timestampMs = Date.now();
-    pushEvent({
-      id: `live-sound-${timestampMs}`,
-      type: 'sound',
-      title: 'Sound Detection',
-      timestampMs,
-      time: formatClockFromTimestamp(timestampMs) ?? '--:--:--',
     });
   }
 
@@ -234,6 +277,7 @@ function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) 
       title: 'Last Motion',
       timestampMs: lastMotionTimestamp,
       time: formatClockFromTimestamp(lastMotionTimestamp) ?? '--:--:--',
+      source: 'attribute',
     });
   }
   const lastSoundTimestamp = toTimestampMs(
@@ -246,6 +290,7 @@ function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) 
       title: 'Last Sound',
       timestampMs: lastSoundTimestamp,
       time: formatClockFromTimestamp(lastSoundTimestamp) ?? '--:--:--',
+      source: 'attribute',
     });
   }
 
@@ -264,6 +309,72 @@ function buildLiveEventLogs(rawAttributes: Record<string, unknown> | undefined) 
   return deduped
     .sort((left, right) => (right.timestampMs ?? 0) - (left.timestampMs ?? 0))
     .slice(0, 10);
+}
+
+function isActiveCameraHistoryState(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return ['on', 'open', 'detected', 'active', 'triggered', 'pressed', 'ringing', 'motion'].includes(normalized);
+}
+
+export function buildHistoryEventLogs(
+  historyEntries: CameraHistoryEntry[],
+  relatedEntities: CameraRelatedEntityInfo[],
+) {
+  const metadataById = new Map(relatedEntities.map((entity) => [entity.entityId.toLowerCase(), entity]));
+  return historyEntries
+    .map((entry): CameraEvent | null => {
+      const metadata = metadataById.get(entry.entityId.toLowerCase());
+      const domain = metadata?.domain ?? entry.entityId.split('.')[0] ?? '';
+      const isImage = domain === 'image';
+      const isEventEntity = domain === 'event';
+      if (!isImage && !isEventEntity && !isActiveCameraHistoryState(entry.state)) {
+        return null;
+      }
+      const descriptor = `${metadata?.name ?? ''} ${metadata?.deviceClass ?? ''} ${entry.entityId}`;
+      const type = inferEventType(descriptor);
+      const attributes = entry.attributes ?? {};
+      const explicitClipUrl = firstStringValue(attributes, [
+        'clip_url',
+        'video_url',
+        'recording_url',
+        'playback_url',
+        'media_url',
+      ]);
+      const genericUrl = firstStringValue(attributes, ['url']);
+      const clipUrl = explicitClipUrl ?? (genericUrl && isLikelyVideoUrl(genericUrl) ? genericUrl : undefined);
+      const thumbnailUrl = firstStringValue(attributes, [
+        'thumbnail_url',
+        'snapshot_url',
+        'image_url',
+        'entity_picture',
+      ]);
+      return {
+        id: `history-${entry.entityId}-${entry.timestampMs}`,
+        type,
+        title: metadata?.name ?? (type === 'sound' ? 'Suono rilevato' : 'Movimento rilevato'),
+        timestampMs: entry.timestampMs,
+        time: formatClockFromTimestamp(entry.timestampMs) ?? '--:--:--',
+        clipUrl,
+        thumbnailUrl,
+        entityId: entry.entityId,
+        source: 'history',
+      };
+    })
+    .filter((event): event is CameraEvent => event !== null);
+}
+
+export function mergeCameraEvents(...collections: CameraEvent[][]) {
+  const events = collections.flat().sort((left, right) => (right.timestampMs ?? 0) - (left.timestampMs ?? 0));
+  const seen = new Set<string>();
+  return events.filter((event) => {
+    const timestampBucket = Math.round((event.timestampMs ?? 0) / 1000);
+    const signature = `${event.entityId ?? ''}|${event.type}|${timestampBucket}|${event.clipUrl ?? ''}|${event.thumbnailUrl ?? ''}`;
+    if (seen.has(signature)) {
+      return false;
+    }
+    seen.add(signature);
+    return true;
+  }).slice(0, 80);
 }
 
 function appendCacheBuster(url: string, nonce: number) {
@@ -301,28 +412,433 @@ function isLikelyVideoUrl(url: string | undefined) {
   return /\.(mp4|webm|ogg|m3u8)(?:$|[?#])/i.test(url);
 }
 
+function formatRelatedEntityValue(entity: CameraRelatedEntityInfo) {
+  const rawValue = entity.stateLabel ?? entity.state;
+  if (!rawValue) return 'ND';
+  const normalized = rawValue.trim().toLowerCase();
+  const translated =
+    normalized === 'on'
+      ? 'Attivo'
+      : normalized === 'off'
+        ? 'Spento'
+        : normalized === 'unavailable'
+          ? 'Non disponibile'
+          : normalized === 'unknown'
+            ? 'ND'
+            : rawValue;
+  return entity.unit && translated !== 'ND' ? `${translated} ${entity.unit}` : translated;
+}
+
+function normalizeEntityState(value: string | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isRelatedEntityUnavailable(entity: CameraRelatedEntityInfo) {
+  const normalized = normalizeEntityState(entity.state ?? entity.stateLabel);
+  return normalized === 'unavailable' || normalized === 'unknown';
+}
+
+function isRelatedEntityActive(entity: CameraRelatedEntityInfo) {
+  const normalized = normalizeEntityState(entity.state);
+  return ['on', 'open', 'opening', 'playing', 'recording', 'detected', 'active', 'home'].includes(normalized);
+}
+
+function isCameraToggleEntity(entity: CameraRelatedEntityInfo) {
+  return ['switch', 'input_boolean', 'light', 'fan', 'siren'].includes(entity.domain);
+}
+
+function isCameraButtonEntity(entity: CameraRelatedEntityInfo) {
+  return entity.domain === 'button' || entity.domain === 'input_button';
+}
+
+function isCameraSelectEntity(entity: CameraRelatedEntityInfo) {
+  return (entity.domain === 'select' || entity.domain === 'input_select') && Array.isArray(entity.options) && entity.options.length > 0;
+}
+
+function isCameraNumberEntity(entity: CameraRelatedEntityInfo) {
+  return entity.domain === 'number' || entity.domain === 'input_number';
+}
+
+function formatCameraActionLabel(entity: CameraRelatedEntityInfo) {
+  if (isCameraButtonEntity(entity)) {
+    return 'Esegui';
+  }
+  if (!isCameraToggleEntity(entity)) {
+    return 'Gestisci';
+  }
+  const active = isRelatedEntityActive(entity);
+  if (entity.domain === 'siren') {
+    return active ? 'Spegni sirena' : 'Attiva sirena';
+  }
+  return active ? 'Disattiva' : 'Attiva';
+}
+
+function formatEntityKind(entity: CameraRelatedEntityInfo) {
+  const deviceClass = entity.deviceClass?.replaceAll('_', ' ').trim();
+  if (deviceClass) {
+    return deviceClass.charAt(0).toUpperCase() + deviceClass.slice(1);
+  }
+  const labels: Record<string, string> = {
+    binary_sensor: 'Sensore',
+    sensor: 'Informazione',
+    switch: 'Interruttore',
+    input_boolean: 'Interruttore',
+    light: 'Luce',
+    fan: 'Ventola',
+    siren: 'Sirena',
+    button: 'Azione',
+    input_button: 'Azione',
+    select: 'Scelta',
+    input_select: 'Scelta',
+    number: 'Regolazione',
+    input_number: 'Regolazione',
+  };
+  return labels[entity.domain] ?? 'Entità associata';
+}
+
+function CameraAppleSwitch({
+  checked,
+  disabled,
+  busy,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  busy: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <GlassToggle
+      checked={checked}
+      label={label}
+      disabled={disabled}
+      busy={busy}
+      onChange={() => onChange()}
+      size="compact"
+      tone="accent"
+    />
+  );
+}
+
+function RelatedEntityGrid({
+  title,
+  entities,
+  kind,
+}: {
+  title: string;
+  entities: CameraRelatedEntityInfo[];
+  kind: 'detection' | 'diagnostic';
+}) {
+  if (entities.length === 0) {
+    return null;
+  }
+  const SectionIcon = kind === 'detection' ? Eye : Activity;
+
+  return (
+    <section className="mb-1">
+      <div className="mb-2.5 flex items-end justify-between gap-3 px-1">
+        <div>
+          <p className="text-[13px] font-semibold text-[color:var(--ui-text-primary)]">{title}</p>
+          <p className="mt-0.5 text-[10px] font-medium text-[color:var(--ui-text-secondary)]">
+            {kind === 'detection' ? 'Eventi rilevati dal dispositivo' : 'Stato e integrità della camera'}
+          </p>
+        </div>
+        <span className="text-[10px] font-semibold tabular-nums text-[color:var(--ui-text-secondary)]">{entities.length}</span>
+      </div>
+      <div className="space-y-2">
+        {entities.slice(0, 8).map((entity) => {
+          const active = isRelatedEntityActive(entity);
+          const unavailable = isRelatedEntityUnavailable(entity);
+          return (
+            <div
+              key={entity.entityId}
+              className={`flex min-w-0 items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
+                active
+                  ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.14)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                  : 'bg-[color:var(--ui-fill-tertiary)] hover:bg-[color:var(--ui-fill-secondary)]'
+              }`}
+            >
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
+                  active
+                    ? 'border-[color:rgb(var(--ui-accent-rgb)/0.38)] bg-[color:rgb(var(--ui-accent-rgb)/0.16)] text-[color:rgb(var(--ui-accent-rgb)/0.95)]'
+                    : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
+                }`}
+              >
+                <SectionIcon size={14} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-[color:var(--ui-text-primary)]">{entity.name}</span>
+                <span className="mt-0.5 block truncate text-[10px] text-[color:var(--ui-text-secondary)]">{formatEntityKind(entity)}</span>
+              </span>
+              <span className={`max-w-[38%] truncate text-right text-[11px] font-semibold ${unavailable ? 'text-[color:var(--ui-text-secondary)]' : active ? 'text-[color:rgb(var(--ui-accent-rgb)/0.95)]' : 'text-[color:var(--ui-text-primary)]'}`}>
+                {formatRelatedEntityValue(entity)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CameraNumberEntityControl({
+  entity,
+  busy,
+  disabled,
+  onAction,
+}: {
+  entity: CameraRelatedEntityInfo;
+  busy: boolean;
+  disabled: boolean;
+  onAction: (request: CameraRelatedEntityActionRequest) => void;
+}) {
+  const initialValue = isFiniteNumber(entity.numericValue)
+    ? entity.numericValue
+    : Number.isFinite(Number.parseFloat(entity.state ?? ''))
+      ? Number.parseFloat(entity.state ?? '')
+      : entity.min ?? 0;
+  const [draftValue, setDraftValue] = useState(initialValue);
+
+  useEffect(() => {
+    setDraftValue(initialValue);
+  }, [initialValue]);
+
+  const min = isFiniteNumber(entity.min) ? entity.min : undefined;
+  const max = isFiniteNumber(entity.max) ? entity.max : undefined;
+  const step = isFiniteNumber(entity.step) && entity.step ? entity.step : 1;
+  const canUseRange = min !== undefined && max !== undefined && max > min;
+  const commitValue = () => {
+    if (!disabled && !busy && Number.isFinite(draftValue)) {
+      onAction({ entity, action: 'set_value', value: draftValue });
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      {canUseRange ? (
+        <div className="flex items-center gap-3">
+          <GlassSlider
+            min={min}
+            max={max}
+            step={step}
+            value={draftValue}
+            disabled={disabled || busy}
+            onChange={(event) => setDraftValue(Number.parseFloat(event.target.value))}
+            onPointerUp={commitValue}
+            onKeyUp={commitValue}
+            aria-label={entity.name}
+            className="min-w-0 flex-1"
+          />
+          <span className="min-w-[3.5rem] text-right text-[11px] font-semibold tabular-nums text-[color:var(--ui-text-primary)]">
+            {Number.isFinite(draftValue) ? `${draftValue}${entity.unit ? ` ${entity.unit}` : ''}` : 'ND'}
+          </span>
+        </div>
+      ) : (
+        <input
+          type="number"
+          step={step}
+          value={draftValue}
+          disabled={disabled || busy}
+          onChange={(event) => setDraftValue(Number.parseFloat(event.target.value))}
+          onBlur={commitValue}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              commitValue();
+              event.currentTarget.blur();
+            }
+          }}
+          className="w-full rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] px-3 py-2 text-xs font-semibold text-[color:var(--ui-text-primary)] outline-none focus:border-[color:rgb(var(--ui-accent-rgb)/0.55)]"
+        />
+      )}
+    </div>
+  );
+}
+
+function RelatedEntityControlList({
+  title,
+  entities,
+  busyEntityId,
+  onAction,
+}: {
+  title: string;
+  entities: CameraRelatedEntityInfo[];
+  busyEntityId: string | null;
+  onAction: (request: CameraRelatedEntityActionRequest) => void;
+}) {
+  if (entities.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mb-1">
+      <div className="mb-2.5 flex items-end justify-between gap-3 px-1">
+        <div>
+          <p className="text-[13px] font-semibold text-[color:var(--ui-text-primary)]">{title}</p>
+          <p className="mt-0.5 text-[10px] font-medium text-[color:var(--ui-text-secondary)]">Funzioni esposte da Home Assistant</p>
+        </div>
+        <span className="text-[10px] font-semibold tabular-nums text-[color:var(--ui-text-secondary)]">{entities.length}</span>
+      </div>
+      <div className="space-y-2">
+        {entities.slice(0, 10).map((entity) => {
+          const busy = busyEntityId === entity.entityId;
+          const unavailable = isRelatedEntityUnavailable(entity);
+          const active = isRelatedEntityActive(entity);
+          const canToggle = isCameraToggleEntity(entity);
+          const canPress = isCameraButtonEntity(entity);
+          const canSelect = isCameraSelectEntity(entity);
+          const canSetNumber = isCameraNumberEntity(entity);
+          const selectOptions: GlassDropdownOption[] = (entity.options ?? []).map((option) => ({ id: option, name: option }));
+          const selectedOption = selectOptions.find((option) => option.id === entity.state) ?? selectOptions[0] ?? null;
+          return (
+            <div
+              key={entity.entityId}
+              className={`rounded-2xl px-4 py-3 transition-all duration-200 ${
+                active
+                  ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.14)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                  : 'bg-[color:var(--ui-fill-tertiary)] hover:bg-[color:var(--ui-fill-secondary)]'
+              }`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${
+                    active
+                      ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.18)] text-[color:var(--ui-accent)]'
+                      : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]'
+                  }`}
+                >
+                  {canPress ? (
+                    <MousePointerClick size={15} />
+                  ) : canSelect || canSetNumber ? (
+                    <SlidersHorizontal size={15} />
+                  ) : (
+                    <Power size={15} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-[color:var(--ui-text-primary)]">{entity.name}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-[color:var(--ui-text-secondary)]">
+                    {canSelect ? 'Seleziona un valore' : canSetNumber ? 'Regola il valore' : formatEntityKind(entity)}
+                  </p>
+                </div>
+                {canToggle ? (
+                  <CameraAppleSwitch
+                    checked={active}
+                    disabled={unavailable}
+                    busy={busy}
+                    label={`${entity.name}: ${active ? 'attivo' : 'disattivo'}`}
+                    onChange={() => onAction({ entity, action: 'toggle' })}
+                  />
+                ) : canPress ? (
+                  <button
+                    type="button"
+                    disabled={unavailable || busy}
+                    onClick={() => onAction({ entity, action: 'press' })}
+                    className="inline-flex min-w-[68px] items-center justify-center gap-1.5 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-strong)] px-3 py-1.5 text-[11px] font-semibold text-[color:rgb(var(--ui-accent-rgb)/0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {busy ? <Loader2 size={12} className="animate-spin" /> : null}
+                    Esegui
+                  </button>
+                ) : canSelect ? (
+                  <GlassDropdown
+                    ariaLabel={entity.name}
+                    options={selectOptions}
+                    selected={selectedOption}
+                    disabled={unavailable || busy}
+                    onChange={(option) => onAction({ entity, action: 'select', value: option.id })}
+                    size="compact"
+                    className="max-w-[46%] shrink-0"
+                    buttonClassName="text-[color:rgb(var(--ui-accent-rgb)/0.96)]"
+                  />
+                ) : null}
+              </div>
+
+              {canSetNumber ? (
+                <CameraNumberEntityControl
+                  entity={entity}
+                  busy={busy}
+                  disabled={unavailable}
+                  onAction={onAction}
+                />
+              ) : null}
+
+              {!canToggle && !canPress && !canSelect && !canSetNumber ? (
+                <p className="mt-2 text-[10px] text-[color:var(--ui-text-secondary)]">Entità collegata ma non controllabile da qui.</p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function TimelineSelector({
   value,
   items,
   onChange,
+  days,
+  selectedDay,
+  onDayChange,
+  loading,
+  onRefresh,
 }: {
   value: string;
   items: TimelineItem[];
   onChange: (next: string) => void;
+  days: CameraEventDay[];
+  selectedDay: string;
+  onDayChange: (next: string) => void;
+  loading: boolean;
+  onRefresh?: () => void;
 }) {
-  const dayLabel = useMemo(
-    () => new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(new Date()),
-    [],
-  );
-  const columnCount = Math.min(4, Math.max(1, items.length));
-
   return (
     <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
-      <p className="text-center text-sm text-gray-300 font-medium">{dayLabel}</p>
-      <div
-        className="mt-4 grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
-      >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Cronologia</p>
+          <p className="mt-0.5 text-[10px] font-medium text-[color:var(--ui-text-tertiary)]">Ultime 24 ore</p>
+        </div>
+        {onRefresh ? (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="glass-button flex h-8 w-8 items-center justify-center rounded-full text-[color:var(--ui-text-secondary)] transition disabled:opacity-45"
+            aria-label="Aggiorna cronologia"
+            title="Aggiorna cronologia"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+        ) : null}
+      </div>
+
+      {days.length > 1 ? (
+        <div className="mt-3 flex max-w-full gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {days.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              onClick={() => onDayChange(day.key)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-semibold transition ${
+                selectedDay === day.key
+                  ? 'liquid-glass-selection text-[color:var(--ui-text-primary)]'
+                  : 'text-[color:var(--ui-text-tertiary)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]'
+              }`}
+            >
+              {day.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex max-w-full gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((item) => {
           const isActive = value === item.id;
           return (
@@ -330,15 +846,23 @@ function TimelineSelector({
               key={item.id}
               type="button"
               onClick={() => onChange(item.id)}
-              className="rounded-xl py-2 px-1 flex flex-col items-center gap-1 text-center"
+              className={`flex min-w-[4.25rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition ${
+                isActive ? 'bg-[color:var(--ui-fill-primary)]' : 'hover:bg-[color:var(--ui-fill-tertiary)]'
+              }`}
               aria-label={`Seleziona orario ${item.label}`}
             >
-              <span className={`text-xs font-medium ${isActive ? 'text-white' : 'text-gray-500'}`}>
+              <span className={`text-xs font-medium ${isActive ? 'text-[color:var(--ui-text-primary)]' : 'text-[color:var(--ui-text-tertiary)]'}`}>
                 {item.label}
               </span>
               <span
                 className={`h-1 w-8 rounded-full transition-colors ${
-                  isActive ? 'bg-[#3b82f6]' : item.hasClip ? 'bg-cyan-300/55' : 'bg-transparent'
+                  isActive
+                    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.92)]'
+                    : item.hasClip
+                      ? 'bg-cyan-300/55'
+                      : item.hasSnapshot
+                        ? 'bg-[color:var(--ui-text-tertiary)]'
+                        : 'bg-transparent'
                 }`}
               />
             </button>
@@ -359,11 +883,14 @@ function EventRow({
   onPlay?: () => void;
 }) {
   const isSound = event.type === 'sound';
-  const hasClip = Boolean(event.clipUrl || event.thumbnailUrl);
+  const hasClip = Boolean(event.clipUrl);
+  const hasSnapshot = Boolean(event.thumbnailUrl);
+  const hasMedia = hasClip || hasSnapshot;
+  const EventIcon = event.type === 'vehicle' ? CarFront : event.type === 'doorbell' ? BellRing : event.type === 'sound' ? Volume2 : PersonStanding;
   return (
     <div
-      className={`rounded-2xl border p-3 flex items-center gap-4 transition-colors ${
-        isActive ? 'bg-white/12 border-blue-300/35' : 'bg-white/5 border-white/10'
+      className={`flex items-center gap-4 rounded-2xl border p-3 transition-colors ${
+        isActive ? 'border-[color:rgb(var(--ui-accent-rgb)/0.38)] bg-[color:rgb(var(--ui-accent-rgb)/0.12)]' : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)]'
       }`}
     >
       <span
@@ -373,142 +900,54 @@ function EventRow({
             : 'bg-cyan-500/20 border-cyan-400/35 text-cyan-200'
         }`}
       >
-        {isSound ? <Volume2 size={18} /> : <PersonStanding size={18} />}
+        <EventIcon size={18} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-white truncate">{event.title}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{event.time}</p>
+        <p className="truncate text-sm font-medium text-[color:var(--ui-text-primary)]">{event.title}</p>
+        <p className="mt-0.5 text-xs text-[color:var(--ui-text-tertiary)]">{event.time}</p>
       </div>
       <button
         type="button"
         className={`w-10 h-10 rounded-full border flex items-center justify-center transition-colors ${
-          hasClip
-            ? 'bg-white/10 border-white/15 text-white hover:bg-white/15'
-            : 'bg-white/5 border-white/8 text-white/40 cursor-not-allowed'
+          hasMedia
+            ? 'border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-secondary)] text-[color:var(--ui-text-primary)] hover:bg-[color:var(--ui-fill-primary)]'
+            : 'cursor-not-allowed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-disabled)]'
         }`}
-        aria-label={`Riproduci clip ${event.time}`}
+        aria-label={`${hasClip ? 'Riproduci clip' : 'Apri snapshot'} ${event.time}`}
         onClick={onPlay}
-        disabled={!hasClip}
+        disabled={!hasMedia}
       >
-        <Play size={15} className="ml-0.5" />
+        {hasClip ? <Play size={15} className="ml-0.5" /> : <Eye size={15} />}
       </button>
-    </div>
-  );
-}
-
-function QuickActionButton({
-  icon,
-  label,
-  active = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className={`w-16 h-16 rounded-full border flex items-center justify-center transition-colors ${
-        active
-          ? 'bg-[#3b82f6] border-[#60a5fa] text-white shadow-[0_10px_24px_rgba(59,130,246,0.35)]'
-          : 'bg-white/10 border-white/15 text-white/90 hover:bg-white/15'
-      }`}
-      aria-label={label}
-      title={label}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function PtzJoystick({
-  activeDirection,
-  onDirectionStart,
-  onDirectionStop,
-}: {
-  activeDirection: CameraPtzDirection | null;
-  onDirectionStart: (direction: CameraPtzDirection) => void;
-  onDirectionStop: () => void;
-}) {
-  const bindDirection = (direction: CameraPtzDirection) => ({
-    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      onDirectionStart(direction);
-    },
-    onPointerUp: onDirectionStop,
-    onPointerLeave: (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.buttons === 0) {
-        onDirectionStop();
-      }
-    },
-    onPointerCancel: onDirectionStop,
-    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault(),
-  });
-
-  const buttonClass = (direction: CameraPtzDirection) =>
-    `h-12 w-12 rounded-xl border flex items-center justify-center transition-colors ${
-      activeDirection === direction
-        ? 'bg-blue-500/28 border-blue-300/40 text-blue-100'
-        : 'bg-white/10 border-white/12 text-white hover:bg-white/16'
-    }`;
-
-  return (
-    <div className="w-full flex items-center justify-center">
-      <div className="grid grid-cols-3 gap-2">
-        <button type="button" className={buttonClass('up_left')} aria-label="PTZ in alto a sinistra" {...bindDirection('up_left')}>
-          <ArrowUpLeft size={16} />
-        </button>
-        <button type="button" className={buttonClass('up')} aria-label="PTZ in alto" {...bindDirection('up')}>
-          <ArrowUp size={16} />
-        </button>
-        <button type="button" className={buttonClass('up_right')} aria-label="PTZ in alto a destra" {...bindDirection('up_right')}>
-          <ArrowUpRight size={16} />
-        </button>
-
-        <button type="button" className={buttonClass('left')} aria-label="PTZ a sinistra" {...bindDirection('left')}>
-          <ArrowLeft size={16} />
-        </button>
-        <button
-          type="button"
-          className="h-12 w-12 rounded-xl border border-white/12 bg-rose-500/16 text-rose-100 hover:bg-rose-500/22 flex items-center justify-center transition-colors"
-          aria-label="Ferma movimento PTZ"
-          onClick={onDirectionStop}
-        >
-          <Square size={14} />
-        </button>
-        <button type="button" className={buttonClass('right')} aria-label="PTZ a destra" {...bindDirection('right')}>
-          <ArrowRight size={16} />
-        </button>
-
-        <button type="button" className={buttonClass('down_left')} aria-label="PTZ in basso a sinistra" {...bindDirection('down_left')}>
-          <ArrowDownLeft size={16} />
-        </button>
-        <button type="button" className={buttonClass('down')} aria-label="PTZ in basso" {...bindDirection('down')}>
-          <ArrowDown size={16} />
-        </button>
-        <button type="button" className={buttonClass('down_right')} aria-label="PTZ in basso a destra" {...bindDirection('down_right')}>
-          <ArrowDownRight size={16} />
-        </button>
-      </div>
     </div>
   );
 }
 
 export function CameraControlsPanel({
   name,
+  status,
   entityId,
   streamUrl,
   snapshotUrl,
   isOffline = false,
   rawAttributes,
   supportsPtz = false,
+  deviceInfo,
+  relatedEntities = [],
+  historyEntries = [],
+  historyStatus = 'idle',
+  historyError,
+  onRefreshHistory,
   onPtzMove,
   onPtzStop,
+  onRelatedEntityAction,
+  onSecondaryPageChange,
+  commandsEnabled = true,
 }: CameraControlsProps) {
-  const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const clipVideoRef = useRef<HTMLVideoElement | null>(null);
   const refreshResetTimeoutRef = useRef<number | null>(null);
   const [selectedTimelineId, setSelectedTimelineId] = useState('');
+  const [selectedEventDay, setSelectedEventDay] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isClipMode, setIsClipMode] = useState(false);
   const [streamFailed, setStreamFailed] = useState(false);
@@ -518,6 +957,18 @@ export function CameraControlsPanel({
   const [isSnapshotBusy, setIsSnapshotBusy] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [activePtzDirection, setActivePtzDirection] = useState<CameraPtzDirection | null>(null);
+  const [relatedActionBusyId, setRelatedActionBusyId] = useState<string | null>(null);
+  const [settingsPageOpen, setSettingsPageOpen] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(true);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(true);
+  const [isPtzVisible, setIsPtzVisible] = useState(false);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [activeImageFailed, setActiveImageFailed] = useState(false);
+
+  useEffect(() => {
+    onSecondaryPageChange?.(settingsPageOpen);
+    return () => onSecondaryPageChange?.(false);
+  }, [onSecondaryPageChange, settingsPageOpen]);
 
   useEffect(() => {
     setStreamFailed(false);
@@ -564,33 +1015,102 @@ export function CameraControlsPanel({
   const liveVisualUrl = streamFailed ? fallbackVisual ?? '' : resolvedStreamUrl ?? fallbackVisual ?? '';
   const hasLiveVisual = liveVisualUrl.length > 0;
   const snapshotCaptureUrl = cameraProxySnapshotUrl ?? fallbackVisual ?? (hasLiveVisual ? liveVisualUrl : undefined);
-  const subtitle = isOffline ? 'Disconnesso' : 'Connesso';
+  const subtitle = isOffline ? 'Disconnesso' : status?.trim() || 'Connesso';
   const subtitleClass = isOffline ? 'text-rose-200/90' : 'text-emerald-200/90';
+  const detectionEntities = useMemo(
+    () => relatedEntities.filter((entity) => entity.category === 'detection'),
+    [relatedEntities],
+  );
+  const diagnosticEntities = useMemo(
+    () => relatedEntities.filter((entity) => entity.category === 'diagnostic'),
+    [relatedEntities],
+  );
+  const controlEntities = useMemo(
+    () => relatedEntities.filter((entity) => entity.category === 'control' || entity.category === 'action'),
+    [relatedEntities],
+  );
+  const settingsEntityCount = controlEntities.length + detectionEntities.length + diagnosticEntities.length;
+  const settingsSummary =
+    settingsEntityCount > 0
+      ? `${settingsEntityCount} entità collegate`
+      : 'Nessun controllo secondario disponibile';
+  const hasDeviceMetadata = Boolean(
+    deviceInfo?.manufacturer ||
+      deviceInfo?.model ||
+      deviceInfo?.swVersion ||
+      deviceInfo?.hwVersion ||
+      deviceInfo?.configurationUrl ||
+      relatedEntities.length > 0,
+  );
+  const deviceSummary =
+    [deviceInfo?.manufacturer, deviceInfo?.model].filter(Boolean).join(' • ') ||
+    deviceInfo?.name ||
+    'ND';
+  const deviceDetail = [
+    deviceInfo?.swVersion ? `FW ${deviceInfo.swVersion}` : undefined,
+    deviceInfo?.hwVersion ? `HW ${deviceInfo.hwVersion}` : undefined,
+    relatedEntities.length > 0 ? `${relatedEntities.length} entità` : undefined,
+  ]
+    .filter((entry): entry is string => Boolean(entry))
+    .join(' • ');
 
-  const eventLogs = useMemo(() => {
-    const liveEvents = buildLiveEventLogs(rawAttributes);
-    return liveEvents.length > 0 ? liveEvents : FALLBACK_EVENT_LOGS;
-  }, [rawAttributes]);
+  useEffect(() => {
+    if (settingsEntityCount === 0) {
+      setSettingsPageOpen(false);
+    }
+  }, [settingsEntityCount]);
+
+  const eventLogs = useMemo(
+    () => mergeCameraEvents(
+      buildHistoryEventLogs(historyEntries, relatedEntities),
+      buildLiveEventLogs(rawAttributes),
+    ),
+    [historyEntries, rawAttributes, relatedEntities],
+  );
 
   const clipEvents = useMemo(
-    () => eventLogs.filter((event) => Boolean(event.clipUrl || event.thumbnailUrl)),
+    () => eventLogs.filter((event) => Boolean(event.clipUrl)),
     [eventLogs],
   );
 
+  const eventDays = useMemo<CameraEventDay[]>(() => {
+    const seen = new Set<string>();
+    return eventLogs.reduce<CameraEventDay[]>((days, event) => {
+      const key = formatEventDayKey(event.timestampMs);
+      if (seen.has(key)) return days;
+      seen.add(key);
+      days.push({ key, label: formatEventDayLabel(event.timestampMs) });
+      return days;
+    }, []);
+  }, [eventLogs]);
+
+  useEffect(() => {
+    if (eventDays.length === 0) {
+      setSelectedEventDay('');
+      return;
+    }
+    if (!eventDays.some((day) => day.key === selectedEventDay)) {
+      setSelectedEventDay(eventDays[0].key);
+    }
+  }, [eventDays, selectedEventDay]);
+
+  const visibleEventLogs = useMemo(
+    () => eventLogs.filter((event) => !selectedEventDay || formatEventDayKey(event.timestampMs) === selectedEventDay),
+    [eventLogs, selectedEventDay],
+  );
+
   const timelineItems = useMemo<TimelineItem[]>(() => {
-    if (eventLogs.length > 0) {
-      return eventLogs.slice(0, 4).map((event) => ({
+    if (visibleEventLogs.length > 0) {
+      return visibleEventLogs.slice(0, 12).map((event) => ({
         id: event.id,
         label: event.time,
-        hasClip: Boolean(event.clipUrl || event.thumbnailUrl),
+        hasClip: Boolean(event.clipUrl),
+        hasSnapshot: Boolean(event.thumbnailUrl),
+        timestampMs: event.timestampMs,
       }));
     }
-    return FALLBACK_TIMELINE_TIMES.map((time) => ({
-      id: `fallback-${time}`,
-      label: time,
-      hasClip: false,
-    }));
-  }, [eventLogs]);
+    return [];
+  }, [visibleEventLogs]);
 
   useEffect(() => {
     if (!timelineItems.length) {
@@ -624,21 +1144,33 @@ export function CameraControlsPanel({
 
   const showClipVisual = isClipMode && Boolean(activeClipUrl) && !clipFailed;
   const activeVisualUrl = showClipVisual ? activeClipUrl ?? '' : liveVisualUrl;
-  const hasActiveVisual = activeVisualUrl.length > 0;
-  const activeVisualIsVideo = showClipVisual && isLikelyVideoUrl(activeClipUrl);
+  const hasActiveVisual = activeVisualUrl.length > 0 && !activeImageFailed;
+  const activeVisualIsVideo = showClipVisual && Boolean(selectedClipEvent?.clipUrl);
+  const showingSnapshot = showClipVisual && !activeVisualIsVideo;
   const canTakeSnapshot = Boolean(snapshotCaptureUrl) && !isSnapshotBusy;
-  const canUsePtz = supportsPtz && typeof onPtzMove === 'function';
+  const canUsePtz = commandsEnabled && supportsPtz && typeof onPtzMove === 'function';
+  const previewIsPlaying = showClipVisual ? (activeVisualIsVideo ? isPlaying : true) : isPreviewPlaying;
+
+  useEffect(() => {
+    setActiveImageFailed(false);
+  }, [activeVisualUrl]);
+
+  useEffect(() => {
+    if (!canUsePtz) {
+      setIsPtzVisible(false);
+    }
+  }, [canUsePtz]);
 
   useEffect(() => {
     if (!showClipVisual || !activeVisualIsVideo || !clipVideoRef.current) {
       return;
     }
-    if (isPlaying) {
+    if (previewIsPlaying) {
       void clipVideoRef.current.play().catch(() => undefined);
       return;
     }
     clipVideoRef.current.pause();
-  }, [activeVisualIsVideo, isPlaying, showClipVisual]);
+  }, [activeVisualIsVideo, previewIsPlaying, showClipVisual]);
 
   const refreshStream = () => {
     setStreamFailed(false);
@@ -653,42 +1185,6 @@ export function CameraControlsPanel({
       setIsRefreshing(false);
       refreshResetTimeoutRef.current = null;
     }, 800);
-  };
-
-  const toggleFullscreen = async () => {
-    const target = previewContainerRef.current;
-    if (!target) {
-      return;
-    }
-    const anyTarget = target as HTMLElement & {
-      webkitRequestFullscreen?: () => Promise<void> | void;
-      msRequestFullscreen?: () => Promise<void> | void;
-    };
-    const anyDocument = document as Document & {
-      webkitExitFullscreen?: () => Promise<void> | void;
-      msExitFullscreen?: () => Promise<void> | void;
-    };
-    try {
-      if (document.fullscreenElement) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if (anyDocument.webkitExitFullscreen) {
-          await anyDocument.webkitExitFullscreen();
-        } else if (anyDocument.msExitFullscreen) {
-          await anyDocument.msExitFullscreen();
-        }
-        return;
-      }
-      if (target.requestFullscreen) {
-        await target.requestFullscreen();
-      } else if (anyTarget.webkitRequestFullscreen) {
-        await anyTarget.webkitRequestFullscreen();
-      } else if (anyTarget.msRequestFullscreen) {
-        await anyTarget.msRequestFullscreen();
-      }
-    } catch {
-      setActionFeedback('Fullscreen non disponibile');
-    }
   };
 
   const captureSnapshot = async () => {
@@ -732,7 +1228,7 @@ export function CameraControlsPanel({
     }
     if (event.clipUrl || event.thumbnailUrl) {
       setIsClipMode(true);
-      setIsPlaying(true);
+      setIsPlaying(Boolean(event.clipUrl));
       setClipFailed(false);
       return;
     }
@@ -768,6 +1264,19 @@ export function CameraControlsPanel({
     setIsPlaying((value) => !value);
   };
 
+  const togglePreviewPlayback = () => {
+    if (showingSnapshot) {
+      setIsClipMode(false);
+      setIsPlaying(false);
+      return;
+    }
+    if (showClipVisual) {
+      toggleClipPlayback();
+      return;
+    }
+    setIsPreviewPlaying((value) => !value);
+  };
+
   const startPtz = (direction: CameraPtzDirection) => {
     if (!canUsePtz || !onPtzMove) {
       return;
@@ -784,6 +1293,29 @@ export function CameraControlsPanel({
     onPtzStop?.();
   };
 
+  const runRelatedEntityAction = async (request: CameraRelatedEntityActionRequest) => {
+    if (!onRelatedEntityAction) {
+      setActionFeedback('Controllo non disponibile');
+      return;
+    }
+    if (relatedActionBusyId) {
+      return;
+    }
+    setRelatedActionBusyId(request.entity.entityId);
+    try {
+      const success = await onRelatedEntityAction(request);
+      if (success === false) {
+        setActionFeedback(`Comando non riuscito: ${request.entity.name}`);
+        return;
+      }
+      setActionFeedback(`Comando inviato: ${request.entity.name}`);
+    } catch {
+      setActionFeedback(`Errore comando: ${request.entity.name}`);
+    } finally {
+      setRelatedActionBusyId(null);
+    }
+  };
+
   useEffect(
     () => () => {
       if (activePtzDirection !== null) {
@@ -793,8 +1325,70 @@ export function CameraControlsPanel({
     [activePtzDirection, onPtzStop],
   );
 
+  if (settingsPageOpen) {
+    return (
+      <ContextSecondaryPage
+        title="Impostazioni camera"
+        subtitle={`Controlli associati a ${name}`}
+        backLabel="Camera"
+        icon={<Settings2 size={18} />}
+        iconClassName="text-cyan-200"
+        onBack={() => setSettingsPageOpen(false)}
+      >
+        {controlEntities.length > 0 ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <RelatedEntityControlList
+              title="Controlli"
+              entities={controlEntities}
+              busyEntityId={relatedActionBusyId}
+              onAction={(request) => {
+                void runRelatedEntityAction(request);
+              }}
+            />
+          </div>
+        ) : null}
+
+        {detectionEntities.length > 0 ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <RelatedEntityGrid title="Rilevamenti" kind="detection" entities={detectionEntities} />
+          </div>
+        ) : null}
+
+        {diagnosticEntities.length > 0 ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <RelatedEntityGrid title="Diagnostica" kind="diagnostic" entities={diagnosticEntities} />
+          </div>
+        ) : null}
+
+        {hasDeviceMetadata ? (
+          <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Informazioni</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <span className="text-[color:var(--ui-text-tertiary)]">Stato</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{isOffline ? 'Non raggiungibile' : 'Online'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Produttore</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{deviceInfo?.manufacturer ?? 'N/D'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Modello</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{deviceInfo?.model ?? 'N/D'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Firmware</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{deviceInfo?.swVersion ?? 'N/D'}</span>
+              <span className="text-[color:var(--ui-text-tertiary)]">Hardware</span><span className="text-right font-semibold text-[color:var(--ui-text-secondary)]">{deviceInfo?.hwVersion ?? 'N/D'}</span>
+            </div>
+            {relatedEntities.length > 0 ? (
+              <details className="mt-3 border-t border-[color:var(--ui-separator)] pt-3">
+                <summary className="cursor-pointer list-none text-xs font-semibold text-cyan-200/78 [&::-webkit-details-marker]:hidden">
+                  {relatedEntities.length} entità associate
+                </summary>
+                <div className="mt-2 space-y-1.5">
+                  {relatedEntities.map((entity) => <p key={entity.entityId} className="break-all text-[10px] leading-snug text-[color:var(--ui-text-tertiary)]">{entity.entityId}</p>)}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+      </ContextSecondaryPage>
+    );
+  }
+
   return (
-    <div className={CONTEXT_PANEL_LAYOUT.shell}>
+    <>
+    <div className={`${CONTEXT_PANEL_LAYOUT.shell} relative`}>
       <ContextPanelHeader
         title={name}
         subtitle={subtitle}
@@ -803,19 +1397,16 @@ export function CameraControlsPanel({
         subtitleClassName={subtitleClass}
       />
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
-        <div
-          ref={previewContainerRef}
-          className="relative aspect-video rounded-3xl overflow-hidden bg-black/40 border border-white/10"
-        >
+      <div className="mb-1 overflow-hidden rounded-[clamp(1.25rem,4.6vw,2rem)] bg-black/40 shadow-[0_16px_38px_rgba(0,0,0,0.18)]">
+        <div className="relative aspect-video w-full overflow-hidden bg-black/40">
           {hasActiveVisual ? (
             activeVisualIsVideo ? (
               <video
                 ref={clipVideoRef}
                 src={activeVisualUrl}
                 className="absolute inset-0 h-full w-full object-cover"
-                autoPlay
-                muted
+                autoPlay={previewIsPlaying}
+                muted={isAudioMuted}
                 loop
                 playsInline
                 onError={() => {
@@ -836,7 +1427,9 @@ export function CameraControlsPanel({
                   }
                   if (!streamFailed && fallbackVisual && activeVisualUrl !== fallbackVisual) {
                     setStreamFailed(true);
+                    return;
                   }
+                  setActiveImageFailed(true);
                 }}
               />
             )
@@ -849,118 +1442,81 @@ export function CameraControlsPanel({
             </>
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/45" aria-hidden="true" />
-
-          {showClipVisual ? (
-            <div className="absolute top-3 right-3 z-20 inline-flex items-center gap-2">
-              <span className="rounded-full border border-cyan-300/35 bg-cyan-500/20 px-3 py-1 text-[10px] font-semibold tracking-[0.16em] text-cyan-100">
-                CLIP
+          {!previewIsPlaying ? (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/18 backdrop-blur-[1px]">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/18 bg-black/32 text-white/86 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+                <Play size={20} className="ml-0.5" />
               </span>
-              <button
-                type="button"
-                className="rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[10px] font-semibold tracking-[0.16em] text-white/90 hover:bg-black/55"
-                onClick={() => {
-                  setIsClipMode(false);
-                  setIsPlaying(false);
-                }}
-              >
-                LIVE
-              </button>
             </div>
           ) : null}
-
-          <div className="absolute left-4 bottom-4">
-            <div className="liquid-glass-card flex items-center gap-1.5 rounded-full px-2 py-1.5">
+          <div className="absolute bottom-4 right-4 z-20">
+            <div className="liquid-glass-card flex items-center gap-1.5 rounded-full px-2 py-1.5 shadow-[0_10px_26px_rgba(0,0,0,0.24)]">
               <button
                 type="button"
-                className={`w-8 h-8 rounded-full border text-white flex items-center justify-center transition-colors ${
-                  clipEvents.length > 0
-                    ? 'bg-white/10 border-white/10 hover:bg-white/15'
-                    : 'bg-white/6 border-white/8 opacity-45 cursor-not-allowed'
+                className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                  isAudioMuted
+                    ? 'border-white/10 bg-white/10 text-white/72 hover:bg-white/15'
+                    : 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.22)] text-white'
                 }`}
-                aria-label="Clip precedente"
-                onClick={() => navigateClips(-1)}
-                disabled={clipEvents.length === 0}
+                aria-label={isAudioMuted ? 'Attiva audio' : 'Disattiva audio'}
+                title={isAudioMuted ? 'Attiva audio' : 'Disattiva audio'}
+                onClick={() => setIsAudioMuted((value) => !value)}
               >
-                <SkipBack size={14} />
+                {isAudioMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
+              {canUsePtz ? (
+                <button
+                  type="button"
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                    isPtzVisible
+                      ? 'border-[color:rgb(var(--ui-accent-rgb)/0.42)] bg-[color:rgb(var(--ui-accent-rgb)/0.22)] text-white'
+                      : 'border-white/10 bg-white/10 text-white/72 hover:bg-white/15'
+                  }`}
+                  aria-label={isPtzVisible ? 'Nascondi controllo PTZ' : 'Mostra controllo PTZ'}
+                  title={isPtzVisible ? 'Nascondi PTZ' : 'Mostra PTZ'}
+                  onClick={() => setIsPtzVisible((value) => !value)}
+                >
+                  <SlidersHorizontal size={14} />
+                </button>
+              ) : null}
               <button
                 type="button"
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                  clipEvents.length > 0 ? 'border-[#0A84FF]/40 bg-[#0A84FF]/18 text-blue-50 shadow-[0_0_18px_rgba(10,132,255,0.28)] hover:bg-[#0A84FF]/26' : 'bg-white/20 text-white/60'
-                }`}
-                onClick={toggleClipPlayback}
-                aria-label={isClipMode && isPlaying ? 'Pausa clip' : 'Riproduci clip'}
-                disabled={clipEvents.length === 0}
-              >
-                {isClipMode && isPlaying ? <Pause size={15} /> : <Play size={15} className="ml-0.5" />}
-              </button>
-              <button
-                type="button"
-                className={`w-8 h-8 rounded-full border text-white flex items-center justify-center transition-colors ${
-                  clipEvents.length > 0
-                    ? 'bg-white/10 border-white/10 hover:bg-white/15'
-                    : 'bg-white/6 border-white/8 opacity-45 cursor-not-allowed'
-                }`}
-                aria-label="Clip successiva"
-                onClick={() => navigateClips(1)}
-                disabled={clipEvents.length === 0}
-              >
-                <SkipForward size={14} />
-              </button>
-            </div>
-          </div>
-
-          <div className="absolute right-4 bottom-4">
-            <div className="liquid-glass-card flex items-center gap-1.5 rounded-full px-2 py-1.5">
-              <button
-                type="button"
-                className="w-8 h-8 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center hover:bg-white/15 transition-colors"
-                aria-label="Aggiorna stream"
-                title="Aggiorna stream"
-                onClick={refreshStream}
-              >
-                <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-              </button>
-              <button
-                type="button"
-                className={`w-8 h-8 rounded-full border text-white flex items-center justify-center transition-colors ${
-                  canTakeSnapshot
-                    ? 'bg-white/10 border-white/10 hover:bg-white/15'
-                    : 'bg-white/6 border-white/8 opacity-45 cursor-not-allowed'
-                }`}
-                aria-label="Scatta foto"
-                title="Scatta foto"
-                onClick={captureSnapshot}
-                disabled={!canTakeSnapshot}
-              >
-                <Camera size={14} />
-              </button>
-              <button
-                type="button"
-                className="w-8 h-8 rounded-full bg-white/10 border border-white/10 text-white flex items-center justify-center hover:bg-white/15 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/72 transition-colors hover:bg-white/15"
                 aria-label="Schermo intero"
                 title="Schermo intero"
-                onClick={() => {
-                  void toggleFullscreen();
-                }}
+                onClick={() => setIsViewerOpen(true)}
               >
                 <Expand size={14} />
               </button>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/72 transition-colors hover:bg-white/15"
+                aria-label={showingSnapshot ? 'Torna al live' : previewIsPlaying ? 'Pausa' : 'Riproduci'}
+                title={showingSnapshot ? 'Torna al live' : previewIsPlaying ? 'Pausa' : 'Riproduci'}
+                onClick={togglePreviewPlayback}
+              >
+                {showingSnapshot ? <Webcam size={14} /> : previewIsPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+              </button>
             </div>
           </div>
+
+          {actionFeedback ? (
+            <div className="absolute left-4 right-4 top-[4.15rem] z-30 rounded-2xl border border-white/10 bg-black/32 px-3 py-2 text-center text-[11px] font-medium text-white/76 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
+              {actionFeedback}
+            </div>
+          ) : null}
         </div>
-        {actionFeedback ? <p className="mt-2 px-1 text-[11px] text-white/60">{actionFeedback}</p> : null}
       </div>
 
-      {canUsePtz ? (
+      {canUsePtz && isPtzVisible ? (
         <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.18em] text-white/55">PTZ Joystick</p>
-            <span className="text-[10px] uppercase tracking-[0.16em] rounded-full border border-white/12 bg-white/8 px-2.5 py-1 text-white/70">
-              Hold to move
+            <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--ui-text-secondary)]">Controllo PTZ</p>
+            <span className="rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">
+              Tieni premuto
             </span>
           </div>
-          <PtzJoystick
+          <CameraPtzJoystick
             activeDirection={activePtzDirection}
             onDirectionStart={startPtz}
             onDirectionStop={stopPtz}
@@ -968,30 +1524,132 @@ export function CameraControlsPanel({
         </div>
       ) : null}
 
-      <div className="mb-1">
-        <TimelineSelector value={selectedTimelineId} items={timelineItems} onChange={handleTimelineChange} />
-      </div>
-
-      <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
-        <div className="space-y-3">
-          {eventLogs.map((event) => (
-            <EventRow
-              key={event.id}
-              event={event}
-              isActive={event.id === selectedTimelineId}
-              onPlay={() => handleTimelineChange(event.id)}
-            />
-          ))}
+      {timelineItems.length > 0 ? (
+        <div className="mb-1">
+          <TimelineSelector
+            value={selectedTimelineId}
+            items={timelineItems}
+            onChange={handleTimelineChange}
+            days={eventDays}
+            selectedDay={selectedEventDay}
+            onDayChange={setSelectedEventDay}
+            loading={historyStatus === 'loading' || historyStatus === 'idle'}
+            onRefresh={onRefreshHistory}
+          />
         </div>
-      </div>
+      ) : null}
 
-      <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <QuickActionButton icon={<Mic size={22} />} label="Push to talk" active />
-          <QuickActionButton icon={<AlarmSmoke size={22} />} label="Siren" />
+      {visibleEventLogs.length > 0 ? (
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
+          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+            <p className="text-xs font-semibold text-[color:var(--ui-text-secondary)]">Eventi</p>
+            <span className="text-[10px] font-medium tabular-nums text-[color:var(--ui-text-tertiary)]">{visibleEventLogs.length}</span>
+          </div>
+          <div className="space-y-3">
+            {visibleEventLogs.map((event) => (
+              <EventRow
+                key={event.id}
+                event={event}
+                isActive={event.id === selectedTimelineId}
+                onPlay={() => handleTimelineChange(event.id)}
+              />
+            ))}
+          </div>
+          {historyStatus === 'error' ? (
+            <p className="mt-3 px-1 text-[10px] leading-relaxed text-amber-100/62">
+              {historyError ?? 'Cronologia non disponibile.'} Sono mostrati gli eventi forniti direttamente dalla camera.
+            </p>
+          ) : null}
         </div>
-      </div>
+      ) : (
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
+          <div className="dashboard-content-surface rounded-2xl px-4 py-5 text-center">
+            {historyStatus === 'loading' || historyStatus === 'idle' ? (
+              <GlassLoader
+                size="sm"
+                label="Carico la cronologia"
+                description="Recupero gli eventi delle ultime 24 ore."
+              />
+            ) : historyStatus === 'error' ? (
+              <>
+                <p className="text-sm font-semibold text-[color:var(--ui-text-secondary)]">Cronologia non disponibile</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--ui-text-tertiary)]">{historyError ?? 'Home Assistant non ha restituito gli eventi.'}</p>
+                {onRefreshHistory ? (
+                  <button type="button" onClick={onRefreshHistory} className="glass-button mt-3 rounded-full px-4 py-2 text-[11px] font-semibold text-[color:var(--ui-text-secondary)] transition">
+                    Riprova
+                  </button>
+                ) : null}
+              </>
+            ) : historyStatus === 'offline' ? (
+              <>
+                <p className="text-sm font-semibold text-[color:var(--ui-text-secondary)]">Camera non raggiungibile</p>
+                <p className="mt-1 text-[11px] text-[color:var(--ui-text-tertiary)]">La cronologia tornerà disponibile alla riconnessione.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-[color:var(--ui-text-secondary)]">Nessuna attività recente</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--ui-text-tertiary)]">Non risultano rilevamenti nelle ultime 24 ore.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {settingsEntityCount > 0 ? (
+        <div className={`${CONTEXT_PANEL_LAYOUT.sectionSoft} mb-1`}>
+          <button
+            type="button"
+            onClick={() => setSettingsPageOpen(true)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-2 py-1 text-left transition active:scale-[0.99]"
+            aria-label="Apri impostazioni camera"
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
+                <Settings2 size={17} />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-[color:var(--ui-text-primary)]">Impostazioni camera</span>
+                <span className="mt-0.5 block truncate text-[11px] text-[color:var(--ui-text-tertiary)]">{settingsSummary}</span>
+              </span>
+            </span>
+            <ChevronRight size={17} className="shrink-0 text-[color:var(--ui-text-tertiary)]" />
+          </button>
+        </div>
+      ) : null}
+
+      {hasDeviceMetadata ? (
+        <div className="dashboard-content-surface-soft mb-1 rounded-[clamp(1rem,3vw,1.45rem)] px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block text-[10px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Dispositivo</span>
+              <span className="mt-1 block truncate text-xs font-semibold text-[color:var(--ui-text-secondary)]">{deviceSummary}</span>
+            </span>
+            {deviceDetail ? (
+              <span className="max-w-[45%] truncate text-right text-[10px] font-medium text-[color:var(--ui-text-tertiary)]">{deviceDetail}</span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
+    <CameraViewer
+      isOpen={isViewerOpen}
+      cameras={entityId ? [{
+        entityId,
+        name,
+        statusLabel: subtitle,
+        streamUrl,
+        snapshotUrl,
+        isOffline,
+        supportsPtz: canUsePtz,
+      }] : []}
+      activeEntityId={entityId ?? null}
+      onActiveEntityChange={() => undefined}
+      onClose={() => setIsViewerOpen(false)}
+      commandsEnabled={commandsEnabled && !isOffline}
+      onPtzMove={onPtzMove ? (_entityId, direction) => onPtzMove(direction) : undefined}
+      onPtzStop={onPtzStop ? () => onPtzStop() : undefined}
+    />
+    </>
   );
 }
 

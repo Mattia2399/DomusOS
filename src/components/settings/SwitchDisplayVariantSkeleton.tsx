@@ -13,13 +13,13 @@ export function SwitchDisplayVariantSkeleton({
   disabled,
 }: SwitchDisplayVariantSkeletonProps) {
   const accent = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb)/0.72)]'
-    : disabled ? 'bg-white/10' : 'bg-emerald-300/55';
+    ? 'bg-[color:rgb(var(--ui-accent-rgb)/0.72)]'
+    : disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-emerald-400/70';
   const soft = active
-    ? 'bg-[color:rgb(var(--profile-sheet-accent-rgb-2)/0.28)]'
-    : disabled ? 'bg-white/[0.05]' : 'bg-white/[0.13]';
-  const muted = disabled ? 'bg-white/[0.07]' : 'bg-white/[0.2]';
-  const frame = 'overflow-hidden rounded-[0.82rem] border border-white/10 bg-white/[0.035] p-2';
+    ? 'bg-[color:rgb(var(--ui-accent-secondary-rgb)/0.28)]'
+    : disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-secondary)]';
+  const muted = disabled ? 'bg-[color:var(--ui-fill-tertiary)]' : 'bg-[color:var(--ui-fill-primary)]';
+  const frame = 'dashboard-content-surface-soft overflow-hidden rounded-[0.82rem] p-2';
 
   const header = () => (
     <span className="flex min-w-0 items-center gap-1.5">
@@ -35,7 +35,7 @@ export function SwitchDisplayVariantSkeleton({
   );
 
   const consumption = (
-    <span className="flex min-w-0 flex-col gap-1 rounded-[0.45rem] border border-white/[0.07] bg-white/[0.035] px-1.5 py-1">
+    <span className="flex min-w-0 flex-col gap-1 rounded-[0.45rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-1.5 py-1">
       <span className={`h-1 w-[46%] rounded-full ${soft}`} />
       <span className="flex items-end gap-1">
         <span className={`h-2.5 w-7 rounded-full ${accent}`} />

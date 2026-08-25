@@ -16,11 +16,11 @@
   border-radius: 24px;
   padding: 0;
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ui-surface-glass);
+  border: 1px solid var(--ui-border);
   box-shadow:
-    0 36px 58px rgba(12, 18, 32, 0.3),
-    0 10px 22px rgba(12, 18, 32, 0.18);
+    0 36px 58px var(--ui-shadow),
+    0 10px 22px var(--ui-shadow-soft);
   backdrop-filter: blur(20px);
 }
 
@@ -29,7 +29,7 @@
   position: absolute;
   inset: 1px;
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ui-border);
   pointer-events: none;
   z-index: 4;
 }
@@ -90,19 +90,19 @@
   gap: 10px;
   background:
     radial-gradient(circle at 20% 16%, rgba(75, 99, 255, 0.3), transparent 56%),
-    linear-gradient(145deg, #23263a 0%, #121724 100%);
+    var(--ui-surface-glass-strong);
 }
 
 .ha-camera-card__placeholder-icon {
   width: 34px;
   height: 34px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ui-text-secondary);
 }
 
 .ha-camera-card__placeholder-text {
   max-width: min(85%, 220px);
   text-align: center;
-  color: rgba(231, 238, 252, 0.88);
+  color: var(--ui-text-secondary);
   font-family: "SF Pro Text";
   font-size: 12px;
   line-height: 1.2;

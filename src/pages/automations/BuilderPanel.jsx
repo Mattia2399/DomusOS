@@ -4,6 +4,7 @@ import { ChevronDown, Clock3, Info, Plus, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { IconGlyph } from './IconGlyph';
+import GlassSegmentSelect from '../../components/ui/GlassSegmentSelect';
 
 function cn(...values) {
   return twMerge(clsx(values));
@@ -15,22 +16,22 @@ function NarrativePill({ value, placeholder, onClick }) {
       layout
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/10 px-5 py-2.5 text-white transition-colors hover:bg-white/20"
+      className="inline-flex items-center gap-3 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] px-5 py-2.5 text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-fill-primary)]"
     >
-      {value ? <IconGlyph name={value.icon} size={20} className="text-white/80" /> : null}
-      <span className={cn('text-base lg:text-xl', value ? 'text-white' : 'text-white/65')}>
+      {value ? <IconGlyph name={value.icon} size={20} className="text-[color:var(--ui-text-secondary)]" /> : null}
+      <span className={cn('text-base lg:text-xl', value ? 'text-[color:var(--ui-text-primary)]' : 'text-[color:var(--ui-text-secondary)]')}>
         {value ? value.label : placeholder}
       </span>
-      <ChevronDown size={18} className="text-white/55" />
+      <ChevronDown size={18} className="text-[color:var(--ui-text-tertiary)]" />
     </motion.button>
   );
 }
 
 function SequenceTimerPill({ label, value, onChange, onClear }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-white">
-      <Clock3 size={15} className="text-white/70" />
-      <span className="text-[11px] uppercase tracking-[0.14em] text-white/60">
+    <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] px-4 py-2 text-[color:var(--ui-text-primary)]">
+      <Clock3 size={15} className="text-[color:var(--ui-text-secondary)]" />
+      <span className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--ui-text-secondary)]">
         {label}
       </span>
       <input
@@ -41,13 +42,13 @@ function SequenceTimerPill({ label, value, onChange, onClear }) {
         onChange={(eventInput) =>
           onChange(Math.max(0, Number.parseInt(eventInput.target.value || '0', 10) || 0))
         }
-        className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-sm text-white focus:border-emerald-300/45 focus:outline-none"
+        className="w-20 rounded-lg border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2 py-1 text-sm text-[color:var(--ui-text-primary)] focus:border-emerald-300/45 focus:outline-none"
       />
-      <span className="text-xs text-white/60">s</span>
+      <span className="text-xs text-[color:var(--ui-text-secondary)]">s</span>
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
         aria-label="Rimuovi timer"
       >
         <X size={12} />
@@ -94,23 +95,23 @@ export function BuilderPanel({
   const eventSupportsPersistence =
     event?.triggerType === 'state' || event?.triggerConfig?.trigger === 'state';
   const mainActionButtonClass = cn(
-    'flex-1 rounded-[2rem] border px-8 py-4 text-base font-semibold transition-all bg-white/10 backdrop-blur-2xl',
-    'border-emerald-300/45 text-emerald-100 shadow-[0_0_0_1px_rgba(110,231,183,0.22),0_0_32px_rgba(16,185,129,0.32)] hover:bg-emerald-400/18',
+    'flex-1 rounded-[2rem] border px-8 py-4 text-base font-semibold transition-all bg-[color:var(--ui-fill-secondary)] backdrop-blur-2xl',
+    'border-emerald-300/45 text-[color:var(--ui-success)] shadow-[0_0_0_1px_rgba(110,231,183,0.22),0_0_32px_rgba(16,185,129,0.32)] hover:bg-emerald-400/18',
     'disabled:cursor-not-allowed disabled:opacity-50',
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="relative flex min-h-[360px] flex-col items-start justify-center gap-5 overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-800/40 p-8 lg:p-10 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_24px_64px_rgba(0,0,0,0.4)]">
+      <section className="relative flex min-h-[360px] flex-col items-start justify-center gap-5 overflow-hidden rounded-[2rem] border border-[color:var(--ui-border)] bg-[color:var(--ui-surface-glass-soft)] p-8 lg:p-10 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_24px_64px_rgba(0,0,0,0.4)]">
         <div className="pointer-events-none absolute -left-32 -top-44 h-80 w-80 rounded-full bg-sky-400/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 -right-24 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
 
         <div className="relative z-10 w-full space-y-4">
-          <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/60">
+          <div className="inline-flex rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 py-1 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">
             Motore Causa-Effetto
           </div>
           <div>
-            <label htmlFor="automation-name" className="mb-2 block text-xs uppercase tracking-[0.18em] text-white/45">
+            <label htmlFor="automation-name" className="mb-2 block text-xs uppercase tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
               Nome automazione
             </label>
             <input
@@ -118,13 +119,13 @@ export function BuilderPanel({
               value={automationName}
               onChange={(eventInput) => onAutomationNameChange(eventInput.target.value)}
               placeholder="Es. Sicurezza ingresso serale"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-white placeholder:text-white/35 focus:border-emerald-300/45 focus:outline-none"
+              className="w-full rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-5 py-3 text-[color:var(--ui-text-primary)] placeholder:text-[color:var(--ui-text-disabled)] focus:border-emerald-300/45 focus:outline-none"
             />
           </div>
 
           <div className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-4">
             <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-emerald-100/80">
+              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--ui-success)]">
                 Frase Automazione
               </p>
               <span
@@ -133,18 +134,18 @@ export function BuilderPanel({
                     ? 'Questa automazione viene salvata direttamente su Home Assistant.'
                     : 'Per salvare direttamente su Home Assistant serve una connessione attiva.'
                 }
-                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/12 text-emerald-100/80"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/12 text-[color:var(--ui-success)]"
                 aria-label="Informazioni salvataggio diretto"
               >
                 <Info size={12} />
               </span>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-emerald-50/95">
+            <p className="mt-2 text-sm leading-relaxed text-[color:var(--ui-text-primary)]">
               {narrativePreview}
             </p>
           </div>
           {saveError ? (
-            <p className="rounded-xl border border-rose-300/30 bg-rose-500/12 px-4 py-3 text-sm text-rose-100">
+            <p className="rounded-xl border border-rose-300/30 bg-rose-500/12 px-4 py-3 text-sm text-[color:var(--ui-danger)]">
               {saveError}
             </p>
           ) : null}
@@ -155,7 +156,7 @@ export function BuilderPanel({
           className="relative z-10 flex w-full flex-col gap-4 text-xl font-medium tracking-tight lg:text-3xl"
         >
           <motion.div layout className="flex flex-wrap items-center gap-4">
-            <span className="text-xl font-bold uppercase tracking-widest text-white/40">QUANDO</span>
+            <span className="text-xl font-bold uppercase tracking-widest text-[color:var(--ui-text-tertiary)]">QUANDO</span>
             <NarrativePill value={event} placeholder="[ Seleziona Evento ]" onClick={onOpenEventMenu} />
             {eventSupportsPersistence && eventPersistenceSeconds > 0 ? (
               <SequenceTimerPill
@@ -171,32 +172,32 @@ export function BuilderPanel({
               layout
               type="button"
               onClick={() => onEventPersistenceSecondsChange(30)}
-              className="inline-flex items-center gap-1 text-sm text-white/40 transition-colors hover:text-white"
+              className="inline-flex items-center gap-1 text-sm text-[color:var(--ui-text-tertiary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
             >
               <Plus size={14} />
               Aggiungi "Per almeno..."
             </motion.button>
           ) : null}
           {event?.triggerType === 'time' ? (
-            <motion.div layout className="ml-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-              <label className="block text-xs uppercase tracking-[0.16em] text-white/45">
+            <motion.div layout className="ml-2 rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-4 py-3">
+              <label className="block text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                 Orario
               </label>
               <input
                 type="time"
                 value={eventTime}
                 onChange={(eventInput) => onEventTimeChange(eventInput.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base text-white focus:border-emerald-300/45 focus:outline-none"
+                className="mt-2 w-full rounded-xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 py-2 text-base text-[color:var(--ui-text-primary)] focus:border-emerald-300/45 focus:outline-none"
               />
             </motion.div>
           ) : null}
           {event?.triggerType === 'manual_event' ? (
-            <motion.p layout className="ml-2 text-sm text-white/60">
+            <motion.p layout className="ml-2 text-sm text-[color:var(--ui-text-secondary)]">
               Trigger manuale: puoi avviarla dal pulsante "Esegui" e da qualsiasi bottone dashboard collegato.
             </motion.p>
           ) : null}
           {event?.triggerConfig?.trigger === 'event' && event?.triggerType !== 'manual_event' ? (
-            <motion.p layout className="ml-2 text-sm text-white/60">
+            <motion.p layout className="ml-2 text-sm text-[color:var(--ui-text-secondary)]">
               Evento custom: deve essere inviato da una dashboard, webhook o integrazione esterna.
             </motion.p>
           ) : null}
@@ -208,7 +209,7 @@ export function BuilderPanel({
                 layout
                 type="button"
                 onClick={onShowCondition}
-                className="mt-2 mb-2 inline-flex items-center gap-1 text-sm text-white/40 transition-colors hover:text-white"
+                className="mt-2 mb-2 inline-flex items-center gap-1 text-sm text-[color:var(--ui-text-tertiary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
               >
                 <Plus size={16} />
                 Aggiungi "Ma solo se..."
@@ -216,36 +217,21 @@ export function BuilderPanel({
             ) : (
               <motion.div key="condition" layout className="flex w-full flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="liquid-segmented-control segmented-options min-w-[9rem] flex-1">
-                    <button
-                      type="button"
-                      onClick={() => onConditionLogicChange('and')}
-                      className={cn(
-                        'w-full min-w-0 rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
-                        conditionLogic === 'and'
-                          ? 'liquid-segmented-option-active'
-                          : 'liquid-segmented-option-inactive',
-                      )}
-                    >
-                      AND
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onConditionLogicChange('or')}
-                      className={cn(
-                        'w-full min-w-0 rounded-full px-3 py-1 text-xs uppercase tracking-[0.14em] transition-colors',
-                        conditionLogic === 'or'
-                          ? 'liquid-segmented-option-active'
-                          : 'liquid-segmented-option-inactive',
-                      )}
-                    >
-                      OR
-                    </button>
-                  </div>
+                  <GlassSegmentSelect
+                    ariaLabel="Logica condizioni"
+                    className="min-w-[9rem] flex-1"
+                    options={[
+                      { value: 'and', label: 'AND' },
+                      { value: 'or', label: 'OR' },
+                    ]}
+                    value={conditionLogic}
+                    onChange={onConditionLogicChange}
+                    optionClassName="h-auto py-1 uppercase tracking-[0.14em]"
+                  />
                   <button
                     type="button"
                     onClick={onClearConditions}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.14em] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                    className="rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
                   >
                     Rimuovi blocco
                   </button>
@@ -254,7 +240,7 @@ export function BuilderPanel({
                 <div className="flex flex-wrap items-center gap-3">
                   {safeConditions.map((conditionItem, index) => (
                     <React.Fragment key={`${conditionItem.id}-${index}`}>
-                      <span className="text-sm font-bold uppercase tracking-[0.16em] text-white/40">
+                      <span className="text-sm font-bold uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">
                         {index === 0
                           ? 'MA SOLO SE'
                           : conditionLogic === 'and'
@@ -270,7 +256,7 @@ export function BuilderPanel({
                         <button
                           type="button"
                           onClick={() => onRemoveCondition(index)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
                           aria-label="Rimuovi condizione"
                         >
                           <X size={14} />
@@ -289,7 +275,7 @@ export function BuilderPanel({
                   <button
                     type="button"
                     onClick={onAddCondition}
-                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    className="inline-flex items-center gap-1 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-4 py-2 text-sm text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
                   >
                     <Plus size={14} />
                     Aggiungi "Ma solo se..."
@@ -299,7 +285,7 @@ export function BuilderPanel({
                   <button
                     type="button"
                     onClick={() => onConditionPersistenceSecondsChange(30)}
-                    className="inline-flex items-center gap-1 text-sm text-white/40 transition-colors hover:text-white"
+                    className="inline-flex items-center gap-1 text-sm text-[color:var(--ui-text-tertiary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
                   >
                     <Plus size={14} />
                     Aggiungi "Valide da..."
@@ -310,7 +296,7 @@ export function BuilderPanel({
           </AnimatePresence>
 
           <motion.div layout className="flex flex-wrap items-center gap-4">
-            <span className="text-xl font-bold uppercase tracking-widest text-white/40">ALLORA</span>
+            <span className="text-xl font-bold uppercase tracking-widest text-[color:var(--ui-text-tertiary)]">ALLORA</span>
             <NarrativePill value={action} placeholder="[ Seleziona Azione ]" onClick={onOpenActionMenu} />
             {actionDelaySeconds > 0 ? (
               <SequenceTimerPill
@@ -326,7 +312,7 @@ export function BuilderPanel({
               layout
               type="button"
               onClick={() => onActionDelaySecondsChange(10)}
-              className="inline-flex items-center gap-1 text-sm text-white/40 transition-colors hover:text-white"
+              className="inline-flex items-center gap-1 text-sm text-[color:var(--ui-text-tertiary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
             >
               <Plus size={14} />
               Aggiungi "Dopo..."
@@ -360,7 +346,7 @@ export function BuilderPanel({
           <button
             type="button"
             onClick={onCancelEdit}
-            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-6 py-3 text-sm text-[color:var(--ui-text-secondary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
           >
             Annulla modifica
           </button>

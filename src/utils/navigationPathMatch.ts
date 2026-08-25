@@ -117,19 +117,17 @@ function matchesBySegments(
   return containsContiguousSegments(currentHashSegments, targetSegments);
 }
 
-export function isPathActiveForCurrentLocation(path: string) {
-  if (typeof window === 'undefined') {
-    return false;
-  }
+export function isPathActiveForLocation(path: string, currentLocation: string) {
   const target = path.trim().toLowerCase();
-  if (!target) {
+  const normalizedCurrentLocation = currentLocation.trim();
+  if (!target || !normalizedCurrentLocation) {
     return false;
   }
   if (target.startsWith('http://') || target.startsWith('https://')) {
-    return window.location.href.toLowerCase().startsWith(target);
+    return normalizedCurrentLocation.toLowerCase().startsWith(target);
   }
 
-  const current = parseNavigationTarget(window.location.href);
+  const current = parseNavigationTarget(normalizedCurrentLocation);
   if (!current) {
     return false;
   }
@@ -179,4 +177,11 @@ export function isPathActiveForCurrentLocation(path: string) {
   return targetPathCandidates.some((candidate) =>
     matchesBySegments(current.pathSegments, current.hashSegments, candidate),
   );
+}
+
+export function isPathActiveForCurrentLocation(path: string) {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return isPathActiveForLocation(path, window.location.href);
 }

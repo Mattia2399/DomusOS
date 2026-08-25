@@ -109,6 +109,7 @@ export type MediaCardModel = {
   isPlaying: boolean;
   isUnavailable: boolean;
   isBuffering: boolean;
+  commandPending: boolean;
   progressPercent: number;
   repeatMode: MediaRepeatMode;
   shuffleEnabled: boolean;
@@ -372,6 +373,7 @@ export function buildMediaCardModel({
   };
 
   const displayState = state === 'unknown' ? 'idle' : state;
+  const commandPhase = toTrimmedString(rawAttributes?.__dashboard_command_phase);
 
   return {
     entityId: widget.entityId,
@@ -383,6 +385,7 @@ export function buildMediaCardModel({
     isPlaying: state === 'playing',
     isUnavailable: displayState === 'unavailable',
     isBuffering: displayState === 'buffering',
+    commandPending: commandPhase === 'sending' || commandPhase === 'awaiting_confirmation',
     progressPercent,
     repeatMode,
     shuffleEnabled,

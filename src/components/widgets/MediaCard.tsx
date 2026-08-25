@@ -117,6 +117,7 @@ export function MediaCard({
           state={model.displayState}
           layoutVariant={layoutVariant}
           capabilities={model.capabilities}
+          commandPending={model.commandPending}
           attributes={{
             state_label: model.stateLabel,
             app_id: model.metadata.appId,

@@ -785,7 +785,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
           <button
             type="button"
             onClick={onOpen}
-            className="fixed top-1/2 right-2 -translate-y-1/2 w-2 h-16 rounded-full bg-white/20 backdrop-blur-lg border border-white/10 ai-assistant-swipe-hint"
+            className="liquid-glass-control ai-assistant-swipe-hint fixed right-2 top-1/2 h-16 w-2 -translate-y-1/2"
             style={{ zIndex: 59 }}
             aria-label="Apri assistente AI"
           />
@@ -804,7 +804,7 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
       ) : null}
 
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-[color:var(--ui-scrim)] backdrop-blur-[2px] transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         style={{ zIndex: 55 }}
         onClick={onClose}
       />
@@ -836,10 +836,10 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
               <button
                 type="button"
                 onClick={() => setIsConversationEntityEditMode((previous) => !previous)}
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-xl transition-all active:scale-95 ${
+                className={`liquid-glass-control inline-flex h-9 w-9 items-center justify-center transition-all active:scale-95 ${
                   isConversationEntityEditMode
                     ? 'border-cyan-300/35 bg-cyan-400/18 text-cyan-100'
-                    : 'border-white/[0.08] bg-white/[0.04] text-white/85 hover:bg-white/[0.10] hover:text-white'
+                    : 'text-[color:var(--ui-text-secondary)] hover:text-[color:var(--ui-text-primary)]'
                 }`}
                 aria-label="Attiva modifica entita conversation"
                 title="Modifica entita conversation"
@@ -858,8 +858,8 @@ export function FavoritesDrawer({ isOpen, onOpen, onClose, agentClient, haEntity
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-white/50">Assistente Casa</p>
-              <h3 className="text-xl font-semibold mt-2">AI Control Center</h3>
+              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--ui-text-tertiary)]">Assistente Casa</p>
+              <h3 className="mt-2 text-xl font-semibold text-[color:var(--ui-text-primary)]">AI Control Center</h3>
             </div>
 
             {isConversationEntityEditMode ? (

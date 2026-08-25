@@ -28,6 +28,7 @@ import {
 } from '../../services/securityAuth';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
 
 type AlarmActionResult = boolean | void | Promise<boolean | void>;
 
@@ -137,96 +138,56 @@ function resolveAlarmVisual(state: string) {
   if (state === 'triggered') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(94,36,53,0.62)_0%,rgba(43,20,31,0.74)_54%,rgba(255,255,255,0.035)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(251,113,133,0.24),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(244,63,94,0.16),transparent_68%)]',
-      line: 'via-rose-300/86',
       glow: 'bg-rose-400/24',
-      icon: 'text-rose-100',
-      dot: 'bg-rose-300',
-      selected: 'border-rose-200/34 bg-rose-300/[0.17] text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(244,63,94,0.18)]',
-      cta: 'border-rose-200/26 bg-rose-400/[0.16] text-rose-50 hover:bg-rose-400/[0.23]',
+      icon: 'text-[color:var(--ui-danger)]',
     };
   }
   if (state === 'disarmed') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(69,78,92,0.42)_0%,rgba(29,35,46,0.66)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(255,255,255,0.12),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(148,163,184,0.10),transparent_68%)]',
-      line: 'via-white/40',
       glow: 'bg-white/[0.08]',
-      icon: 'text-white/82',
-      dot: 'bg-white/60',
-      selected: 'border-white/24 bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.17),0_8px_20px_rgba(0,0,0,0.12)]',
-      cta: 'border-white/[0.14] bg-white/[0.10] text-white hover:bg-white/[0.15]',
+      icon: 'text-[color:var(--ui-text-secondary)]',
     };
   }
   if (state === 'armed_home') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(35,88,75,0.62)_0%,rgba(22,60,56,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(110,231,183,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(16,185,129,0.14),transparent_68%)]',
-      line: 'via-emerald-300/80',
       glow: 'bg-emerald-400/22',
-      icon: 'text-emerald-100',
-      dot: 'bg-emerald-300',
-      selected: 'border-emerald-200/32 bg-emerald-300/[0.16] text-emerald-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(16,185,129,0.17)]',
-      cta: 'border-emerald-100/18 bg-emerald-300/[0.14] text-emerald-50 hover:bg-emerald-300/[0.20]',
+      icon: 'text-[color:var(--ui-success)]',
     };
   }
   if (state === 'armed_away') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(34,70,112,0.62)_0%,rgba(25,45,78,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(147,197,253,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(59,130,246,0.15),transparent_68%)]',
-      line: 'via-blue-300/82',
       glow: 'bg-blue-400/22',
-      icon: 'text-blue-100',
-      dot: 'bg-blue-300',
-      selected: 'border-blue-200/32 bg-blue-300/[0.16] text-blue-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(59,130,246,0.17)]',
-      cta: 'border-blue-100/18 bg-blue-300/[0.14] text-blue-50 hover:bg-blue-300/[0.20]',
+      icon: 'text-[color:var(--ui-info)]',
     };
   }
   if (state === 'armed_night') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(55,52,116,0.60)_0%,rgba(34,32,82,0.72)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(165,180,252,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(99,102,241,0.15),transparent_68%)]',
-      line: 'via-indigo-300/82',
       glow: 'bg-indigo-400/23',
-      icon: 'text-indigo-100',
-      dot: 'bg-indigo-300',
-      selected: 'border-indigo-200/32 bg-indigo-300/[0.16] text-indigo-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(99,102,241,0.18)]',
-      cta: 'border-indigo-100/18 bg-indigo-300/[0.14] text-indigo-50 hover:bg-indigo-300/[0.20]',
+      icon: 'text-[color:var(--ui-info)]',
     };
   }
   if (state === 'armed_vacation') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(101,70,35,0.62)_0%,rgba(72,45,24,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(252,211,77,0.22),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(245,158,11,0.15),transparent_68%)]',
-      line: 'via-amber-300/78',
       glow: 'bg-amber-400/21',
-      icon: 'text-amber-100',
-      dot: 'bg-amber-300',
-      selected: 'border-amber-200/32 bg-amber-300/[0.16] text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(245,158,11,0.17)]',
-      cta: 'border-amber-100/18 bg-amber-300/[0.14] text-amber-50 hover:bg-amber-300/[0.20]',
+      icon: 'text-[color:var(--ui-warning)]',
     };
   }
   if (state === 'armed_custom_bypass') {
     return {
       surface: 'bg-[linear-gradient(145deg,rgba(28,86,101,0.60)_0%,rgba(22,61,73,0.70)_55%,rgba(255,255,255,0.032)_100%)]',
-      wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(103,232,249,0.20),transparent_62%),radial-gradient(70%_75%_at_100%_100%,rgba(6,182,212,0.14),transparent_68%)]',
-      line: 'via-cyan-300/78',
       glow: 'bg-cyan-400/21',
-      icon: 'text-cyan-100',
-      dot: 'bg-cyan-300',
-      selected: 'border-cyan-200/32 bg-cyan-300/[0.15] text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.20),0_8px_22px_rgba(6,182,212,0.16)]',
-      cta: 'border-cyan-100/18 bg-cyan-300/[0.13] text-cyan-50 hover:bg-cyan-300/[0.19]',
+      icon: 'text-[color:var(--ui-info)]',
     };
   }
   return {
     surface: 'bg-[linear-gradient(145deg,rgba(255,255,255,0.078),rgba(255,255,255,0.024))]',
-    wash: 'bg-[radial-gradient(80%_68%_at_10%_0%,rgba(255,255,255,0.10),transparent_62%)]',
-    line: 'via-white/34',
     glow: 'bg-white/[0.07]',
-    icon: 'text-white/68',
-    dot: 'bg-white/48',
-    selected: 'border-white/24 bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.17),0_8px_20px_rgba(0,0,0,0.12)]',
-    cta: 'border-white/[0.14] bg-white/[0.09] text-white hover:bg-white/[0.14]',
+    icon: 'text-[color:var(--ui-text-secondary)]',
   };
 }
 
@@ -537,13 +498,14 @@ export function AlarmControls({
 
   const runAlarmAction = async (action: PendingAlarmAction, code?: string, options?: AlarmActionAuthOptions) => {
     if (isAuthBusy) {
-      return;
+      return false;
     }
     setIsAuthBusy(true);
     try {
       const didRun = await action.onPress(code, options);
       if (didRun === false) {
-        return;
+        setAuthSubmissionError('Comando non autorizzato o non completato.');
+        return false;
       }
       if (action.timelineText && shouldUseLocalTimeline) {
         pushTimeline(action.timelineText);
@@ -551,6 +513,7 @@ export function AlarmControls({
       setPendingAction(null);
       setAuthCode('');
       setAuthSubmissionError('');
+      return true;
     } finally {
       setIsAuthBusy(false);
     }
@@ -604,12 +567,12 @@ export function AlarmControls({
       message: 'Comando allarme autorizzato con autenticazione dispositivo.',
       context: alarm.name || 'Allarme',
     });
-    await runAlarmAction(
+    const didRun = await runAlarmAction(
       pendingAction,
       pendingSecurityRequirement.needsCodeInput ? storedHaPin : undefined,
       { deviceAuthVerified: true },
     );
-    return true;
+    return didRun;
   };
 
   const confirmPendingAction = async () => {
@@ -631,6 +594,7 @@ export function AlarmControls({
     const manualCodeSubmission = resolveAlarmManualCodeSubmission({
       inputCode: authCode,
       localExtraCode,
+      storedHaCode: storedHaPin,
       requiresCode: pendingSecurityRequirement.needsCodeInput,
     });
     if (manualCodeSubmission.ok === false && manualCodeSubmission.reason === 'missing') {
@@ -649,15 +613,17 @@ export function AlarmControls({
     }
     setAuthSubmissionError('');
     const code = manualCodeSubmission.haCode;
-    if (pendingSecurityRequirement.needsCodeInput) {
-      setAuthAttemptState(recordAuthSuccess());
-      appendSecurityAuditEvent({
-        tone: 'success',
-        message: 'PIN allarme verificato.',
-        context: alarm.name || 'Allarme',
-      });
+    const didRun = await runAlarmAction(pendingAction, code, { manualCodeVerified: true });
+    if (!didRun) {
+      setAuthAttemptState(recordAuthFailure(authAttemptState));
+      return;
     }
-    await runAlarmAction(pendingAction, code);
+    setAuthAttemptState(recordAuthSuccess());
+    appendSecurityAuditEvent({
+      tone: 'success',
+      message: 'PIN allarme verificato.',
+      context: alarm.name || 'Allarme',
+    });
   };
 
   const pushCodeDigit = (digit: string) => {
@@ -676,25 +642,6 @@ export function AlarmControls({
   const clearCode = () => {
     setAuthSubmissionError('');
     setAuthCode('');
-  };
-
-  const scrollModesWithWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    const rail = event.currentTarget;
-    const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
-    if (maxScrollLeft <= 0) {
-      return;
-    }
-
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    if (delta === 0) {
-      return;
-    }
-
-    const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, rail.scrollLeft + delta));
-    if (nextScrollLeft !== rail.scrollLeft) {
-      event.preventDefault();
-      rail.scrollLeft = nextScrollLeft;
-    }
   };
 
   return (
@@ -734,41 +681,27 @@ export function AlarmControls({
 
       <div className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1`}>
         <div className="mb-2 flex items-center justify-between gap-3 px-1">
-          <span className="min-w-0 truncate text-xs font-semibold text-white/48">Modalità</span>
-          <span className="ml-auto max-w-[9rem] truncate text-xs font-semibold text-white/78">
+          <span className="min-w-0 truncate text-xs font-semibold text-[color:var(--ui-text-tertiary)]">Modalità</span>
+          <span className="ml-auto max-w-[9rem] truncate text-xs font-semibold text-[color:var(--ui-text-secondary)]">
             {selectedMode?.label ?? currentModeLabel}
           </span>
         </div>
 
-        <div className="liquid-segmented-control">
-          <div
-            className="grid w-full grid-flow-col gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-            style={{ gridAutoColumns: 'minmax(2.75rem, 1fr)' }}
-            onWheel={scrollModesWithWheel}
-          >
-            {supportedModes.map((mode) => {
-              const isSelected = selectedMode?.id === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  type="button"
-                  onClick={() => setSelectedModeId(mode.id)}
-                  disabled={isTransitioning || isUnavailable}
-                  title={mode.label}
-                  className={`group flex h-9 w-full min-w-0 items-center justify-center rounded-full px-2 transition-all active:scale-[0.95] disabled:cursor-default disabled:opacity-45 sm:h-10 ${
-                    isSelected
-                      ? 'liquid-segmented-option-active'
-                      : 'liquid-segmented-option-inactive'
-                  }`}
-                  aria-pressed={isSelected}
-                  aria-label={`Seleziona ${mode.label}`}
-                >
-                  <span className="shrink-0">{mode.icon}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <GlassSegmentSelect<AlarmModeId>
+          ariaLabel="Modalità allarme"
+          options={supportedModes.map((mode) => ({
+            value: mode.id,
+            label: <span className="shrink-0">{mode.icon}</span>,
+            ariaLabel: `Seleziona ${mode.label}`,
+            title: mode.label,
+          }))}
+          value={selectedMode?.id}
+          onChange={setSelectedModeId}
+          disabled={isTransitioning || isUnavailable}
+          minOptionWidth="2.75rem"
+          scrollable
+          optionClassName="h-9 px-2 sm:h-10"
+        />
 
         <button
           type="button"
@@ -778,7 +711,7 @@ export function AlarmControls({
             }
           }}
           disabled={primaryActionDisabled}
-          className={`mt-3 flex min-h-[4.6rem] w-full items-center justify-between gap-3 rounded-[1.35rem] border px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl transition active:scale-[0.985] disabled:cursor-default disabled:opacity-45 ${stateVisual.cta}`}
+          className="glass-button mt-3 flex min-h-[4.6rem] w-full items-center justify-between gap-3 rounded-[1.35rem] px-4 py-3 text-left text-[color:var(--ui-text-primary)] transition active:scale-[0.985] disabled:cursor-default disabled:opacity-45"
           aria-label={primaryActionLabel}
         >
           <span className="min-w-0">
@@ -790,7 +723,7 @@ export function AlarmControls({
               {primaryActionDescription}
             </span>
           </span>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.16] bg-white/[0.10]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)]">
             {normalizedState === 'triggered' || selectedIsActive ? <LockOpen size={16} /> : selectedMode?.icon ?? <Shield size={16} />}
           </span>
         </button>
@@ -801,7 +734,7 @@ export function AlarmControls({
           type="button"
           onClick={() => openActionDialog(triggerAction)}
           disabled={normalizedState === 'triggered' || isTransitioning || isUnavailable}
-          className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 flex min-h-[4.75rem] w-full items-center justify-center text-center text-sm font-bold uppercase tracking-[0.14em] text-rose-100 transition hover:border-white/[0.12] hover:text-rose-50 active:scale-[0.99] disabled:cursor-default disabled:opacity-45`}
+          className={`${CONTEXT_PANEL_LAYOUT.sectionCompact} mb-1 flex min-h-[4.75rem] w-full items-center justify-center text-center text-sm font-bold uppercase tracking-[0.14em] text-[color:var(--ui-danger)] transition hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] active:scale-[0.99] disabled:cursor-default disabled:opacity-45`}
           aria-label="Attiva SOS emergenza"
         >
           SOS Emergenza
@@ -841,23 +774,23 @@ export function AlarmControls({
       <div className={CONTEXT_PANEL_LAYOUT.sectionCompact}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Attività recente</p>
-            <p className="mt-1 text-xs text-white/38">Eventi reali Home Assistant quando disponibili.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ui-text-secondary)]">Attività recente</p>
+            <p className="mt-1 text-xs text-[color:var(--ui-text-tertiary)]">Eventi reali Home Assistant quando disponibili.</p>
           </div>
-          <span className="text-[11px] font-medium text-white/38">{timeline.length}/{maxTimelineEntries}</span>
+          <span className="text-[11px] font-medium text-[color:var(--ui-text-tertiary)]">{timeline.length}/{maxTimelineEntries}</span>
         </div>
         <div className="mt-3 space-y-2.5">
           {timeline.length > 0 ? (
             timeline.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/78"
+                className="dashboard-content-surface rounded-2xl px-3.5 py-2.5 text-sm text-[color:var(--ui-text-secondary)]"
               >
                 {entry.text}
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-white/7 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white/58">
+            <div className="dashboard-content-surface rounded-2xl px-3.5 py-2.5 text-sm text-[color:var(--ui-text-tertiary)]">
               {activityUnavailableMessage}
             </div>
           )}

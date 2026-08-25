@@ -13,6 +13,7 @@ export type AlarmCredentialKind = 'none' | 'ha_code' | 'combined_code';
 
 export type AlarmActionAuthOptions = {
   deviceAuthVerified?: boolean;
+  manualCodeVerified?: boolean;
 };
 
 export type AlarmSecurityRequirement = {
@@ -30,7 +31,7 @@ export type AlarmSecurityRequirement = {
 
 export type AlarmManualCodeSubmissionResult =
   | { ok: true; haCode: string | undefined }
-  | { ok: false; reason: 'missing' | 'local_extra_mismatch' };
+  | { ok: false; reason: 'missing' | 'credential_mismatch' };
 
 export type ResolveAlarmSecurityRequirementOptions = {
   action: AlarmSecurityActionKind;
@@ -109,10 +110,12 @@ export function resolveAlarmSecurityRequirement({
 export function resolveAlarmManualCodeSubmission({
   inputCode,
   localExtraCode,
+  storedHaCode,
   requiresCode,
 }: {
   inputCode: string;
   localExtraCode?: string;
+  storedHaCode?: string;
   requiresCode: boolean;
 }): AlarmManualCodeSubmissionResult {
   if (!requiresCode) {
@@ -126,11 +129,17 @@ export function resolveAlarmManualCodeSubmission({
   }
 
   if (trimmedLocalExtra && !trimmedCode.endsWith(trimmedLocalExtra)) {
-    return { ok: false, reason: 'local_extra_mismatch' };
+    return { ok: false, reason: 'credential_mismatch' };
+  }
+
+  const haCode = trimmedLocalExtra ? trimmedCode.slice(0, -trimmedLocalExtra.length) : trimmedCode;
+  const configuredHaCode = storedHaCode?.trim() ?? '';
+  if (configuredHaCode && haCode !== configuredHaCode) {
+    return { ok: false, reason: 'credential_mismatch' };
   }
 
   return {
     ok: true,
-    haCode: trimmedLocalExtra ? trimmedCode.slice(0, -trimmedLocalExtra.length) : trimmedCode,
+    haCode,
   };
 }

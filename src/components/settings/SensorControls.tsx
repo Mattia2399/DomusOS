@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
-import { Clock3, Droplets } from 'lucide-react';
+import { Clock3, Droplets, Wifi, WifiOff } from 'lucide-react';
 import type { SensorConnectionState } from './types';
 import { CONTEXT_PANEL_LAYOUT } from './layoutClasses';
 import { ContextPanelHeader } from './ContextPanelHeader';
 import { formatSensorNumericValue } from '../../utils/sensorValue';
 import { resolveSensorVisualGroup, type SensorVisualGroup } from '../../utils/sensorPresentation';
 import { SensorHeroVisual } from './SensorHeroVisual';
+import GlassSegmentSelect from '../ui/GlassSegmentSelect';
+import { BatteryLevelGlyph, parseBatteryPercentage } from './DeviceMetadataCard';
+import { DeviceTelemetryStrip, type DeviceTelemetryStripItem } from './DeviceTelemetryStrip';
 
 interface SensorControlsProps {
   name: string;
@@ -87,55 +90,6 @@ function resolveSensorChartKind({
   return 'line';
 }
 
-function parseBatteryPercentage(value?: string) {
-  if (!value) {
-    return undefined;
-  }
-  const match = value.trim().replace(',', '.').match(/-?\d+(?:\.\d+)?/);
-  if (!match) {
-    return undefined;
-  }
-  const parsed = Number.parseFloat(match[0]);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  return clamp(Math.round(parsed), 0, 100);
-}
-
-function BatteryLevelGlyph({ percentage }: { percentage?: number }) {
-  const level = percentage === undefined ? 'unknown' : percentage <= 20 ? 'low' : percentage <= 50 ? 'medium' : 'high';
-  const activeBars = percentage === undefined ? 0 : level === 'low' ? 1 : level === 'medium' ? 2 : 3;
-  const colorClass =
-    level === 'low'
-      ? 'text-rose-300'
-      : level === 'medium'
-        ? 'text-amber-300'
-        : level === 'high'
-          ? 'text-emerald-300'
-          : 'text-white/70';
-
-  return (
-    <span className={`inline-flex h-[clamp(0.95rem,2.8vw,1.15rem)] w-[clamp(1.45rem,4.6vw,1.8rem)] ${colorClass}`}>
-      <svg viewBox="0 0 28 16" className="h-full w-full" fill="none" aria-hidden="true">
-        <rect x="1" y="2" width="22" height="12" rx="2.4" stroke="currentColor" strokeWidth="1.4" />
-        <rect x="24.2" y="5.2" width="2.6" height="5.6" rx="1.2" fill="currentColor" />
-        {[0, 1, 2].map((index) => (
-          <rect
-            key={index}
-            x={4 + index * 5.4}
-            y="4.4"
-            width="3.4"
-            height="7.2"
-            rx="0.9"
-            fill="currentColor"
-            opacity={index < activeBars ? 1 : 0.18}
-          />
-        ))}
-      </svg>
-    </span>
-  );
-}
-
 function normalizeTrendLinePoints(values: number[], width: number, height: number, padding: number) {
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -152,8 +106,8 @@ function normalizeTrendLinePoints(values: number[], width: number, height: numbe
 function TrendLine({ values }: { values: number[] }) {
   if (values.length < 2) {
     return (
-      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
-        <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-white/50">Nessun dato storico disponibile</p>
+      <div className="dashboard-content-surface-soft flex h-[clamp(8.5rem,28vw,10rem)] items-center justify-center rounded-[clamp(0.9rem,3vw,1rem)] p-[clamp(0.6rem,2.2vw,0.95rem)]">
+        <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-[color:var(--ui-text-tertiary)]">Nessun dato storico disponibile</p>
       </div>
     );
   }
@@ -176,18 +130,18 @@ function TrendLine({ values }: { values: number[] }) {
   ].join(' ');
 
   return (
-    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
+    <div className="dashboard-content-surface-soft h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] p-[clamp(0.6rem,2.2vw,0.95rem)]">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" fill="none" aria-hidden="true">
-        <path d={areaPath} fill="rgba(59,130,246,0.16)" />
+        <path d={areaPath} fill="rgb(var(--ui-accent-rgb) / 0.16)" />
         <path
           d={linePath}
-          stroke="rgba(191,219,254,0.95)"
+          stroke="rgb(var(--ui-accent-rgb) / 0.95)"
           strokeWidth={2.2}
           strokeLinecap="round"
           strokeLinejoin="round"
           fill="none"
         />
-        <circle cx={lastPoint.x} cy={lastPoint.y} r={2.6} fill="rgba(191,219,254,1)" />
+        <circle cx={lastPoint.x} cy={lastPoint.y} r={2.6} fill="rgb(var(--ui-accent-rgb))" />
       </svg>
     </div>
   );
@@ -209,21 +163,21 @@ function TrendBars({ values }: { values: number[] }) {
 
   if (normalizedHeights.length === 0) {
     return (
-      <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)] flex items-center justify-center">
-        <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-white/50">Nessun dato storico disponibile</p>
+      <div className="dashboard-content-surface-soft flex h-[clamp(8.5rem,28vw,10rem)] items-center justify-center rounded-[clamp(0.9rem,3vw,1rem)] p-[clamp(0.6rem,2.2vw,0.95rem)]">
+        <p className="text-[clamp(0.66rem,1.8vw,0.76rem)] text-[color:var(--ui-text-tertiary)]">Nessun dato storico disponibile</p>
       </div>
     );
   }
 
   return (
-    <div className="h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] bg-white/[0.04] border border-white/8 p-[clamp(0.6rem,2.2vw,0.95rem)]">
+    <div className="dashboard-content-surface-soft h-[clamp(8.5rem,28vw,10rem)] rounded-[clamp(0.9rem,3vw,1rem)] p-[clamp(0.6rem,2.2vw,0.95rem)]">
       <div className="h-full flex items-end justify-between gap-[clamp(0.3rem,1vw,0.5rem)]">
         {normalizedHeights.map((height, index) => {
           const isLast = index === normalizedHeights.length - 1;
           return (
             <div
               key={`${index}-${height}`}
-              className={`w-[clamp(0.34rem,1vw,0.52rem)] rounded-full transition-all ${isLast ? 'bg-[#3b82f6] shadow-[0_0_14px_rgba(59,130,246,0.45)]' : 'bg-white/20'}`}
+              className={`w-[clamp(0.34rem,1vw,0.52rem)] rounded-full transition-all ${isLast ? 'bg-[color:var(--ui-accent)] shadow-[0_0_14px_rgb(var(--ui-accent-rgb)/0.45)]' : 'bg-[color:var(--ui-fill-primary)]'}`}
               style={{ height: `${height}%` }}
               aria-hidden="true"
             />
@@ -263,36 +217,6 @@ function resolveSensorChartAccent(group: SensorVisualGroup) {
     stroke: 'rgba(148,163,184,0.86)',
     fill: 'rgba(148,163,184,0.10)',
   };
-}
-
-function MetadataCard({
-  icon,
-  label,
-  value,
-  accentClass,
-  valueClassName,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  accentClass?: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="min-w-0 rounded-[clamp(0.95rem,3vw,1.2rem)] bg-white/5 backdrop-blur-md border border-white/8 p-[clamp(0.7rem,2.2vw,1rem)] min-h-[clamp(6.5rem,22vw,8.25rem)] flex flex-col">
-      <span
-        className={`h-[clamp(2rem,6vw,2.5rem)] w-[clamp(2rem,6vw,2.5rem)] rounded-full border border-white/10 bg-white/8 flex items-center justify-center ${accentClass ?? 'text-white/80'}`}
-      >
-        {icon}
-      </span>
-      <p className="mt-[clamp(0.45rem,1.6vw,0.7rem)] text-[clamp(0.66rem,1.8vw,0.78rem)] text-gray-400">{label}</p>
-      <p
-        className={`mt-[clamp(0.2rem,0.9vw,0.35rem)] min-w-0 text-[clamp(1.2rem,4.4vw,1.7rem)] leading-tight font-light text-white ${valueClassName ?? ''}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
 }
 
 export function SensorControlsPanel({
@@ -345,9 +269,37 @@ export function SensorControlsPanel({
       ? 'text-rose-200/90'
       : resolvedConnectionState === 'online'
         ? 'text-emerald-200/90'
-        : 'text-white/55';
+        : 'text-[color:var(--ui-text-secondary)]';
   const connectionValue = connectionLabel;
   const batteryPercent = parseBatteryPercentage(batteryValue);
+  const telemetryItems = useMemo<DeviceTelemetryStripItem[]>(() => [
+    {
+      id: 'battery',
+      icon: <BatteryLevelGlyph percentage={batteryPercent} compact />,
+      label: 'Batteria',
+      value: batteryValue,
+      tone:
+        batteryPercent === undefined
+          ? 'neutral'
+          : batteryPercent <= 20
+            ? 'danger'
+            : batteryPercent <= 50
+              ? 'warning'
+              : 'success',
+    },
+    {
+      id: 'connection',
+      icon: resolvedConnectionState === 'offline' ? <WifiOff size={15} /> : <Wifi size={15} />,
+      label: 'Connessione',
+      value: connectionValue,
+      tone:
+        resolvedConnectionState === 'online'
+          ? 'success'
+          : resolvedConnectionState === 'offline'
+            ? 'danger'
+            : 'neutral',
+    },
+  ], [batteryPercent, batteryValue, connectionValue, resolvedConnectionState]);
   return (
     <div className={`${CONTEXT_PANEL_LAYOUT.shell} gap-[clamp(0.7rem,2.4vw,1rem)]`}>
       <ContextPanelHeader
@@ -375,38 +327,26 @@ export function SensorControlsPanel({
 
       <div className={`${CONTEXT_PANEL_LAYOUT.section} mb-1`}>
         <div className="mb-3 flex items-center justify-between gap-3 px-1">
-          <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-white/48">
+          <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-[color:var(--ui-text-tertiary)]">
             <Clock3 size={14} />
             Andamento
           </span>
-          <span className="shrink-0 text-xs font-semibold text-white/52">{averageLabel}</span>
+          <span className="shrink-0 text-xs font-semibold text-[color:var(--ui-text-secondary)]">{averageLabel}</span>
         </div>
 
-        <div className="liquid-segmented-control">
-          <div className="grid grid-cols-4 gap-1">
-            {SENSOR_HISTORY_WINDOWS.map((hours) => {
-              const active = historyHours === hours;
-              return (
-                <button
-                  key={hours}
-                  type="button"
-                  onClick={() => setHistoryHours(hours)}
-                  className={`flex h-9 min-w-0 items-center justify-center rounded-full text-xs font-semibold transition-all active:scale-[0.96] ${
-                    active
-                      ? 'liquid-segmented-option-active'
-                      : 'liquid-segmented-option-inactive'
-                  }`}
-                  aria-pressed={active}
-                  aria-label={`Mostra ultime ${hours} ore`}
-                >
-                  {hours}h
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <GlassSegmentSelect<(typeof SENSOR_HISTORY_WINDOWS)[number]>
+          ariaLabel="Intervallo storico sensore"
+          options={SENSOR_HISTORY_WINDOWS.map((hours) => ({
+            value: hours,
+            label: `${hours}h`,
+            ariaLabel: `Mostra ultime ${hours} ore`,
+          }))}
+          value={historyHours}
+          onChange={setHistoryHours}
+          optionClassName="h-9"
+        />
 
-        <div className="mt-3 h-36 overflow-hidden rounded-[1.55rem] border border-white/[0.07] bg-black/[0.14] px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]">
+        <div className="dashboard-content-surface-soft mt-3 h-36 overflow-hidden rounded-[1.55rem] px-2 py-3">
           {chartData.length >= 2 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 8, right: 4, left: 4, bottom: 4 }}>
@@ -423,21 +363,15 @@ export function SensorControlsPanel({
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-full items-center justify-center px-4 text-center text-xs text-white/42">
+            <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[color:var(--ui-text-tertiary)]">
               Nessun dato storico disponibile
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-[clamp(0.55rem,1.9vw,0.8rem)] mt-auto">
-        <MetadataCard icon={<BatteryLevelGlyph percentage={batteryPercent} />} label="Batteria" value={batteryValue} />
-        <MetadataCard
-          icon={<Clock3 size={18} />}
-          label="Connessione"
-          value={connectionValue}
-          valueClassName="text-[clamp(1rem,3.2vw,1.42rem)] leading-[1.12] [overflow-wrap:anywhere]"
-        />
+      <div className="mt-auto">
+        <DeviceTelemetryStrip items={telemetryItems} />
       </div>
     </div>
   );

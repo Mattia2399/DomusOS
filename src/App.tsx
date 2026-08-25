@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
-import { EmbeddedDashboardExamplePage } from './pages/Home';
+import { Route, Routes } from 'react-router';
 import { BetaLandingPage } from './pages/BetaLandingPage';
+import { ExperienceGate } from './components/onboarding/ExperienceGate';
 
 const GridTestView = import.meta.env.DEV ? React.lazy(() => import('./pages/GridTestView')) : null;
 
@@ -20,7 +20,7 @@ export default function App() {
             }
           />
         ) : null}
-        <Route path="*" element={<EmbeddedDashboardExamplePage />} />
+        <Route path="*" element={<ExperienceGate />} />
       </Routes>
     </div>
   );

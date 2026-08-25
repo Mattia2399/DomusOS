@@ -1,5 +1,18 @@
 import type { GridItem, WidgetKind } from '../../types/dashboardModels';
 import type { GridEngineBreakpoint } from '../dashboard/dashboardBreakpointConfig';
+import {
+  ALARM_CARD_CAPABILITY,
+  CAMERA_CARD_CAPABILITY,
+  CLIMATE_CARD_CAPABILITY,
+  COVER_CARD_CAPABILITY,
+  LIGHT_CARD_CAPABILITY,
+  LOCK_CARD_CAPABILITY,
+  MEDIA_CARD_CAPABILITY,
+  resolveCardDisplayVariant,
+  SENSOR_CARD_CAPABILITY,
+  SWITCH_CARD_CAPABILITY,
+  VACUUM_CARD_CAPABILITY,
+} from './cardCapabilityRegistry';
 
 export type WidgetDisplayVariant = 'mini' | 'compact' | 'standard' | 'full';
 
@@ -41,6 +54,11 @@ type ResolveMediaPixelDisplayVariantInput = {
   height: number;
 };
 
+type ResolveCameraPixelDisplayVariantInput = {
+  width: number;
+  height: number;
+};
+
 type ResolveLockPixelDisplayVariantInput = {
   width: number;
   height: number;
@@ -51,185 +69,80 @@ type ResolveCoverPixelDisplayVariantInput = {
   height: number;
 };
 
-const SENSOR_PIXEL_VARIANT_RANK: Record<WidgetDisplayVariant, number> = {
-  mini: 0,
-  compact: 1,
-  standard: 2,
-  full: 3,
+type ResolveVacuumPixelDisplayVariantInput = {
+  width: number;
+  height: number;
 };
-
-const SENSOR_PIXEL_HYSTERESIS_WIDTH = 8;
-const SENSOR_PIXEL_HYSTERESIS_HEIGHT = 4;
-
-function fitsSensorPixelVariant(
-  variant: WidgetDisplayVariant,
-  width: number,
-  height: number,
-  direction: -1 | 0 | 1 = 0,
-) {
-  const widthMargin = SENSOR_PIXEL_HYSTERESIS_WIDTH * direction;
-  const heightMargin = SENSOR_PIXEL_HYSTERESIS_HEIGHT * direction;
-
-  if (variant === 'mini') {
-    return true;
-  }
-  if (variant === 'compact') {
-    return (
-      (width >= 132 + widthMargin && height >= 44 + heightMargin) ||
-      (width >= 88 + widthMargin && height >= 96 + heightMargin)
-    );
-  }
-  if (variant === 'standard') {
-    return width >= 170 + widthMargin && height >= 104 + heightMargin;
-  }
-  return (
-    (width >= 260 + widthMargin && height >= 104 + heightMargin) ||
-    (width >= 176 + widthMargin && height >= 160 + heightMargin)
-  );
-}
-
-function resolveSensorPixelVariantWithoutHysteresis(width: number, height: number): WidgetDisplayVariant {
-  if (fitsSensorPixelVariant('full', width, height)) {
-    return 'full';
-  }
-  if (fitsSensorPixelVariant('standard', width, height)) {
-    return 'standard';
-  }
-  if (fitsSensorPixelVariant('compact', width, height)) {
-    return 'compact';
-  }
-  return 'mini';
-}
 
 export function resolveSensorPixelDisplayVariant({
   width,
   height,
   previousVariant,
 }: ResolveSensorPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  const nextVariant = resolveSensorPixelVariantWithoutHysteresis(safeWidth, safeHeight);
-
-  if (!previousVariant || nextVariant === previousVariant) {
-    return nextVariant;
-  }
-
-  const isPromotion = SENSOR_PIXEL_VARIANT_RANK[nextVariant] > SENSOR_PIXEL_VARIANT_RANK[previousVariant];
-  if (isPromotion) {
-    return fitsSensorPixelVariant(nextVariant, safeWidth, safeHeight, 1) ? nextVariant : previousVariant;
-  }
-
-  return fitsSensorPixelVariant(previousVariant, safeWidth, safeHeight, -1) ? previousVariant : nextVariant;
+  return SENSOR_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height, previousVariant });
 }
 
 export function resolveLightPixelDisplayVariant({
   width,
   height,
 }: ResolveLightPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if ((safeWidth >= 260 && safeHeight >= 104) || (safeWidth >= 176 && safeHeight >= 160)) {
-    return 'full';
-  }
-  if (safeWidth >= 170 && safeHeight >= 104) {
-    return 'standard';
-  }
-  if ((safeWidth >= 132 && safeHeight >= 44) || (safeWidth >= 88 && safeHeight >= 96)) {
-    return 'compact';
-  }
-  return 'mini';
+  return LIGHT_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveSwitchPixelDisplayVariant({
   width,
   height,
 }: ResolveSwitchPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if ((safeWidth >= 260 && safeHeight >= 104) || (safeWidth >= 176 && safeHeight >= 160)) {
-    return 'full';
-  }
-  if (safeWidth >= 170 && safeHeight >= 104) {
-    return 'standard';
-  }
-  if ((safeWidth >= 132 && safeHeight >= 44) || (safeWidth >= 88 && safeHeight >= 96)) {
-    return 'compact';
-  }
-  return 'mini';
+  return SWITCH_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveClimatePixelDisplayVariant({
   width,
   height,
 }: ResolveClimatePixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if (safeWidth >= 260 && safeHeight >= 212) {
-    return 'full';
-  }
-  if (safeWidth >= 200 && safeHeight >= 148) {
-    return 'standard';
-  }
-  return 'compact';
+  return CLIMATE_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveAlarmPixelDisplayVariant({
   width,
   height,
 }: ResolveAlarmPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if (safeWidth >= 260 && safeHeight >= 212) return 'full';
-  if (safeWidth >= 200 && safeHeight >= 148) return 'standard';
-  return 'compact';
+  return ALARM_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveMediaPixelDisplayVariant({
   width,
   height,
 }: ResolveMediaPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if (safeWidth >= 270 && safeHeight >= 212) return 'full';
-  if (safeWidth >= 220 && safeHeight >= 148) return 'standard';
-  if ((safeWidth >= 150 && safeHeight >= 92) || (safeWidth >= 210 && safeHeight >= 72)) return 'compact';
-  return 'mini';
+  return MEDIA_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
+}
+
+export function resolveCameraPixelDisplayVariant({
+  width,
+  height,
+}: ResolveCameraPixelDisplayVariantInput): WidgetDisplayVariant {
+  return CAMERA_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveLockPixelDisplayVariant({
   width,
   height,
 }: ResolveLockPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if ((safeWidth >= 250 && safeHeight >= 188) || (safeWidth >= 176 && safeHeight >= 212)) {
-    return 'full';
-  }
-  if (safeWidth >= 170 && safeHeight >= 160) {
-    return 'standard';
-  }
-  if (safeWidth >= 132 && safeHeight >= 44) {
-    return 'compact';
-  }
-  return 'mini';
+  return LOCK_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 export function resolveCoverPixelDisplayVariant({
   width,
   height,
 }: ResolveCoverPixelDisplayVariantInput): WidgetDisplayVariant {
-  const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
-  const safeHeight = Math.max(0, Number.isFinite(height) ? height : 0);
-  if ((safeWidth >= 350 && safeHeight >= 160) || (safeWidth >= 176 && safeHeight >= 212)) {
-    return 'full';
-  }
-  if (safeWidth >= 170 && safeHeight >= 148) {
-    return 'standard';
-  }
-  if ((safeWidth >= 132 && safeHeight >= 72) || (safeWidth >= 88 && safeHeight >= 112)) {
-    return 'compact';
-  }
-  return 'mini';
+  return COVER_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
+}
+
+export function resolveVacuumPixelDisplayVariant({
+  width,
+  height,
+}: ResolveVacuumPixelDisplayVariantInput): WidgetDisplayVariant {
+  return VACUUM_CARD_CAPABILITY.resolvePixelDisplayVariant({ width, height });
 }
 
 type ResolveWidgetDisplayVariantInput = {
@@ -239,98 +152,15 @@ type ResolveWidgetDisplayVariantInput = {
   parentSectionId?: string;
 };
 
-function toGridUnits(value: number | undefined, fallback = 1) {
-  return Math.max(1, Math.round(value ?? fallback));
-}
-
 export function resolveWidgetDisplayVariant({
   kind,
   breakpoint,
   layout,
   parentSectionId,
 }: ResolveWidgetDisplayVariantInput): WidgetDisplayVariant {
-  const width = toGridUnits(layout.w);
-  const height = toGridUnits(layout.h);
-  const area = width * height;
-  const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
-  const isInsideStack = Boolean(parentSectionId);
-
-  if (kind === 'climate') {
-    if (width >= 2 && height >= 4) {
-      return 'full';
-    }
-    if (width >= 2 && height >= 3) {
-      return 'standard';
-    }
-    return 'compact';
-  }
-
-  if (kind === 'alarm') {
-    if (width >= 2 && height >= 4) return 'full';
-    if (width >= 2 && height >= 3) return 'standard';
-    return 'compact';
-  }
-
-  if (kind === 'media') {
-    if (width >= 2 && height >= 4) return 'full';
-    if (width >= 2 && height >= 3) return 'standard';
-    if (width <= 1 && height <= 1) return 'mini';
-    return 'compact';
-  }
-
-  if (kind === 'lock') {
-    if ((width >= 2 && height >= 4) || (width >= 3 && height >= 2 && !isInsideStack)) {
-      return 'full';
-    }
-    if (width >= 2 && height >= 3) {
-      return 'standard';
-    }
-    if (width <= 1 && height <= 2) {
-      return 'mini';
-    }
-    if (width >= 2 && height >= 2) {
-      return 'compact';
-    }
-    return 'compact';
-  }
-
-  if (kind === 'cover') {
-    if ((width >= 2 && height >= 4) || (width >= 3 && height >= 3 && !isInsideStack)) {
-      return 'full';
-    }
-    if (width >= 2 && height >= 3) {
-      return 'standard';
-    }
-    if (width <= 1 && height <= 1) {
-      return 'mini';
-    }
-    if (width >= 2 && height >= 2) {
-      return 'compact';
-    }
-    return 'compact';
-  }
-
-  if (width <= 1 && height <= 1) {
-    return 'mini';
-  }
-
-  if (height <= 1 || width <= 1 || area <= 2) {
-    return 'compact';
-  }
-
-  if (kind === 'sensor') {
-    if (width >= 2 && height >= 3 && !isMobile) {
-      return 'full';
-    }
-    if (width >= 3 && height >= 2 && !isInsideStack) {
-      return 'full';
-    }
-    return 'standard';
-  }
-
-  if (isMobile || area <= 4) {
-    return 'standard';
-  }
-
-  return 'full';
+  return resolveCardDisplayVariant(kind, {
+    breakpoint,
+    layout,
+    isInsideStack: Boolean(parentSectionId),
+  });
 }

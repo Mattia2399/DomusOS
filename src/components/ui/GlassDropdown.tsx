@@ -13,9 +13,14 @@ type GlassDropdownProps = {
   selected: GlassDropdownOption | null;
   onChange: (option: GlassDropdownOption) => void;
   label?: string;
+  ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
+  size?: 'default' | 'compact';
   className?: string;
+  buttonClassName?: string;
+  optionsClassName?: string;
+  portalZIndex?: number;
 };
 
 export function GlassDropdown({
@@ -23,21 +28,35 @@ export function GlassDropdown({
   selected,
   onChange,
   label,
+  ariaLabel,
   placeholder = 'Seleziona',
   disabled = false,
+  size = 'default',
   className,
+  buttonClassName,
+  optionsClassName,
+  portalZIndex = 400,
 }: GlassDropdownProps) {
   return (
     <Listbox value={selected} onChange={(option) => option && onChange(option)} by="id" disabled={disabled}>
       {({ open }) => (
         <div className={clsx('relative w-full min-w-0', className)}>
-          {label ? <Listbox.Label className="mb-2 block text-xs font-medium text-white/60">{label}</Listbox.Label> : null}
+          {label ? <Listbox.Label className="mb-2 block text-xs font-medium text-[color:var(--ui-text-secondary)]">{label}</Listbox.Label> : null}
 
-          <Listbox.Button className="liquid-glass-card btn-premium flex w-full items-center justify-between gap-3 rounded-2xl bg-white/[0.04] px-3.5 py-2.5 text-left text-sm font-medium text-white/90 outline-none backdrop-blur-xl transition duration-200 hover:bg-white/[0.08] focus:border-white/20 focus:bg-white/[0.08] focus:ring-2 focus:ring-white/10 disabled:cursor-not-allowed disabled:opacity-50">
-            <span className={clsx('block min-w-0 truncate', !selected && 'text-white/45')}>{selected?.name ?? placeholder}</span>
+          <Listbox.Button
+            aria-label={label ? undefined : ariaLabel}
+            className={clsx(
+              'liquid-glass-control btn-premium flex w-full items-center justify-between text-left font-medium text-[color:var(--ui-text-primary)] outline-none transition duration-200 hover:brightness-110 focus:!border-[color:var(--ui-focus-ring)] focus:ring-2 focus:ring-[color:var(--ui-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50',
+              size === 'compact'
+                ? 'gap-2 rounded-xl px-2.5 py-2 text-xs'
+                : 'gap-3 rounded-2xl px-3.5 py-2.5 text-sm',
+              buttonClassName,
+            )}
+          >
+            <span className={clsx('block min-w-0 truncate', !selected && 'text-[color:var(--ui-text-tertiary)]')}>{selected?.name ?? placeholder}</span>
             <ChevronDown
               aria-hidden="true"
-              className={clsx('h-4 w-4 shrink-0 text-white/55 transition-transform duration-200', open && 'rotate-180 text-white/80')}
+              className={clsx('h-4 w-4 shrink-0 text-[color:var(--ui-text-tertiary)] transition-transform duration-200', open && 'rotate-180 text-[color:var(--ui-text-primary)]')}
             />
           </Listbox.Button>
 
@@ -53,7 +72,11 @@ export function GlassDropdown({
             <Listbox.Options
               anchor={{ to: 'bottom start', gap: 8, padding: 12 }}
               portal
-              className="liquid-glass-card glass-scrollbar z-50 max-h-64 w-[var(--button-width)] origin-top overflow-auto rounded-2xl bg-white/[0.04] p-1.5 text-sm text-white/88 outline-none backdrop-blur-xl ring-1 ring-black/5"
+              style={{ zIndex: portalZIndex }}
+              className={clsx(
+                'liquid-glass-navigation glass-scrollbar max-h-64 w-[var(--button-width)] origin-top overflow-auto rounded-2xl p-1.5 text-sm text-[color:var(--ui-text-primary)] outline-none',
+                optionsClassName,
+              )}
             >
               {options.map((option) => (
                 <Listbox.Option
@@ -62,8 +85,8 @@ export function GlassDropdown({
                   className={({ focus, selected: isSelected }) =>
                     clsx(
                       'relative cursor-pointer select-none rounded-xl px-3 py-2.5 pr-9 transition-colors duration-150',
-                      focus && 'bg-white/10 text-white',
-                      isSelected ? 'font-medium text-white' : 'text-white/72',
+                      focus && 'bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-primary)]',
+                      isSelected ? 'font-medium text-[color:var(--ui-text-primary)]' : 'text-[color:var(--ui-text-secondary)]',
                     )
                   }
                 >
@@ -71,7 +94,7 @@ export function GlassDropdown({
                     <>
                       <span className="block truncate">{option.name}</span>
                       {isSelected ? (
-                        <span className="absolute inset-y-0 right-3 flex items-center text-white/80">
+                        <span className="absolute inset-y-0 right-3 flex items-center text-[color:var(--ui-accent)]">
                           <Check aria-hidden="true" className="h-4 w-4" />
                         </span>
                       ) : null}

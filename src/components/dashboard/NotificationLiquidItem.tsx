@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   BarChart3,
   Bell,
@@ -144,40 +143,46 @@ export function NotificationLiquidItem({
 
   return (
     <li
-      onClick={() => onRead?.(notificationId)}
-      className={`group relative pl-6 transition-opacity ${isRead ? 'opacity-72' : 'opacity-100'}`}
+      className={`group relative transition-opacity ${isRead ? 'opacity-70' : 'opacity-100'}`}
     >
-      <div className="relative min-h-[4.6rem] cursor-pointer overflow-visible rounded-[2rem] border border-white/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.38),rgba(255,255,255,0.14))] py-3 pl-11 pr-12 text-left shadow-[0_18px_44px_rgba(3,8,20,0.16),inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-2xl transition-transform duration-200 group-hover:scale-[1.01]">
-        <span className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-        <span
-          className={`absolute left-0 top-1/2 flex h-[3.25rem] w-[3.25rem] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border backdrop-blur-2xl ${meta.orbClassName}`}
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-[color:var(--ui-border)] bg-[linear-gradient(180deg,var(--ui-surface-glass-strong),var(--ui-surface-glass-soft))] shadow-[0_10px_26px_var(--ui-shadow-soft),inset_0_1px_0_var(--ui-border)] backdrop-blur-2xl transition-[transform,border-color] duration-200 group-hover:border-[color:var(--ui-border-strong)]">
+        <button
+          type="button"
+          onClick={() => onRead?.(notificationId)}
+          className="flex min-h-[4.75rem] w-full items-center gap-3 py-3 pl-3 pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--ui-focus-ring)]"
+          aria-label={`${isRead ? 'Apri' : 'Segna come letta'}: ${message}`}
         >
-          <span className={`absolute inset-1 rounded-full ${meta.ringClassName}`} />
-          <Icon size={23} strokeWidth={2.2} className={`relative z-10 ${meta.iconClassName}`} />
-        </span>
+          <span
+            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-2xl ${meta.orbClassName}`}
+          >
+            <span className={`absolute inset-1 rounded-full ${meta.ringClassName}`} />
+            <Icon size={18} strokeWidth={2.1} className={`relative z-10 ${meta.iconClassName}`} />
+          </span>
 
-        {!isRead ? (
-          <span className="absolute right-11 top-3 h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.18)]" />
-        ) : null}
-
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-base font-semibold tracking-[-0.01em] text-[color:var(--profile-sheet-title)]">
-              {meta.label}
-            </p>
-            {notification.type === 'alert' ? (
-              <span className="rounded-full bg-red-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-red-500">
-                Alert
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-semibold tracking-[-0.01em] text-[color:var(--ui-text-primary)]">
+                {meta.label}
               </span>
-            ) : null}
-          </div>
-          <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-[color:var(--profile-sheet-muted)]">
-            {message}
-          </p>
-          {timeLabel ? (
-            <p className="mt-1.5 text-[11px] font-semibold text-[color:var(--profile-sheet-muted)]">{timeLabel}</p>
-          ) : null}
-        </div>
+              {notification.type === 'alert' ? (
+                <span className="shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--ui-danger)_14%,transparent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--ui-danger)]">
+                  Avviso
+                </span>
+              ) : null}
+              {!isRead ? (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--ui-accent)] shadow-[0_0_0_3px_rgb(var(--ui-accent-rgb)/0.14)]" />
+              ) : null}
+              {timeLabel ? (
+                <span className="ml-auto shrink-0 text-[10px] font-semibold text-[color:var(--ui-text-tertiary)]">
+                  {timeLabel}
+                </span>
+              ) : null}
+            </span>
+            <span className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-[color:var(--ui-text-secondary)]">
+              {message}
+            </span>
+          </span>
+        </button>
 
         {onRemove ? (
           <button
@@ -186,7 +191,7 @@ export function NotificationLiquidItem({
               event.stopPropagation();
               onRemove(notificationId);
             }}
-            className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/24 bg-white/16 text-[color:var(--profile-sheet-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-xl transition-colors hover:bg-white/24 hover:text-[color:var(--profile-sheet-title)]"
+            className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] text-[color:var(--ui-text-secondary)] shadow-[inset_0_1px_0_var(--ui-border)] backdrop-blur-xl transition-colors hover:bg-[color:var(--ui-fill-primary)] hover:text-[color:var(--ui-text-primary)]"
             aria-label="Rimuovi notifica"
           >
             <X size={15} />

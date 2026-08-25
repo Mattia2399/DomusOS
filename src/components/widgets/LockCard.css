@@ -87,18 +87,17 @@
   background:
     radial-gradient(120% 90% at 10% 0%, rgb(var(--lock-surface-rgb) / var(--lock-surface-tint)), transparent 62%),
     radial-gradient(95% 90% at 100% 100%, rgb(var(--lock-surface-rgb) / calc(var(--lock-surface-tint) * 0.58)), transparent 68%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.062), rgb(255 255 255 / 0.026) 54%, rgb(var(--lock-surface-rgb) / 0.035)),
-    rgb(255 255 255 / 0.035);
+    linear-gradient(145deg, rgb(var(--ui-glass-highlight-rgb) / 0.062), transparent 54%, rgb(var(--lock-surface-rgb) / 0.035)),
+    var(--ui-surface-glass);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    0 14px 34px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.16),
+    0 14px 34px var(--ui-shadow-soft),
     0 0 30px rgb(var(--lock-surface-rgb) / var(--lock-surface-glow));
   backdrop-filter: blur(22px) saturate(1.24);
   -webkit-backdrop-filter: blur(22px) saturate(1.24);
 }
 
 .lock-card__meta,
-.lock-card__battery-badge,
 .lock-card__state-dot,
 .lock-card__mini-toggle,
 .lock-card__control,
@@ -132,16 +131,16 @@
 }
 
 .lock-card__title {
-  color: rgb(255 255 255 / 0.95);
+  color: var(--ui-text-primary);
   font-size: clamp(0.76rem, 7.4cqi, 1.05rem);
-  font-weight: 760;
-  letter-spacing: -0.045em;
+  font-weight: var(--ui-card-title-weight);
+  letter-spacing: var(--ui-card-title-tracking);
   line-height: 1.02;
 }
 
 .lock-card__status {
   margin-top: 0.24rem;
-  color: rgb(255 255 255 / 0.46);
+  color: var(--ui-text-tertiary);
   font-size: clamp(0.54rem, 4.3cqi, 0.72rem);
   font-weight: 620;
   letter-spacing: -0.01em;
@@ -163,73 +162,18 @@
   border-radius: 999px;
   background:
     linear-gradient(90deg, transparent, rgb(var(--lock-accent-rgb) / 0.95), transparent),
-    rgb(255 255 255 / 0.07);
+    var(--ui-fill-tertiary);
   box-shadow: 0 0 14px rgb(var(--lock-accent-rgb) / 0.26);
   opacity: 0.85;
 }
 
 .lock-card[data-lock-tone='offline'] .lock-card__state-dot {
-  background: rgb(255 255 255 / 0.16);
+  background: var(--ui-fill-secondary);
   box-shadow: none;
 }
 
 .lock-card[data-lock-tone='transition'] .lock-card__state-dot {
   animation: lock-card-breathe 1.7s ease-in-out infinite;
-}
-
-.lock-card__battery-badge {
-  grid-area: state;
-  display: inline-flex;
-  min-width: 1.62rem;
-  height: 0.92rem;
-  align-self: start;
-  justify-self: end;
-  align-items: center;
-  justify-content: center;
-  gap: 0.12rem;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 999px;
-  background:
-    radial-gradient(80% 120% at 28% 0%, rgb(255 255 255 / 0.2), transparent 58%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.045) 58%, rgb(255 255 255 / 0.08));
-  color: rgb(255 255 255 / 0.68);
-  padding: 0 0.24rem;
-  font-size: 0.42rem;
-  font-weight: 720;
-  letter-spacing: -0.015em;
-  line-height: 1;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.2),
-    inset 0 -1px 0 rgb(0 0 0 / 0.1),
-    0 5px 14px rgb(0 0 0 / 0.13);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-}
-
-.lock-card__battery-badge svg {
-  width: 0.46rem;
-  height: 0.46rem;
-  flex: 0 0 auto;
-  stroke-width: 2.2;
-}
-
-.lock-card__battery-badge[data-battery-tone='good'] {
-  color: rgb(187 247 208 / 0.86);
-  border-color: rgb(187 247 208 / 0.16);
-}
-
-.lock-card__battery-badge[data-battery-tone='medium'] {
-  color: rgb(253 230 138 / 0.86);
-  border-color: rgb(253 230 138 / 0.18);
-}
-
-.lock-card__battery-badge[data-battery-tone='low'] {
-  color: rgb(254 202 202 / 0.9);
-  border-color: rgb(254 202 202 / 0.2);
-}
-
-.lock-card__battery-badge[data-battery-tone='unknown'] {
-  color: rgb(255 255 255 / 0.48);
 }
 
 .lock-card__control {
@@ -241,17 +185,16 @@
   align-self: end;
   height: 2.36rem;
   min-height: 2.36rem;
-  border: 1px solid rgb(255 255 255 / 0.08);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
   background:
-    radial-gradient(85% 170% at 12% 0%, rgb(255 255 255 / 0.13), transparent 58%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.075), rgb(255 255 255 / 0.025) 56%, rgb(255 255 255 / 0.055)),
-    rgb(255 255 255 / 0.035);
+    radial-gradient(85% 170% at 12% 0%, rgb(var(--ui-glass-highlight-rgb) / 0.13), transparent 58%),
+    var(--ui-fill-tertiary);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    inset 0 -1px 0 rgb(0 0 0 / 0.08),
-    0 8px 18px rgb(0 0 0 / 0.1);
-  color: rgb(255 255 255 / 0.86);
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.18),
+    inset 0 -1px 0 var(--ui-shadow-soft),
+    0 8px 18px var(--ui-shadow-soft);
+  color: var(--ui-text-primary);
   overflow: hidden;
   padding: 0.18rem;
   backdrop-filter: blur(16px) saturate(1.28);
@@ -291,19 +234,19 @@
 }
 
 .lock-card__control:not(:disabled):hover {
-  border-color: rgb(255 255 255 / 0.13);
+  border-color: var(--ui-border-strong);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.2),
-    inset 0 -1px 0 rgb(0 0 0 / 0.1),
-    0 10px 22px rgb(0 0 0 / 0.13);
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.2),
+    inset 0 -1px 0 var(--ui-shadow-soft),
+    0 10px 22px var(--ui-shadow-soft);
 }
 
 .lock-card__control[data-control='button']:not(:disabled):hover {
   border-color: rgb(var(--lock-accent-rgb) / 0.18);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.22),
-    inset 0 -1px 0 rgb(0 0 0 / 0.1),
-    0 10px 22px rgb(0 0 0 / 0.13),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.22),
+    inset 0 -1px 0 var(--ui-shadow-soft),
+    0 10px 22px var(--ui-shadow-soft),
     0 0 18px rgb(var(--lock-accent-rgb) / 0.08);
 }
 
@@ -320,11 +263,11 @@
   max-width: calc(100% - 0.36rem);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 22% 20%, rgb(255 255 255 / 0.26), transparent 36%),
-    linear-gradient(90deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.045));
+    radial-gradient(circle at 22% 20%, rgb(var(--ui-glass-highlight-rgb) / 0.26), transparent 36%),
+    var(--ui-fill-secondary);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    inset 0 -1px 0 rgb(0 0 0 / 0.06);
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.16),
+    inset 0 -1px 0 var(--ui-shadow-soft);
   opacity: 0.78;
   transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
   pointer-events: none;
@@ -340,7 +283,7 @@
   min-width: 0;
   align-items: center;
   justify-content: center;
-  color: rgb(255 255 255 / 0.62);
+  color: var(--ui-text-secondary);
   pointer-events: none;
   transition: opacity 180ms ease, transform 180ms ease;
 }
@@ -360,7 +303,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: rgb(255 255 255 / 0.38);
+  color: var(--ui-text-disabled);
   opacity: 0.78;
   transform: translateY(-50%);
   pointer-events: none;
@@ -379,12 +322,12 @@
   border: 0;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 35% 22%, rgb(255 255 255 / 0.48), transparent 38%),
-    linear-gradient(145deg, rgb(var(--lock-accent-rgb) / 0.36), rgb(var(--lock-accent-rgb) / 0.18) 54%, rgb(255 255 255 / 0.075));
+    radial-gradient(circle at 35% 22%, rgb(var(--ui-glass-highlight-rgb) / 0.48), transparent 38%),
+    linear-gradient(145deg, rgb(var(--lock-accent-rgb) / 0.36), rgb(var(--lock-accent-rgb) / 0.18) 54%, var(--ui-fill-tertiary));
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.42),
-    inset 0 -10px 14px rgb(0 0 0 / 0.15),
-    0 5px 13px rgb(0 0 0 / 0.24),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.42),
+    inset 0 -10px 14px var(--ui-shadow-soft),
+    0 5px 13px var(--ui-shadow),
     0 0 18px rgb(var(--lock-accent-rgb) / 0.18);
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, background 180ms ease;
   pointer-events: none;
@@ -397,9 +340,9 @@
 
 .lock-card__control[data-complete='true'] .lock-card__slider-thumb {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.48),
-    inset 0 -10px 14px rgb(0 0 0 / 0.13),
-    0 6px 15px rgb(0 0 0 / 0.24),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.48),
+    inset 0 -10px 14px var(--ui-shadow-soft),
+    0 6px 15px var(--ui-shadow),
     0 0 28px rgb(var(--lock-accent-rgb) / 0.24);
 }
 
@@ -412,15 +355,15 @@
   width: 1rem;
   height: 1rem;
   stroke-width: 2.25;
-  color: rgb(255 255 255 / 0.94);
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
+  color: var(--ui-text-primary);
+  filter: drop-shadow(0 1px 2px var(--ui-shadow-soft));
 }
 
 .lock-card[data-lock-tone='open'] .lock-card__slider-thumb,
 .lock-card[data-lock-tone='warning'] .lock-card__slider-thumb {
   background:
-    radial-gradient(circle at 35% 22%, rgb(255 255 255 / 0.5), transparent 38%),
-    linear-gradient(145deg, rgb(var(--lock-accent-rgb) / 0.44), rgb(var(--lock-accent-rgb) / 0.22) 54%, rgb(255 255 255 / 0.075));
+    radial-gradient(circle at 35% 22%, rgb(var(--ui-glass-highlight-rgb) / 0.5), transparent 38%),
+    linear-gradient(145deg, rgb(var(--lock-accent-rgb) / 0.44), rgb(var(--lock-accent-rgb) / 0.22) 54%, var(--ui-fill-tertiary));
 }
 
 .lock-card__button-glow {
@@ -429,8 +372,8 @@
   z-index: 0;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 30% 12%, rgb(255 255 255 / 0.18), transparent 38%),
-    linear-gradient(90deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.035));
+    radial-gradient(circle at 30% 12%, rgb(var(--ui-glass-highlight-rgb) / 0.18), transparent 38%),
+    var(--ui-fill-tertiary);
   opacity: 0.9;
   pointer-events: none;
 }
@@ -444,7 +387,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.42rem;
-  color: rgb(255 255 255 / 0.86);
+  color: var(--ui-text-primary);
   pointer-events: none;
 }
 
@@ -468,16 +411,16 @@
   justify-self: center;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(255 255 255 / 0.16);
+  border: 1px solid var(--ui-border-strong);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 34% 22%, rgb(255 255 255 / 0.28), transparent 38%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.035) 54%, rgb(0 0 0 / 0.14));
-  color: rgb(255 255 255 / 0.9);
+    radial-gradient(circle at 34% 22%, rgb(var(--ui-glass-highlight-rgb) / 0.28), transparent 38%),
+    var(--ui-fill-secondary);
+  color: var(--ui-text-primary);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.24),
-    inset 0 -10px 18px rgb(0 0 0 / 0.15),
-    0 12px 26px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.24),
+    inset 0 -10px 18px var(--ui-shadow-soft),
+    0 12px 26px var(--ui-shadow),
     0 0 24px rgb(var(--lock-accent-rgb) / 0.14);
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 150ms ease, opacity 180ms ease;
 }
@@ -499,9 +442,9 @@
 .lock-card__mini-toggle:not(:disabled):hover {
   border-color: rgb(var(--lock-accent-rgb) / 0.3);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28),
-    inset 0 -10px 18px rgb(0 0 0 / 0.15),
-    0 14px 30px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.28),
+    inset 0 -10px 18px var(--ui-shadow-soft),
+    0 14px 30px var(--ui-shadow),
     0 0 30px rgb(var(--lock-accent-rgb) / 0.2);
   transform: translateY(-1px);
 }
@@ -515,7 +458,7 @@
   width: clamp(1.35rem, 18cqi, 1.7rem);
   height: clamp(1.35rem, 18cqi, 1.7rem);
   stroke-width: 2.15;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.24));
+  filter: drop-shadow(0 1px 2px var(--ui-shadow-soft));
 }
 
 .lock-card__hold-ring {
@@ -544,7 +487,7 @@
   grid-area: caption;
   display: -webkit-box;
   overflow: hidden;
-  color: rgb(255 255 255 / 0.46);
+  color: var(--ui-text-tertiary);
   font-size: 0.61rem;
   font-weight: 560;
   line-height: 1.18;
@@ -563,12 +506,12 @@
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  border-bottom: 1px solid var(--ui-border);
   padding: 0.18rem 0 0.42rem;
 }
 
 .lock-card__details small {
-  color: rgb(255 255 255 / 0.34);
+  color: var(--ui-text-disabled);
   font-size: 0.48rem;
   font-weight: 660;
   letter-spacing: 0.08em;
@@ -578,7 +521,7 @@
 
 .lock-card__details strong {
   margin-top: 0.22rem;
-  color: rgb(255 255 255 / 0.74);
+  color: var(--ui-text-secondary);
   font-size: 0.6rem;
   font-weight: 700;
   line-height: 1;
@@ -598,10 +541,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.34rem;
-  border: 1px solid rgb(255 255 255 / 0.095);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.038);
-  color: rgb(255 255 255 / 0.62);
+  background: var(--ui-fill-tertiary);
+  color: var(--ui-text-secondary);
   padding: 0.42rem 0.65rem;
   transition:
     background 180ms ease,
@@ -629,31 +572,13 @@
   border-color: rgb(var(--lock-accent-rgb) / 0.26);
   background: rgb(var(--lock-accent-rgb) / 0.07);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    0 10px 22px rgb(0 0 0 / 0.13);
+    inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.16),
+    0 10px 22px var(--ui-shadow-soft);
   transform: translateY(-1px);
 }
 
 .lock-card__secondary-action:not(:disabled):active {
   transform: scale(0.985);
-}
-
-.lock-card__battery-floating {
-  position: absolute;
-  z-index: 2;
-  right: 0.64rem;
-  top: 0.64rem;
-  display: none;
-  align-items: center;
-  gap: 0.18rem;
-  border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 999px;
-  background: rgb(0 0 0 / 0.12);
-  color: rgb(255 255 255 / 0.48);
-  padding: 0.14rem 0.32rem;
-  font-size: 0.48rem;
-  font-weight: 650;
-  backdrop-filter: blur(16px);
 }
 
 .lock-card__edit-handle {
@@ -682,11 +607,9 @@
 }
 
 .lock-card[data-lock-variant='mini'] .lock-card__state-dot,
-.lock-card[data-lock-variant='mini'] .lock-card__battery-badge,
 .lock-card[data-lock-variant='mini'] .lock-card__caption,
 .lock-card[data-lock-variant='mini'] .lock-card__details,
-.lock-card[data-lock-variant='mini'] .lock-card__actions,
-.lock-card[data-lock-variant='mini'] .lock-card__battery-floating {
+.lock-card[data-lock-variant='mini'] .lock-card__actions {
   display: none;
 }
 
@@ -715,8 +638,8 @@
 
 .lock-card[data-lock-variant='compact'] .lock-card__title {
   font-size: 0.86rem;
-  font-weight: 650;
-  letter-spacing: -0.03em;
+  font-weight: var(--ui-card-title-weight);
+  letter-spacing: var(--ui-card-title-tracking);
   line-height: 1.08;
 }
 
@@ -781,7 +704,7 @@
 }
 
 .lock-card[data-lock-variant='full'] .lock-card__details {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr));
 }
 
 .lock-card[data-lock-variant='full'] .lock-card__actions:empty {
@@ -801,11 +724,8 @@
   }
 
   .lock-card[data-lock-variant='compact'] .lock-card__state-dot,
-  .lock-card[data-lock-variant='compact'] .lock-card__battery-badge,
   .lock-card[data-lock-variant='standard'] .lock-card__state-dot,
-  .lock-card[data-lock-variant='standard'] .lock-card__battery-badge,
   .lock-card[data-lock-variant='full'] .lock-card__state-dot,
-  .lock-card[data-lock-variant='full'] .lock-card__battery-badge,
   .lock-card[data-lock-variant='standard'] .lock-card__caption,
   .lock-card[data-lock-variant='standard'] .lock-card__actions,
   .lock-card[data-lock-variant='full'] .lock-card__caption,
@@ -837,11 +757,9 @@
 
 @container lock-card (max-width: 132px) {
   .lock-card__state-dot,
-  .lock-card__battery-badge,
   .lock-card__caption,
   .lock-card__details,
-  .lock-card__actions,
-  .lock-card__battery-floating {
+  .lock-card__actions {
     display: none;
   }
 
@@ -956,7 +874,7 @@
 
   .lock-card[data-lock-variant='full'] .lock-card__details {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr));
   }
 }
 

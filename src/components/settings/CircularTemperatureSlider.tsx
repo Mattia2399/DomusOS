@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 const SLIDER_CENTER = 100;
 const SLIDER_RADIUS = 74;
@@ -111,6 +111,7 @@ export function CircularTemperatureSlider({
   onCommit,
 }: CircularTemperatureSliderProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const lastInteractionValueRef = useRef<number | undefined>(value);
   const canUseSlider = !disabled && min !== undefined && max !== undefined && max > min;
   const snappedValue =
     canUseSlider && value !== undefined ? snapTemperatureToStep(clamp(value, min, max), step, min) : undefined;
@@ -144,6 +145,7 @@ export function CircularTemperatureSlider({
     setIsDragging(true);
     const nextValue = resolveValueFromPointer(event);
     if (nextValue !== undefined) {
+      lastInteractionValueRef.current = nextValue;
       onChange?.(nextValue);
     }
   };
@@ -155,6 +157,7 @@ export function CircularTemperatureSlider({
     event.preventDefault();
     const nextValue = resolveValueFromPointer(event);
     if (nextValue !== undefined) {
+      lastInteractionValueRef.current = nextValue;
       onChange?.(nextValue);
     }
   };
@@ -164,9 +167,8 @@ export function CircularTemperatureSlider({
       return;
     }
     event.preventDefault();
-    const nextValue = resolveValueFromPointer(event);
+    const nextValue = lastInteractionValueRef.current;
     if (nextValue !== undefined) {
-      onChange?.(nextValue);
       onCommit?.(nextValue);
     }
     setIsDragging(false);
@@ -177,6 +179,7 @@ export function CircularTemperatureSlider({
 
   const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
     setIsDragging(false);
+    lastInteractionValueRef.current = value;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -250,14 +253,14 @@ export function CircularTemperatureSlider({
               y1="21"
               x2="100"
               y2={index % 5 === 0 ? '31' : '27'}
-              stroke="rgba(255,255,255,0.18)"
+              stroke="var(--ui-border-strong)"
               strokeWidth={index % 5 === 0 ? 1.4 : 0.9}
               strokeLinecap="round"
               transform={`rotate(${(360 / SLIDER_TICK_COUNT) * index} 100 100)`}
             />
           );
         })}
-        <path d={sliderTrackPath} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="18" strokeLinecap="round" />
+        <path d={sliderTrackPath} fill="none" stroke="var(--ui-fill-secondary)" strokeWidth="18" strokeLinecap="round" />
         {sliderActivePath ? (
           <path
             d={sliderActivePath}
@@ -274,8 +277,8 @@ export function CircularTemperatureSlider({
           cx={handlePoint.x}
           cy={handlePoint.y}
           r="8"
-          fill="white"
-          stroke="rgba(255,255,255,0.72)"
+          fill="var(--ui-accent-contrast)"
+          stroke="var(--ui-border-strong)"
           strokeWidth="1.5"
           style={{
             transition: 'filter 160ms ease',

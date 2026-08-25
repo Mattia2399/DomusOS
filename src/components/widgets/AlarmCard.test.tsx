@@ -70,7 +70,7 @@ describe('AlarmCard responsive safety compositions', () => {
 
     fireEvent.click(getByRole('button', { name: 'Disattiva' }));
     expect(onQuickDisarm).toHaveBeenCalledOnce();
-    expect(queryByRole('button', { name: 'Seleziona modalità Casa' })).toBeNull();
+    expect(queryByRole('radio', { name: 'Seleziona modalità Casa' })).toBeNull();
   });
 
   it('shows inline modes and details in the full composition', () => {
@@ -86,9 +86,9 @@ describe('AlarmCard responsive safety compositions', () => {
       />,
     );
 
-    expect(getByRole('button', { name: 'Seleziona modalità Casa' })).not.toBeNull();
+    expect(getByRole('radio', { name: 'Seleziona modalità Casa' })).not.toBeNull();
     expect(getByText('Dashboard Demo')).not.toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Seleziona modalità Notte' }));
+    fireEvent.click(getByRole('radio', { name: 'Seleziona modalità Notte' }));
     fireEvent.click(getByRole('button', { name: 'Inserisci Notte' }));
     expect(onQuickArm).toHaveBeenCalledWith('night');
   });
@@ -106,7 +106,7 @@ describe('AlarmCard responsive safety compositions', () => {
       />,
     );
 
-    fireEvent.click(getByRole('button', { name: 'Seleziona modalità Notte' }));
+    fireEvent.click(getByRole('radio', { name: 'Seleziona modalità Notte' }));
     fireEvent.click(getByRole('button', { name: 'Passa a Notte' }));
     expect(onQuickArm).toHaveBeenCalledWith('night');
   });

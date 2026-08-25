@@ -5,8 +5,8 @@
   --cover-accent: var(--cover-device-accent);
   --cover-accent-strong: var(--cover-device-accent-strong);
   --cover-accent-soft: var(--cover-device-accent-soft);
-  --cover-rail-bg: rgb(255 255 255 / 0.055);
-  --cover-muted: rgb(255 255 255 / 0.48);
+  --cover-rail-bg: var(--ui-fill-tertiary);
+  --cover-muted: var(--ui-text-tertiary);
   --cover-card-radius: 1.55rem;
   --cover-control-height: clamp(2.7rem, 18cqi, 3.25rem);
   --cover-control-radius: calc(var(--cover-card-radius) * 0.62);
@@ -98,8 +98,9 @@
   overflow: hidden;
   border-radius: inherit;
   background:
-    linear-gradient(145deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.018)),
-    var(--cover-accent-soft);
+    radial-gradient(110% 95% at 8% 0%, var(--cover-accent-soft), transparent 62%),
+    linear-gradient(145deg, rgb(var(--ui-glass-highlight-rgb) / 0.07), transparent),
+    var(--ui-surface-glass);
 }
 
 .cover-card__icon-shell {
@@ -112,9 +113,9 @@
   align-items: center;
   justify-content: center;
   align-self: start;
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.09);
+  background: var(--ui-fill-tertiary);
   color: var(--cover-accent);
 }
 
@@ -148,9 +149,10 @@
 }
 
 .cover-card__title {
-  color: white;
+  color: var(--ui-text-primary);
   font-size: clamp(0.74rem, 5.2cqi, 0.92rem);
-  font-weight: 650;
+  font-weight: var(--ui-card-title-weight);
+  letter-spacing: var(--ui-card-title-tracking);
   line-height: 1.05;
 }
 
@@ -169,11 +171,11 @@
   align-items: center;
   justify-content: center;
   align-self: start;
-  border: 1px solid rgb(255 255 255 / 0.1);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
   padding: 0 0.55rem;
-  background: rgb(255 255 255 / 0.08);
-  color: rgb(255 255 255 / 0.78);
+  background: var(--ui-fill-tertiary);
+  color: var(--ui-text-secondary);
   font-size: 0.62rem;
   font-weight: 650;
   line-height: 1;
@@ -186,18 +188,18 @@
   height: 100%;
   min-height: 4.1rem;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid var(--ui-border);
   border-radius: 0.85rem;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.045), rgb(0 0 0 / 0.18)),
+    linear-gradient(180deg, rgb(var(--ui-glass-highlight-rgb) / 0.045), var(--ui-shadow-soft)),
     var(--cover-rail-bg);
-  box-shadow: inset 0 8px 18px rgb(0 0 0 / 0.24);
+  box-shadow: inset 0 8px 18px var(--ui-shadow-soft);
 }
 
 .cover-card__frame-glow {
   position: absolute;
   inset: 0.28rem;
-  border: 1px solid rgb(255 255 255 / 0.06);
+  border: 1px solid var(--ui-border);
   border-radius: 0.6rem;
 }
 
@@ -364,9 +366,9 @@
   display: block;
   height: 0.46rem;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.08);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.08);
+  background: var(--ui-fill-tertiary);
 }
 
 .cover-card__progress-fill,
@@ -386,7 +388,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0.4rem;
-  color: rgb(255 255 255 / 0.42);
+  color: var(--ui-text-tertiary);
   font-size: 0.52rem;
   font-weight: 560;
   line-height: 1;
@@ -397,7 +399,7 @@
 }
 
 .cover-card__progress-labels strong {
-  color: rgb(255 255 255 / 0.76);
+  color: var(--ui-text-secondary);
   font-weight: 700;
 }
 
@@ -418,19 +420,19 @@
   min-width: 0;
   flex-direction: column;
   gap: 0.12rem;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
+  border-top: 1px solid var(--ui-border);
   padding-top: 0.42rem;
 }
 
 .cover-card__detail small {
-  color: rgb(255 255 255 / 0.38);
+  color: var(--ui-text-tertiary);
   font-size: 0.52rem;
   font-weight: 560;
   line-height: 1;
 }
 
 .cover-card__detail strong {
-  color: rgb(255 255 255 / 0.74);
+  color: var(--ui-text-secondary);
   font-size: 0.62rem;
   font-weight: 650;
   line-height: 1.08;
@@ -458,6 +460,24 @@
   width: 100%;
 }
 
+.cover-card__controls--stacked {
+  display: grid;
+  grid-template-rows: minmax(2.05rem, auto) var(--cover-control-height);
+  align-content: end;
+  gap: clamp(0.34rem, 2.4cqi, 0.5rem);
+}
+
+.cover-card__controls--with-actions {
+  display: grid;
+  grid-template-rows: var(--cover-control-height) auto;
+  align-content: end;
+  gap: clamp(0.34rem, 2.4cqi, 0.5rem);
+}
+
+.cover-card__controls--stacked.cover-card__controls--with-actions {
+  grid-template-rows: minmax(2.05rem, auto) var(--cover-control-height) auto;
+}
+
 .cover-card__cover-slider {
   position: relative;
   display: block;
@@ -466,20 +486,20 @@
   height: var(--cover-control-height);
   flex: 1 1 auto;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.12);
+  border: 1px solid var(--ui-border);
   border-radius: var(--cover-control-radius);
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.045), rgb(0 0 0 / 0.16)),
-    rgb(255 255 255 / 0.08);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.2);
+    linear-gradient(180deg, rgb(var(--ui-glass-highlight-rgb) / 0.045), var(--ui-shadow-soft)),
+    var(--ui-fill-tertiary);
+  box-shadow: inset 0 1px 3px var(--ui-shadow-soft), inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.2);
 }
 
 .cover-card__cover-slider-fill {
   position: absolute;
   inset-block: 0;
   left: 0;
-  width: var(--cover-card-position);
-  border-radius: inherit;
+  width: var(--cover-slider-coverage);
+  border-radius: var(--cover-control-radius) 0 0 var(--cover-control-radius);
   border-right: 1px solid rgb(255 255 255 / 0.38);
   background:
     repeating-linear-gradient(
@@ -594,7 +614,7 @@
 .cover-card__cover-slider-handle {
   position: absolute;
   inset-block: 0.34rem;
-  left: calc(var(--cover-card-position) - 0.11rem);
+  left: calc(var(--cover-slider-coverage) - 0.11rem);
   width: 0.22rem;
   border-radius: 999px;
   background: rgb(255 255 255 / 0.72);
@@ -630,17 +650,17 @@
   justify-self: end;
   align-self: start;
   gap: 0.35rem;
-  border: 1px solid rgb(255 255 255 / 0.15);
+  border: 1px solid var(--ui-border);
   border-radius: var(--cover-control-radius);
   padding: 0 0.62rem;
-  background: rgb(255 255 255 / 0.1);
-  color: rgb(255 255 255 / 0.88);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+  background: var(--ui-fill-tertiary);
+  color: var(--ui-text-primary);
+  box-shadow: inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.14);
   transition: transform 160ms ease, background 180ms ease;
 }
 
 .cover-card__mode-button:hover {
-  background: rgb(255 255 255 / 0.17);
+  background: var(--ui-fill-secondary);
 }
 
 .cover-card__mode-button:active {
@@ -671,11 +691,11 @@
   flex: 1 1 auto;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.24rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
+  border: 1px solid var(--ui-border);
   border-radius: var(--cover-control-radius);
   padding: 0.26rem;
-  background: rgb(255 255 255 / 0.08);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.12);
+  background: var(--ui-fill-tertiary);
+  box-shadow: inset 0 1px 3px var(--ui-shadow-soft), inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.12);
 }
 
 .cover-card__tilt-option {
@@ -687,7 +707,7 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: rgb(255 255 255 / 0.64);
+  color: var(--ui-text-secondary);
   font-size: 0.58rem;
   font-weight: 700;
   line-height: 1;
@@ -695,8 +715,8 @@
 }
 
 .cover-card__tilt-option:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: rgb(255 255 255 / 0.86);
+  background: var(--ui-fill-secondary);
+  color: var(--ui-text-primary);
 }
 
 .cover-card__tilt-option:active {
@@ -704,9 +724,100 @@
 }
 
 .cover-card__tilt-option--active {
-  background: rgb(255 255 255 / 0.92);
-  color: rgb(15 23 42 / 0.92);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.75);
+  background: var(--ui-surface-glass-strong);
+  color: var(--ui-text-primary);
+  box-shadow: 0 2px 8px var(--ui-shadow-soft), inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.24);
+}
+
+.cover-card__controls--stacked .cover-card__tilt-segments {
+  min-height: clamp(2.05rem, 12cqi, var(--cover-control-height));
+  padding: clamp(0.2rem, 1.4cqi, 0.26rem);
+}
+
+.cover-card__controls--stacked .cover-card__tilt-option {
+  height: calc(clamp(2.05rem, 12cqi, var(--cover-control-height)) - 0.58rem);
+  font-size: clamp(0.54rem, 2.7cqi, 0.62rem);
+}
+
+.cover-card__controls--stacked .cover-card__cover-slider {
+  height: var(--cover-control-height);
+}
+
+.cover-card__quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.28rem, 2cqi, 0.42rem);
+  min-width: 0;
+}
+
+.cover-card__quick-action {
+  min-width: 0;
+  height: clamp(1.82rem, 8.5cqi, 2.16rem);
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--cover-control-radius) * 0.82);
+  padding: 0 0.35rem;
+  background:
+    linear-gradient(180deg, rgb(var(--ui-glass-highlight-rgb) / 0.1), transparent),
+    var(--ui-fill-tertiary);
+  color: var(--ui-text-secondary);
+  font-size: clamp(0.55rem, 2.7cqi, 0.66rem);
+  font-weight: 720;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgb(var(--ui-glass-highlight-rgb) / 0.12), 0 8px 18px var(--ui-shadow-soft);
+  transition: transform 150ms ease, border-color 170ms ease, background 170ms ease, color 170ms ease;
+}
+
+.cover-card__quick-action:hover:not(:disabled) {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-fill-secondary);
+  color: var(--ui-text-primary);
+}
+
+.cover-card__quick-action:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.cover-card__quick-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.cover-card__quick-action--stop {
+  border-color: var(--ui-border-strong);
+  background:
+    linear-gradient(180deg, rgb(var(--ui-glass-highlight-rgb) / 0.13), transparent),
+    var(--cover-accent-soft);
+  color: var(--ui-text-primary);
+}
+
+@container cover-card (max-height: 170px) {
+  .cover-card__controls--stacked {
+    grid-template-rows: minmax(1.72rem, auto) var(--cover-control-height);
+    gap: 0.28rem;
+  }
+
+  .cover-card__controls--with-actions {
+    gap: 0.28rem;
+  }
+
+  .cover-card__controls--stacked.cover-card__controls--with-actions {
+    grid-template-rows: minmax(1.72rem, auto) var(--cover-control-height) auto;
+  }
+
+  .cover-card__controls--stacked .cover-card__tilt-segments {
+    min-height: 1.72rem;
+    padding: 0.16rem;
+  }
+
+  .cover-card__controls--stacked .cover-card__tilt-option {
+    height: 1.34rem;
+    font-size: 0.52rem;
+  }
+
+  .cover-card__quick-action {
+    height: 1.64rem;
+    font-size: 0.52rem;
+  }
 }
 
 .cover-card[data-cover-variant='mini'] .cover-card__surface {
@@ -846,12 +957,12 @@
   height: 100%;
   min-height: 0;
   border-width: 6px;
-  border-color: rgb(255 255 255 / 0.1);
+  border-color: var(--ui-border);
   border-radius: 1.75rem;
-  background: rgb(255 255 255 / 0.045);
+  background: var(--ui-fill-tertiary);
   box-shadow:
-    inset 0 10px 28px rgb(0 0 0 / 0.24),
-    0 18px 40px rgb(0 0 0 / 0.18);
+    inset 0 10px 28px var(--ui-shadow-soft),
+    0 18px 40px var(--ui-shadow-soft);
 }
 
 .cover-controls__rail .cover-card__frame-glow {

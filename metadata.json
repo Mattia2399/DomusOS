@@ -1,5 +1,5 @@
 {
-  "name": "HA Dashboard Builder",
-  "description": "A visual web app to design Home Assistant dashboards, manage a card registry, and export clean YAML.",
+  "name": "DomusOS",
+  "description": "DomusOS is a premium responsive dashboard and visual builder for Home Assistant.",
   "requestFramePermissions": []
 }

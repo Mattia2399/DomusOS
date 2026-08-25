@@ -172,43 +172,43 @@ export function MicroStep({ widget, state, onValueChange }: MicroStepProps) {
 
   return (
     <div
-      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-white transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)] ${
+      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-[color:var(--ui-text-primary)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)] ${
         isDisabled
-          ? 'border-white/8 bg-white/[0.05] opacity-70'
-          : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]'
+          ? 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] opacity-70'
+          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)]'
       }`}
     >
       <div className="flex h-full min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-medium leading-tight text-white/90">{label}</p>
+          <p className="truncate text-sm font-medium leading-tight text-[color:var(--ui-text-primary)]">{label}</p>
           <div className="inline-flex items-center gap-1.5">
             {isPending ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-sky-200/90 border-t-transparent" />
             ) : isSent ? (
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.85)]" />
             ) : null}
-            <p className="text-[11px] font-semibold leading-tight text-white/72">{formattedValue}</p>
+            <p className="text-[11px] font-semibold leading-tight text-[color:var(--ui-text-secondary)]">{formattedValue}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-2 py-1.5">
+        <div className="flex items-center gap-2 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2 py-1.5">
           <button
             type="button"
             onClick={() => handleStep('down')}
             disabled={!canDecrease}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/18 bg-white/[0.04] text-base font-semibold text-white/88 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-base font-semibold text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={`Riduci ${label}`}
           >
             -
           </button>
 
-          <p className="min-w-0 flex-1 truncate text-center text-[11px] font-semibold leading-tight text-white/78">{formattedValue}</p>
+          <p className="min-w-0 flex-1 truncate text-center text-[11px] font-semibold leading-tight text-[color:var(--ui-text-secondary)]">{formattedValue}</p>
 
           <button
             type="button"
             onClick={() => handleStep('up')}
             disabled={!canIncrease}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/18 bg-white/[0.04] text-base font-semibold text-white/88 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-base font-semibold text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-fill-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={`Aumenta ${label}`}
           >
             +

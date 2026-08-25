@@ -12,6 +12,7 @@ import {
   resolveAlarmSupportedFeatures,
   toTrimmedString,
 } from '../../utils/alarmUtils';
+import { getWidgetSecrets } from '../../services/widgetSecrets';
 
 export type AlarmArmMode = 'home' | 'away' | 'night' | 'vacation' | 'custom_bypass';
 export type AlarmCardTone = 'neutral' | 'home' | 'away' | 'night' | 'vacation' | 'bypass' | 'danger' | 'unavailable';
@@ -85,9 +86,10 @@ export function buildAlarmCardModel(widget: Widget, liveEntity?: MockEntityState
   const isUnavailable = state === 'unknown' || state === 'unavailable';
   const isDisarmed = state === 'disarmed';
   const codeArmRequired = rawAttributes?.code_arm_required === true;
+  const widgetSecrets = getWidgetSecrets(widget.id);
   const localUnlockEnabled =
-    (widget.alarmUnlockCode ?? '').trim().length > 0 ||
-    (widget.alarmLocalExtraCode ?? '').trim().length > 0;
+    (widgetSecrets.alarmUnlockCode ?? '').trim().length > 0 ||
+    (widgetSecrets.alarmLocalExtraCode ?? '').trim().length > 0;
 
   return {
     title: widget.title,

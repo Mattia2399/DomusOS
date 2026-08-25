@@ -34,6 +34,7 @@ function normalizeMessage(message) {
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
+  const [announcement, setAnnouncement] = useState(null);
 
   const removeNotification = useCallback((id) => {
     setNotifications((prev) => prev.filter((notification) => notification.id !== id));
@@ -50,6 +51,7 @@ export function NotificationProvider({ children }) {
     };
 
     setNotifications((prev) => [nextNotification, ...prev].slice(0, MAX_NOTIFICATIONS));
+    setAnnouncement(nextNotification);
 
     return id;
   }, []);
@@ -101,7 +103,19 @@ export function NotificationProvider({ children }) {
     ],
   );
 
-  return <NotificationContext.Provider value={contextValue}>{children}</NotificationContext.Provider>;
+  return (
+    <NotificationContext.Provider value={contextValue}>
+      {children}
+      <div
+        className="sr-only"
+        role={announcement?.type === 'alert' ? 'alert' : 'status'}
+        aria-live={announcement?.type === 'alert' ? 'assertive' : 'polite'}
+        aria-atomic="true"
+      >
+        {announcement?.message ?? ''}
+      </div>
+    </NotificationContext.Provider>
+  );
 }
 
 export function useNotifications() {

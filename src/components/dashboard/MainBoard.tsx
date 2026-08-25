@@ -1,44 +1,155 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveDevice, SensorConnectionState } from '../settings/types';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { useDashboardState } from '../../hooks/useDashboardState';
-import { ConsumptionDashboardPage } from '../../pages/Consumi';
-import { AutomationsBuilder } from '../../pages/AutomationsBuilder';
-import AppGallery from '../../pages/AppGallery';
-import RoomsDashboard from '../../pages/RoomsDashboard';
-import SecurityDashboard from '../../pages/SecurityDashboard';
-import SettingsDashboard from '../../pages/SettingsDashboard';
-import { ConsumptionEditorSidebar } from '../settings/ConsumptionEditorSidebar';
-import SecurityAuthModal from '../security/SecurityAuthModal';
+import DeferredGlassLoader from '../ui/DeferredGlassLoader';
+import GlassModal from '../ui/GlassModal';
 import { LeftSidebar } from './LeftSidebar';
 import { BottomBarNav } from './BottomBarNav';
 import { XsNotificationBell } from './XsNotificationBell';
+import { XsProfileChip } from './XsProfileChip';
 import { MobileSidebarDrawer } from './MobileSidebarDrawer';
-import { RightSidebarManager } from './RightSidebarManager';
+import { DashboardSidebarPlaceholder } from './DashboardSidebarPlaceholder';
 import { GridCanvas } from './GridCanvas';
+import { HomeAssistantRecoveryBanner } from './HomeAssistantRecoveryBanner';
+import { DashboardEditToolbar } from './DashboardEditToolbar';
+import { DashboardViewportPreviewBar } from './DashboardViewportPreviewBar';
+import DashboardEditDraftRecoveryModal from './DashboardEditDraftRecoveryModal';
+import HomeAttentionCenter from '../homeAttention/HomeAttentionCenter';
+import type { HomeAttentionItem } from '../homeAttention/homeAttentionEngine';
+import {
+  CLIMATE_FEATURE_FAN_MODE,
+  CLIMATE_FEATURE_PRESET_MODE,
+  CLIMATE_FEATURE_SWING_HORIZONTAL_MODE,
+  CLIMATE_FEATURE_SWING_MODE,
+  CLIMATE_FEATURE_TARGET_HUMIDITY,
+  CLIMATE_FEATURE_TARGET_TEMPERATURE,
+  CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE,
+  CLIMATE_FEATURE_TURN_OFF,
+  CLIMATE_FEATURE_TURN_ON,
+  CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID,
+  createLivingRoomClimateMock,
+  resolveMockClimateAction,
+} from './mainboard/mainBoardClimateMock';
+import {
+  resolveLightCapabilities,
+} from './mainboard/mainBoardLightModel';
+import {
+  CAMERA_PTZ_DIRECTION_VECTORS,
+  CAMERA_PTZ_SERVICE_CANDIDATES,
+  buildCameraDeviceContext,
+  extractCameraHistoryEntries,
+  hasAnyCameraPtzButton,
+  isCameraOfflineState,
+  normalizeCameraState,
+  resolveCameraDerivedActivity,
+  resolveCameraPreviewUrls,
+  resolveCameraPtzButtonPressSequence,
+  resolveCameraPtzButtons,
+  resolveCameraPtzServiceTarget,
+  resolveCameraSupportsPtz,
+  type CameraPtzButtonMap,
+  type CameraPtzServiceTarget,
+  type HaServiceRegistry,
+} from './mainboard/mainBoardCameraModel';
+import {
+  SENSOR_HISTORY_WINDOW_HOURS,
+  SENSOR_HISTORY_MAX_POINTS,
+  extractSensorHistoryValues,
+  resolveSensorMeta,
+  sameNumberSeries,
+} from './mainboard/mainBoardSensorModel';
+import {
+  isRecordObject,
+  normalizeLookupToken,
+  normalizeLower,
+  resolveRelativeHaUrl,
+  toBoolean,
+  toFiniteNumber,
+  toHistoryTimestampMs,
+  toTimestampMs,
+  toTrimmedString,
+} from './mainboard/mainBoardValueUtils';
+import {
+  useLightSwitchPendingController,
+} from './mainboard/useLightSwitchPendingController';
+import { useLightSwitchCommands } from './mainboard/useLightSwitchCommands';
+import {
+  CLIMATE_PENDING_TTL_MS,
+  hasClimatePendingValues,
+  hasCoverPendingValues,
+  useClimateCoverPendingController,
+} from './mainboard/useClimateCoverPendingController';
+import { useClimateCoverCommandTransport } from './mainboard/useClimateCoverCommandTransport';
+import {
+  VACUUM_COMMAND_TTL_MS,
+  normalizeVacuumState,
+  translateVacuumState,
+} from './mainboard/mainBoardVacuumModel';
+import { useVacuumCommands } from './mainboard/useVacuumCommands';
+import {
+  MEDIA_COMMAND_TTL_MS,
+  resolveMediaState,
+  resolveMediaRepeatMode,
+  type MediaRepeatMode,
+} from './mainboard/mainBoardMediaModel';
+import { useMediaCommands } from './mainboard/useMediaCommands';
 import type { WidgetDisplayMetrics } from '../widgets/widgetDisplayVariant';
 import { createHomeAlarmMock, HOME_ALARM_MOCK_ENTITY_ID } from '../widgets/alarmMock';
 import {
   createMediaPlayerStateMocks,
 } from '../widgets/mediaMock';
 import { createCoverStateMocks } from '../widgets/coverMock';
-import { GRID_ENGINE_BREAKPOINTS } from './DashboardGrid';
-import { Menu, Plus, X } from 'lucide-react';
+import { createLockStateMocks } from '../widgets/lockMock';
+import {
+  CAMERA_MAX_COMPAT_MOCK_ENTITY_ID,
+  createCameraStateMocks,
+} from '../widgets/cameraMock';
+import {
+  buildVacuumDeviceSnapshot,
+  buildVacuumRelatedEntity,
+  enrichVacuumEntity,
+  parseVacuumMappedAreas,
+  type VacuumDeviceInfo,
+  type VacuumMappedArea,
+  type VacuumRelatedEntityInfo,
+} from '../widgets/vacuumDeviceModel';
+import {
+  createVacuumStateMocks,
+} from '../widgets/vacuumMock';
+import {
+  isCompactViewportNow,
+  isDesktopViewportNow,
+  isXsViewportNow,
+  resolveDashboardViewportPreviewWidth,
+  resolveGridBreakpointFromWidth,
+  resolveGridBreakpointNow,
+  type DashboardViewportPreviewMode,
+} from './dashboardViewport';
+import { resolveFavoriteGridTargetSectionId } from './favoriteGridPlacement';
+import { LayoutDashboard, Lightbulb, Menu, MousePointerClick, PanelRightOpen, PencilRuler, Plus, Settings2, X } from 'lucide-react';
 import {
   normalizeWidgetTypeLayoutOverrides,
   setActiveWidgetTypeLayoutOverrides,
 } from './dashboardBreakpointConfig';
-import type { CameraPtzDirection } from '../settings/CameraControls';
-import type { MediaPlayRequest } from '../settings/MediaControls';
+import type {
+  CameraDeviceInfo,
+  CameraHistoryEntry,
+  CameraHistoryStatus,
+  CameraPtzDirection,
+  CameraRelatedEntityActionRequest,
+  CameraRelatedEntityCategory,
+  CameraRelatedEntityInfo,
+} from '../settings/CameraControls';
 import { useNotifications } from '../../context/NotificationProvider';
-import {
-  ProfilePanel,
-  type ProfileHouseMember,
-  type ProfileSectionId,
-  type ProfileMovementMapPoint,
-  type ProfileMovementTimelineEntry,
-} from '../settings/ProfilePanel';
-import { GuidedSetupOverlay, type GuidedSetupStep } from '../settings/GuidedSetupOverlay';
+import type {
+  ProfileMovementMapPoint,
+  ProfileMovementTimelineEntry,
+  ProfileSectionId,
+} from '../settings/profileModels';
+import type { SettingsManagementSectionId } from '../settings/settingsManagementRegistry';
+import type { ProfileHouseMember } from '../settings/settingsHouseAccessModel';
+import type { GuidedSetupStep } from '../settings/GuidedSetupOverlay';
 import {
   ENTITY_OPTIONS,
   FAVORITES_GRID_TITLE,
@@ -58,9 +169,13 @@ import {
   type SceneRunState,
   type SectionKind,
   type Widget,
+  type WidgetCatalogDestination,
   type WidgetKind,
 } from '../../types/dashboardModels';
-import { loadDashboardLayout, saveDashboardLayout } from '../../services/dashboardStorage';
+import {
+  DASHBOARD_LAYOUT_STORAGE_VERSION,
+  loadDashboardLayout,
+} from '../../services/dashboardStorage';
 import type {
   DashboardResponsiveLayouts,
   DashboardGridBreakpoint,
@@ -74,17 +189,84 @@ import {
   useConsumptionConfig,
 } from '../../hooks/useConsumptionConfig';
 import { useProfileSettings, type SidebarQuickPath } from '../../hooks/useProfileSettings';
+import { resolveApplicationRoutePath } from '../../navigation/applicationRoutes';
 import { useHaLiveConnection } from '../../hooks/useHaLiveConnection';
 import { useHaPanelBridgeConnection } from '../../hooks/useHaPanelBridgeConnection';
+import { useHaIdentityRevalidation } from '../../hooks/useHaIdentityRevalidation';
+import { useDashboardLayoutPersistence } from '../../hooks/useDashboardLayoutPersistence';
+import { useHaDashboardLayoutPersistence } from '../../hooks/useHaDashboardLayoutPersistence';
+import { useDashboardEditorHistory } from '../../hooks/useDashboardEditorHistory';
+import { createDashboardStructuralFingerprint } from '../../services/dashboardPersistenceProjection';
+import type { DashboardLayoutConfiguration } from '../../services/dashboardConfigurationRepository';
+import {
+  createDashboardRecoverySnapshot,
+  discardDashboardRecoverySnapshot,
+  readPendingDashboardRecoverySnapshot,
+  restoreDashboardRecoverySnapshot,
+} from '../../services/dashboardRecovery';
+import {
+  discardDashboardEditDraft,
+  readDashboardEditDraft,
+  saveDashboardEditDraft,
+  type DashboardEditDraft,
+} from '../../services/dashboardEditDraft';
+import { isHaConnectionRecoveryStatus } from '../../services/haConnectionState';
 import {
   buildHaOAuthAuthorizeUrl,
+  clearHassAuthTokensStorage,
   exchangeHaOAuthCode,
   loadHassAuthTokensFromStorage,
   normalizeHassUrl,
-  persistOAuthTokensAsAuthData,
+  persistHaOAuthSession,
 } from '../../services/haLive';
+import {
+  fallbackTitleFromEntityId,
+  parseDeviceIdsByLabelIds,
+  parseEntityIdsByDeviceIds,
+  parseEntityIdsByLabelIds,
+  parseFavoriteLabelIds,
+  parseHaDeviceRegistry,
+  parseHaEntityRegistry,
+  resolveWidgetKindFromEntityId,
+  type HaDeviceRegistryEntry,
+  type HaEntityRegistryEntry,
+} from '../../services/haRegistryPresentation';
+import {
+  parseHaAuthUsers,
+  parseHaLogbookEvents,
+  type HaAuthUser,
+  type HaLogbookEvent,
+} from '../../services/haIdentityPresentation';
+import {
+  resolveOAuthReturnPath,
+  validateHaOAuthCallbackState,
+  type HaOAuthStatePayload,
+} from '../../security/oauthState';
+import {
+  requestTargetsMockEntity,
+  shouldBlockMockEntityApiRequest,
+} from '../../security/mockSourcePolicy';
+import {
+  DashboardSecurityProvider,
+  createDashboardSecurityValue,
+  isDashboardAdministrativeApiMessage,
+  isDashboardRestartService,
+  type DashboardRuntimeMode,
+} from '../../security/dashboardAccess';
+import {
+  SensitiveActionGateProvider,
+} from '../../security/SensitiveActionGate';
+import {
+  persistDashboardRuntimeMode,
+  resolveInitialDashboardRuntimeMode,
+} from '../../services/dashboardRuntime';
 import type { MockEntityState, MockEntityStateMap } from '../../types/ha';
 import { resolveSensorDisplayPrecision } from '../../utils/sensorValue';
+import {
+  resolveDeviceBatteryLevel,
+  resolveDeviceConnection,
+  resolveDeviceTelemetryEntities,
+} from '../../utils/deviceTelemetry';
 import {
   clearManagedDashboardStorage,
   createDashboardBackupPayload,
@@ -102,6 +284,16 @@ import {
 } from '../../services/securityAuth';
 import { isOnboardingCompleted, markOnboardingCompleted } from '../../services/onboardingStorage';
 import { useDeviceAuth } from '../../hooks/useDeviceAuth';
+import {
+  useDeviceCommandCoordinator,
+  type DeviceCommandRollbackReason,
+} from '../../hooks/useDeviceCommandCoordinator';
+import {
+  forgetWidgetSecrets,
+  getWidgetSecrets,
+  mergeWidgetSecretsIntoWidgets,
+  useWidgetSecrets,
+} from '../../services/widgetSecrets';
 import {
   type AlarmServiceName,
   getAlarmStateLabel,
@@ -144,108 +336,111 @@ import {
   resolveCoverTiltPosition,
   translateCoverState,
 } from '../../utils/coverUtils';
-import { normalizeMediaPlayerStateKey, translateMediaPlayerState } from '../../utils/mediaPlayerState';
+import { translateMediaPlayerState } from '../../utils/mediaPlayerState';
+import {
+  createOAuthNonce,
+  isAppGalleryNavigationTarget,
+  isAutomationNavigationTarget,
+  isConsumptionDetailNavigationTarget,
+  isConsumptionNavigationTarget,
+  isExternalNavigationTarget,
+  isHomeNavigationTarget,
+  isNestedDashboardNavigationTarget,
+  isNavigationPathnameAllowed,
+  isProfileNavigationTarget,
+  isRoomsNavigationTarget,
+  isSecurityCamerasNavigationTarget,
+  isSecurityNavigationTarget,
+  isSettingsNavigationTarget,
+  normalizeNavigationPathname,
+  resolveAppGalleryFromLocation,
+  resolveAutomationFromLocation,
+  resolveConsumptionDetailFromLocation,
+  resolveConsumptionFromLocation,
+  resolveEditAvailabilityFromLocation,
+  resolveProfileFromLocation,
+  resolveRoomsFromLocation,
+  resolveSecurityCamerasFromLocation,
+  resolveSecurityFromLocation,
+  resolveSettingsFromLocation,
+  shouldUseBrowserRouteNavigation,
+} from './mainboard/mainBoardNavigation';
 
-const LIGHT_FEATURE_BRIGHTNESS = 1;
-const LIGHT_FEATURE_COLOR_TEMP = 2;
-const LIGHT_FEATURE_EFFECT = 4;
-const LIGHT_FEATURE_FLASH = 8;
-const LIGHT_FEATURE_COLOR = 16;
-const LIGHT_FEATURE_TRANSITION = 32;
-const LIGHT_FEATURE_WHITE = 128;
-const CLIMATE_FEATURE_TARGET_TEMPERATURE = 1;
-const CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE = 2;
-const CLIMATE_FEATURE_TARGET_HUMIDITY = 4;
-const CLIMATE_FEATURE_FAN_MODE = 8;
-const CLIMATE_FEATURE_PRESET_MODE = 16;
-const CLIMATE_FEATURE_SWING_MODE = 32;
-const CLIMATE_FEATURE_TURN_OFF = 128;
-const CLIMATE_FEATURE_TURN_ON = 256;
-const CLIMATE_FEATURE_SWING_HORIZONTAL_MODE = 512;
-const CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID = 'climate.living_room';
-const CLIMATE_LIVING_ROOM_MOCK_FEATURES =
-  CLIMATE_FEATURE_TARGET_TEMPERATURE |
-  CLIMATE_FEATURE_TARGET_TEMPERATURE_RANGE |
-  CLIMATE_FEATURE_TARGET_HUMIDITY |
-  CLIMATE_FEATURE_FAN_MODE |
-  CLIMATE_FEATURE_PRESET_MODE |
-  CLIMATE_FEATURE_SWING_MODE |
-  CLIMATE_FEATURE_TURN_OFF |
-  CLIMATE_FEATURE_TURN_ON |
-  CLIMATE_FEATURE_SWING_HORIZONTAL_MODE;
+const loadConsumptionDashboard = () => import('../../pages/Consumi');
+const loadConsumptionEditor = () => import('../settings/ConsumptionEditorSidebar');
+const loadAutomationsBuilder = () => import('../../pages/AutomationsBuilder');
+const loadAppGallery = () => import('../../pages/AppGallery');
+const loadRoomsDashboard = () => import('../../pages/RoomsDashboard');
+const loadSecurityDashboard = () => import('../../pages/SecurityDashboard');
+const loadSettingsDashboard = () => import('../../pages/SettingsDashboard');
+const loadRightSidebarManager = () =>
+  import('./RightSidebarManager').then((module) => ({ default: module.RightSidebarManager }));
+const loadModernProfilePage = () =>
+  import('../settings/ModernProfilePage').then((module) => ({ default: module.ModernProfilePage }));
+const loadSettingsManagementPanel = () =>
+  import('../settings/SettingsManagementPanel').then((module) => ({
+    default: module.SettingsManagementPanel,
+  }));
+const loadGuidedSetupOverlay = () => import('../settings/GuidedSetupOverlay');
+const loadSecurityAuthModal = () => import('../security/SecurityAuthModal');
+const loadDashboardRecoveryModal = () => import('./DashboardRecoveryModal');
 
-function resolveMockClimateAction(mode: string) {
-  if (mode === 'heat') return 'heating';
-  if (mode === 'cool') return 'cooling';
-  if (mode === 'dry') return 'drying';
-  if (mode === 'fan_only') return 'fan';
-  if (mode === 'off') return 'off';
-  return 'idle';
+const ConsumptionDashboardPage = React.lazy(loadConsumptionDashboard);
+const ConsumptionEditorSidebar = React.lazy(loadConsumptionEditor);
+const AutomationsBuilder = React.lazy(loadAutomationsBuilder);
+const AppGallery = React.lazy(loadAppGallery);
+const RoomsDashboard = React.lazy(loadRoomsDashboard);
+const SecurityDashboard = React.lazy(loadSecurityDashboard);
+const SettingsDashboard = React.lazy(loadSettingsDashboard);
+const RightSidebarManager = React.lazy(loadRightSidebarManager);
+const ModernProfilePage = React.lazy(loadModernProfilePage);
+const SettingsManagementPanel = React.lazy(loadSettingsManagementPanel);
+const GuidedSetupOverlay = React.lazy(loadGuidedSetupOverlay);
+const SecurityAuthModal = React.lazy(loadSecurityAuthModal);
+const DashboardRecoveryModal = React.lazy(loadDashboardRecoveryModal);
+
+function prefetchDashboardWorkspace(path: string) {
+  const normalizedPath = path.trim().toLowerCase().split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+
+  if (normalizedPath === '/rooms') return void loadRoomsDashboard();
+  if (normalizedPath.startsWith('/security')) return void loadSecurityDashboard();
+  if (normalizedPath.startsWith('/consumi')) return void loadConsumptionDashboard();
+  if (normalizedPath.startsWith('/automations')) return void loadAutomationsBuilder();
+  if (normalizedPath.startsWith('/appgallery')) return void loadAppGallery();
+  if (normalizedPath.startsWith('/settings')) return void loadSettingsDashboard();
+  if (normalizedPath.startsWith('/profile')) return void loadModernProfilePage();
 }
 
-function createLivingRoomClimateMock(): MockEntityState {
-  const hvacMode = 'heat';
-  const hvacAction = resolveMockClimateAction(hvacMode);
-  const hvacModes = ['off', 'heat', 'cool', 'heat_cool', 'auto', 'dry', 'fan_only'];
-  const fanModes = ['auto', 'low', 'medium', 'high', 'quiet', 'turbo'];
-  const presetModes = ['none', 'eco', 'comfort', 'away', 'sleep', 'boost'];
-  const swingModes = ['off', 'vertical', 'horizontal', 'both'];
-  const swingHorizontalModes = ['off', 'left', 'center', 'right', 'wide'];
-  return {
-    state: hvacMode,
-    stateLabel: hvacAction,
-    toggleOn: true,
-    hvacMode,
-    hvacAction,
-    hvacModes,
-    currentValue: 20.5,
-    targetValue: 22,
-    minTemp: 7,
-    maxTemp: 35,
-    targetTempStep: 0.5,
-    supportedFeatures: CLIMATE_LIVING_ROOM_MOCK_FEATURES,
-    currentHumidity: 48,
-    targetHumidity: 60,
-    minHumidity: 30,
-    maxHumidity: 80,
-    targetHumidityStep: 1,
-    fanMode: 'auto',
-    fanModes,
-    presetMode: 'comfort',
-    presetModes,
-    swingMode: 'off',
-    swingModes,
-    swingHorizontalMode: 'center',
-    swingHorizontalModes,
-    unit: '°C',
-    rawAttributes: {
-      friendly_name: 'Clima Living Room',
-      hvac_mode: hvacMode,
-      hvac_action: hvacAction,
-      hvac_modes: hvacModes,
-      current_temperature: 20.5,
-      temperature: 22,
-      min_temp: 7,
-      max_temp: 35,
-      target_temp_step: 0.5,
-      temperature_unit: '°C',
-      current_humidity: 48,
-      humidity: 60,
-      min_humidity: 30,
-      max_humidity: 80,
-      target_humidity_step: 1,
-      fan_mode: 'auto',
-      fan_modes: fanModes,
-      preset_mode: 'comfort',
-      preset_modes: presetModes,
-      swing_mode: 'off',
-      swing_modes: swingModes,
-      swing_horizontal_mode: 'center',
-      swing_horizontal_modes: swingHorizontalModes,
-      supported_features: CLIMATE_LIVING_ROOM_MOCK_FEATURES,
-    },
-  };
+function SecondaryWorkspaceLoading({
+  label = 'Apertura sezione…',
+  overlay = false,
+}: {
+  label?: string;
+  overlay?: boolean;
+}) {
+  return (
+    <DeferredGlassLoader
+      label={label}
+      description="Carichiamo soltanto gli strumenti necessari."
+      overlay={overlay}
+    />
+  );
 }
+
+type DashboardEditorSnapshot = Omit<DashboardLayoutConfiguration, 'storageVersion'>;
+
+function cloneDashboardEditorSnapshot(snapshot: DashboardEditorSnapshot): DashboardEditorSnapshot {
+  if (typeof structuredClone === 'function') return structuredClone(snapshot);
+  return JSON.parse(JSON.stringify(snapshot)) as DashboardEditorSnapshot;
+}
+
+function fingerprintDashboardEditorSnapshot(snapshot: DashboardEditorSnapshot) {
+  return createDashboardStructuralFingerprint({
+    storageVersion: DASHBOARD_LAYOUT_STORAGE_VERSION,
+    ...snapshot,
+  });
+}
+
 const MEDIA_FEATURE_PAUSE = 1;
 const MEDIA_FEATURE_SEEK = 2;
 const MEDIA_FEATURE_VOLUME_SET = 4;
@@ -300,107 +495,11 @@ const VACUUM_DEMO_SUPPORTED_FEATURES =
   VACUUM_FEATURE_CLEAN_AREA;
 const VACUUM_DEMO_MAP_URL =
   "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%20800%20520'%3E%3Cdefs%3E%3ClinearGradient%20id%3D'g'%20x1%3D'0'%20x2%3D'1'%20y1%3D'0'%20y2%3D'1'%3E%3Cstop%20offset%3D'0%25'%20stop-color%3D'%23131a24'/%3E%3Cstop%20offset%3D'100%25'%20stop-color%3D'%231f2b3b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D'800'%20height%3D'520'%20fill%3D'url(%23g)'/%3E%3Cg%20stroke%3D'%236f8fb4'%20stroke-opacity%3D'.45'%20stroke-width%3D'3'%20fill%3D'none'%3E%3Crect%20x%3D'58'%20y%3D'48'%20width%3D'684'%20height%3D'424'%20rx%3D'18'/%3E%3Cpath%20d%3D'M245%2048v202h198V48M466%20250v222M58%20320h187M466%20354h276'%20/%3E%3C/g%3E%3Cg%20fill%3D'%23d1e8ff'%20fill-opacity%3D'.9'%20font-family%3D'SF Pro Text'%20font-size%3D'22'%3E%3Ctext%20x%3D'100'%20y%3D'90'%3ELiving%20Room%3C/text%3E%3Ctext%20x%3D'286'%20y%3D'90'%3EKitchen%3C/text%3E%3Ctext%20x%3D'516'%20y%3D'90'%3EBedroom%3C/text%3E%3Ctext%20x%3D'100'%20y%3D'360'%3EHallway%3C/text%3E%3C/g%3E%3Ccircle%20cx%3D'330'%20cy%3D'314'%20r%3D'14'%20fill%3D'%2338bdf8'%3E%3Canimate%20attributeName%3D'r'%20values%3D'12%3B16%3B12'%20dur%3D'2s'%20repeatCount%3D'indefinite'/%3E%3C/circle%3E%3C/svg%3E";
-const SENSOR_BATTERY_ATTRIBUTE_KEYS = [
-  'battery_level',
-  'battery',
-  'battery_percentage',
-  'battery_percent',
-  'battery_state_of_charge',
-];
-const SENSOR_STATUS_ATTRIBUTE_KEYS = ['status', 'sensor_status', 'device_status', 'system_status'];
-const SENSOR_CONNECTION_ATTRIBUTE_KEYS = [
-  'connection_status',
-  'connectivity',
-  'connected',
-  'online',
-  'network_status',
-  'linkquality',
-  'link_quality',
-  'rssi',
-];
-const SENSOR_CONNECTION_ON_VALUES = new Set([
-  'on',
-  'online',
-  'connected',
-  'home',
-  'available',
-  'ok',
-  'true',
-  'yes',
-  'open',
-]);
-const SENSOR_CONNECTION_OFF_VALUES = new Set([
-  'off',
-  'offline',
-  'disconnected',
-  'not_home',
-  'unavailable',
-  'down',
-  'false',
-  'no',
-  'closed',
-  '0',
-]);
-const SENSOR_HISTORY_WINDOW_HOURS = 24;
-const SENSOR_HISTORY_MAX_POINTS = 24;
-const CAMERA_OFFLINE_STATES = new Set([
-  'off',
-  'offline',
-  'idle',
-  'unavailable',
-  'unknown',
-  'error',
-  'problem',
-  'disconnected',
-]);
-const CAMERA_PTZ_SERVICE_CANDIDATES = [
-  { domain: 'onvif', service: 'ptz' },
-  { domain: 'camera', service: 'onvif_ptz' },
-  { domain: 'camera', service: 'ptz' },
-] as const;
-const CAMERA_PTZ_DIRECTION_VECTORS: Record<CameraPtzDirection, { pan: number; tilt: number; movement: string }> = {
-  up: { pan: 0, tilt: 1, movement: 'up' },
-  down: { pan: 0, tilt: -1, movement: 'down' },
-  left: { pan: -1, tilt: 0, movement: 'left' },
-  right: { pan: 1, tilt: 0, movement: 'right' },
-  up_left: { pan: -1, tilt: 1, movement: 'up_left' },
-  up_right: { pan: 1, tilt: 1, movement: 'up_right' },
-  down_left: { pan: -1, tilt: -1, movement: 'down_left' },
-  down_right: { pan: 1, tilt: -1, movement: 'down_right' },
-};
-const CAMERA_MOTION_KEYWORDS = ['motion', 'movimento', 'pir', 'person', 'persona', 'human', 'vehicle', 'auto', 'car'] as const;
-const CAMERA_SOUND_KEYWORDS = ['sound', 'audio', 'suono', 'noise'] as const;
-const CAMERA_IMAGE_KEYWORDS = ['image', 'immagine', 'snapshot', 'thumbnail', 'ultima immagine', 'last image'] as const;
-
-const LIGHT_COLOR_MODES_WITH_COLOR = new Set(['hs', 'xy', 'rgb', 'rgbw', 'rgbww']);
-const LIGHT_COLOR_MODES_WITH_BRIGHTNESS = new Set([
-  'brightness',
-  'white',
-  'color_temp',
-  'hs',
-  'xy',
-  'rgb',
-  'rgbw',
-  'rgbww',
-]);
-const LIGHT_COLOR_MODE_PRIORITY = ['hs', 'rgb', 'xy', 'rgbw', 'rgbww'] as const;
-type LightColorPayloadMode = (typeof LIGHT_COLOR_MODE_PRIORITY)[number];
-type LightCommandOptions = {
-  transition?: number;
-};
-type LightFlashMode = 'short' | 'long';
 const BACKUP_FILENAME_PREFIX = 'ha-dashboard-backup';
 const HA_OAUTH_CALLBACK_PARAM = 'ha_oauth_callback';
-const HA_OAUTH_SESSION_NONCE_KEY = 'ha.dashboard.oauth.nonce';
-const CLIMATE_PENDING_TTL_MS = 15000;
-const CLIMATE_SEND_DELAY_MS = 5000;
-const LIGHT_TOGGLE_PENDING_TTL_MS = 5000;
-const LIGHT_BRIGHTNESS_PENDING_TTL_MS = 6000;
-const LIGHT_COLOR_PENDING_TTL_MS = 2500;
-const SWITCH_TOGGLE_PENDING_TTL_MS = 5000;
+const HA_OAUTH_SESSION_STATE_KEY = 'ha.dashboard.oauth.state';
 const LOCK_PENDING_TTL_MS = 7000;
 const ALARM_PENDING_TTL_MS = 10000;
-const COVER_PENDING_TTL_MS = 7000;
 const SCENE_SCRIPT_START_GRACE_MS = 5000;
 const HA_ACTIVITY_REFRESH_MS = 30000;
 const DEFAULT_ACTIVITY_WINDOW_HOURS = 24;
@@ -426,298 +525,12 @@ const LOCK_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_lock';
 const ALARM_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_alarm_action';
 const COVER_PENDING_ATTRIBUTE_KEY = '__dashboard_pending_cover';
 const COVER_PENDING_TILT_ATTRIBUTE_KEY = '__dashboard_pending_cover_tilt';
+const DEVICE_COMMAND_PHASE_ATTRIBUTE_KEY = '__dashboard_command_phase';
 const DEFAULT_ACTIVITY_ACTOR = 'Sistema';
 const MAIN_GUIDED_SETUP_STORAGE_KEYS = {
   welcome: 'ha.dashboard.onboarding.welcome.v1',
   context: 'ha.dashboard.onboarding.context.v1',
 } as const;
-const HA_FAVORITE_LABEL_ALIASES = new Set(['preferiti', 'preferito', 'favorites', 'favorite']);
-
-function isXsViewportNow() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return window.innerWidth < GRID_ENGINE_BREAKPOINTS.sm;
-}
-
-function isCompactViewportNow() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return window.innerWidth < GRID_ENGINE_BREAKPOINTS.md;
-}
-
-function resolveGridBreakpointFromWidth(width: number): DashboardGridBreakpoint {
-  if (width >= GRID_ENGINE_BREAKPOINTS['2xl']) {
-    return '2xl';
-  }
-  if (width >= GRID_ENGINE_BREAKPOINTS.xl) {
-    return 'xl';
-  }
-  if (width >= GRID_ENGINE_BREAKPOINTS.lg) {
-    return 'lg';
-  }
-  if (width >= GRID_ENGINE_BREAKPOINTS.md) {
-    return 'md';
-  }
-  return width >= GRID_ENGINE_BREAKPOINTS.sm ? 'sm' : 'xs';
-}
-
-function resolveGridBreakpointNow() {
-  if (typeof window === 'undefined') {
-    return 'xl' as DashboardGridBreakpoint;
-  }
-  return resolveGridBreakpointFromWidth(window.innerWidth);
-}
-
-function normalizeHaLabelKey(value: unknown) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-}
-
-function hasFavoriteLabelAlias(value: unknown) {
-  const normalized = normalizeHaLabelKey(value);
-  if (!normalized) {
-    return false;
-  }
-  for (const alias of HA_FAVORITE_LABEL_ALIASES) {
-    if (normalized === alias || normalized.includes(alias) || alias.includes(normalized)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function collectLabelIdsFromValue(value: unknown): string[] {
-  if (typeof value === 'string') {
-    const labelId = value.trim();
-    return labelId ? [labelId] : [];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap((entry) => collectLabelIdsFromValue(entry));
-  }
-  if (!value || typeof value !== 'object') {
-    return [];
-  }
-  const record = value as Record<string, unknown>;
-  const directValues = [record.label_id, record.id, record.labelId];
-  const directLabelIds = directValues
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-  if (directLabelIds.length > 0) {
-    return directLabelIds;
-  }
-  return Object.keys(record)
-    .map((key) => key.trim())
-    .filter((key) => key.length > 0);
-}
-
-function parseFavoriteLabelIds(payload: unknown) {
-  if (!Array.isArray(payload)) {
-    return new Set<string>();
-  }
-
-  const favoriteLabelIds = new Set<string>();
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const record = entry as Record<string, unknown>;
-    const rawId =
-      typeof record.label_id === 'string'
-        ? record.label_id
-        : typeof record.id === 'string'
-          ? record.id
-          : '';
-    const labelId = rawId.trim();
-    if (!labelId) {
-      return;
-    }
-    if (
-      hasFavoriteLabelAlias(labelId) ||
-      hasFavoriteLabelAlias(record.name) ||
-      hasFavoriteLabelAlias(record.slug)
-    ) {
-      favoriteLabelIds.add(labelId);
-    }
-  });
-
-  return favoriteLabelIds;
-}
-
-function parseEntityIdsByLabelIds(payload: unknown, labelIds: Set<string>) {
-  if (!Array.isArray(payload) || labelIds.size === 0) {
-    return new Set<string>();
-  }
-
-  const entityIds = new Set<string>();
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const record = entry as Record<string, unknown>;
-    const entityId = typeof record.entity_id === 'string' ? record.entity_id.trim() : '';
-    if (!entityId) {
-      return;
-    }
-    const labelsRaw = [...collectLabelIdsFromValue(record.labels), ...collectLabelIdsFromValue(record.label_ids)];
-    const hasFavoriteLabel = labelsRaw.some(
-      (label) => typeof label === 'string' && labelIds.has(label.trim()),
-    );
-    if (hasFavoriteLabel) {
-      entityIds.add(entityId);
-    }
-  });
-
-  return entityIds;
-}
-
-function parseDeviceIdsByLabelIds(payload: unknown, labelIds: Set<string>) {
-  if (!Array.isArray(payload) || labelIds.size === 0) {
-    return new Set<string>();
-  }
-
-  const deviceIds = new Set<string>();
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const record = entry as Record<string, unknown>;
-    const rawDeviceId =
-      typeof record.id === 'string'
-        ? record.id
-        : typeof record.device_id === 'string'
-          ? record.device_id
-          : '';
-    const deviceId = rawDeviceId.trim();
-    if (!deviceId) {
-      return;
-    }
-    const labelsRaw = [...collectLabelIdsFromValue(record.labels), ...collectLabelIdsFromValue(record.label_ids)];
-    const hasFavoriteLabel = labelsRaw.some(
-      (label) => typeof label === 'string' && labelIds.has(label.trim()),
-    );
-    if (hasFavoriteLabel) {
-      deviceIds.add(deviceId);
-    }
-  });
-
-  return deviceIds;
-}
-
-function parseEntityIdsByDeviceIds(payload: unknown, deviceIds: Set<string>) {
-  if (!Array.isArray(payload) || deviceIds.size === 0) {
-    return new Set<string>();
-  }
-
-  const entityIds = new Set<string>();
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const record = entry as Record<string, unknown>;
-    const entityId = typeof record.entity_id === 'string' ? record.entity_id.trim() : '';
-    const deviceId = typeof record.device_id === 'string' ? record.device_id.trim() : '';
-    if (!entityId || !deviceId) {
-      return;
-    }
-    if (deviceIds.has(deviceId)) {
-      entityIds.add(entityId);
-    }
-  });
-
-  return entityIds;
-}
-
-function resolveWidgetKindFromEntityId(entityId: string): WidgetKind | null {
-  const domain = entityId.split('.')[0];
-  if (domain === 'light') {
-    return 'light';
-  }
-  if (domain === 'climate') {
-    return 'climate';
-  }
-  if (domain === 'camera') {
-    return 'camera';
-  }
-  if (domain === 'sensor' || domain === 'binary_sensor') {
-    return 'sensor';
-  }
-  if (domain === 'switch' || domain === 'input_boolean' || domain === 'fan') {
-    return 'switch';
-  }
-  if (domain === 'media_player') {
-    return 'media';
-  }
-  if (domain === 'alarm_control_panel') {
-    return 'alarm';
-  }
-  if (domain === 'vacuum') {
-    return 'vacuum';
-  }
-  if (domain === 'lock') {
-    return 'lock';
-  }
-  if (domain === 'cover') {
-    return 'cover';
-  }
-  return null;
-}
-
-function fallbackTitleFromEntityId(entityId: string) {
-  const [, objectId = entityId] = entityId.split('.');
-  return objectId
-    .split('_')
-    .filter((chunk) => chunk.length > 0)
-    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-    .join(' ');
-}
-
-type ClimatePendingState = {
-  targetTemp?: number;
-  targetTempLow?: number;
-  targetTempHigh?: number;
-  fanMode?: string;
-  targetHumidity?: number;
-  presetMode?: string;
-  swingMode?: string;
-  swingHorizontalMode?: string;
-  expiresAt: number;
-};
-
-type ClimateQueuedCommand = {
-  targetTemp?: number;
-  targetTempLow?: number;
-  targetTempHigh?: number;
-  fanMode?: string;
-  targetHumidity?: number;
-  presetMode?: string;
-  swingMode?: string;
-  swingHorizontalMode?: string;
-};
-
-type LightColorPendingState = {
-  hsColor: [number, number];
-  expiresAt: number;
-};
-
-type LightTogglePendingState = {
-  targetOn: boolean;
-  expiresAt: number;
-};
-
-type LightBrightnessPendingState = {
-  brightness: number;
-  expiresAt: number;
-};
-
-type SwitchTogglePendingState = {
-  targetOn: boolean;
-  expiresAt: number;
-};
 
 type LockPendingAction = 'lock' | 'unlock' | 'open';
 
@@ -768,13 +581,6 @@ function resolveAlarmSecurityActionKind(service: AlarmServiceName): AlarmSecurit
   return 'disarm';
 }
 
-type CoverPendingState = {
-  state?: string;
-  position?: number;
-  tiltPosition?: number;
-  expiresAt: number;
-};
-
 type ActivityTimelineEntry = {
   id: string;
   text: string;
@@ -785,48 +591,11 @@ type ActivityTimelineEntry = {
 
 type ActivityTimelineStatus = 'idle' | 'loading' | 'available' | 'empty' | 'unavailable' | 'offline';
 
-type HaAuthUser = {
-  id: string;
-  name: string;
-  username?: string;
-  email?: string;
-  isOwner?: boolean;
-  isAdmin?: boolean;
-};
-
-type HaLogbookEvent = {
-  when?: string;
-  message?: string;
-  name?: string;
-  state?: string;
-  entity_id?: string;
-  context_user_id?: string;
-  context_user_name?: string;
-  user_id?: string;
-  user_name?: string;
-  context?: {
-    user_id?: string;
-    user_name?: string;
-  };
-};
-
-type HaServiceRegistry = Record<string, Record<string, Record<string, unknown>>>;
-
-type CameraPtzServiceTarget = {
-  domain: string;
-  service: string;
-  fields: Set<string>;
-};
-
-type CameraPtzButtonMap = Partial<Record<CameraPtzDirection, string>>;
-
-type CameraDerivedActivity = {
-  eventLog: Array<Record<string, unknown>>;
-  motionDetected?: boolean;
-  soundDetected?: boolean;
-  lastMotionDetected?: string;
-  lastSoundDetected?: string;
-  lastImageUrl?: string;
+type LockQuickAuthAction = {
+  widget: Widget;
+  action: 'unlock' | 'open';
+  unlockCode: string;
+  numericCodeMode: boolean;
 };
 
 type MainGuidedSetupKind = keyof typeof MAIN_GUIDED_SETUP_STORAGE_KEYS;
@@ -836,6 +605,7 @@ const MAIN_GUIDED_SETUP_CONTENT: Record<
   {
     tag: string;
     heading: string;
+    description: string;
     steps: GuidedSetupStep[];
     completeLabel?: string;
     skipLabel?: string;
@@ -843,1150 +613,114 @@ const MAIN_GUIDED_SETUP_CONTENT: Record<
 > = {
   welcome: {
     tag: 'Primo accesso',
-    heading: 'Benvenuto nella dashboard',
+    heading: 'La tua nuova Home è pronta',
+    description: 'Una guida rapida per orientarti e aggiungere la prima card collegata alla tua casa.',
     steps: [
       {
-        title: 'Vista generale',
+        id: 'overview',
+        title: 'Tutto ciò che conta, subito',
         description:
-          'Qui trovi una shell completa: menu rapido a sinistra, area card al centro e strumenti di controllo sulla destra.',
-        hint: 'In meno di un minuto puoi avere una configurazione pronta da usare.',
+          'La Home riunisce scene, preferiti e dispositivi. La navigazione resta sempre disponibile e si adatta automaticamente a desktop, tablet e mobile.',
+        hint: 'Puoi iniziare a controllare la casa immediatamente: Home Assistant è già collegato.',
+        icon: LayoutDashboard,
       },
       {
-        title: 'Configurazione guidata layout',
+        id: 'edit-mode',
+        title: 'Personalizza il layout',
         description:
-          'Attiva la modalita edit per trascinare card, aggiungere sezioni e personalizzare la struttura della home.',
-        hint: 'Le modifiche vengono salvate automaticamente in locale.',
+          'Attiva la modalità Edit dal pulsante con la matita. Potrai trascinare le card, riordinarle e scegliere una dimensione diversa per ogni breakpoint.',
+        hint: 'Il layout viene salvato automaticamente e ogni modifica resta separata tra Demo e casa reale.',
+        icon: PencilRuler,
+        target: '[data-tour-target="edit-mode"]',
+        actionLabel: 'Attiva Edit Mode',
       },
       {
-        title: 'Connessione Home Assistant',
+        id: 'widget-catalog',
+        title: 'Apri il catalogo delle card',
         description:
-          'Apri il profilo per inserire URL, token o OAuth e collegare entita reali ai controlli della dashboard.',
-        hint: 'Puoi completare questo passaggio anche in un secondo momento.',
+          'In Edit Mode apri il catalogo per scegliere quale componente inserire e in quale area della dashboard posizionarlo.',
+        hint: 'Useremo una card Luce come esempio: lo stesso flusso vale per tutte le altre card.',
+        icon: Plus,
+        target: '[data-tour-target="widget-catalog"]',
+        actionLabel: 'Apri il Catalogo',
+        advanceOnTargetClick: true,
+      },
+      {
+        id: 'catalog-light',
+        title: 'Scegli la card Luce',
+        description:
+          'Il catalogo organizza le card per famiglia. Seleziona Luce per aggiungere un controllo illuminazione alla dashboard.',
+        hint: 'Puoi usare la ricerca quando il catalogo contiene molti componenti.',
+        icon: Lightbulb,
+        target: '[data-tour-target="catalog-light"]',
+        actionLabel: 'Seleziona Luce',
+        advanceOnTargetClick: true,
+      },
+      {
+        id: 'catalog-add-light',
+        title: 'Aggiungila alla dashboard',
+        description:
+          'Conferma la destinazione scelta. La nuova card verrà inserita nel canvas e selezionata automaticamente per la configurazione.',
+        hint: 'In futuro potrai scegliere anche uno stack come destinazione.',
+        icon: Plus,
+        target: '[data-tour-target="catalog-confirm"]',
+        actionLabel: 'Aggiungi al canvas',
+        advanceOnTargetClick: true,
+      },
+      {
+        id: 'catalog-finish',
+        title: 'Passa alla configurazione',
+        description:
+          'La card Luce è stata aggiunta. Chiudi il catalogo per visualizzare il relativo Builder senza perdere la selezione.',
+        icon: PanelRightOpen,
+        target: '[data-tour-target="catalog-finish"]',
+        actionLabel: 'Apri il Builder',
+        advanceOnTargetClick: true,
+      },
+      {
+        id: 'builder-entity',
+        title: 'Collega l’entità Home Assistant',
+        description:
+          'Nel tab Setting trovi il campo Entità. Da qui scegli la luce reale che la card dovrà mostrare e controllare.',
+        hint: 'Il Builder propone automaticamente soltanto entità compatibili, ma puoi anche digitare un entity_id.',
+        icon: Settings2,
+        target: '[data-tour-target="builder-entity"]',
+        actionLabel: 'Fine guida',
+        actionBehavior: 'continue',
       },
     ],
-    completeLabel: 'Inizia adesso',
+    completeLabel: 'Esplora la Home',
     skipLabel: 'Chiudi guida',
   },
   context: {
     tag: 'Pannello contestuale',
     heading: 'Guida rapida ai controlli live',
+    description: 'Il pannello contestuale raccoglie azioni, stato e funzioni avanzate del dispositivo selezionato.',
     steps: [
       {
-        title: 'Come si apre',
+        title: 'Seleziona una card',
         description:
-          'In modalita dashboard, cliccando una card si apre il pannello contestuale con i dettagli del dispositivo selezionato.',
+          'Fuori dalla modalità Edit, seleziona una card per aprire i controlli live del dispositivo senza lasciare la Home.',
+        icon: MousePointerClick,
       },
       {
-        title: 'Cosa puoi fare',
+        title: 'Controlli e informazioni',
         description:
-          'Da qui gestisci azioni immediate: luce, clima, media, sensori, sicurezza e automazioni senza entrare in edit mode.',
+          'Qui trovi azioni immediate, stato dettagliato, grafici e funzionalità specifiche supportate dall’entità Home Assistant.',
+        hint: 'Le funzioni non supportate dal dispositivo non vengono mostrate.',
+        icon: PanelRightOpen,
       },
       {
-        title: 'Cambio dispositivo',
+        title: 'Passa a un altro dispositivo',
         description:
-          'Per vedere un altro controllo, clicca una card diversa. Usa il pulsante di chiusura per tornare alla sola vista card.',
+          'Seleziona una card diversa per aggiornare il pannello. Chiudilo quando vuoi tornare alla vista completa della dashboard.',
+        icon: LayoutDashboard,
       },
     ],
     completeLabel: 'Ho capito',
     skipLabel: 'Chiudi',
   },
 };
-
-type HaOAuthStatePayload = {
-  nonce: string;
-  hassUrl: string;
-  returnTo: string;
-  issuedAt: number;
-};
-
-function createOAuthNonce() {
-  if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    window.crypto.getRandomValues(bytes);
-    return Array.from(bytes)
-      .map((value) => value.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  return `${Date.now()}-${Math.round(Math.random() * 1_000_000_000)}`;
-}
-
-function parseHaOAuthState(rawState: string | null) {
-  if (!rawState) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(rawState) as Partial<HaOAuthStatePayload>;
-    if (
-      typeof parsed.nonce !== 'string' ||
-      typeof parsed.hassUrl !== 'string' ||
-      typeof parsed.returnTo !== 'string' ||
-      typeof parsed.issuedAt !== 'number'
-    ) {
-      return null;
-    }
-    return {
-      nonce: parsed.nonce,
-      hassUrl: parsed.hassUrl,
-      returnTo: parsed.returnTo,
-      issuedAt: parsed.issuedAt,
-    } satisfies HaOAuthStatePayload;
-  } catch {
-    return null;
-  }
-}
-
-function resolveOAuthReturnPath(path: string | undefined) {
-  if (typeof path === 'string' && path.trim().startsWith('/')) {
-    return path.trim();
-  }
-  return '/home';
-}
-
-function isEmbeddedDashboardRuntime() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  try {
-    if (window.self !== window.top) {
-      return true;
-    }
-  } catch {
-    return true;
-  }
-  const url = new URL(window.location.href);
-  const mode = (url.searchParams.get('dashboard_mode') ?? url.searchParams.get('navigation_mode') ?? '').toLowerCase();
-  return mode === 'embedded' || mode === 'iframe' || url.searchParams.get('embedded') === '1';
-}
-
-function shouldUseBrowserRouteNavigation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  if (isEmbeddedDashboardRuntime()) {
-    return false;
-  }
-  const pathname = window.location.pathname.toLowerCase();
-  const lastSegment = pathname.split('/').filter(Boolean).at(-1) ?? '';
-  if (/\.[a-z0-9]+$/i.test(lastSegment)) {
-    return false;
-  }
-  return !(
-    pathname.startsWith('/local/') ||
-    pathname.startsWith('/hacsfiles/') ||
-    pathname.startsWith('/api/') ||
-    pathname.startsWith('/panel_iframe/')
-  );
-}
-
-function isExternalNavigationTarget(path: string) {
-  const target = path.trim().toLowerCase();
-  return target.startsWith('http://') || target.startsWith('https://');
-}
-
-function normalizeNavigationPathname(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return '';
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.trim().toLowerCase();
-    if (!pathname) {
-      return '/';
-    }
-    const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`;
-    if (normalized === '/') {
-      return normalized;
-    }
-    return normalized.replace(/\/+$/, '');
-  } catch {
-    return '';
-  }
-}
-
-function isNavigationPathnameAllowed(pathname: string, allowedPathnames: Set<string>) {
-  if (!pathname) {
-    return false;
-  }
-  if (allowedPathnames.size === 0) {
-    return true;
-  }
-  for (const allowedPathname of allowedPathnames) {
-    if (!allowedPathname) {
-      continue;
-    }
-    if (allowedPathname === '/') {
-      return true;
-    }
-    if (pathname === allowedPathname || pathname.startsWith(`${allowedPathname}/`)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isConsumptionNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasConsumi = pathSegments.includes('consumi');
-    const hashHasConsumi = hashSegments.includes('consumi') || hashNormalized === 'consumi';
-    return (
-      pathHasConsumi ||
-      hash === '#consumi' ||
-      hashHasConsumi ||
-      view === 'consumi'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isConsumptionDetailNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  const detailSegments = new Set(['energia', 'elettricita', 'electricity', 'acqua', 'water', 'gas', 'metano', 'report', 'trend']);
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathIndex = pathSegments.indexOf('consumi');
-    const hashIndex = hashSegments.indexOf('consumi');
-
-    return (
-      (pathIndex >= 0 && detailSegments.has(pathSegments[pathIndex + 1] ?? '')) ||
-      (hashIndex >= 0 && detailSegments.has(hashSegments[hashIndex + 1] ?? '')) ||
-      view.startsWith('consumi-') ||
-      view.startsWith('consumption-')
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveConsumptionFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isConsumptionNavigationTarget(window.location.href);
-}
-
-function resolveConsumptionDetailFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isConsumptionDetailNavigationTarget(window.location.href);
-}
-
-
-function isHomeNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasHome = pathSegments.includes('home');
-    const hashHasHome = hashSegments.includes('home') || hashNormalized === 'home';
-    return pathHasHome || hash === '#home' || hashHasHome || view === 'home';
-  } catch {
-    return false;
-  }
-}
-
-function resolveEditAvailabilityFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  const current = window.location.href;
-  return (
-    isHomeNavigationTarget(current) ||
-    isConsumptionNavigationTarget(current) ||
-    isAppGalleryNavigationTarget(current) ||
-    isSecurityNavigationTarget(current)
-  );
-}
-
-function isAutomationNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasAutomations = pathSegments.includes('automations') || pathSegments.includes('automation');
-    const hashHasAutomations =
-      hashSegments.includes('automations') ||
-      hashSegments.includes('automation') ||
-      hashNormalized === 'automations' ||
-      hashNormalized === 'automation';
-    return (
-      pathHasAutomations ||
-      hash === '#automations' ||
-      hash === '#automation' ||
-      hashHasAutomations ||
-      view === 'automations' ||
-      view === 'automation'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveAutomationFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isAutomationNavigationTarget(window.location.href);
-}
-
-function isAppGalleryNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasAppGallery = pathSegments.includes('appgallery') || pathSegments.includes('appgalley');
-    const hashHasAppGallery =
-      hashSegments.includes('appgallery') ||
-      hashSegments.includes('appgalley') ||
-      hashNormalized === 'appgallery' ||
-      hashNormalized === 'appgalley';
-    return (
-      pathHasAppGallery ||
-      hash === '#appgallery' ||
-      hash === '#appgalley' ||
-      hashHasAppGallery ||
-      view === 'appgallery' ||
-      view === 'appgalley'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveAppGalleryFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isAppGalleryNavigationTarget(window.location.href);
-}
-
-function isRoomsNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasRooms = pathSegments.includes('rooms');
-    const hashHasRooms = hashSegments.includes('rooms') || hashNormalized === 'rooms';
-    return pathHasRooms || hash === '#rooms' || hashHasRooms || view === 'rooms';
-  } catch {
-    return false;
-  }
-}
-
-function resolveRoomsFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isRoomsNavigationTarget(window.location.href);
-}
-
-function isSecurityNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasSecurity = pathSegments.includes('security');
-    const hashHasSecurity = hashSegments.includes('security') || hashNormalized === 'security';
-    return pathHasSecurity || hash === '#security' || hashHasSecurity || view === 'security';
-  } catch {
-    return false;
-  }
-}
-
-function resolveSecurityFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isSecurityNavigationTarget(window.location.href);
-}
-
-function isSecurityCamerasNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasSecurity = pathSegments.includes('security');
-    const pathHasCameras = pathSegments.includes('cameras') || pathSegments.includes('telecamere');
-    const hashHasSecurity = hashSegments.includes('security');
-    const hashHasCameras = hashSegments.includes('cameras') || hashSegments.includes('telecamere');
-    return (
-      (pathHasSecurity && pathHasCameras) ||
-      hash === '#security/cameras' ||
-      hash === '#security/telecamere' ||
-      (hashHasSecurity && hashHasCameras) ||
-      view === 'security-cameras' ||
-      view === 'security-telecamere'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveSecurityCamerasFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isSecurityCamerasNavigationTarget(window.location.href);
-}
-
-function isProfileNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasProfile = pathSegments.includes('profile') || pathSegments.includes('profilo');
-    const hashHasProfile =
-      hashSegments.includes('profile') || hashSegments.includes('profilo') || hashNormalized === 'profile' || hashNormalized === 'profilo';
-    return (
-      pathHasProfile ||
-      hash === '#profile' ||
-      hash === '#profilo' ||
-      hashHasProfile ||
-      view === 'profile' ||
-      view === 'profilo'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveProfileFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isProfileNavigationTarget(window.location.href);
-}
-
-function isSettingsNavigationTarget(path: string) {
-  const target = path.trim();
-  if (!target) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(target, 'http://dashboard.local');
-    const pathname = parsed.pathname.toLowerCase();
-    const hash = parsed.hash.toLowerCase();
-    const view = (parsed.searchParams.get('view') ?? '').trim().toLowerCase();
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const hashNormalized = hash.replace(/^#/, '').replace(/^\//, '');
-    const hashSegments = hashNormalized.split('/').filter(Boolean);
-    const pathHasSettings = pathSegments.includes('settings') || pathSegments.includes('impostazioni');
-    const hashHasSettings =
-      hashSegments.includes('settings') ||
-      hashSegments.includes('impostazioni') ||
-      hashNormalized === 'settings' ||
-      hashNormalized === 'impostazioni';
-    return (
-      pathHasSettings ||
-      hash === '#settings' ||
-      hash === '#impostazioni' ||
-      hashHasSettings ||
-      view === 'settings' ||
-      view === 'impostazioni'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveSettingsFromLocation() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return isSettingsNavigationTarget(window.location.href);
-}
-
-function toFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) {
-      return undefined;
-    }
-    const parsed = Number.parseFloat(normalized);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return undefined;
-}
-
-function toTrimmedString(value: unknown): string | undefined {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.length > 0) {
-      return trimmed;
-    }
-    return undefined;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return `${value}`;
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-  return undefined;
-}
-
-function normalizeLower(value: string | undefined) {
-  return (value ?? '').trim().toLowerCase();
-}
-
-function normalizeCameraState(value: string | undefined) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  return normalized || 'unknown';
-}
-
-function isCameraOfflineState(value: string | undefined) {
-  return CAMERA_OFFLINE_STATES.has(normalizeCameraState(value));
-}
-
-function toBoolean(value: unknown) {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return value !== 0;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (
-      [
-        'true',
-        'on',
-        'yes',
-        'enabled',
-        'supported',
-        'available',
-        '1',
-        'attivo',
-        'presente',
-        'rilevato',
-      ].includes(normalized)
-    ) {
-      return true;
-    }
-    if (
-      [
-        'false',
-        'off',
-        'no',
-        'disabled',
-        'unsupported',
-        'unavailable',
-        '0',
-        'assente',
-        'inattivo',
-        'spento',
-        'silenzioso',
-      ].includes(normalized)
-    ) {
-      return false;
-    }
-  }
-  return undefined;
-}
-
-function findHaServiceEntry(
-  serviceRegistry: HaServiceRegistry | null | undefined,
-  domain: string,
-  service: string,
-) {
-  if (!serviceRegistry || typeof serviceRegistry !== 'object') {
-    return null;
-  }
-
-  const domainEntry =
-    serviceRegistry[domain] ??
-    Object.entries(serviceRegistry).find(([key]) => key.trim().toLowerCase() === domain)?.[1];
-  if (!domainEntry || typeof domainEntry !== 'object') {
-    return null;
-  }
-
-  const typedDomainEntry = domainEntry as Record<string, unknown>;
-  const serviceEntry =
-    typedDomainEntry[service] ??
-    Object.entries(typedDomainEntry).find(([key]) => key.trim().toLowerCase() === service)?.[1];
-  return serviceEntry && typeof serviceEntry === 'object' ? (serviceEntry as Record<string, unknown>) : null;
-}
-
-function resolveCameraPtzServiceTarget(serviceRegistry: HaServiceRegistry | null | undefined): CameraPtzServiceTarget | null {
-  for (const candidate of CAMERA_PTZ_SERVICE_CANDIDATES) {
-    const serviceEntry = findHaServiceEntry(serviceRegistry, candidate.domain, candidate.service);
-    if (!serviceEntry) {
-      continue;
-    }
-    const rawFields = serviceEntry.fields;
-    const fieldNames = rawFields && typeof rawFields === 'object' ? Object.keys(rawFields) : [];
-    const normalizedFields = new Set(fieldNames.map((field) => field.trim().toLowerCase()));
-    return {
-      domain: candidate.domain,
-      service: candidate.service,
-      fields: normalizedFields,
-    };
-  }
-  return null;
-}
-
-function resolveCameraPtzHint(rawAttributes: Record<string, unknown> | undefined) {
-  if (!rawAttributes) {
-    return undefined;
-  }
-
-  const explicitKeys = [
-    'supports_ptz',
-    'ptz_supported',
-    'ptz_support',
-    'ptz_enabled',
-    'can_pan_tilt',
-    'can_pan_tilt_zoom',
-  ];
-  for (const key of explicitKeys) {
-    const parsed = toBoolean(rawAttributes[key]);
-    if (parsed !== undefined) {
-      return parsed;
-    }
-  }
-
-  const stringCandidates = [
-    toTrimmedString(rawAttributes.supported_features),
-    toTrimmedString(rawAttributes.capabilities),
-    toTrimmedString(rawAttributes.features),
-  ];
-  if (stringCandidates.some((value) => (value ?? '').toLowerCase().includes('ptz'))) {
-    return true;
-  }
-
-  const arrayCandidates = [
-    rawAttributes.features,
-    rawAttributes.capabilities,
-    rawAttributes.supported_features_list,
-    rawAttributes.supported_capabilities,
-  ];
-  for (const source of arrayCandidates) {
-    if (!Array.isArray(source)) {
-      continue;
-    }
-    const hasPtz = source.some((entry) => (toTrimmedString(entry) ?? '').toLowerCase().includes('ptz'));
-    if (hasPtz) {
-      return true;
-    }
-  }
-
-  if (Array.isArray(rawAttributes.ptz_presets) && rawAttributes.ptz_presets.length > 0) {
-    return true;
-  }
-  if (rawAttributes.ptz && typeof rawAttributes.ptz === 'object') {
-    return true;
-  }
-
-  const keyHasPtz = Object.keys(rawAttributes).some((key) => key.trim().toLowerCase().includes('ptz'));
-  if (keyHasPtz) {
-    return true;
-  }
-
-  return undefined;
-}
-
-function resolveCameraSupportsPtz(
-  entityId: string | undefined,
-  rawAttributes: Record<string, unknown> | undefined,
-  serviceRegistry: HaServiceRegistry | null | undefined,
-) {
-  const explicitHint = resolveCameraPtzHint(rawAttributes);
-  if (explicitHint !== undefined) {
-    return explicitHint;
-  }
-
-  const serviceTarget = resolveCameraPtzServiceTarget(serviceRegistry);
-  if (!serviceTarget) {
-    return false;
-  }
-
-  const normalizedEntityId = (entityId ?? '').trim().toLowerCase();
-  if (!normalizedEntityId.startsWith('camera.')) {
-    return false;
-  }
-
-  if (serviceTarget.domain === 'camera') {
-    return true;
-  }
-
-  const integrationHints = [
-    toTrimmedString(rawAttributes?.integration),
-    toTrimmedString(rawAttributes?.platform),
-    toTrimmedString(rawAttributes?.attribution),
-    toTrimmedString(rawAttributes?.manufacturer),
-    toTrimmedString(rawAttributes?.model),
-    normalizedEntityId,
-  ];
-  return integrationHints.some((value) => (value ?? '').toLowerCase().includes('onvif'));
-}
-
-function normalizeLookupToken(value: string | undefined) {
-  if (!value) {
-    return '';
-  }
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function extractEntityObjectId(entityId: string | undefined) {
-  const value = (entityId ?? '').trim().toLowerCase();
-  const separator = value.indexOf('.');
-  if (separator <= 0 || separator >= value.length - 1) {
-    return '';
-  }
-  return value.slice(separator + 1);
-}
-
-function isEntityLikelyCameraRelated(
-  candidateEntityId: string,
-  cameraEntityId: string | undefined,
-  cameraFriendlyName: string | undefined,
-  candidateFriendlyName: string | undefined,
-) {
-  const candidateObjectId = extractEntityObjectId(candidateEntityId);
-  const cameraObjectId = extractEntityObjectId(cameraEntityId);
-  if (cameraObjectId && candidateObjectId) {
-    if (candidateObjectId.startsWith(`${cameraObjectId}_`) || candidateObjectId.includes(`_${cameraObjectId}_`)) {
-      return true;
-    }
-    if (candidateObjectId === cameraObjectId) {
-      return true;
-    }
-  }
-
-  const cameraNameToken = normalizeLookupToken(cameraFriendlyName);
-  const candidateNameToken = normalizeLookupToken(candidateFriendlyName);
-  if (cameraNameToken && candidateNameToken && candidateNameToken.includes(cameraNameToken)) {
-    return true;
-  }
-
-  return false;
-}
-
-function resolvePtzDirectionFromCandidateText(value: string) {
-  const normalized = ` ${normalizeLookupToken(value)} `;
-  const has = (token: string) => normalized.includes(` ${token} `);
-  if ((has('ptz') && has('destra')) || has('right')) {
-    return 'right' as const;
-  }
-  if ((has('ptz') && has('sinistra')) || has('left')) {
-    return 'left' as const;
-  }
-  if ((has('ptz') && has('su')) || has('up') || has('alto')) {
-    return 'up' as const;
-  }
-  if ((has('ptz') && has('giu')) || has('down') || has('basso')) {
-    return 'down' as const;
-  }
-  return undefined;
-}
-
-function resolveCameraPtzButtons(
-  cameraEntityId: string | undefined,
-  cameraFriendlyName: string | undefined,
-  haStates: MockEntityStateMap,
-) {
-  const mapping: CameraPtzButtonMap = {};
-  Object.entries(haStates).forEach(([entityId, entity]) => {
-    if (!entityId.startsWith('button.')) {
-      return;
-    }
-    const candidateFriendlyName = toTrimmedString(entity.rawAttributes?.friendly_name);
-    if (
-      !isEntityLikelyCameraRelated(
-        entityId,
-        cameraEntityId,
-        cameraFriendlyName,
-        candidateFriendlyName,
-      )
-    ) {
-      return;
-    }
-    const direction =
-      resolvePtzDirectionFromCandidateText(candidateFriendlyName ?? '') ??
-      resolvePtzDirectionFromCandidateText(entityId);
-    if (!direction || mapping[direction]) {
-      return;
-    }
-    mapping[direction] = entityId;
-  });
-  return mapping;
-}
-
-function hasAnyCameraPtzButton(mapping: CameraPtzButtonMap) {
-  return Boolean(mapping.up || mapping.down || mapping.left || mapping.right);
-}
-
-function resolveCameraPtzButtonPressSequence(
-  direction: CameraPtzDirection,
-  mapping: CameraPtzButtonMap,
-) {
-  if (direction === 'up') {
-    return mapping.up ? [mapping.up] : [];
-  }
-  if (direction === 'down') {
-    return mapping.down ? [mapping.down] : [];
-  }
-  if (direction === 'left') {
-    return mapping.left ? [mapping.left] : [];
-  }
-  if (direction === 'right') {
-    return mapping.right ? [mapping.right] : [];
-  }
-  if (direction === 'up_left') {
-    return [mapping.up, mapping.left].filter((entry): entry is string => Boolean(entry));
-  }
-  if (direction === 'up_right') {
-    return [mapping.up, mapping.right].filter((entry): entry is string => Boolean(entry));
-  }
-  if (direction === 'down_left') {
-    return [mapping.down, mapping.left].filter((entry): entry is string => Boolean(entry));
-  }
-  return [mapping.down, mapping.right].filter((entry): entry is string => Boolean(entry));
-}
-
-function includesAnyKeyword(value: string, keywords: readonly string[]) {
-  return keywords.some((keyword) => value.includes(normalizeLookupToken(keyword)));
-}
-
-function resolveSignalState(value: unknown) {
-  const direct = toBoolean(value);
-  if (direct !== undefined) {
-    return direct;
-  }
-  const normalized = normalizeLookupToken(toTrimmedString(value));
-  if (!normalized) {
-    return undefined;
-  }
-  if (
-    normalized.includes('detected') ||
-    normalized.includes('rilevato') ||
-    normalized.includes('triggered') ||
-    normalized.includes('active')
-  ) {
-    return true;
-  }
-  if (
-    normalized.includes('not detected') ||
-    normalized.includes('no motion') ||
-    normalized.includes('nessun movimento') ||
-    normalized.includes('idle')
-  ) {
-    return false;
-  }
-  return undefined;
-}
-
-function parseItalianDateTime(value: string) {
-  const normalized = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-  const months: Record<string, number> = {
-    gennaio: 0,
-    febbraio: 1,
-    marzo: 2,
-    aprile: 3,
-    maggio: 4,
-    giugno: 5,
-    luglio: 6,
-    agosto: 7,
-    settembre: 8,
-    ottobre: 9,
-    novembre: 10,
-    dicembre: 11,
-  };
-  const match = normalized.match(
-    /(\d{1,2})\s+([a-z]+)\s+(\d{4})(?:\s+alle?\s+ore)?\s+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?/i,
-  );
-  if (!match) {
-    return undefined;
-  }
-  const day = Number.parseInt(match[1], 10);
-  const month = months[match[2]];
-  const year = Number.parseInt(match[3], 10);
-  const hour = Number.parseInt(match[4], 10);
-  const minute = Number.parseInt(match[5], 10);
-  const second = match[6] ? Number.parseInt(match[6], 10) : 0;
-  if (
-    !Number.isFinite(day) ||
-    month === undefined ||
-    !Number.isFinite(year) ||
-    !Number.isFinite(hour) ||
-    !Number.isFinite(minute) ||
-    !Number.isFinite(second)
-  ) {
-    return undefined;
-  }
-  const timestamp = new Date(year, month, day, hour, minute, second, 0).getTime();
-  return Number.isFinite(timestamp) ? timestamp : undefined;
-}
-
-function resolveFlexibleTimestamp(value: unknown) {
-  const direct = toTimestampMs(value);
-  if (direct !== undefined) {
-    return direct;
-  }
-  if (typeof value === 'string') {
-    return parseItalianDateTime(value);
-  }
-  return undefined;
-}
-
-function resolveEntityEventTimestamp(entity: MockEntityState) {
-  const rawAttributes = entity.rawAttributes;
-  const candidates: unknown[] = [
-    rawAttributes?.last_triggered,
-    rawAttributes?.last_motion,
-    rawAttributes?.last_motion_detected,
-    rawAttributes?.last_sound,
-    rawAttributes?.last_sound_detected,
-    rawAttributes?.event_time,
-    rawAttributes?.timestamp,
-    rawAttributes?.time,
-    rawAttributes?.datetime,
-    rawAttributes?.__last_changed,
-    rawAttributes?.last_changed,
-    rawAttributes?.__last_updated,
-    rawAttributes?.last_updated,
-    entity.state,
-  ];
-  for (const candidate of candidates) {
-    const parsed = resolveFlexibleTimestamp(candidate);
-    if (parsed !== undefined) {
-      return parsed;
-    }
-  }
-  return undefined;
-}
-
-function resolveCameraDerivedActivity(
-  cameraEntityId: string | undefined,
-  cameraFriendlyName: string | undefined,
-  haStates: MockEntityStateMap,
-  haUrl: string,
-) {
-  const eventLog: Array<{ timestampMs: number; event: Record<string, unknown> }> = [];
-  let motionDetected: boolean | undefined;
-  let soundDetected: boolean | undefined;
-  let lastMotionDetected: number | undefined;
-  let lastSoundDetected: number | undefined;
-  let lastImageUrl: string | undefined;
-  let lastImageTimestamp = -1;
-
-  Object.entries(haStates).forEach(([entityId, entity]) => {
-    if (!isEntityLikelyCameraRelated(entityId, cameraEntityId, cameraFriendlyName, toTrimmedString(entity.rawAttributes?.friendly_name))) {
-      return;
-    }
-    const domain = entityId.split('.')[0];
-    const normalizedKey = normalizeLookupToken(`${entityId} ${toTrimmedString(entity.rawAttributes?.friendly_name) ?? ''}`);
-    const isMotion = includesAnyKeyword(normalizedKey, CAMERA_MOTION_KEYWORDS);
-    const isSound = includesAnyKeyword(normalizedKey, CAMERA_SOUND_KEYWORDS);
-    const isImage = domain === 'image' || includesAnyKeyword(normalizedKey, CAMERA_IMAGE_KEYWORDS);
-    if (!isMotion && !isSound && !isImage) {
-      return;
-    }
-
-    const friendlyName = toTrimmedString(entity.rawAttributes?.friendly_name) ?? entityId;
-    const stateLabel = toTrimmedString(entity.stateLabel) ?? toTrimmedString(entity.state);
-    const timestampMs = resolveEntityEventTimestamp(entity) ?? Date.now();
-    const imageCandidate = toTrimmedString(entity.imageUrl) ?? toTrimmedString(entity.rawAttributes?.entity_picture);
-    const imageUrl = resolveRelativeHaUrl(imageCandidate, haUrl);
-
-    if (isMotion) {
-      const signalState = resolveSignalState(entity.state) ?? resolveSignalState(stateLabel);
-      if (signalState !== undefined) {
-        motionDetected = signalState;
-      }
-      lastMotionDetected = Math.max(lastMotionDetected ?? 0, timestampMs);
-      eventLog.push({
-        timestampMs,
-        event: {
-          title: friendlyName,
-          type: 'motion',
-          timestamp: timestampMs,
-          time: timestampMs,
-          event: stateLabel ?? 'Motion update',
-          thumbnail_url: imageUrl,
-        },
-      });
-    }
-
-    if (isSound) {
-      const signalState = resolveSignalState(entity.state) ?? resolveSignalState(stateLabel);
-      if (signalState !== undefined) {
-        soundDetected = signalState;
-      }
-      lastSoundDetected = Math.max(lastSoundDetected ?? 0, timestampMs);
-      eventLog.push({
-        timestampMs,
-        event: {
-          title: friendlyName,
-          type: 'sound',
-          timestamp: timestampMs,
-          time: timestampMs,
-          event: stateLabel ?? 'Sound update',
-          thumbnail_url: imageUrl,
-        },
-      });
-    }
-
-    if (isImage && imageUrl) {
-      if (timestampMs >= lastImageTimestamp) {
-        lastImageTimestamp = timestampMs;
-        lastImageUrl = imageUrl;
-      }
-      eventLog.push({
-        timestampMs,
-        event: {
-          title: friendlyName,
-          type: 'motion',
-          timestamp: timestampMs,
-          time: timestampMs,
-          event: stateLabel ?? 'Snapshot',
-          thumbnail_url: imageUrl,
-          image_url: imageUrl,
-          snapshot_url: imageUrl,
-        },
-      });
-    }
-  });
-
-  const deduped = eventLog
-    .sort((left, right) => right.timestampMs - left.timestampMs)
-    .filter((entry, index, source) => {
-      const signature = JSON.stringify(entry.event);
-      const first = source.findIndex((candidate) => JSON.stringify(candidate.event) === signature);
-      return first === index;
-    })
-    .slice(0, 12)
-    .map((entry) => entry.event);
-
-  return {
-    eventLog: deduped,
-    motionDetected,
-    soundDetected,
-    lastMotionDetected:
-      lastMotionDetected !== undefined ? new Date(lastMotionDetected).toISOString() : undefined,
-    lastSoundDetected:
-      lastSoundDetected !== undefined ? new Date(lastSoundDetected).toISOString() : undefined,
-    lastImageUrl,
-  } satisfies CameraDerivedActivity;
-}
-
-function resolveRelativeHaUrl(value: string | undefined, haUrl: string) {
-  if (!value) {
-    return undefined;
-  }
-  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) {
-    return value;
-  }
-  if (value.startsWith('/')) {
-    const base = normalizeHassUrl(haUrl);
-    return base ? `${base}${value}` : value;
-  }
-  return value;
-}
 
 function almostEqual(value: number | undefined, expected: number | undefined, tolerance = 0.15) {
   if (!Number.isFinite(value) || !Number.isFinite(expected)) {
@@ -1995,54 +729,12 @@ function almostEqual(value: number | undefined, expected: number | undefined, to
   return Math.abs((value as number) - (expected as number)) <= tolerance;
 }
 
-function hasClimatePendingValues(value: ClimatePendingState | undefined) {
-  if (!value) {
+function hueAlmostEqual(value: number | undefined, expected: number | undefined, tolerance = 1.2) {
+  if (!Number.isFinite(value) || !Number.isFinite(expected)) {
     return false;
   }
-  return (
-    Number.isFinite(value.targetTemp) ||
-    Number.isFinite(value.targetTempLow) ||
-    Number.isFinite(value.targetTempHigh) ||
-    Number.isFinite(value.targetHumidity) ||
-    normalizeLower(value.fanMode).length > 0 ||
-    normalizeLower(value.presetMode).length > 0 ||
-    normalizeLower(value.swingMode).length > 0 ||
-    normalizeLower(value.swingHorizontalMode).length > 0
-  );
-}
-
-function hasCoverPendingValues(value: CoverPendingState | undefined) {
-  if (!value) {
-    return false;
-  }
-  return (
-    normalizeLower(value.state).length > 0 ||
-    Number.isFinite(value.position) ||
-    Number.isFinite(value.tiltPosition)
-  );
-}
-
-function toTimestampMs(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value > 1_000_000_000_000_000) {
-      return Math.round(value / 1000);
-    }
-    if (value < 10_000_000_000) {
-      return Math.round(value * 1000);
-    }
-    return Math.round(value);
-  }
-  if (typeof value === 'string') {
-    const numericValue = Number(value.trim());
-    if (Number.isFinite(numericValue) && value.trim().length > 0) {
-      return toTimestampMs(numericValue);
-    }
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return undefined;
+  const distance = Math.abs((value as number) - (expected as number)) % 360;
+  return Math.min(distance, 360 - distance) <= tolerance;
 }
 
 function resolveActivityWindowHours(value: unknown) {
@@ -2133,25 +825,6 @@ function resolveGuestAliasUserId(
   return candidatesFromNames?.[0] ?? null;
 }
 
-function parseGuestAccessContextFromLocation() {
-  if (typeof window === 'undefined') {
-    return { isGuestMode: false, guestUserId: null as string | null };
-  }
-
-  try {
-    const parsed = new URL(window.location.href);
-    const guestParam = (parsed.searchParams.get('guest') ?? '').trim().toLowerCase();
-    const isGuestMode = guestParam === '1' || guestParam === 'true' || guestParam === 'yes';
-    if (!isGuestMode) {
-      return { isGuestMode: false, guestUserId: null as string | null };
-    }
-    const guestUserId = toTrimmedString(parsed.searchParams.get('guest_user_id')) ?? null;
-    return { isGuestMode: true, guestUserId };
-  } catch {
-    return { isGuestMode: false, guestUserId: null as string | null };
-  }
-}
-
 function resolveHaAssetUrl(candidate: string | undefined, haUrl: string) {
   if (!candidate) {
     return undefined;
@@ -2164,58 +837,6 @@ function resolveHaAssetUrl(candidate: string | undefined, haUrl: string) {
     return base ? `${base}${candidate}` : candidate;
   }
   return candidate;
-}
-
-function parseHaAuthUsers(payload: unknown): HaAuthUser[] {
-  if (!Array.isArray(payload)) {
-    return [];
-  }
-  const users: HaAuthUser[] = [];
-  const seen = new Set<string>();
-  payload.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return;
-    }
-    const source = entry as Record<string, unknown>;
-    const id = toTrimmedString(source.id);
-    const name = toTrimmedString(source.name) ?? toTrimmedString(source.username);
-    const username = toTrimmedString(source.username);
-    const explicitEmail = toTrimmedString(source.email);
-    const email = explicitEmail ?? (username && username.includes('@') ? username : undefined);
-    const isOwner = source.is_owner === true;
-    const isAdmin = source.is_admin === true;
-    if (!id || !name || seen.has(id)) {
-      return;
-    }
-    seen.add(id);
-    users.push({ id, name, username, email, isOwner, isAdmin });
-  });
-  return users;
-}
-
-function parseHaCurrentUser(payload: unknown): HaAuthUser | null {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-  const source = payload as Record<string, unknown>;
-  const id = toTrimmedString(source.id);
-  const name = toTrimmedString(source.name) ?? toTrimmedString(source.username);
-  const username = toTrimmedString(source.username);
-  const explicitEmail = toTrimmedString(source.email);
-  const email = explicitEmail ?? (username && username.includes('@') ? username : undefined);
-  const isOwner = source.is_owner === true;
-  const isAdmin = source.is_admin === true;
-  if (!id || !name) {
-    return null;
-  }
-  return { id, name, username, email, isOwner, isAdmin };
-}
-
-function parseHaLogbookEvents(payload: unknown): HaLogbookEvent[] {
-  if (!Array.isArray(payload)) {
-    return [];
-  }
-  return payload.filter((entry): entry is HaLogbookEvent => Boolean(entry) && typeof entry === 'object');
 }
 
 function toStringArray(value: unknown) {
@@ -2495,258 +1116,6 @@ function buildTimelineEntries(
     .slice(0, maxEntries);
 }
 
-function readFirstAttributeValue(attributes: Record<string, unknown> | undefined, keys: string[]): unknown {
-  if (!attributes) {
-    return undefined;
-  }
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(attributes, key)) {
-      return attributes[key];
-    }
-  }
-  return undefined;
-}
-
-function readAttributeNumber(attributes: Record<string, unknown> | undefined, keys: string[]): number | undefined {
-  const value = readFirstAttributeValue(attributes, keys);
-  return toFiniteNumber(value);
-}
-
-function readAttributeString(attributes: Record<string, unknown> | undefined, keys: string[]): string | undefined {
-  const value = readFirstAttributeValue(attributes, keys);
-  return toTrimmedString(value);
-}
-
-function formatRoundedValue(value: number) {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded) ? `${Math.round(rounded)}` : rounded.toFixed(1);
-}
-
-function normalizeConnectionState(value: unknown): SensorConnectionState {
-  if (typeof value === 'boolean') {
-    return value ? 'online' : 'offline';
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value === 0) {
-      return 'offline';
-    }
-    return 'online';
-  }
-  const text = toTrimmedString(value);
-  if (!text) {
-    return 'unknown';
-  }
-  const normalized = text.toLowerCase();
-  if (normalized === 'unknown') {
-    return 'unknown';
-  }
-  if (SENSOR_CONNECTION_OFF_VALUES.has(normalized)) {
-    return 'offline';
-  }
-  if (SENSOR_CONNECTION_ON_VALUES.has(normalized)) {
-    return 'online';
-  }
-  return 'unknown';
-}
-
-function normalizeConnectionLabel(state: SensorConnectionState): string {
-  return state === 'offline' ? 'Disconnesso' : state === 'online' ? 'Connesso' : 'Stato sconosciuto';
-}
-
-function isRecordObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function toHistoryTimestampMs(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.abs(value) < 10_000_000_000 ? Math.round(value * 1000) : Math.round(value);
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return undefined;
-    }
-    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
-      const numeric = Number.parseFloat(trimmed);
-      if (Number.isFinite(numeric)) {
-        return Math.abs(numeric) < 10_000_000_000 ? Math.round(numeric * 1000) : Math.round(numeric);
-      }
-    }
-    const parsed = Date.parse(trimmed);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return undefined;
-}
-
-function downsampleNumberSeries(values: number[], maxPoints: number) {
-  const safeMax = Math.max(1, Math.round(maxPoints));
-  if (values.length <= safeMax) {
-    return values;
-  }
-  const sampled: number[] = [];
-  const usedIndices = new Set<number>();
-  for (let index = 0; index < safeMax; index += 1) {
-    const nextIndex = Math.round((index * (values.length - 1)) / (safeMax - 1));
-    if (usedIndices.has(nextIndex)) {
-      continue;
-    }
-    usedIndices.add(nextIndex);
-    sampled.push(values[nextIndex]);
-  }
-  if (sampled.length === 0) {
-    return values.slice(-safeMax);
-  }
-  return sampled;
-}
-
-function extractSensorHistoryValues(payload: unknown, entityId: string, maxPoints = SENSOR_HISTORY_MAX_POINTS) {
-  const normalizedEntityId = entityId.trim();
-  if (!normalizedEntityId) {
-    return [];
-  }
-
-  const historyEntries: Record<string, unknown>[] = [];
-  const tryCollectEntries = (candidate: unknown) => {
-    if (!Array.isArray(candidate)) {
-      return;
-    }
-    candidate.forEach((entry) => {
-      if (isRecordObject(entry)) {
-        historyEntries.push(entry);
-      }
-    });
-  };
-
-  if (isRecordObject(payload)) {
-    tryCollectEntries(payload[normalizedEntityId]);
-    if (historyEntries.length === 0) {
-      const entityValues = Object.values(payload);
-      if (entityValues.length === 1) {
-        tryCollectEntries(entityValues[0]);
-      }
-    }
-  } else if (Array.isArray(payload)) {
-    if (payload.length > 0 && Array.isArray(payload[0])) {
-      tryCollectEntries(payload[0]);
-    } else {
-      tryCollectEntries(payload);
-    }
-  }
-
-  const points = historyEntries
-    .map((entry, fallbackIndex) => {
-      const rawState = entry.s ?? entry.state;
-      const value = toFiniteNumber(rawState);
-      if (!Number.isFinite(value)) {
-        return null;
-      }
-      const timestampMs =
-        toHistoryTimestampMs(
-          entry.lu ??
-            entry.last_updated ??
-            entry.last_updated_ts ??
-            entry.lc ??
-            entry.last_changed ??
-            entry.last_changed_ts,
-        ) ?? fallbackIndex;
-      return {
-        value: value as number,
-        timestampMs,
-      };
-    })
-    .filter((point): point is { value: number; timestampMs: number } => point !== null)
-    .sort((left, right) => left.timestampMs - right.timestampMs);
-
-  if (points.length === 0) {
-    return [];
-  }
-
-  const series = points.map((point) => point.value);
-  return downsampleNumberSeries(series, maxPoints);
-}
-
-function sameNumberSeries(left: number[] | undefined, right: number[] | undefined) {
-  if (!left && !right) {
-    return true;
-  }
-  if (!left || !right) {
-    return false;
-  }
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function resolveSensorMeta(
-  widget: Widget,
-  liveEntity: MockEntityState | undefined,
-  haEntityMap: Record<string, MockEntityState>,
-) {
-  const statusEntityId = widget.sensorStatusEntityId?.trim();
-  const batteryEntityId = widget.sensorBatteryEntityId?.trim();
-  const connectionEntityId = widget.sensorConnectionEntityId?.trim();
-  const statusEntity = statusEntityId ? haEntityMap[statusEntityId] : undefined;
-  const batteryEntity = batteryEntityId ? haEntityMap[batteryEntityId] : undefined;
-  const connectionEntity = connectionEntityId ? haEntityMap[connectionEntityId] : undefined;
-  const mainAttributes = liveEntity?.rawAttributes;
-
-  const statusFromEntity =
-    statusEntity?.stateLabel ?? statusEntity?.secondary ?? statusEntity?.state;
-  const statusFromAttributes = readAttributeString(mainAttributes, SENSOR_STATUS_ATTRIBUTE_KEYS);
-  const status =
-    statusFromEntity ??
-    statusFromAttributes ??
-    liveEntity?.stateLabel ??
-    liveEntity?.state ??
-    widget.status;
-
-  const batteryNumericFromEntity =
-    typeof batteryEntity?.numericValue === 'number'
-      ? batteryEntity.numericValue
-      : toFiniteNumber(batteryEntity?.state);
-  const batteryFromEntity =
-    batteryNumericFromEntity !== undefined
-      ? `${formatRoundedValue(batteryNumericFromEntity)}${batteryEntity?.unit ?? '%'}`
-      : batteryEntity
-        ? batteryEntity.stateLabel ?? batteryEntity.secondary ?? batteryEntity.state
-        : undefined;
-  const batteryNumericFromAttributes = readAttributeNumber(mainAttributes, SENSOR_BATTERY_ATTRIBUTE_KEYS);
-  const batteryFromAttributes =
-    batteryNumericFromAttributes !== undefined
-      ? `${formatRoundedValue(batteryNumericFromAttributes)}%`
-      : readAttributeString(mainAttributes, SENSOR_BATTERY_ATTRIBUTE_KEYS);
-  const battery = batteryFromEntity ?? batteryFromAttributes;
-
-  const connectionSourceFromEntity =
-    connectionEntity?.stateLabel ?? connectionEntity?.state ?? connectionEntity?.secondary;
-  const connectionSourceFromAttributes = readFirstAttributeValue(mainAttributes, SENSOR_CONNECTION_ATTRIBUTE_KEYS);
-  const fallbackConnectionSource = liveEntity?.stateLabel ?? liveEntity?.state;
-  const rawConnectionSource =
-    connectionSourceFromEntity ?? connectionSourceFromAttributes ?? fallbackConnectionSource;
-  const connectionState = normalizeConnectionState(rawConnectionSource);
-  const connection = normalizeConnectionLabel(connectionState);
-
-  return {
-    status,
-    battery,
-    connection,
-    connectionState,
-  };
-}
-
-function resolveMediaState(value: string | undefined) {
-  return normalizeMediaPlayerStateKey(value);
-}
-
-type MediaRepeatMode = 'off' | 'all' | 'one';
 type MediaOutputKind = 'speaker' | 'tv' | 'cast';
 
 function inferMediaOutputKind(value: string | undefined): MediaOutputKind {
@@ -2799,17 +1168,6 @@ function resolveLiveMediaPosition(
     return safeBase;
   }
   return Math.max(0, Math.min(duration, safeBase + elapsedSeconds));
-}
-
-function resolveMediaRepeatMode(value: unknown): MediaRepeatMode {
-  const normalized = normalizeLower(toTrimmedString(value));
-  if (normalized === 'one' || normalized === 'single' || normalized === 'track' || normalized === '1') {
-    return 'one';
-  }
-  if (normalized === 'all' || normalized === 'playlist' || normalized === 'on' || normalized === 'true') {
-    return 'all';
-  }
-  return 'off';
 }
 
 function resolveMediaCapabilities(entity?: MockEntityState) {
@@ -2883,45 +1241,6 @@ function resolveMediaCapabilities(entity?: MockEntityState) {
     supportsEnqueue: (features & MEDIA_FEATURE_ENQUEUE) !== 0,
     supportsSearchMedia: (features & MEDIA_FEATURE_SEARCH_MEDIA) !== 0,
   };
-}
-
-function normalizeVacuumState(value: string | undefined) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (!normalized) {
-    return 'unknown';
-  }
-  if (normalized === 'returning_to_base') {
-    return 'returning';
-  }
-  if (normalized === 'charging') {
-    return 'docked';
-  }
-  return normalized;
-}
-
-function translateVacuumState(state: string) {
-  if (state === 'cleaning') {
-    return 'Pulizia';
-  }
-  if (state === 'paused') {
-    return 'In pausa';
-  }
-  if (state === 'returning') {
-    return 'Rientro base';
-  }
-  if (state === 'docked') {
-    return 'In base';
-  }
-  if (state === 'idle') {
-    return 'Inattivo';
-  }
-  if (state === 'error') {
-    return 'Errore';
-  }
-  if (state === 'unavailable') {
-    return 'Non disponibile';
-  }
-  return 'Sconosciuto';
 }
 
 function buildFallbackVacuumAttributes(widget: Widget, includeDemoFeatures: boolean) {
@@ -3051,28 +1370,79 @@ function resolveAlarmPendingState(service: AlarmServiceName) {
   };
 }
 
-function resolveCameraPreviewUrls(
-  entity: MockEntityState | undefined,
-  fallbackEntityId: string | undefined,
-  haUrl: string,
-) {
-  const rawAttributes = entity?.rawAttributes;
-  const cameraEntityId =
-    toTrimmedString(rawAttributes?.camera_entity_id) ??
-    toTrimmedString(rawAttributes?.entity_id) ??
-    toTrimmedString(fallbackEntityId);
-  const streamUrl = cameraEntityId
-    ? `/api/camera_proxy_stream/${encodeURIComponent(cameraEntityId)}`
+function buildVacuumDeviceContext({
+  vacuumEntityId,
+  haStates,
+  entityRegistry,
+  deviceRegistry,
+  haUrl,
+}: {
+  vacuumEntityId: string;
+  haStates: MockEntityStateMap;
+  entityRegistry: HaEntityRegistryEntry[];
+  deviceRegistry: HaDeviceRegistryEntry[];
+  haUrl: string;
+}) {
+  const normalizedEntityId = vacuumEntityId.trim();
+  const mainEntity = haStates[normalizedEntityId] ?? haStates[normalizedEntityId.toLowerCase()];
+  const registryByEntityId = new Map(entityRegistry.map((entry) => [entry.entityId.toLowerCase(), entry]));
+  const mainRegistryEntry = registryByEntityId.get(normalizedEntityId.toLowerCase());
+  const deviceId = mainRegistryEntry?.deviceId;
+  const rawAttributes = mainEntity?.rawAttributes;
+  const demoRelatedIds = Array.isArray(rawAttributes?.demo_related_entities)
+    ? rawAttributes.demo_related_entities
+        .map((entry) => toTrimmedString(entry))
+        .filter((entry): entry is string => Boolean(entry))
+    : [];
+  const relatedRegistryEntries = deviceId
+    ? entityRegistry.filter(
+        (entry) =>
+          entry.deviceId === deviceId &&
+          entry.entityId.toLowerCase() !== normalizedEntityId.toLowerCase() &&
+          !entry.disabledBy &&
+          !entry.hiddenBy,
+      )
+    : [];
+  const relatedIds = relatedRegistryEntries.length > 0
+    ? relatedRegistryEntries.map((entry) => entry.entityId)
+    : demoRelatedIds;
+  const relatedEntities = relatedIds
+    .map((entityId) => {
+      const entity = haStates[entityId] ?? haStates[entityId.toLowerCase()];
+      if (!entity) return null;
+      const registryEntry = registryByEntityId.get(entityId.toLowerCase());
+      return buildVacuumRelatedEntity(entityId, entity, registryEntry, haUrl);
+    })
+    .filter((entry): entry is VacuumRelatedEntityInfo => entry !== null);
+  const snapshot = buildVacuumDeviceSnapshot({
+    vacuumEntity: mainEntity,
+    relatedEntities,
+    haUrl,
+  });
+  const rawDemoDeviceInfo = isRecordObject(rawAttributes?.demo_device_info)
+    ? rawAttributes.demo_device_info
     : undefined;
-  const snapshotCandidate =
-    toTrimmedString(entity?.imageUrl) ??
-    toTrimmedString(rawAttributes?.entity_picture) ??
-    toTrimmedString(rawAttributes?.camera_url) ??
-    toTrimmedString(rawAttributes?.cameraUrl);
+  const deviceEntry = deviceId ? deviceRegistry.find((entry) => entry.id === deviceId) : undefined;
+  const deviceInfo: VacuumDeviceInfo | undefined = deviceEntry || rawDemoDeviceInfo
+    ? {
+        id: deviceEntry?.id ?? toTrimmedString(rawDemoDeviceInfo?.id),
+        name: deviceEntry?.nameByUser ?? deviceEntry?.name ?? toTrimmedString(rawDemoDeviceInfo?.name),
+        manufacturer: deviceEntry?.manufacturer ?? toTrimmedString(rawDemoDeviceInfo?.manufacturer),
+        model: deviceEntry?.model ?? toTrimmedString(rawDemoDeviceInfo?.model),
+        swVersion: deviceEntry?.swVersion ?? toTrimmedString(rawDemoDeviceInfo?.swVersion),
+        hwVersion: deviceEntry?.hwVersion ?? toTrimmedString(rawDemoDeviceInfo?.hwVersion),
+        areaId: deviceEntry?.areaId ?? mainRegistryEntry?.areaId ?? toTrimmedString(rawDemoDeviceInfo?.areaId),
+        configurationUrl: deviceEntry?.configurationUrl ?? toTrimmedString(rawDemoDeviceInfo?.configurationUrl),
+      }
+    : undefined;
+
   return {
-    cameraEntityId,
-    streamUrl,
-    snapshotUrl: resolveRelativeHaUrl(snapshotCandidate, haUrl),
+    mainEntity,
+    snapshot,
+    deviceInfo,
+    relatedEntities,
+    registryOptions: mainRegistryEntry?.options ??
+      (isRecordObject(rawAttributes?.demo_registry_options) ? rawAttributes.demo_registry_options : undefined),
   };
 }
 
@@ -3116,16 +1486,16 @@ function resolveVacuumCapabilities(entity: MockEntityState | undefined) {
   const supportedFeatures = typeof entity?.supportedFeatures === 'number' ? entity.supportedFeatures : rawFeatures ?? 0;
   return {
     supportedFeatures,
-    supportsStart: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_START) !== 0,
-    supportsPause: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_PAUSE) !== 0,
-    supportsStop: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_STOP) !== 0,
-    supportsReturnHome: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_RETURN_HOME) !== 0,
-    supportsLocate: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_LOCATE) !== 0,
-    supportsCleanSpot: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_CLEAN_SPOT) !== 0,
-    supportsFanSpeed: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_FAN_SPEED) !== 0,
-    supportsSendCommand: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_SEND_COMMAND) !== 0,
-    supportsMap: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_MAP) !== 0,
-    supportsCleanArea: supportedFeatures === 0 || (supportedFeatures & VACUUM_FEATURE_CLEAN_AREA) !== 0,
+    supportsStart: (supportedFeatures & VACUUM_FEATURE_START) !== 0,
+    supportsPause: (supportedFeatures & VACUUM_FEATURE_PAUSE) !== 0,
+    supportsStop: (supportedFeatures & VACUUM_FEATURE_STOP) !== 0,
+    supportsReturnHome: (supportedFeatures & VACUUM_FEATURE_RETURN_HOME) !== 0,
+    supportsLocate: (supportedFeatures & VACUUM_FEATURE_LOCATE) !== 0,
+    supportsCleanSpot: (supportedFeatures & VACUUM_FEATURE_CLEAN_SPOT) !== 0,
+    supportsFanSpeed: (supportedFeatures & VACUUM_FEATURE_FAN_SPEED) !== 0,
+    supportsSendCommand: (supportedFeatures & VACUUM_FEATURE_SEND_COMMAND) !== 0,
+    supportsMap: (supportedFeatures & VACUUM_FEATURE_MAP) !== 0,
+    supportsCleanArea: (supportedFeatures & VACUUM_FEATURE_CLEAN_AREA) !== 0,
   };
 }
 
@@ -3157,255 +1527,6 @@ function isDemoVacuumEntity(entityId: string | undefined) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
-}
-
-function normalizeLightColorMode(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-function readLightSupportedColorModes(entity: MockEntityState | undefined) {
-  const rawModes =
-    entity?.supportedColorModes ??
-    entity?.supported_color_modes ??
-    entity?.rawAttributes?.supported_color_modes;
-  if (!Array.isArray(rawModes)) {
-    return [];
-  }
-  return rawModes
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => normalizeLightColorMode(entry))
-    .filter((entry) => entry.length > 0);
-}
-
-function readLightEffectList(entity: MockEntityState | undefined) {
-  const rawEffects = entity?.effectList ?? entity?.effect_list ?? entity?.rawAttributes?.effect_list;
-  if (!Array.isArray(rawEffects)) {
-    return [];
-  }
-  const seen = new Set<string>();
-  return rawEffects
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => {
-      if (!entry) {
-        return false;
-      }
-      const key = entry.toLowerCase();
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-}
-
-function hsToRgbColor(hue: number, saturation: number): [number, number, number] {
-  const h = ((Number(hue) || 0) % 360 + 360) % 360;
-  const s = clampNumber((Number(saturation) || 0) / 100, 0, 1);
-  const c = s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  let rPrime = 0;
-  let gPrime = 0;
-  let bPrime = 0;
-  if (h < 60) {
-    rPrime = c;
-    gPrime = x;
-  } else if (h < 120) {
-    rPrime = x;
-    gPrime = c;
-  } else if (h < 180) {
-    gPrime = c;
-    bPrime = x;
-  } else if (h < 240) {
-    gPrime = x;
-    bPrime = c;
-  } else if (h < 300) {
-    rPrime = x;
-    bPrime = c;
-  } else {
-    rPrime = c;
-    bPrime = x;
-  }
-  const m = 1 - c;
-  return [
-    Math.round(clampNumber((rPrime + m) * 255, 0, 255)),
-    Math.round(clampNumber((gPrime + m) * 255, 0, 255)),
-    Math.round(clampNumber((bPrime + m) * 255, 0, 255)),
-  ];
-}
-
-function rgbToXyColor(rgb: [number, number, number]): [number, number] {
-  const normalizeChannel = (channel: number) => {
-    const normalized = clampNumber(channel, 0, 255) / 255;
-    return normalized > 0.04045
-      ? ((normalized + 0.055) / 1.055) ** 2.4
-      : normalized / 12.92;
-  };
-  const red = normalizeChannel(rgb[0]);
-  const green = normalizeChannel(rgb[1]);
-  const blue = normalizeChannel(rgb[2]);
-  const x = red * 0.664511 + green * 0.154324 + blue * 0.162028;
-  const y = red * 0.283881 + green * 0.668433 + blue * 0.047685;
-  const z = red * 0.000088 + green * 0.07231 + blue * 0.986039;
-  const total = x + y + z;
-  if (total <= 0) {
-    return [0.3127, 0.329];
-  }
-  return [
-    Math.round((x / total) * 10000) / 10000,
-    Math.round((y / total) * 10000) / 10000,
-  ];
-}
-
-function buildLightColorServicePayload(mode: LightColorPayloadMode, hsColor: [number, number]) {
-  const safeHue = clampNumber(Math.round(hsColor[0]), 0, 360);
-  const safeSat = clampNumber(Math.round(hsColor[1]), 0, 100);
-  const rgbColor = hsToRgbColor(safeHue, safeSat);
-  if (mode === 'hs') {
-    return { hs_color: [safeHue, safeSat] };
-  }
-  if (mode === 'rgb') {
-    return { rgb_color: rgbColor };
-  }
-  if (mode === 'xy') {
-    return { xy_color: rgbToXyColor(rgbColor) };
-  }
-  if (mode === 'rgbw') {
-    return { rgbw_color: [...rgbColor, 0] };
-  }
-  return { rgbww_color: [...rgbColor, 0, 0] };
-}
-
-function buildLightCommandOptionsPayload(options?: LightCommandOptions) {
-  const transition = toFiniteNumber(options?.transition);
-  if (transition === undefined || transition <= 0) {
-    return {};
-  }
-  return { transition: Math.round(transition * 10) / 10 };
-}
-
-function percentToHaBrightness(value: number) {
-  return Math.round((clampNumber(value, 0, 100) / 100) * 255);
-}
-
-function resolveLightCapabilities(entity?: MockEntityState) {
-  if (!entity) {
-    return {
-      supportedColorModes: [...LIGHT_COLOR_MODE_PRIORITY, 'color_temp', 'brightness'],
-      colorMode: 'hs',
-      preferredColorMode: 'hs' as LightColorPayloadMode,
-      supportsOnOff: true,
-      supportsBrightness: true,
-      supportsColorTemp: true,
-      supportsColor: true,
-      supportsHs: true,
-      supportsRgb: true,
-      supportsRgbw: true,
-      supportsRgbww: true,
-      supportsXy: true,
-      supportsWhite: true,
-      supportsEffects: true,
-      supportsFlash: true,
-      supportsTransition: true,
-      minColorTempKelvin: 2000,
-      maxColorTempKelvin: 6500,
-      activeEffect: undefined,
-      effectList: ['off', 'colorloop', 'pulse'],
-    };
-  }
-
-  const supportedColorModes = readLightSupportedColorModes(entity);
-  const features = typeof entity.supportedFeatures === 'number' ? entity.supportedFeatures : 0;
-  const hasExplicitColorModes = supportedColorModes.length > 0;
-  const colorMode = normalizeLightColorMode(entity.colorMode ?? entity.color_mode ?? entity.rawAttributes?.color_mode);
-  const hasLegacyColorFeature = (features & LIGHT_FEATURE_COLOR) !== 0;
-
-  const supportsHs =
-    supportedColorModes.includes('hs') ||
-    (!hasExplicitColorModes && hasLegacyColorFeature) ||
-    Array.isArray(entity.hsColor ?? entity.hs_color);
-  const supportsRgb =
-    supportedColorModes.includes('rgb') ||
-    (!hasExplicitColorModes && hasLegacyColorFeature) ||
-    Array.isArray(entity.rgbColor ?? entity.rgb_color);
-  const supportsRgbw = supportedColorModes.includes('rgbw') || Array.isArray(entity.rgbwColor ?? entity.rgbw_color);
-  const supportsRgbww = supportedColorModes.includes('rgbww') || Array.isArray(entity.rgbwwColor ?? entity.rgbww_color);
-  const supportsXy = supportedColorModes.includes('xy') || Array.isArray(entity.xyColor ?? entity.xy_color);
-  const supportsColor = supportsHs || supportsRgb || supportsRgbw || supportsRgbww || supportsXy;
-
-  const supportsColorTemp =
-    supportedColorModes.includes('color_temp') ||
-    (features & LIGHT_FEATURE_COLOR_TEMP) !== 0 ||
-    typeof entity.colorTempKelvin === 'number' ||
-    typeof entity.color_temp_kelvin === 'number' ||
-    typeof entity.rawAttributes?.min_color_temp_kelvin === 'number' ||
-    typeof entity.rawAttributes?.max_color_temp_kelvin === 'number';
-
-  const supportsWhite = supportedColorModes.includes('white') || (features & LIGHT_FEATURE_WHITE) !== 0;
-  const supportsBrightness =
-    supportedColorModes.some((mode) => LIGHT_COLOR_MODES_WITH_BRIGHTNESS.has(mode)) ||
-    (features & LIGHT_FEATURE_BRIGHTNESS) !== 0 ||
-    typeof entity.brightness === 'number' ||
-    entity.rawAttributes?.brightness !== undefined ||
-    supportsColor ||
-    supportsColorTemp ||
-    supportsWhite;
-  const effectList = readLightEffectList(entity);
-  const supportsEffects = effectList.length > 0 || (features & LIGHT_FEATURE_EFFECT) !== 0;
-  const supportsFlash = (features & LIGHT_FEATURE_FLASH) !== 0;
-  const supportsTransition = (features & LIGHT_FEATURE_TRANSITION) !== 0;
-  const preferredColorMode =
-    LIGHT_COLOR_MODE_PRIORITY.find((mode) => {
-      if (mode === 'hs') {
-        return supportsHs;
-      }
-      if (mode === 'rgb') {
-        return supportsRgb;
-      }
-      if (mode === 'xy') {
-        return supportsXy;
-      }
-      if (mode === 'rgbw') {
-        return supportsRgbw;
-      }
-      return supportsRgbww;
-    }) ?? null;
-  const minColorTempKelvin =
-    toFiniteNumber(entity.minColorTempKelvin) ??
-    toFiniteNumber(entity.min_color_temp_kelvin) ??
-    toFiniteNumber(entity.rawAttributes?.min_color_temp_kelvin) ??
-    2000;
-  const maxColorTempKelvin =
-    toFiniteNumber(entity.maxColorTempKelvin) ??
-    toFiniteNumber(entity.max_color_temp_kelvin) ??
-    toFiniteNumber(entity.rawAttributes?.max_color_temp_kelvin) ??
-    6500;
-  const activeEffect =
-    toTrimmedString(entity.effect) ??
-    toTrimmedString(entity.rawAttributes?.effect);
-
-  return {
-    supportedColorModes,
-    colorMode,
-    preferredColorMode,
-    supportsOnOff: supportedColorModes.includes('onoff') || !hasExplicitColorModes || Boolean(entity.state),
-    supportsBrightness,
-    supportsColorTemp,
-    supportsColor,
-    supportsHs,
-    supportsRgb,
-    supportsRgbw,
-    supportsRgbww,
-    supportsXy,
-    supportsWhite,
-    supportsEffects,
-    supportsFlash,
-    supportsTransition,
-    minColorTempKelvin: Math.min(minColorTempKelvin, maxColorTempKelvin),
-    maxColorTempKelvin: Math.max(minColorTempKelvin, maxColorTempKelvin),
-    activeEffect,
-    effectList,
-  };
 }
 
 function readClimateStringArray(entity: MockEntityState | undefined, directKey: keyof MockEntityState, rawKey: string) {
@@ -3491,12 +1612,11 @@ export function MainBoard() {
   const routerLocation = useLocation();
   const canUseBrowserRouteNavigation = useMemo(shouldUseBrowserRouteNavigation, []);
   const {
-    theme,
-    themeMode,
-    setTheme,
-    setThemeMode,
-    wallpaper,
-    setWallpaper,
+    appearance,
+    appearanceMode,
+    setAppearanceMode,
+    background,
+    setBackground,
     developerMode,
     setDeveloperMode,
     haUrl: profileHaUrl,
@@ -3529,34 +1649,193 @@ export function MainBoard() {
     error: haError,
     haStates,
     haAreas,
+    lastUpdatedAt: haLastUpdatedAt,
     connect: connectHa,
     disconnect: disconnectHa,
-    callService: callHaService,
-    callApi: callHaApi,
+    callService: rawCallHaService,
+    callApi: rawCallHaApi,
   } = activeHaConnection;
   const { addNotification, removeNotification } = useNotifications();
   const isHaConnected = haStatus === 'connected';
-  const [climatePendingByEntity, setClimatePendingByEntity] = useState<Record<string, ClimatePendingState>>({});
+  const [runtimeMode] = useState<DashboardRuntimeMode | null>(() =>
+    resolveInitialDashboardRuntimeMode({
+      storage: typeof window === 'undefined' ? undefined : window.localStorage,
+      isManagedByParent: isHaManagedByParent,
+      hasManualToken: haToken.trim().length > 0,
+    }),
+  );
+  const effectiveRuntimeMode: DashboardRuntimeMode = runtimeMode ?? 'demo';
+  const explicitMockEntityIdsRef = useRef<Set<string>>(new Set());
+  const [initialLayout] = useState(() => loadDashboardLayout(effectiveRuntimeMode));
+  const [pendingDashboardRecovery, setPendingDashboardRecovery] = useState(() =>
+    typeof window === 'undefined'
+      ? null
+      : readPendingDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage),
+  );
+  const [pendingDashboardEditDraft, setPendingDashboardEditDraft] = useState<DashboardEditDraft | null>(() =>
+    typeof window === 'undefined'
+      ? null
+      : readDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode),
+  );
+  const [widgets, setWidgets] = useState<Widget[]>(() => initialLayout.widgets);
+  const [sections, setSections] = useState<DashboardSection[]>(() => initialLayout.sections);
+  const [widgetTypeLayoutOverrides, setWidgetTypeLayoutOverrides] = useState<WidgetTypeLayoutOverrides>(() => {
+    const normalized = normalizeWidgetTypeLayoutOverrides(initialLayout.widgetTypeLayoutOverrides);
+    setActiveWidgetTypeLayoutOverrides(normalized);
+    return normalized;
+  });
+  const [widgetLayoutOverrides, setWidgetLayoutOverrides] = useState<WidgetLayoutOverrides>(
+    () => initialLayout.widgetLayoutOverrides,
+  );
+  const [responsiveLayouts, setResponsiveLayouts] = useState<DashboardResponsiveLayouts>(
+    () => initialLayout.responsiveLayouts,
+  );
+  explicitMockEntityIdsRef.current = new Set(
+    widgets
+      .filter((widget) => widget.dataSource === 'mock' && !haStates[widget.entityId.trim()])
+      .map((widget) => widget.entityId.trim())
+      .filter(Boolean),
+  );
+  setActiveWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides);
+  const administrativeAccessRef = useRef({ manageRooms: false, restartHomeAssistant: false });
+  useEffect(() => {
+    if (!isHaManagedByParent || runtimeMode === 'real' || typeof window === 'undefined') {
+      return;
+    }
+    persistDashboardRuntimeMode('real', window.localStorage);
+    window.location.reload();
+  }, [isHaManagedByParent, runtimeMode]);
+  useEffect(() => {
+    if (runtimeMode !== 'demo' || !isHaConnected || typeof window === 'undefined') {
+      return;
+    }
+    persistDashboardRuntimeMode('real', window.localStorage);
+    window.location.reload();
+  }, [isHaConnected, runtimeMode]);
+  const callHaService = useCallback(
+    async (domain: string, service: string, serviceData: Record<string, unknown>) => {
+      if (effectiveRuntimeMode !== 'real') {
+        return false;
+      }
+      if (requestTargetsMockEntity(serviceData, explicitMockEntityIdsRef.current)) {
+        return false;
+      }
+      if (isDashboardRestartService(domain, service) && !administrativeAccessRef.current.restartHomeAssistant) {
+        return false;
+      }
+      return rawCallHaService(domain, service, serviceData);
+    },
+    [effectiveRuntimeMode, rawCallHaService],
+  );
+  const callHaApi = useCallback(
+    <TResponse = unknown,>(
+      message: Record<string, unknown>,
+      options?: { reportError?: boolean; throwOnError?: boolean },
+    ): Promise<TResponse | null> => {
+      if (effectiveRuntimeMode !== 'real') {
+        if (options?.throwOnError) {
+          return Promise.reject(new Error('API Home Assistant non disponibile in modalità Demo.'));
+        }
+        return Promise.resolve(null);
+      }
+      if (shouldBlockMockEntityApiRequest(message, explicitMockEntityIdsRef.current)) {
+        if (options?.throwOnError) {
+          return Promise.reject(new Error('Le entità mock non possono usare API Home Assistant.'));
+        }
+        return Promise.resolve(null);
+      }
+      if (isDashboardAdministrativeApiMessage(message) && !administrativeAccessRef.current.manageRooms) {
+        if (options?.throwOnError) {
+          return Promise.reject(new Error('Permesso amministrativo Home Assistant richiesto.'));
+        }
+        return Promise.resolve(null);
+      }
+      return rawCallHaApi<TResponse>(message, options);
+    },
+    [effectiveRuntimeMode, rawCallHaApi],
+  );
+  const commandCoordinator = useDeviceCommandCoordinator({
+    entities: haStates,
+    isReliable: effectiveRuntimeMode === 'real' && isHaConnected,
+  });
+  const {
+    climatePendingByEntity,
+    coverPendingByEntity,
+    upsertClimatePending,
+    clearClimatePendingFields,
+    upsertCoverPending,
+    clearCoverPendingFields,
+  } = useClimateCoverPendingController({
+    haStates,
+    isHaConnected,
+  });
+  const {
+    queueClimateCommandDispatch,
+    runCoverCommand,
+  } = useClimateCoverCommandTransport({
+    isHaConnected,
+    commandCoordinator,
+    callHaService,
+    pending: {
+      clearClimatePendingFields,
+      upsertCoverPending,
+      clearCoverPendingFields,
+    },
+    addNotification,
+  });
   const [livingRoomClimateMock, setLivingRoomClimateMock] = useState<MockEntityState>(createLivingRoomClimateMock);
   const [homeAlarmMock, setHomeAlarmMock] = useState<MockEntityState>(createHomeAlarmMock);
   const [mediaPlayerStateMocks] = useState<MockEntityStateMap>(createMediaPlayerStateMocks);
   const [coverStateMocks, setCoverStateMocks] = useState<MockEntityStateMap>(createCoverStateMocks);
-  const [lightTogglePendingByEntity, setLightTogglePendingByEntity] = useState<Record<string, LightTogglePendingState>>({});
-  const [lightBrightnessPendingByEntity, setLightBrightnessPendingByEntity] = useState<Record<string, LightBrightnessPendingState>>({});
-  const [lightColorPendingByEntity, setLightColorPendingByEntity] = useState<Record<string, LightColorPendingState>>({});
-  const [switchTogglePendingByEntity, setSwitchTogglePendingByEntity] = useState<Record<string, SwitchTogglePendingState>>({});
+  const [lockStateMocks] = useState<MockEntityStateMap>(createLockStateMocks);
+  const [cameraStateMocks, setCameraStateMocks] = useState<MockEntityStateMap>(createCameraStateMocks);
+  const [vacuumStateMocks, setVacuumStateMocks] = useState<MockEntityStateMap>(createVacuumStateMocks);
+  const {
+    lightTogglePendingByEntity,
+    lightBrightnessPendingByEntity,
+    lightColorPendingByEntity,
+    switchTogglePendingByEntity,
+    setLightTogglePending,
+    setLightPowerPendingIfChanged,
+    setLightBrightnessPending,
+    setLightColorPending,
+    setSwitchTogglePending,
+    clearLightTogglePending,
+    clearSwitchTogglePending,
+    clearLightCommandPending,
+  } = useLightSwitchPendingController({
+    haStates,
+    isHaConnected,
+  });
   const [lockPendingByEntity, setLockPendingByEntity] = useState<Record<string, LockPendingState>>({});
   const [alarmPendingByEntity, setAlarmPendingByEntity] = useState<Record<string, AlarmPendingState>>({});
-  const [coverPendingByEntity, setCoverPendingByEntity] = useState<Record<string, CoverPendingState>>({});
   const [haUserNamesById, setHaUserNamesById] = useState<Record<string, string>>({});
   const [haUsersById, setHaUsersById] = useState<Record<string, HaAuthUser>>({});
-  const [haCurrentUser, setHaCurrentUser] = useState<HaAuthUser | null>(null);
+  const haCurrentUser = useHaIdentityRevalidation({
+    isConnected: effectiveRuntimeMode === 'real' && isHaConnected,
+    callApi: callHaApi,
+  });
+  const dashboardSecurity = useMemo(
+    () =>
+      createDashboardSecurityValue({
+        runtimeMode: effectiveRuntimeMode,
+        haStatus,
+        user: haCurrentUser,
+      }),
+    [effectiveRuntimeMode, haCurrentUser, haStatus],
+  );
+  administrativeAccessRef.current = {
+    manageRooms: dashboardSecurity.can('manage_rooms'),
+    restartHomeAssistant: dashboardSecurity.can('restart_home_assistant'),
+  };
   const [lockTimelineByEntity, setLockTimelineByEntity] = useState<Record<string, ActivityTimelineEntry[]>>({});
   const [lockActivityStatusByEntity, setLockActivityStatusByEntity] = useState<Record<string, ActivityTimelineStatus>>({});
   const [alarmTimelineByEntity, setAlarmTimelineByEntity] = useState<Record<string, ActivityTimelineEntry[]>>({});
   const [alarmActivityStatusByEntity, setAlarmActivityStatusByEntity] = useState<Record<string, ActivityTimelineStatus>>({});
   const [activityRefreshNonce, setActivityRefreshNonce] = useState(0);
   const [haServiceRegistry, setHaServiceRegistry] = useState<HaServiceRegistry | null>(null);
+  const [haEntityRegistry, setHaEntityRegistry] = useState<HaEntityRegistryEntry[]>([]);
+  const [haDeviceRegistry, setHaDeviceRegistry] = useState<HaDeviceRegistryEntry[]>([]);
   const [haFavoriteEntityIds, setHaFavoriteEntityIds] = useState<string[]>([]);
   const [haFavoriteLabelDetected, setHaFavoriteLabelDetected] = useState(false);
   const [profileMovementTimeline, setProfileMovementTimeline] = useState<ProfileMovementTimelineEntry[]>([]);
@@ -3697,12 +1976,36 @@ export function MainBoard() {
     };
   }, [haCurrentUser?.email, haCurrentUser?.id, haCurrentUser?.name, haCurrentUser?.username, haStates]);
 
-  const haStatesForUi = useMemo<MockEntityStateMap>(() => {
+  const baseHaStatesForUi = useMemo<MockEntityStateMap>(() => {
     if (!isHaConnected) {
+      if (effectiveRuntimeMode === 'real') {
+        const explicitMockIds = explicitMockEntityIdsRef.current;
+        if (explicitMockIds.size === 0) {
+          return haStates;
+        }
+        const availableMocks: MockEntityStateMap = {
+          ...mediaPlayerStateMocks,
+          ...coverStateMocks,
+          ...lockStateMocks,
+          ...cameraStateMocks,
+          ...vacuumStateMocks,
+          [CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]: livingRoomClimateMock,
+          [HOME_ALARM_MOCK_ENTITY_ID]: homeAlarmMock,
+        };
+        const explicitMocks = Object.fromEntries(
+          [...explicitMockIds]
+            .filter((entityId) => availableMocks[entityId])
+            .map((entityId) => [entityId, availableMocks[entityId]]),
+        );
+        return { ...haStates, ...explicitMocks };
+      }
       return {
         ...haStates,
         ...mediaPlayerStateMocks,
         ...coverStateMocks,
+        ...lockStateMocks,
+        ...cameraStateMocks,
+        ...vacuumStateMocks,
         [CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]: livingRoomClimateMock,
         [HOME_ALARM_MOCK_ENTITY_ID]: homeAlarmMock,
       };
@@ -4012,24 +2315,65 @@ export function MainBoard() {
         ensureNextStates()[entityId] = entity;
       }
     });
+    Object.entries(lockStateMocks).forEach(([entityId, entity]) => {
+      if (!haStates[entityId]) {
+        ensureNextStates()[entityId] = entity;
+      }
+    });
+    Object.entries(cameraStateMocks).forEach(([entityId, entity]) => {
+      if (!haStates[entityId]) {
+        ensureNextStates()[entityId] = entity;
+      }
+    });
+    Object.entries(vacuumStateMocks).forEach(([entityId, entity]) => {
+      if (!haStates[entityId]) {
+        ensureNextStates()[entityId] = entity;
+      }
+    });
 
     return nextStates ?? haStates;
-  }, [alarmPendingByEntity, climatePendingByEntity, coverPendingByEntity, coverStateMocks, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, mediaPlayerStateMocks, switchTogglePendingByEntity]);
-  const initialLayoutRef = useRef(loadDashboardLayout());
-  const [widgets, setWidgets] = useState<Widget[]>(() => initialLayoutRef.current.widgets);
-  const [sections, setSections] = useState<DashboardSection[]>(() => initialLayoutRef.current.sections);
-  const [widgetTypeLayoutOverrides, setWidgetTypeLayoutOverrides] = useState<WidgetTypeLayoutOverrides>(() => {
-    const normalized = normalizeWidgetTypeLayoutOverrides(initialLayoutRef.current.widgetTypeLayoutOverrides);
-    setActiveWidgetTypeLayoutOverrides(normalized);
-    return normalized;
-  });
-  const [widgetLayoutOverrides, setWidgetLayoutOverrides] = useState<WidgetLayoutOverrides>(
-    () => initialLayoutRef.current.widgetLayoutOverrides,
-  );
-  const [responsiveLayouts, setResponsiveLayouts] = useState<DashboardResponsiveLayouts>(
-    () => initialLayoutRef.current.responsiveLayouts,
-  );
-  setActiveWidgetTypeLayoutOverrides(widgetTypeLayoutOverrides);
+  }, [alarmPendingByEntity, cameraStateMocks, climatePendingByEntity, coverPendingByEntity, coverStateMocks, effectiveRuntimeMode, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, lockStateMocks, mediaPlayerStateMocks, switchTogglePendingByEntity, vacuumStateMocks]);
+  const haStatesForUi = useMemo<MockEntityStateMap>(() => {
+    let enrichedStates: MockEntityStateMap | null = null;
+    Object.values(commandCoordinator.statuses)
+      .filter((status) => status.phase === 'sending' || status.phase === 'awaiting_confirmation')
+      .sort((left, right) => left.updatedAt - right.updatedAt)
+      .forEach((status) => {
+        const entity = (enrichedStates ?? baseHaStatesForUi)[status.entityId];
+        if (!entity) return;
+        if (!enrichedStates) enrichedStates = { ...baseHaStatesForUi };
+        enrichedStates[status.entityId] = {
+          ...entity,
+          rawAttributes: {
+            ...(entity.rawAttributes ?? {}),
+            [DEVICE_COMMAND_PHASE_ATTRIBUTE_KEY]: status.phase,
+          },
+        };
+      });
+    Object.entries(baseHaStatesForUi).forEach(([entityId, entity]) => {
+      if (!entityId.startsWith('vacuum.')) return;
+      const context = buildVacuumDeviceContext({
+        vacuumEntityId: entityId,
+        haStates: baseHaStatesForUi,
+        entityRegistry: haEntityRegistry,
+        deviceRegistry: haDeviceRegistry,
+        haUrl,
+      });
+      const snapshot = context.snapshot;
+      if (
+        snapshot.batteryLevel === undefined &&
+        !snapshot.mapUrl &&
+        snapshot.cleanedArea === undefined &&
+        snapshot.cleaningMinutes === undefined
+      ) {
+        return;
+      }
+      const currentEntity = (enrichedStates ?? baseHaStatesForUi)[entityId] ?? entity;
+      if (!enrichedStates) enrichedStates = { ...baseHaStatesForUi };
+      enrichedStates[entityId] = enrichVacuumEntity(currentEntity, snapshot);
+    });
+    return enrichedStates ?? baseHaStatesForUi;
+  }, [baseHaStatesForUi, commandCoordinator.statuses, haDeviceRegistry, haEntityRegistry, haUrl]);
   const weatherConfigSection = useMemo(() => {
     const greetingWithWeather = sections.find(
       (section) => section.kind === 'greeting' && (section.showWeather ?? false),
@@ -4050,15 +2394,19 @@ export function MainBoard() {
   const { state, actions } = useDashboardState({
     haStates: haStatesForUi,
     haStatus,
+    allowMockFallback: effectiveRuntimeMode === 'demo',
     weatherEntityId,
     weatherForecastType,
     haCallApi: callHaApi,
   });
   const [activeDevice, setActiveDevice] = useState<ActiveDevice | null>(null);
   const [pendingQuickAlarmAction, setPendingQuickAlarmAction] = useState<AlarmQuickAuthAction | null>(null);
+  const [pendingQuickLockAction, setPendingQuickLockAction] = useState<LockQuickAuthAction | null>(null);
+  const [hasMountedQuickSecurityAuth, setHasMountedQuickSecurityAuth] = useState(false);
   const [quickAlarmAuthCode, setQuickAlarmAuthCode] = useState('');
   const [quickAlarmSubmissionError, setQuickAlarmSubmissionError] = useState('');
   const [quickAlarmAuthAttemptState, setQuickAlarmAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
+  const [quickLockAuthAttemptState, setQuickLockAuthAttemptState] = useState(INITIAL_AUTH_ATTEMPT_STATE);
   const [isQuickAlarmAuthBusy, setIsQuickAlarmAuthBusy] = useState(false);
   const [isLockAuthBusy, setIsLockAuthBusy] = useState(false);
   const deviceAuthUser = useMemo(
@@ -4079,10 +2427,30 @@ export function MainBoard() {
   );
   const deviceAuth = useDeviceAuth(deviceAuthUser);
   const [sensorHistoryByEntity, setSensorHistoryByEntity] = useState<Record<string, number[]>>({});
+  const [cameraHistory, setCameraHistory] = useState<{
+    cameraEntityId?: string;
+    status: CameraHistoryStatus;
+    entries: CameraHistoryEntry[];
+    error?: string;
+  }>({ status: 'idle', entries: [] });
+  const [cameraHistoryRefreshNonce, setCameraHistoryRefreshNonce] = useState(0);
+  const cameraHistoryRequestRef = useRef(0);
+  const refreshCameraHistory = useCallback(() => {
+    setCameraHistoryRefreshNonce(Date.now());
+  }, []);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [hasUnsavedDashboardEdits, setHasUnsavedDashboardEdits] = useState(false);
+  const [isDashboardSaveBusy, setIsDashboardSaveBusy] = useState(false);
+  const [isDashboardConflictOpen, setIsDashboardConflictOpen] = useState(false);
+  const editSessionBaselineRef = useRef<DashboardEditorSnapshot | null>(null);
+  const editSessionCreatedAtRef = useRef<number | null>(null);
+  const allowDashboardUnloadRef = useRef(false);
+  const editSessionRouteRef = useRef<string | null>(null);
   const [isXsViewport, setIsXsViewport] = useState(isXsViewportNow);
   const [isCompactViewport, setIsCompactViewport] = useState(isCompactViewportNow);
-  const [activeGridBreakpoint, setActiveGridBreakpoint] = useState<DashboardGridBreakpoint>(resolveGridBreakpointNow);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(isDesktopViewportNow);
+  const [canvasGridBreakpoint, setCanvasGridBreakpoint] = useState<DashboardGridBreakpoint>(resolveGridBreakpointNow);
+  const [viewportPreviewMode, setViewportPreviewMode] = useState<DashboardViewportPreviewMode>('auto');
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const [selectedWidgetDisplayMetrics, setSelectedWidgetDisplayMetrics] = useState<WidgetDisplayMetrics | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
@@ -4103,33 +2471,25 @@ export function MainBoard() {
   const [isSettingsView, setIsSettingsView] = useState(resolveSettingsFromLocation);
   const [isEditAvailableForRoute, setIsEditAvailableForRoute] = useState(resolveEditAvailabilityFromLocation);
   const [internalNavigationRoute, setInternalNavigationRoute] = useState(() =>
-    typeof window === 'undefined' ? '/home' : window.location.href,
+    typeof window === 'undefined' || !canUseBrowserRouteNavigation ? '/home' : window.location.href,
   );
   const [selectedConsumptionCardId, setSelectedConsumptionCardId] = useState<ConsumptionCardId | null>('electricity');
   const [oauthFlowError, setOAuthFlowError] = useState<string | null>(null);
   const [isOAuthFlowBusy, setIsOAuthFlowBusy] = useState(false);
-  const [pendingOAuthConnect, setPendingOAuthConnect] = useState(false);
+  const oauthExchangePromiseRef = useRef<ReturnType<typeof exchangeHaOAuthCode> | null>(null);
   const [pendingStoredOAuthReconnectUrl, setPendingStoredOAuthReconnectUrl] = useState<string | null>(null);
   const [completedMainGuides, setCompletedMainGuides] = useState<Record<MainGuidedSetupKind, boolean>>(() => ({
     welcome: isOnboardingCompleted(MAIN_GUIDED_SETUP_STORAGE_KEYS.welcome),
     context: isOnboardingCompleted(MAIN_GUIDED_SETUP_STORAGE_KEYS.context),
   }));
+  const [activeMainGuideStepId, setActiveMainGuideStepId] = useState<string | null>(null);
 
   const nextWidgetIdRef = useRef(1);
   const nextSectionIdRef = useRef(1);
-  const lightBrightnessDebounceRef = useRef<Record<string, number>>({});
-  const climatePendingTimeoutRef = useRef<Record<string, number>>({});
-  const climateSendDelayTimeoutRef = useRef<Record<string, number>>({});
-  const climateQueuedCommandRef = useRef<Record<string, ClimateQueuedCommand>>({});
-  const lightTogglePendingTimeoutRef = useRef<Record<string, number>>({});
-  const lightBrightnessPendingTimeoutRef = useRef<Record<string, number>>({});
-  const lightColorPendingTimeoutRef = useRef<Record<string, number>>({});
-  const switchTogglePendingTimeoutRef = useRef<Record<string, number>>({});
   const lockPendingTimeoutRef = useRef<Record<string, number>>({});
   const alarmPendingTimeoutRef = useRef<Record<string, number>>({});
   const lockActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
   const alarmActivityRefreshTimeoutRef = useRef<Record<string, number[]>>({});
-  const coverPendingTimeoutRef = useRef<Record<string, number>>({});
   const activityFetchSeqRef = useRef(0);
   const vacuumReturnToBaseTimeoutRef = useRef<Record<string, number>>({});
   const profileReturnRouteRef = useRef('/home');
@@ -4279,8 +2639,10 @@ export function MainBoard() {
     const updateViewport = () => {
       const nextXs = isXsViewportNow();
       const nextCompact = isCompactViewportNow();
+      const nextDesktop = isDesktopViewportNow();
       setIsXsViewport((current) => (current === nextXs ? current : nextXs));
       setIsCompactViewport((current) => (current === nextCompact ? current : nextCompact));
+      setIsDesktopViewport((current) => (current === nextDesktop ? current : nextDesktop));
     };
 
     updateViewport();
@@ -4291,7 +2653,10 @@ export function MainBoard() {
   }, []);
 
   const visibleSidebarPaths = sidebarPaths;
-  const canToggleEditMode = isEditAvailableForRoute;
+  const canToggleEditMode =
+    runtimeMode !== null &&
+    isEditAvailableForRoute &&
+    dashboardSecurity.can('edit_dashboard');
 
   useEffect(() => {
     const maxWidgetCustomIndex = widgets.reduce((max, widget) => {
@@ -4326,7 +2691,7 @@ export function MainBoard() {
     const breakpointLayouts = selectedWidget.parentSectionId
       ? responsiveLayouts.stacks?.[selectedWidget.parentSectionId]
       : responsiveLayouts.root;
-    const activeLayoutItem = breakpointLayouts?.[activeGridBreakpoint]?.find(
+    const activeLayoutItem = breakpointLayouts?.[canvasGridBreakpoint]?.find(
       (item) => item.i === selectedWidget.id,
     );
     return activeLayoutItem
@@ -4335,7 +2700,7 @@ export function MainBoard() {
           h: activeLayoutItem.h,
         }
       : null;
-  }, [activeGridBreakpoint, responsiveLayouts.root, responsiveLayouts.stacks, selectedWidget]);
+  }, [canvasGridBreakpoint, responsiveLayouts.root, responsiveLayouts.stacks, selectedWidget]);
 
   const handleWidgetDisplayMetricsChange = useCallback((metrics: WidgetDisplayMetrics) => {
     setSelectedWidgetDisplayMetrics((current) =>
@@ -4363,7 +2728,6 @@ export function MainBoard() {
     () => visibleSidebarPaths.find((entry) => entry.id === selectedSidebarPathId) ?? null,
     [selectedSidebarPathId, visibleSidebarPaths],
   );
-  const LIGHT_BRIGHTNESS_DEBOUNCE_MS = 120;
   const LIGHT_WIDGET_HEIGHT_OFF = 1;
   const LIGHT_WIDGET_HEIGHT_ON = 2;
   const CLIMATE_WIDGET_WIDTH = 2;
@@ -4371,38 +2735,25 @@ export function MainBoard() {
   const CAMERA_WIDGET_MIN_HEIGHT = 3;
   const MEDIA_WIDGET_MIN_WIDTH = 3;
   const MEDIA_WIDGET_MIN_HEIGHT = 3;
-  const VACUUM_WIDGET_MIN_WIDTH = 2;
-  const VACUUM_WIDGET_MIN_HEIGHT = 3;
+  const VACUUM_WIDGET_MIN_WIDTH = 1;
+  const VACUUM_WIDGET_MIN_HEIGHT = 1;
+  const VACUUM_WIDGET_DEFAULT_WIDTH = 2;
+  const VACUUM_WIDGET_DEFAULT_HEIGHT = 2;
   const COVER_WIDGET_MIN_WIDTH = 2;
   const COVER_WIDGET_MIN_HEIGHT = 1;
   const MEMBERS_WIDGET_MIN_WIDTH = 3;
   const MEMBERS_WIDGET_MIN_HEIGHT = 2;
-  const STACK_SECTION_AUTO_MIN_COLUMNS = 2;
-  const STACK_SECTION_AUTO_MAX_COLUMNS = ROOT_CANVAS_COLS;
   const isStackSection = (section: DashboardSection) =>
     section.kind === 'stack-vertical' || section.kind === 'stack-horizontal' || section.kind === 'stack-grid';
-  const isStackGridAutoColumns = (section: DashboardSection) =>
-    section.kind === 'stack-grid' && section.stackColumnsMode !== 'manual';
   const firstStackSectionId = useMemo(
     () => sections.find((section) => isStackSection(section))?.id ?? null,
     [sections],
   );
-  const clampAutoStackSectionColumns = (value: number) =>
-    Math.max(STACK_SECTION_AUTO_MIN_COLUMNS, Math.min(STACK_SECTION_AUTO_MAX_COLUMNS, Math.round(value)));
-  const resolveUsedColumnsForStackSection = (sectionId: string, sourceWidgets: Widget[]) =>
-    sourceWidgets
-      .filter((widget) => widget.parentSectionId === sectionId)
-      .reduce((maxCols, widget) => {
-        const safeX = Math.max(0, Math.round(widget.layout.x));
-        const safeW = Math.max(1, Math.round(widget.layout.w));
-        return Math.max(maxCols, safeX + safeW);
-      }, 0);
   const resolveStackColumns = (section: DashboardSection) => {
     if (section.kind === 'stack-vertical') {
       return 1;
     }
     if (section.kind === 'stack-grid') {
-      // Grid stack columns always follow the root canvas span of the section.
       return Math.max(1, Math.round(section.layout.w));
     }
     return Math.max(1, Math.round(section.layout.w));
@@ -4486,6 +2837,9 @@ export function MainBoard() {
     if (section.kind === 'weather') {
       return WEATHER_SECTION_CHIP_COLS;
     }
+    if (section.kind === 'stack-grid' && section.stackColumnsMode !== 'manual') {
+      return 1;
+    }
     return 2;
   };
   const haFavoriteEntityIdLookup = useMemo(() => new Set(haFavoriteEntityIds), [haFavoriteEntityIds]);
@@ -4537,8 +2891,8 @@ export function MainBoard() {
   };
   const resolveLightHeightRows = (widget: Widget, nextIsOn: boolean) => {
     const currentHeight = Math.max(1, Math.round(widget.layout.h));
-    const typeOverride = widgetTypeLayoutOverrides.light?.[activeGridBreakpoint];
-    const widgetOverride = widgetLayoutOverrides[widget.id]?.[activeGridBreakpoint];
+    const typeOverride = widgetTypeLayoutOverrides.light?.[canvasGridBreakpoint];
+    const widgetOverride = widgetLayoutOverrides[widget.id]?.[canvasGridBreakpoint];
     const autoExpand = widgetOverride?.autoExpand ?? typeOverride?.autoExpand ?? true;
     const configuredHeight = autoExpand
       ? nextIsOn
@@ -5013,6 +3367,7 @@ export function MainBoard() {
     }
 
     const favoriteSectionById = new Map(favoriteGridSections.map((section) => [section.id, section]));
+    const favoriteSectionIds = new Set(favoriteSectionById.keys());
     const fallbackSection = favoriteGridSections[0];
     const autoCreateFromHaLabels =
       isHaConnected && haFavoriteLabelDetected && haFavoriteEntityIdLookup.size > 0;
@@ -5023,13 +3378,12 @@ export function MainBoard() {
 
       const next = prev.map((widget) => {
         const currentParentId = widget.parentSectionId;
-        const isMovingFromRoot = !currentParentId;
-        const targetSectionId =
-          currentParentId && favoriteSectionById.has(currentParentId)
-            ? currentParentId
-            : isMovingFromRoot && isWidgetMarkedFavorite(widget)
-              ? fallbackSection.id
-              : null;
+        const targetSectionId = resolveFavoriteGridTargetSectionId({
+          widget,
+          favoriteSectionIds,
+          fallbackSectionId: fallbackSection.id,
+          isMarkedFavorite: isWidgetMarkedFavorite(widget),
+        });
 
         if (!targetSectionId) {
           return widget;
@@ -5105,11 +3459,7 @@ export function MainBoard() {
 
       const targetSection = favoriteSectionById.get(fallbackSection.id) ?? fallbackSection;
       const stackCols = resolveStackColumns(targetSection);
-      const existingFavoriteEntityIds = new Set(
-        nextAfterMoves
-          .filter((widget) => widget.parentSectionId === targetSection.id)
-          .map((widget) => widget.entityId),
-      );
+      const existingWidgetEntityIds = new Set(nextAfterMoves.map((widget) => widget.entityId));
       const sectionOccupied =
         occupiedBySection.get(targetSection.id) ??
         nextAfterMoves
@@ -5128,7 +3478,7 @@ export function MainBoard() {
       const additions: Widget[] = [];
 
       sortedFavoriteEntityIds.forEach((entityId) => {
-        if (existingFavoriteEntityIds.has(entityId)) {
+        if (existingWidgetEntityIds.has(entityId)) {
           return;
         }
         const kind = resolveWidgetKindFromEntityId(entityId);
@@ -5150,7 +3500,7 @@ export function MainBoard() {
               : kind === 'media'
                 ? MEDIA_WIDGET_MIN_WIDTH
                 : kind === 'vacuum'
-                  ? VACUUM_WIDGET_MIN_WIDTH
+                  ? VACUUM_WIDGET_DEFAULT_WIDTH
                   : kind === 'cover'
                     ? COVER_WIDGET_MIN_WIDTH
                     : 2;
@@ -5166,7 +3516,7 @@ export function MainBoard() {
                 : kind === 'camera'
                   ? CAMERA_WIDGET_MIN_HEIGHT
                   : kind === 'vacuum'
-                    ? VACUUM_WIDGET_MIN_HEIGHT
+                    ? VACUUM_WIDGET_DEFAULT_HEIGHT
                   : kind === 'cover'
                     ? COVER_WIDGET_MIN_HEIGHT
               : kind === 'media'
@@ -5197,7 +3547,9 @@ export function MainBoard() {
           kind,
           title,
           entityId,
+          dataSource: 'ha',
           isFavorite: true,
+          placementPolicy: 'favorites-auto',
           status:
             kind === 'media'
               ? 'paused'
@@ -5231,7 +3583,7 @@ export function MainBoard() {
         };
 
         additions.push(newWidget);
-        existingFavoriteEntityIds.add(entityId);
+        existingWidgetEntityIds.add(entityId);
         sectionOccupied.push({
           x: normalizedLayout.x,
           y: normalizedLayout.y,
@@ -5245,14 +3597,19 @@ export function MainBoard() {
       }
       return [...nextAfterMoves, ...additions];
     });
-  }, [favoriteGridSections, haFavoriteEntityIdLookup, haFavoriteLabelDetected, haStatesForUi, isHaConnected, widgets]);
+  }, [favoriteGridSections, haFavoriteEntityIdLookup, haFavoriteLabelDetected, haStatesForUi, isHaConnected]);
   const weatherSection = weatherConfigSection;
   const haEntityIds = useMemo(() => Object.keys(haStates), [haStates]);
+  const knownHaEntityIds = useMemo(
+    () => [...new Set([...haEntityIds, ...haEntityRegistry.map((entry) => entry.entityId)])],
+    [haEntityIds, haEntityRegistry],
+  );
   const consumptionData = useMemo(
     () => createConsumptionDashboardData(consumptionConfig, haStates),
     [consumptionConfig, haStates],
   );
   const activeWidget = selectedWidget;
+  const activeWidgetSecrets = useWidgetSecrets(activeWidget?.id);
   const shouldShowWelcomeGuide = !completedMainGuides.welcome;
   const shouldShowContextGuide =
     !completedMainGuides.context &&
@@ -5267,6 +3624,20 @@ export function MainBoard() {
       ? 'context'
       : null;
   const activeMainGuide = activeMainGuideKind ? MAIN_GUIDED_SETUP_CONTENT[activeMainGuideKind] : null;
+  const activeMainGuideSteps = activeMainGuideKind === 'welcome' && !canToggleEditMode
+    ? activeMainGuide?.steps.filter((step) => !step.target) ?? []
+    : activeMainGuide?.steps ?? [];
+  const isGuidedEditTargetActive =
+    activeMainGuideKind === 'welcome' &&
+    activeMainGuideStepId === 'edit-mode' &&
+    !isEditMode &&
+    editConfirm === null;
+
+  useEffect(() => {
+    if (isGuidedEditTargetActive && isCompactViewport) {
+      setIsMobileSidebarOpen(true);
+    }
+  }, [isCompactViewport, isGuidedEditTargetActive]);
 
   const dismissActiveMainGuide = () => {
     if (!activeMainGuideKind) {
@@ -5277,14 +3648,17 @@ export function MainBoard() {
       ...current,
       [activeMainGuideKind]: true,
     }));
+    setActiveMainGuideStepId(null);
+    setIsMobileSidebarOpen(false);
   };
 
   useEffect(() => {
     const previousStatus = previousHaStatusRef.current;
     const reconnectToastId = reconnectToastIdRef.current;
 
-    if (haStatus === 'connecting') {
+    if (haStatus === 'connecting' || haStatus === 'reconnecting') {
       const isReconnecting =
+        haStatus === 'reconnecting' ||
         previousStatus === 'connected' ||
         previousStatus === 'error' ||
         (previousStatus === 'disconnected' && hadSuccessfulConnectionRef.current);
@@ -5310,13 +3684,18 @@ export function MainBoard() {
       }
     }
 
-    if (haStatus === 'error') {
+    if (haStatus === 'error' || haStatus === 'offline' || haStatus === 'reauth_required') {
       if (reconnectToastId) {
         removeNotification(reconnectToastId);
         reconnectToastIdRef.current = null;
       }
-      if (reconnectInFlightRef.current) {
-        addNotification('alert', 'Riconnessione Home Assistant non riuscita.');
+      if (reconnectInFlightRef.current || haStatus === 'reauth_required') {
+        addNotification(
+          'alert',
+          haStatus === 'reauth_required'
+            ? 'Sessione Home Assistant scaduta. Accedi nuovamente.'
+            : 'Riconnessione Home Assistant non riuscita.',
+        );
         reconnectInFlightRef.current = false;
       }
     }
@@ -5509,6 +3888,17 @@ export function MainBoard() {
     [haServiceRegistry],
   );
 
+  const cameraPtzEntityIds = useMemo(
+    () => knownHaEntityIds.filter((entityId) => entityId.startsWith('camera.')).filter((entityId) => {
+      const liveEntity = haStatesForUi[entityId];
+      const rawAttributes = liveEntity?.rawAttributes;
+      const cameraFriendlyName = toTrimmedString(rawAttributes?.friendly_name) ?? entityId;
+      const ptzButtons = resolveCameraPtzButtons(entityId, cameraFriendlyName, haStatesForUi);
+      return hasAnyCameraPtzButton(ptzButtons) || resolveCameraSupportsPtz(entityId, rawAttributes, haServiceRegistry);
+    }),
+    [haServiceRegistry, haStatesForUi, knownHaEntityIds],
+  );
+
   const cameraPtzButtons = useMemo<CameraPtzButtonMap>(() => {
     if (!isHaConnected || activeWidget?.kind !== 'camera') {
       return {};
@@ -5540,7 +3930,13 @@ export function MainBoard() {
         snapshotUrl: undefined as string | undefined,
         isOffline: true,
         supportsPtz: false,
+        deviceInfo: undefined as CameraDeviceInfo | undefined,
+        relatedEntities: [] as CameraRelatedEntityInfo[],
         rawAttributes: undefined as Record<string, unknown> | undefined,
+        historyEntries: [] as CameraHistoryEntry[],
+        historyStatus: 'idle' as CameraHistoryStatus,
+        historyError: undefined as string | undefined,
+        onRefreshHistory: refreshCameraHistory,
       };
     }
 
@@ -5558,7 +3954,19 @@ export function MainBoard() {
       toTrimmedString(rawAttributes?.friendly_name) ||
       'Camera';
     const cameraEntityId = preview.cameraEntityId ?? activeWidget.entityId;
-    const derivedActivity = resolveCameraDerivedActivity(cameraEntityId, cameraName, haStatesForUi, haUrl);
+    const deviceContext = buildCameraDeviceContext({
+      cameraEntityId,
+      haStates: haStatesForUi,
+      entityRegistry: haEntityRegistry,
+      deviceRegistry: haDeviceRegistry,
+    });
+    const derivedActivity = resolveCameraDerivedActivity(
+      cameraEntityId,
+      cameraName,
+      haStatesForUi,
+      haUrl,
+      new Set(deviceContext.relatedEntities.map((entity) => entity.entityId.toLowerCase())),
+    );
     const mergedRawAttributes: Record<string, unknown> = {
       ...(rawAttributes ?? {}),
     };
@@ -5587,6 +3995,7 @@ export function MainBoard() {
 
     const snapshotUrl = preview.snapshotUrl ?? derivedActivity.lastImageUrl;
     const hasMergedAttributes = Object.keys(mergedRawAttributes).length > 0;
+    const hasMatchingHistory = cameraHistory.cameraEntityId === cameraEntityId;
 
     return {
       name: cameraName,
@@ -5598,9 +4007,146 @@ export function MainBoard() {
       supportsPtz:
         cameraHasPtzButtons ||
         resolveCameraSupportsPtz(cameraEntityId, rawAttributes, haServiceRegistry),
+      deviceInfo: deviceContext.deviceInfo,
+      relatedEntities: deviceContext.relatedEntities,
       rawAttributes: hasMergedAttributes ? mergedRawAttributes : undefined,
+      historyEntries: hasMatchingHistory ? cameraHistory.entries : [],
+      historyStatus: hasMatchingHistory ? cameraHistory.status : ('idle' as CameraHistoryStatus),
+      historyError: hasMatchingHistory ? cameraHistory.error : undefined,
+      onRefreshHistory: refreshCameraHistory,
     };
-  }, [activeWidget, cameraHasPtzButtons, haServiceRegistry, haStatesForUi, haUrl, isHaConnected]);
+  }, [
+    activeWidget,
+    cameraHistory,
+    cameraHasPtzButtons,
+    haDeviceRegistry,
+    haEntityRegistry,
+    haServiceRegistry,
+    haStatesForUi,
+    haUrl,
+    isHaConnected,
+    refreshCameraHistory,
+  ]);
+
+  const cameraHistoryEntityIds = useMemo(
+    () =>
+      (contextCamera.relatedEntities ?? [])
+        .filter(
+          (entity) =>
+            entity.category === 'detection' ||
+            entity.domain === 'event' ||
+            entity.domain === 'image',
+        )
+        .map((entity) => entity.entityId.trim())
+        .filter(Boolean),
+    [contextCamera.relatedEntities],
+  );
+  const cameraHistoryEntityKey = cameraHistoryEntityIds.join('|');
+  const isActiveCameraMock =
+    contextCamera.entityId === CAMERA_MAX_COMPAT_MOCK_ENTITY_ID &&
+    !haStates[CAMERA_MAX_COMPAT_MOCK_ENTITY_ID];
+
+  useEffect(() => {
+    const cameraEntityId = contextCamera.entityId?.trim();
+    if (activeDevice?.type !== 'camera' || !cameraEntityId) {
+      return;
+    }
+    if (isActiveCameraMock) {
+      setCameraHistory({ cameraEntityId, status: 'available', entries: [] });
+      return;
+    }
+    if (!isHaConnected || contextCamera.isOffline) {
+      setCameraHistory({ cameraEntityId, status: 'offline', entries: [] });
+      return;
+    }
+    if (cameraHistoryEntityIds.length === 0) {
+      setCameraHistory({ cameraEntityId, status: 'empty', entries: [] });
+      return;
+    }
+
+    const requestId = cameraHistoryRequestRef.current + 1;
+    cameraHistoryRequestRef.current = requestId;
+    setCameraHistory((current) => ({
+      cameraEntityId,
+      status: 'loading',
+      entries: current.cameraEntityId === cameraEntityId ? current.entries : [],
+    }));
+
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+    const loadHistory = async () => {
+      let payload = await callHaApi<unknown>(
+        {
+          type: 'history/history_during_period',
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          entity_ids: cameraHistoryEntityIds,
+          include_start_time_state: false,
+          significant_changes_only: false,
+          minimal_response: false,
+          no_attributes: false,
+        },
+        { reportError: false },
+      );
+
+      if (payload === null) {
+        const normalizedUrl = normalizeHassUrl(haUrl);
+        const token = haToken.trim();
+        if (normalizedUrl && token) {
+          try {
+            const endpoint = new URL(`${normalizedUrl}/api/history/period/${encodeURIComponent(startTime.toISOString())}`);
+            endpoint.searchParams.set('filter_entity_id', cameraHistoryEntityIds.join(','));
+            endpoint.searchParams.set('end_time', endTime.toISOString());
+            endpoint.searchParams.set('minimal_response', '0');
+            endpoint.searchParams.set('no_attributes', '0');
+            endpoint.searchParams.set('significant_changes_only', '0');
+            const response = await fetch(endpoint.toString(), {
+              headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            if (response.ok) {
+              payload = (await response.json()) as unknown;
+            }
+          } catch {
+            payload = null;
+          }
+        }
+      }
+
+      if (cameraHistoryRequestRef.current !== requestId) {
+        return;
+      }
+      if (payload === null) {
+        setCameraHistory({
+          cameraEntityId,
+          status: 'error',
+          entries: [],
+          error: 'Cronologia Home Assistant non disponibile.',
+        });
+        return;
+      }
+      const entries = extractCameraHistoryEntries(payload, cameraHistoryEntityIds);
+      setCameraHistory({
+        cameraEntityId,
+        status: entries.length > 0 ? 'available' : 'empty',
+        entries,
+      });
+    };
+    void loadHistory();
+  }, [
+    activeDevice?.type,
+    callHaApi,
+    cameraHistoryEntityKey,
+    cameraHistoryRefreshNonce,
+    contextCamera.entityId,
+    contextCamera.isOffline,
+    haToken,
+    haUrl,
+    isHaConnected,
+    isActiveCameraMock,
+  ]);
 
   const contextSpeaker = useMemo(() => {
     if (activeWidget?.kind !== 'media') {
@@ -5780,7 +4326,7 @@ export function MainBoard() {
   const contextVacuum = useMemo(() => {
     if (activeWidget?.kind !== 'vacuum') {
       return {
-        name: 'Robot Vacuum',
+        name: 'Robot aspirapolvere',
         state: 'unknown',
         status: translateVacuumState('unknown'),
         batteryLevel: undefined as number | undefined,
@@ -5791,52 +4337,45 @@ export function MainBoard() {
         fanSpeedList: [] as string[],
         mapUrl: undefined as string | undefined,
         supportedFeatures: undefined as number | undefined,
-        supportsStart: true,
-        supportsPause: true,
-        supportsStop: true,
-        supportsReturnToBase: true,
-        supportsLocate: true,
-        supportsCleanSpot: true,
-        supportsCleanArea: true,
-        supportsFanSpeed: true,
-        supportsMap: true,
-        supportsSendCommand: true,
+        supportsStart: false,
+        supportsPause: false,
+        supportsStop: false,
+        supportsReturnToBase: false,
+        supportsLocate: false,
+        supportsCleanSpot: false,
+        supportsCleanArea: false,
+        supportsFanSpeed: false,
+        supportsMap: false,
+        supportsSendCommand: false,
+        deviceInfo: undefined as VacuumDeviceInfo | undefined,
+        relatedEntities: [] as VacuumRelatedEntityInfo[],
+        areaOptions: [] as VacuumMappedArea[],
         rawAttributes: undefined as Record<string, unknown> | undefined,
       };
     }
 
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
-    const useDemoData = !liveEntity && isDemoVacuumEntity(activeWidget.entityId);
-    const rawAttributes = liveEntity?.rawAttributes;
-    const fallbackAttributes = buildFallbackVacuumAttributes(activeWidget, useDemoData);
-    const sourceAttributes = rawAttributes ?? fallbackAttributes;
+    const deviceContext = buildVacuumDeviceContext({
+      vacuumEntityId: activeWidget.entityId,
+      haStates: haStatesForUi,
+      entityRegistry: haEntityRegistry,
+      deviceRegistry: haDeviceRegistry,
+      haUrl,
+    });
+    const liveEntity = deviceContext.mainEntity;
+    const sourceAttributes = liveEntity?.rawAttributes;
     const normalizedState = normalizeVacuumState(
-      toTrimmedString(liveEntity?.stateLabel) ??
-        toTrimmedString(liveEntity?.state) ??
+      toTrimmedString(liveEntity?.state) ??
+        toTrimmedString(liveEntity?.stateLabel) ??
         activeWidget.status,
     );
-    const statusText =
-      toTrimmedString(sourceAttributes?.status) ??
-      translateVacuumState(normalizedState);
-    const batteryLevel =
-      toFiniteNumber(sourceAttributes?.battery_level) ??
-      toFiniteNumber(sourceAttributes?.battery) ??
-      toFiniteNumber(activeWidget.value);
-    const cleanedArea =
-      toFiniteNumber(sourceAttributes?.cleaned_area) ??
-      toFiniteNumber(sourceAttributes?.clean_area) ??
-      toFiniteNumber(activeWidget.vacuumCleanedArea);
-    const cleanedAreaUnit =
-      toTrimmedString(sourceAttributes?.cleaned_area_unit) ??
-      toTrimmedString(sourceAttributes?.area_unit);
-    const cleaningMinutes =
-      toFiniteNumber(sourceAttributes?.cleaning_time) ??
-      toFiniteNumber(sourceAttributes?.clean_time) ??
-      toFiniteNumber(activeWidget.vacuumCleaningMinutes);
+    const statusText = normalizedState === 'error'
+      ? toTrimmedString(sourceAttributes?.error_description) ??
+        toTrimmedString(sourceAttributes?.error) ??
+        translateVacuumState(normalizedState)
+      : translateVacuumState(normalizedState);
     const fanSpeed =
       toTrimmedString(sourceAttributes?.fan_speed) ??
-      toTrimmedString(sourceAttributes?.fan_mode) ??
-      toTrimmedString(activeWidget.vacuumFanSpeed);
+      toTrimmedString(sourceAttributes?.fan_mode);
     const fanSpeedListSource =
       Array.isArray(sourceAttributes?.fan_speed_list)
         ? sourceAttributes.fan_speed_list
@@ -5844,32 +4383,29 @@ export function MainBoard() {
           ? sourceAttributes.fan_speeds
           : Array.isArray(sourceAttributes?.fan_modes)
             ? sourceAttributes.fan_modes
-            : [...VACUUM_DEMO_FAN_SPEEDS];
+            : [];
     const fanSpeedList = fanSpeedListSource.filter(
       (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
     );
     const capabilities = resolveVacuumCapabilities(liveEntity);
-    const mapUrl =
-      capabilities.supportsMap || useDemoData || (liveEntity?.imageUrl ?? '').length > 0
-        ? resolveVacuumMapUrl(liveEntity, haUrl)
-          ?? toTrimmedString(sourceAttributes?.map_url)
-        : undefined;
+    const areaNameMap = new Map(haAreas.map((area) => [area.area_id, area.name]));
+    const areaOptions = parseVacuumMappedAreas(deviceContext.registryOptions, areaNameMap);
 
     return {
       name:
         activeWidget.title ||
         toTrimmedString(sourceAttributes?.friendly_name) ||
-        'Robot Vacuum',
+        'Robot aspirapolvere',
       state: normalizedState,
       status: statusText,
-      batteryLevel,
-      cleanedArea,
-      cleanedAreaUnit,
-      cleaningMinutes,
+      batteryLevel: deviceContext.snapshot.batteryLevel,
+      cleanedArea: deviceContext.snapshot.cleanedArea,
+      cleanedAreaUnit: deviceContext.snapshot.cleanedAreaUnit,
+      cleaningMinutes: deviceContext.snapshot.cleaningMinutes,
       fanSpeed,
       fanSpeedList,
-      mapUrl,
-      supportedFeatures: capabilities.supportedFeatures || (useDemoData ? VACUUM_DEMO_SUPPORTED_FEATURES : undefined),
+      mapUrl: deviceContext.snapshot.mapUrl,
+      supportedFeatures: capabilities.supportedFeatures,
       supportsStart: capabilities.supportsStart,
       supportsPause: capabilities.supportsPause,
       supportsStop: capabilities.supportsStop,
@@ -5880,9 +4416,12 @@ export function MainBoard() {
       supportsFanSpeed: capabilities.supportsFanSpeed,
       supportsMap: capabilities.supportsMap,
       supportsSendCommand: capabilities.supportsSendCommand,
+      deviceInfo: deviceContext.deviceInfo,
+      relatedEntities: deviceContext.relatedEntities,
+      areaOptions,
       rawAttributes: sourceAttributes,
     };
-  }, [activeWidget, haStatesForUi, haUrl, isHaConnected]);
+  }, [activeWidget, haAreas, haDeviceRegistry, haEntityRegistry, haStatesForUi, haUrl]);
 
   const contextAlarm = useMemo(() => {
     if (activeWidget?.kind !== 'alarm') {
@@ -5935,8 +4474,8 @@ export function MainBoard() {
       state: resolvedState,
       status: getAlarmStateLabel(resolvedState),
       codeArmRequired,
-      unlockCode: activeWidget.alarmUnlockCode?.trim() || undefined,
-      localExtraCode: activeWidget.alarmLocalExtraCode?.trim() || undefined,
+      unlockCode: activeWidgetSecrets.values.alarmUnlockCode?.trim() || undefined,
+      localExtraCode: activeWidgetSecrets.values.alarmLocalExtraCode?.trim() || undefined,
       requireAuthToDisarm: activeWidget.alarmRequireAuthToDisarm ?? false,
       activityLogLimit,
       activityLogHours,
@@ -5946,7 +4485,7 @@ export function MainBoard() {
       activityTimelineStatus,
       rawAttributes,
     };
-  }, [activeWidget, alarmActivityStatusByEntity, alarmTimelineByEntity, haCurrentUser?.name, haStates, haStatesForUi, isHaConnected]);
+  }, [activeWidget, activeWidgetSecrets.values, alarmActivityStatusByEntity, alarmTimelineByEntity, haCurrentUser?.name, haStates, haStatesForUi, isHaConnected]);
 
   const contextLock = useMemo(() => {
     if (activeWidget?.kind !== 'lock') {
@@ -5961,12 +4500,16 @@ export function MainBoard() {
         activityTimelineStatus: 'offline' as ActivityTimelineStatus,
         supportedFeatures: undefined as number | undefined,
         batteryLevel: undefined as number | undefined,
+        connection: undefined as ReturnType<typeof resolveDeviceConnection>,
         rawAttributes: undefined as Record<string, unknown> | undefined,
         lockCode: undefined as string | undefined,
       };
     }
 
-    const liveEntity = isHaConnected ? haStatesForUi[activeWidget.entityId] : undefined;
+    const liveEntity =
+      isHaConnected || activeWidget.dataSource === 'mock'
+        ? haStatesForUi[activeWidget.entityId] ?? haStatesForUi[activeWidget.entityId.toLowerCase()]
+        : undefined;
     const rawAttributes = liveEntity?.rawAttributes;
     const stateValue = normalizeLockState(
       toTrimmedString(liveEntity?.state) ??
@@ -5989,12 +4532,15 @@ export function MainBoard() {
       : 'offline';
     const timelineActor = activityTimeline.find((entry) => entry.actor && entry.actor !== DEFAULT_ACTIVITY_ACTOR)?.actor;
     const changedBy = toTrimmedString(rawAttributes?.changed_by) ?? timelineActor ?? haCurrentUser?.name;
-    const batteryLevel =
-      toFiniteNumber(rawAttributes?.battery_level) ??
-      toFiniteNumber(rawAttributes?.battery) ??
-      toFiniteNumber(rawAttributes?.battery_percentage) ??
-      toFiniteNumber(rawAttributes?.battery_percent) ??
-      toFiniteNumber(rawAttributes?.battery_state_of_charge);
+    const telemetryEntities = resolveDeviceTelemetryEntities({
+      mainEntityId: activeWidget.entityId,
+      haStates: haStatesForUi,
+      entityRegistry: haEntityRegistry,
+      batteryEntityId: activeWidget.lockBatteryEntityId,
+      connectionEntityId: activeWidget.lockConnectionEntityId,
+    });
+    const batteryLevel = resolveDeviceBatteryLevel(liveEntity, telemetryEntities.batteryEntity);
+    const connection = resolveDeviceConnection(liveEntity, telemetryEntities.connectionEntity);
 
     return {
       name:
@@ -6010,10 +4556,11 @@ export function MainBoard() {
       activityTimelineStatus,
       supportedFeatures,
       batteryLevel,
+      connection,
       rawAttributes,
-      lockCode: activeWidget.lockCode?.trim() || undefined,
+      lockCode: activeWidgetSecrets.values.lockCode?.trim() || undefined,
     };
-  }, [activeWidget, haCurrentUser?.name, haStatesForUi, isHaConnected, lockActivityStatusByEntity, lockTimelineByEntity]);
+  }, [activeWidget, activeWidgetSecrets.values, haCurrentUser?.name, haEntityRegistry, haStatesForUi, isHaConnected, lockActivityStatusByEntity, lockTimelineByEntity]);
 
   const contextCover = useMemo(() => {
     if (activeWidget?.kind !== 'cover') {
@@ -6442,39 +4989,36 @@ export function MainBoard() {
   );
 
   useEffect(() => {
-    if (!isHaConnected || haCurrentUser) {
+    if (isHaConnected && haCurrentUser) {
+      return;
+    }
+    setHaUsersById({});
+    setHaUserNamesById({});
+  }, [haCurrentUser, isHaConnected]);
+
+  useEffect(() => {
+    if (!isHaConnected || !haCurrentUser) {
+      return;
+    }
+    if (!haCurrentUser.isOwner && !haCurrentUser.isAdmin) {
+      setHaUserNamesById({ [haCurrentUser.id]: haCurrentUser.name });
+      setHaUsersById({ [haCurrentUser.id]: haCurrentUser });
+      return;
+    }
+    setHaUserNamesById((current) =>
+      current[haCurrentUser.id] === haCurrentUser.name
+        ? current
+        : { ...current, [haCurrentUser.id]: haCurrentUser.name },
+    );
+    setHaUsersById((current) => ({ ...current, [haCurrentUser.id]: haCurrentUser }));
+  }, [haCurrentUser, isHaConnected]);
+
+  useEffect(() => {
+    if (!isHaConnected || (!haCurrentUser?.isOwner && !haCurrentUser?.isAdmin)) {
       return;
     }
     let cancelled = false;
     const loadUsers = async () => {
-      const currentUserPayload = await callHaApi<unknown>({ type: 'auth/current_user' }, { reportError: false });
-      if (cancelled) {
-        return;
-      }
-      const parsedCurrentUser = parseHaCurrentUser(currentUserPayload);
-      if (parsedCurrentUser) {
-        setHaCurrentUser(parsedCurrentUser);
-        setHaUserNamesById((current) =>
-          current[parsedCurrentUser.id] === parsedCurrentUser.name
-            ? current
-            : { ...current, [parsedCurrentUser.id]: parsedCurrentUser.name },
-        );
-        setHaUsersById((current) => {
-          const previous = current[parsedCurrentUser.id];
-          if (
-            previous &&
-            previous.name === parsedCurrentUser.name &&
-            previous.username === parsedCurrentUser.username &&
-            previous.email === parsedCurrentUser.email &&
-            previous.isOwner === parsedCurrentUser.isOwner &&
-            previous.isAdmin === parsedCurrentUser.isAdmin
-          ) {
-            return current;
-          }
-          return { ...current, [parsedCurrentUser.id]: parsedCurrentUser };
-        });
-      }
-
       const primary = await callHaApi<unknown>({ type: 'config/auth/list' }, { reportError: false });
       const secondary = primary ?? (await callHaApi<unknown>({ type: 'auth/list' }, { reportError: false }));
       if (cancelled || secondary === null) {
@@ -6522,7 +5066,7 @@ export function MainBoard() {
     return () => {
       cancelled = true;
     };
-  }, [callHaApi, haCurrentUser, isHaConnected]);
+  }, [callHaApi, haCurrentUser?.isAdmin, haCurrentUser?.isOwner, isHaConnected]);
 
   useEffect(() => {
     if (!isHaConnected) {
@@ -6538,6 +5082,34 @@ export function MainBoard() {
       setHaServiceRegistry(payload as HaServiceRegistry);
     };
     void loadServices();
+    return () => {
+      cancelled = true;
+    };
+  }, [callHaApi, isHaConnected]);
+
+  useEffect(() => {
+    if (!isHaConnected) {
+      setHaEntityRegistry([]);
+      setHaDeviceRegistry([]);
+      return;
+    }
+    let cancelled = false;
+    const loadRegistries = async () => {
+      const entitiesRequest = async () =>
+        (await callHaApi<unknown>({ type: 'config/entity_registry/list' }, { reportError: false })) ??
+        (await callHaApi<unknown>({ type: 'config/entity_registry/list_for_display' }, { reportError: false }));
+      const devicesRequest = async () =>
+        (await callHaApi<unknown>({ type: 'config/device_registry/list' }, { reportError: false })) ??
+        (await callHaApi<unknown>({ type: 'config/device_registry/list_for_display' }, { reportError: false }));
+
+      const [entitiesPayload, devicesPayload] = await Promise.all([entitiesRequest(), devicesRequest()]);
+      if (cancelled) {
+        return;
+      }
+      setHaEntityRegistry(parseHaEntityRegistry(entitiesPayload));
+      setHaDeviceRegistry(parseHaDeviceRegistry(devicesPayload));
+    };
+    void loadRegistries();
     return () => {
       cancelled = true;
     };
@@ -7217,30 +5789,31 @@ export function MainBoard() {
     state.climate.isOn,
     state.climate.currentTemp,
     sections,
-    activeGridBreakpoint,
+    canvasGridBreakpoint,
   ]);
 
   useEffect(() => {
     if (!isEditMode) {
       setIsCatalogOpen(false);
+      setViewportPreviewMode('auto');
     }
   }, [isEditMode]);
 
   useEffect(() => {
+    if (
+      isXsViewport ||
+      (!isDesktopViewport && viewportPreviewMode === 'desktop')
+    ) {
+      setViewportPreviewMode('auto');
+    }
+  }, [isDesktopViewport, isXsViewport, viewportPreviewMode]);
+
+  useEffect(() => {
     return () => {
-      clearTimeoutRegistry(lightBrightnessDebounceRef);
-      clearTimeoutRegistry(climatePendingTimeoutRef);
-      clearTimeoutRegistry(climateSendDelayTimeoutRef);
-      climateQueuedCommandRef.current = {};
-      clearTimeoutRegistry(lightTogglePendingTimeoutRef);
-      clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
-      clearTimeoutRegistry(lightColorPendingTimeoutRef);
-      clearTimeoutRegistry(switchTogglePendingTimeoutRef);
       clearTimeoutRegistry(lockPendingTimeoutRef);
       clearTimeoutRegistry(alarmPendingTimeoutRef);
       clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
       clearTimeoutArrayRegistry(alarmActivityRefreshTimeoutRef);
-      clearTimeoutRegistry(coverPendingTimeoutRef);
       clearTimeoutRegistry(vacuumReturnToBaseTimeoutRef);
     };
   }, []);
@@ -7249,24 +5822,6 @@ export function MainBoard() {
     if (isHaConnected) {
       return;
     }
-    clearTimeoutRegistry(lightBrightnessDebounceRef);
-    clearTimeoutRegistry(climatePendingTimeoutRef);
-    clearTimeoutRegistry(climateSendDelayTimeoutRef);
-    climateQueuedCommandRef.current = {};
-    setClimatePendingByEntity({});
-
-    clearTimeoutRegistry(lightTogglePendingTimeoutRef);
-    setLightTogglePendingByEntity({});
-
-    clearTimeoutRegistry(lightBrightnessPendingTimeoutRef);
-    setLightBrightnessPendingByEntity({});
-
-    clearTimeoutRegistry(lightColorPendingTimeoutRef);
-    setLightColorPendingByEntity({});
-
-    clearTimeoutRegistry(switchTogglePendingTimeoutRef);
-    setSwitchTogglePendingByEntity({});
-
     clearTimeoutRegistry(lockPendingTimeoutRef);
     clearTimeoutRegistry(alarmPendingTimeoutRef);
     clearTimeoutArrayRegistry(lockActivityRefreshTimeoutRef);
@@ -7275,11 +5830,8 @@ export function MainBoard() {
     setAlarmPendingByEntity({});
     setLockActivityStatusByEntity({});
 
-    clearTimeoutRegistry(coverPendingTimeoutRef);
-    setCoverPendingByEntity({});
     setHaUserNamesById({});
     setHaUsersById({});
-    setHaCurrentUser(null);
     setLockTimelineByEntity({});
     setAlarmTimelineByEntity({});
     setAlarmActivityStatusByEntity({});
@@ -7291,224 +5843,6 @@ export function MainBoard() {
     }
     clearTimeoutRegistry(vacuumReturnToBaseTimeoutRef);
   }, [isHaConnected]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(climatePendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(climatePendingByEntity)
-      .filter(([entityId, pending]) => {
-        if (!hasClimatePendingValues(pending)) {
-          return true;
-        }
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const rawAttributes = liveEntity.rawAttributes;
-        const liveTargetTemp =
-          toFiniteNumber(liveEntity.targetValue) ??
-          toFiniteNumber(rawAttributes?.temperature);
-        const liveTargetTempLow =
-          toFiniteNumber(liveEntity.targetTempLow) ??
-          toFiniteNumber(rawAttributes?.target_temp_low);
-        const liveTargetTempHigh =
-          toFiniteNumber(liveEntity.targetTempHigh) ??
-          toFiniteNumber(rawAttributes?.target_temp_high);
-        const liveFanMode = normalizeLower(
-          toTrimmedString(liveEntity.fanMode) ??
-            toTrimmedString(rawAttributes?.fan_mode),
-        );
-        const liveTargetHumidity =
-          toFiniteNumber(liveEntity.targetHumidity) ??
-          toFiniteNumber(rawAttributes?.humidity);
-        const livePresetMode = normalizeLower(
-          toTrimmedString(liveEntity.presetMode) ??
-            toTrimmedString(rawAttributes?.preset_mode),
-        );
-        const liveSwingMode = normalizeLower(
-          toTrimmedString(liveEntity.swingMode) ??
-            toTrimmedString(rawAttributes?.swing_mode),
-        );
-        const liveSwingHorizontalMode = normalizeLower(
-          toTrimmedString(liveEntity.swingHorizontalMode) ??
-            toTrimmedString(rawAttributes?.swing_horizontal_mode),
-        );
-        const pendingFanMode = normalizeLower(pending.fanMode);
-        const pendingPresetMode = normalizeLower(pending.presetMode);
-        const pendingSwingMode = normalizeLower(pending.swingMode);
-        const pendingSwingHorizontalMode = normalizeLower(pending.swingHorizontalMode);
-
-        const targetTempReady =
-          !Number.isFinite(pending.targetTemp) ||
-          almostEqual(liveTargetTemp, pending.targetTemp);
-        const targetTempLowReady =
-          !Number.isFinite(pending.targetTempLow) ||
-          almostEqual(liveTargetTempLow, pending.targetTempLow);
-        const targetTempHighReady =
-          !Number.isFinite(pending.targetTempHigh) ||
-          almostEqual(liveTargetTempHigh, pending.targetTempHigh);
-        const fanModeReady = !pendingFanMode || pendingFanMode === liveFanMode;
-        const targetHumidityReady =
-          !Number.isFinite(pending.targetHumidity) ||
-          almostEqual(liveTargetHumidity, pending.targetHumidity, 0.5);
-        const presetModeReady = !pendingPresetMode || pendingPresetMode === livePresetMode;
-        const swingModeReady = !pendingSwingMode || pendingSwingMode === liveSwingMode;
-        const swingHorizontalModeReady =
-          !pendingSwingHorizontalMode || pendingSwingHorizontalMode === liveSwingHorizontalMode;
-
-        return (
-          targetTempReady &&
-          targetTempLowReady &&
-          targetTempHighReady &&
-          fanModeReady &&
-          targetHumidityReady &&
-          presetModeReady &&
-          swingModeReady &&
-          swingHorizontalModeReady
-        );
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    setClimatePendingByEntity((current) => {
-      let changed = false;
-      const next = { ...current };
-      resolvedEntityIds.forEach((entityId) => {
-        if (!(entityId in next)) {
-          return;
-        }
-        changed = true;
-        delete next[entityId];
-      });
-      return changed ? next : current;
-    });
-
-    resolvedEntityIds.forEach((entityId) => {
-      const timeoutId = climatePendingTimeoutRef.current[entityId];
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        delete climatePendingTimeoutRef.current[entityId];
-      }
-    });
-  }, [climatePendingByEntity, haStates, isHaConnected]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(lightTogglePendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(lightTogglePendingByEntity)
-      .filter(([entityId, pending]) => {
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const liveIsOn =
-          typeof liveEntity.toggleOn === 'boolean'
-            ? liveEntity.toggleOn
-            : normalizeLower(liveEntity.state) === 'on';
-        return liveIsOn === pending.targetOn;
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    removePendingEntities(setLightTogglePendingByEntity, resolvedEntityIds);
-    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightTogglePendingTimeoutRef, entityId));
-  }, [haStates, isHaConnected, lightTogglePendingByEntity]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(switchTogglePendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(switchTogglePendingByEntity)
-      .filter(([entityId, pending]) => {
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const liveIsOn =
-          typeof liveEntity.toggleOn === 'boolean'
-            ? liveEntity.toggleOn
-            : normalizeLower(liveEntity.state) === 'on';
-        return liveIsOn === pending.targetOn;
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    removePendingEntities(setSwitchTogglePendingByEntity, resolvedEntityIds);
-    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(switchTogglePendingTimeoutRef, entityId));
-  }, [haStates, isHaConnected, switchTogglePendingByEntity]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(lightBrightnessPendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(lightBrightnessPendingByEntity)
-      .filter(([entityId, pending]) => {
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const liveBrightness =
-          typeof liveEntity.brightness === 'number'
-            ? liveEntity.brightness
-            : typeof liveEntity.numericValue === 'number'
-              ? liveEntity.numericValue
-              : undefined;
-        return Number.isFinite(liveBrightness) && almostEqual(liveBrightness, pending.brightness, 1);
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    removePendingEntities(setLightBrightnessPendingByEntity, resolvedEntityIds);
-    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightBrightnessPendingTimeoutRef, entityId));
-  }, [haStates, isHaConnected, lightBrightnessPendingByEntity]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(lightColorPendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(lightColorPendingByEntity)
-      .filter(([entityId, pending]) => {
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const liveHsColor = liveEntity.hsColor ?? liveEntity.hs_color;
-        if (!liveHsColor) {
-          return false;
-        }
-        return (
-          almostEqual(liveHsColor[0], pending.hsColor[0], 1.2) &&
-          almostEqual(liveHsColor[1], pending.hsColor[1], 1.2)
-        );
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    removePendingEntities(setLightColorPendingByEntity, resolvedEntityIds);
-    resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(lightColorPendingTimeoutRef, entityId));
-  }, [haStates, isHaConnected, lightColorPendingByEntity]);
 
   useEffect(() => {
     if (!isHaConnected || Object.keys(lockPendingByEntity).length === 0) {
@@ -7560,10 +5894,7 @@ export function MainBoard() {
           toTrimmedString(liveEntity.state) ??
             toTrimmedString(liveEntity.stateLabel),
         );
-        if (liveState === pending.targetState) {
-          return true;
-        }
-        return liveState === 'pending' || liveState === 'arming' || liveState === 'disarming';
+        return liveState === pending.targetState;
       })
       .map(([entityId]) => entityId);
 
@@ -7574,77 +5905,6 @@ export function MainBoard() {
     removePendingEntities(setAlarmPendingByEntity, resolvedEntityIds);
     resolvedEntityIds.forEach((entityId) => clearTimeoutForEntity(alarmPendingTimeoutRef, entityId));
   }, [alarmPendingByEntity, haStates, isHaConnected]);
-
-  useEffect(() => {
-    if (!isHaConnected || Object.keys(coverPendingByEntity).length === 0) {
-      return;
-    }
-
-    const resolvedEntityIds = Object.entries(coverPendingByEntity)
-      .filter(([entityId, pending]) => {
-        if (!hasCoverPendingValues(pending)) {
-          return true;
-        }
-        const liveEntity = haStates[entityId];
-        if (!liveEntity) {
-          return false;
-        }
-        const rawAttributes = liveEntity.rawAttributes;
-        const liveState = normalizeCoverState(
-          toTrimmedString(liveEntity.state) ??
-            toTrimmedString(liveEntity.stateLabel),
-        );
-        const livePosition = resolveCoverPosition(
-          liveState,
-          resolveCoverPositionAttribute(rawAttributes),
-          pending.position ?? 70,
-        );
-        const liveTiltPosition = resolveCoverTiltPosition(
-          resolveCoverTiltAttribute(rawAttributes),
-          pending.tiltPosition ?? 50,
-        );
-        const pendingState = normalizeCoverState(pending.state);
-        const stateReady =
-          !pendingState ||
-          pendingState === 'unknown' ||
-          (pendingState === 'opening' && liveState === 'open') ||
-          (pendingState === 'closing' && liveState === 'closed') ||
-          pendingState === liveState;
-        const positionReady =
-          !Number.isFinite(pending.position) ||
-          almostEqual(livePosition, pending.position, 1);
-        const tiltReady =
-          !Number.isFinite(pending.tiltPosition) ||
-          almostEqual(liveTiltPosition, pending.tiltPosition, 1);
-        return stateReady && positionReady && tiltReady;
-      })
-      .map(([entityId]) => entityId);
-
-    if (!resolvedEntityIds.length) {
-      return;
-    }
-
-    setCoverPendingByEntity((current) => {
-      let changed = false;
-      const next = { ...current };
-      resolvedEntityIds.forEach((entityId) => {
-        if (!(entityId in next)) {
-          return;
-        }
-        changed = true;
-        delete next[entityId];
-      });
-      return changed ? next : current;
-    });
-
-    resolvedEntityIds.forEach((entityId) => {
-      const timeoutId = coverPendingTimeoutRef.current[entityId];
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        delete coverPendingTimeoutRef.current[entityId];
-      }
-    });
-  }, [coverPendingByEntity, haStates, isHaConnected]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -7727,6 +5987,42 @@ export function MainBoard() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode || !hasUnsavedDashboardEdits) {
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowDashboardUnloadRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedDashboardEdits, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode || !hasUnsavedDashboardEdits || !editSessionRouteRef.current) return;
+    const currentRoute = canUseBrowserRouteNavigation
+      ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+      : internalNavigationRoute;
+    if (currentRoute === editSessionRouteRef.current) return;
+    if (canUseBrowserRouteNavigation) {
+      navigate(editSessionRouteRef.current, { replace: true });
+    } else {
+      setInternalNavigationRoute(editSessionRouteRef.current);
+    }
+    setEditConfirm('exit');
+  }, [
+    canUseBrowserRouteNavigation,
+    hasUnsavedDashboardEdits,
+    internalNavigationRoute,
+    isEditMode,
+    routerLocation.hash,
+    routerLocation.pathname,
+    routerLocation.search,
+    navigate,
+  ]);
 
   useEffect(() => {
     if (selectedWidgetId && !widgets.some((widget) => widget.id === selectedWidgetId)) {
@@ -7817,6 +6113,26 @@ export function MainBoard() {
   }, [isCatalogOpen, isEditAvailableForRoute, isEditMode]);
 
   useEffect(() => {
+    if (dashboardSecurity.can('edit_dashboard')) {
+      return;
+    }
+    setEditConfirm(null);
+    setIsCatalogOpen(false);
+    setSelectedWidgetId(null);
+    setSelectedSectionId(null);
+    setSelectedSidebarPathId(null);
+    if (isEditMode) {
+      setIsEditMode(false);
+      addNotification(
+        'alert',
+        dashboardSecurity.identityStatus === 'resolving'
+          ? 'Verifica identità Home Assistant in corso. Modifiche sospese.'
+          : 'Sessione di modifica chiusa: servono i permessi Owner o Admin.',
+      );
+    }
+  }, [addNotification, dashboardSecurity, isEditMode]);
+
+  useEffect(() => {
     if (!isConsumptionView) {
       setSelectedConsumptionCardId(null);
       return;
@@ -7848,7 +6164,10 @@ export function MainBoard() {
     const oauthError = currentUrl.searchParams.get('error');
     const oauthErrorDescription = currentUrl.searchParams.get('error_description');
     const oauthCode = currentUrl.searchParams.get('code');
-    const oauthState = parseHaOAuthState(currentUrl.searchParams.get('state'));
+    const receivedState = currentUrl.searchParams.get('state');
+    const expectedState = window.sessionStorage.getItem(HA_OAUTH_SESSION_STATE_KEY);
+    const stateValidation = validateHaOAuthCallbackState(receivedState, expectedState);
+    const oauthState = stateValidation.ok ? stateValidation.payload : null;
     const returnPath = resolveOAuthReturnPath(oauthState?.returnTo);
     const cleanupUrl = () => {
       if (canUseBrowserRouteNavigation) {
@@ -7863,7 +6182,15 @@ export function MainBoard() {
       window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
     };
 
+    if (!stateValidation.ok) {
+      window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+      setOAuthFlowError('Verifica sicurezza OAuth non riuscita o scaduta. Riprova.');
+      cleanupUrl();
+      return;
+    }
+
     if (oauthError) {
+      window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
       setOAuthFlowError(
         oauthErrorDescription?.trim() || `Autorizzazione Home Assistant interrotta: ${oauthError}.`,
       );
@@ -7872,75 +6199,64 @@ export function MainBoard() {
     }
 
     if (!oauthCode || !oauthState) {
+      window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
       setOAuthFlowError('Risposta OAuth Home Assistant non valida.');
       cleanupUrl();
       return;
     }
 
-    const expectedNonce = window.sessionStorage.getItem(HA_OAUTH_SESSION_NONCE_KEY);
-    if (!expectedNonce || expectedNonce !== oauthState.nonce) {
-      setOAuthFlowError('Verifica sicurezza OAuth non riuscita. Riprova.');
-      cleanupUrl();
-      return;
-    }
-
     let cancelled = false;
-    const oauthAbortController = new AbortController();
 
     const runOAuthExchange = async () => {
       setIsOAuthFlowBusy(true);
       try {
-        const oauthTokens = await exchangeHaOAuthCode({
-          hassUrl: oauthState.hassUrl,
-          clientId: window.location.origin,
-          code: oauthCode,
-          signal: oauthAbortController.signal,
-        });
+        const exchangePromise =
+          oauthExchangePromiseRef.current ??
+          exchangeHaOAuthCode({
+            hassUrl: oauthState.hassUrl,
+            clientId: window.location.origin,
+            code: oauthCode,
+          });
+        oauthExchangePromiseRef.current = exchangePromise;
+        const oauthTokens = await exchangePromise;
         if (cancelled) {
           return;
         }
-        persistOAuthTokensAsAuthData({
+        window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+        persistHaOAuthSession({
           hassUrl: oauthState.hassUrl,
           clientId: window.location.origin,
           tokens: oauthTokens,
         });
-        setHaUrl(oauthState.hassUrl);
-        setHaToken(oauthTokens.accessToken);
-        setPendingOAuthConnect(true);
+        persistDashboardRuntimeMode('real', window.localStorage);
         setOAuthFlowError(null);
+        cleanupUrl();
+        window.location.reload();
       } catch (error) {
         if (!cancelled) {
+          window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
           setOAuthFlowError(error instanceof Error ? error.message : 'Autenticazione OAuth fallita.');
         }
       } finally {
         if (!cancelled) {
+          oauthExchangePromiseRef.current = null;
           setIsOAuthFlowBusy(false);
-          window.sessionStorage.removeItem(HA_OAUTH_SESSION_NONCE_KEY);
           cleanupUrl();
         }
       }
     };
 
-    const deferredRunId = window.setTimeout(() => {
-      runOAuthExchange();
-    }, 0);
+    void runOAuthExchange();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(deferredRunId);
-      oauthAbortController.abort();
     };
   }, [canUseBrowserRouteNavigation]);
 
   useEffect(() => {
-    if (!pendingOAuthConnect || !haToken.trim()) {
+    if (runtimeMode !== 'real') {
       return;
     }
-    connectHa();
-    setPendingOAuthConnect(false);
-  }, [connectHa, haToken, pendingOAuthConnect]);
-
-  useEffect(() => {
     if (haStatus !== 'disconnected') {
       return;
     }
@@ -7972,9 +6288,12 @@ export function MainBoard() {
     return () => {
       cancelled = true;
     };
-  }, [haStatus, haToken, haUrl, setHaUrl]);
+  }, [haStatus, haToken, haUrl, runtimeMode, setHaUrl]);
 
   useEffect(() => {
+    if (runtimeMode !== 'real') {
+      return;
+    }
     if (!pendingStoredOAuthReconnectUrl) {
       return;
     }
@@ -7990,11 +6309,202 @@ export function MainBoard() {
     }
     connectHa();
     setPendingStoredOAuthReconnectUrl(null);
-  }, [connectHa, haStatus, haToken, haUrl, pendingStoredOAuthReconnectUrl]);
+  }, [connectHa, haStatus, haToken, haUrl, pendingStoredOAuthReconnectUrl, runtimeMode]);
+
+  const canPersistDashboardLayout = isEditMode && dashboardSecurity.can('edit_dashboard');
+  const localDashboardLayoutPersistence = useDashboardLayoutPersistence({
+    // Edit Mode is transactional: keep the draft in memory and write once on exit.
+    enabled: false,
+    runtimeMode,
+    sections,
+    widgets,
+    widgetTypeLayoutOverrides,
+    responsiveLayouts,
+    widgetLayoutOverrides,
+  });
+  const authoritativeDashboardLayout = useMemo(() => ({
+    storageVersion: DASHBOARD_LAYOUT_STORAGE_VERSION,
+    sections,
+    widgets,
+    widgetTypeLayoutOverrides,
+    responsiveLayouts,
+    widgetLayoutOverrides,
+  }), [responsiveLayouts, sections, widgetLayoutOverrides, widgetTypeLayoutOverrides, widgets]);
+  const hydrateAuthoritativeDashboardLayout = useCallback((layout: typeof authoritativeDashboardLayout) => {
+    setSections(layout.sections);
+    setWidgets(
+      typeof window === 'undefined'
+        ? layout.widgets
+        : mergeWidgetSecretsIntoWidgets(layout.widgets, window.localStorage),
+    );
+    setWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides);
+    setActiveWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides);
+    setResponsiveLayouts(layout.responsiveLayouts);
+    setWidgetLayoutOverrides(layout.widgetLayoutOverrides);
+  }, []);
+  const haDashboardLayoutPersistence = useHaDashboardLayoutPersistence({
+    active: effectiveRuntimeMode === 'real',
+    autoSaveEnabled: false,
+    deferRemoteUpdates: isEditMode,
+    isConnected: effectiveRuntimeMode === 'real' && isHaConnected,
+    canManage: dashboardSecurity.can('edit_dashboard'),
+    userId: haCurrentUser?.id ?? null,
+    callApi: callHaApi,
+    dashboard: authoritativeDashboardLayout,
+    onHydrate: hydrateAuthoritativeDashboardLayout,
+  });
+  const lastNotifiedRemoteRevisionRef = useRef<number | null>(null);
+  const lastAnnouncedAppliedRevisionRef = useRef<number | null>(null);
+  const visibleRemoteConflictRevisionRef = useRef<number | null>(null);
 
   useEffect(() => {
-    saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides, responsiveLayouts, widgetLayoutOverrides);
-  }, [responsiveLayouts, sections, widgetLayoutOverrides, widgetTypeLayoutOverrides, widgets]);
+    const pendingRevision = haDashboardLayoutPersistence.pendingRemoteUpdate?.revision ?? null;
+    if (pendingRevision === null || lastNotifiedRemoteRevisionRef.current === pendingRevision) return;
+    lastNotifiedRemoteRevisionRef.current = pendingRevision;
+    addNotification(
+      'warning',
+      `È disponibile la versione ${pendingRevision} del layout. La tua bozza resta protetta.`,
+    );
+  }, [addNotification, haDashboardLayoutPersistence.pendingRemoteUpdate?.revision]);
+
+  useEffect(() => {
+    const pendingRevision = haDashboardLayoutPersistence.pendingRemoteUpdate?.revision ?? null;
+    if (pendingRevision !== null) {
+      visibleRemoteConflictRevisionRef.current = pendingRevision;
+      return;
+    }
+    if (visibleRemoteConflictRevisionRef.current !== null) {
+      visibleRemoteConflictRevisionRef.current = null;
+      setIsDashboardConflictOpen(false);
+    }
+  }, [haDashboardLayoutPersistence.pendingRemoteUpdate?.revision]);
+
+  useEffect(() => {
+    const appliedRevision = haDashboardLayoutPersistence.lastAppliedRemoteRevision;
+    if (appliedRevision === null || lastAnnouncedAppliedRevisionRef.current === appliedRevision) return;
+    lastAnnouncedAppliedRevisionRef.current = appliedRevision;
+    addNotification('info', `Dashboard aggiornata alla versione ${appliedRevision}.`);
+  }, [addNotification, haDashboardLayoutPersistence.lastAppliedRemoteRevision]);
+  const persistedDashboardLayoutSaveStatus = effectiveRuntimeMode === 'demo'
+    ? localDashboardLayoutPersistence.status
+    : haDashboardLayoutPersistence.status;
+  const dashboardLayoutSaveStatus = persistedDashboardLayoutSaveStatus.phase === 'saving'
+    ? persistedDashboardLayoutSaveStatus
+    : isEditMode && hasUnsavedDashboardEdits
+      ? { phase: 'dirty' as const }
+      : persistedDashboardLayoutSaveStatus;
+  const requiresDashboardLayoutMigration =
+    effectiveRuntimeMode === 'real' &&
+    haDashboardLayoutPersistence.loadStatus === 'migration_required';
+  const saveDashboardLayoutNow = useCallback(async () => (
+    effectiveRuntimeMode === 'demo'
+      ? localDashboardLayoutPersistence.saveNow()
+      : haDashboardLayoutPersistence.saveNow()
+  ), [effectiveRuntimeMode, haDashboardLayoutPersistence.saveNow, localDashboardLayoutPersistence.saveNow]);
+  const [dashboardEditorLayoutRevision, setDashboardEditorLayoutRevision] = useState(0);
+  const dashboardEditorSnapshot = useMemo<DashboardEditorSnapshot>(() => ({
+    sections,
+    widgets,
+    widgetTypeLayoutOverrides,
+    responsiveLayouts,
+    widgetLayoutOverrides,
+  }), [responsiveLayouts, sections, widgetLayoutOverrides, widgetTypeLayoutOverrides, widgets]);
+  const applyDashboardEditorSnapshot = useCallback((snapshot: typeof dashboardEditorSnapshot) => {
+    setSections(snapshot.sections);
+    setWidgets((currentWidgets) => {
+      const currentById = new Map(currentWidgets.map((widget) => [widget.id, widget]));
+      return snapshot.widgets.map((snapshotWidget) => {
+        const currentWidget = currentById.get(snapshotWidget.id);
+        if (!currentWidget || currentWidget.entityId !== snapshotWidget.entityId) {
+          return snapshotWidget;
+        }
+        return {
+          ...snapshotWidget,
+          status: currentWidget.status,
+          isOn: currentWidget.isOn,
+          value: currentWidget.value,
+          unit: currentWidget.unit,
+          vacuumCleanedArea: currentWidget.vacuumCleanedArea,
+          vacuumCleaningMinutes: currentWidget.vacuumCleaningMinutes,
+          coverTiltPosition: currentWidget.coverTiltPosition,
+        };
+      });
+    });
+    setWidgetTypeLayoutOverrides(snapshot.widgetTypeLayoutOverrides);
+    setResponsiveLayouts(snapshot.responsiveLayouts);
+    setWidgetLayoutOverrides(snapshot.widgetLayoutOverrides);
+    setActiveWidgetTypeLayoutOverrides(snapshot.widgetTypeLayoutOverrides);
+    setDashboardEditorLayoutRevision((current) => current + 1);
+    setSelectedWidgetId((current) =>
+      current && snapshot.widgets.some((widget) => widget.id === current) ? current : null,
+    );
+    setSelectedSectionId((current) =>
+      current && snapshot.sections.some((section) => section.id === current) ? current : null,
+    );
+  }, []);
+  const {
+    beginMutation: beginDashboardEditorHistoryMutation,
+    undo: undoDashboardEdit,
+    redo: redoDashboardEdit,
+    canUndo: canUndoDashboardEdit,
+    canRedo: canRedoDashboardEdit,
+  } = useDashboardEditorHistory({
+    enabled: canPersistDashboardLayout,
+    current: dashboardEditorSnapshot,
+    onApply: applyDashboardEditorSnapshot,
+  });
+  const beginDashboardEditorMutation = useCallback(() => {
+    beginDashboardEditorHistoryMutation();
+  }, [beginDashboardEditorHistoryMutation]);
+
+  useEffect(() => {
+    const baseline = editSessionBaselineRef.current;
+    if (!isEditMode || !baseline) {
+      if (!isEditMode) setHasUnsavedDashboardEdits(false);
+      return;
+    }
+    setHasUnsavedDashboardEdits(
+      fingerprintDashboardEditorSnapshot(dashboardEditorSnapshot) !==
+        fingerprintDashboardEditorSnapshot(baseline),
+    );
+  }, [dashboardEditorSnapshot, isEditMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isEditMode) return;
+    if (!hasUnsavedDashboardEdits) {
+      discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      try {
+        saveDashboardEditDraft(window.sessionStorage, {
+          runtimeMode: effectiveRuntimeMode,
+          createdAt: editSessionCreatedAtRef.current ?? Date.now(),
+          baseRevision: haDashboardLayoutPersistence.serverRevision,
+          dashboard: authoritativeDashboardLayout,
+        });
+      } catch {
+        // A recovery draft is best-effort and never changes save authority.
+      }
+    }, 450);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    authoritativeDashboardLayout,
+    effectiveRuntimeMode,
+    haDashboardLayoutPersistence.serverRevision,
+    hasUnsavedDashboardEdits,
+    isEditMode,
+  ]);
+  const previousEditModeRef = useRef(isEditMode);
+
+  useEffect(() => {
+    const wasEditing = previousEditModeRef.current;
+    previousEditModeRef.current = isEditMode;
+    if (!wasEditing || isEditMode || typeof window === 'undefined') {
+      return;
+    }
+    discardDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage);
+  }, [effectiveRuntimeMode, isEditMode]);
 
   useEffect(() => {
     setWidgets((prev) => {
@@ -8028,6 +6538,7 @@ export function MainBoard() {
   }, [sections]);
 
   const updateWidget = (id: string, updater: (widget: Widget) => Widget) => {
+    beginDashboardEditorMutation();
     setWidgets((prev) => prev.map((widget) => (widget.id === id ? updater(widget) : widget)));
   };
 
@@ -8036,6 +6547,7 @@ export function MainBoard() {
     breakpoint: DashboardGridBreakpoint,
     nextOverride: WidgetTypeBreakpointLayoutOverride | null,
   ) => {
+    beginDashboardEditorMutation();
     setWidgetTypeLayoutOverrides((prev) => {
       const next: WidgetTypeLayoutOverrides = { ...prev };
       const currentByBreakpoint = { ...(next[kind] ?? {}) };
@@ -8058,6 +6570,7 @@ export function MainBoard() {
     breakpoint: DashboardGridBreakpoint,
     nextOverride: WidgetTypeBreakpointLayoutOverride | null,
   ) => {
+    beginDashboardEditorMutation();
     setWidgetLayoutOverrides((prev) => {
       const next: WidgetLayoutOverrides = { ...prev };
       const currentByBreakpoint = { ...(next[widgetId] ?? {}) };
@@ -8079,6 +6592,7 @@ export function MainBoard() {
     breakpoint: DashboardGridBreakpoint,
     nextLayout: GridItem[],
   ) => {
+    beginDashboardEditorMutation();
     const normalized = nextLayout.map((item) => normalizeRootLayout(item));
     setResponsiveLayouts((prev) => ({
       ...prev,
@@ -8094,6 +6608,7 @@ export function MainBoard() {
     breakpoint: DashboardGridBreakpoint,
     nextLayout: GridItem[],
   ) => {
+    beginDashboardEditorMutation();
     const section = sections.find((entry) => entry.id === sectionId);
     const normalized = nextLayout.map((item) =>
       section && isStackSection(section)
@@ -8119,6 +6634,7 @@ export function MainBoard() {
   };
 
   const updateWidgetWithAutoLayout = (id: string, updater: (widget: Widget) => Widget) => {
+    beginDashboardEditorMutation();
     setWidgets((prev) => {
       const next = prev.map((widget) => (widget.id === id ? updater(widget) : widget));
       const resolved = resolveAutoWidgetLayoutChanges(prev, next);
@@ -8142,6 +6658,7 @@ export function MainBoard() {
   };
 
   const updateSection = (id: string, updater: (section: DashboardSection) => DashboardSection) => {
+    beginDashboardEditorMutation();
     setSections((prev) =>
       prev.map((section) => {
         if (section.id !== id) {
@@ -8209,44 +6726,8 @@ export function MainBoard() {
       }),
     );
   };
-  useEffect(() => {
-    setSections((previous) => {
-      let hasChanged = false;
-      const next = previous.map((section) => {
-        if (!isStackGridAutoColumns(section)) {
-          return section;
-        }
-        const usedCols = resolveUsedColumnsForStackSection(section.id, widgets);
-        if (usedCols <= 0) {
-          return section;
-        }
-        const targetCols = clampAutoStackSectionColumns(
-          usedCols,
-        );
-        const maxX = Math.max(0, ROOT_CANVAS_COLS - targetCols);
-        const safeX = Math.min(Math.max(0, Math.round(section.layout.x)), maxX);
-        const safeW = targetCols;
-        const layoutUnchanged =
-          Math.round(section.layout.w) === safeW &&
-          Math.round(section.layout.x) === safeX;
-        if (layoutUnchanged) {
-          return section;
-        }
-        hasChanged = true;
-        return {
-          ...section,
-          layout: {
-            ...section.layout,
-            w: safeW,
-            x: safeX,
-          },
-        };
-      });
-      return hasChanged ? next : previous;
-    });
-  }, [sections, widgets]);
-
   const handleWidgetLayoutChange = (sectionId: string, nextLayout: GridItem[]) => {
+    beginDashboardEditorMutation();
     const nextLayoutMap = new Map(nextLayout.map((item) => [item.i, item]));
     const section = sections.find((entry) => entry.id === sectionId);
 
@@ -8327,6 +6808,7 @@ export function MainBoard() {
   };
 
   const handleSectionsLayoutChange = (nextLayout: GridItem[]) => {
+    beginDashboardEditorMutation();
     const nextLayoutMap = new Map(nextLayout.map((item) => [item.i, item]));
     const expandedAnchorIds = new Set<string>();
     const nextSections = sections.map((section) => {
@@ -8450,6 +6932,44 @@ export function MainBoard() {
     return resolvedWidgets;
   };
 
+  const {
+    toggleLightEntity,
+    toggleSwitchEntity,
+    setLightBrightness,
+    handleWidgetBrightnessChange,
+    setLightColorTemp,
+    setLightHsColor,
+    setLightWhite,
+    setLightEffect,
+    flashLight,
+  } = useLightSwitchCommands({
+    activeWidget,
+    isEditMode,
+    isHaConnected,
+    haStatesForUi,
+    commandCoordinator,
+    pending: {
+      setLightTogglePending,
+      setLightPowerPendingIfChanged,
+      setLightBrightnessPending,
+      setLightColorPending,
+      setSwitchTogglePending,
+      clearLightTogglePending,
+      clearSwitchTogglePending,
+      clearLightCommandPending,
+    },
+    callHaService,
+    addNotification,
+    actions,
+    updateWidgetWithAutoLayout,
+    setWidgets,
+    setActiveDevice,
+    resolveLightLayoutForState,
+    resolveSwitchLayout,
+    resolveAutoWidgetLayoutChanges,
+    sameLayout,
+  });
+
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
   const resolvePreferredHvacMode = (entity?: { hvacModes?: string[]; hvacMode?: string; state?: string }) => {
@@ -8466,180 +6986,6 @@ export function MainBoard() {
       return entity.state;
     }
     return modes[0] ?? 'cool';
-  };
-
-  const scheduleClimatePendingExpiry = (entityId: string) => {
-    const timers = climatePendingTimeoutRef.current;
-    const existingTimeout = timers[entityId];
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-    }
-    timers[entityId] = window.setTimeout(() => {
-      setClimatePendingByEntity((current) => {
-        if (!(entityId in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[entityId];
-        return next;
-      });
-      delete timers[entityId];
-    }, CLIMATE_PENDING_TTL_MS);
-  };
-
-  const upsertClimatePending = (
-    entityId: string,
-    patch: Partial<Omit<ClimatePendingState, 'expiresAt'>>,
-  ) => {
-    const expiresAt = Date.now() + CLIMATE_PENDING_TTL_MS;
-    setClimatePendingByEntity((current) => {
-      const nextEntry: ClimatePendingState = {
-        ...(current[entityId] ?? { expiresAt }),
-        ...patch,
-        expiresAt,
-      };
-      if (!hasClimatePendingValues(nextEntry)) {
-        if (!(entityId in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[entityId];
-        return next;
-      }
-      return {
-        ...current,
-        [entityId]: nextEntry,
-      };
-    });
-    scheduleClimatePendingExpiry(entityId);
-  };
-
-  const flushQueuedClimateCommand = (entityId: string) => {
-    const queuedCommands = climateQueuedCommandRef.current;
-    const queued = queuedCommands[entityId];
-    if (!queued) {
-      return;
-    }
-    delete queuedCommands[entityId];
-
-    if (Number.isFinite(queued.targetTempLow) && Number.isFinite(queued.targetTempHigh)) {
-      void callHaService('climate', 'set_temperature', {
-        entity_id: entityId,
-        target_temp_low: queued.targetTempLow,
-        target_temp_high: queued.targetTempHigh,
-      });
-    } else if (Number.isFinite(queued.targetTemp)) {
-      void callHaService('climate', 'set_temperature', {
-        entity_id: entityId,
-        temperature: queued.targetTemp,
-      });
-    }
-
-    const queuedFanMode = normalizeLower(queued.fanMode);
-    if (queuedFanMode) {
-      void callHaService('climate', 'set_fan_mode', {
-        entity_id: entityId,
-        fan_mode: queuedFanMode,
-      });
-    }
-
-    if (Number.isFinite(queued.targetHumidity)) {
-      void callHaService('climate', 'set_humidity', {
-        entity_id: entityId,
-        humidity: queued.targetHumidity,
-      });
-    }
-
-    const queuedPresetMode = normalizeLower(queued.presetMode);
-    if (queuedPresetMode) {
-      void callHaService('climate', 'set_preset_mode', {
-        entity_id: entityId,
-        preset_mode: queuedPresetMode,
-      });
-    }
-
-    const queuedSwingMode = normalizeLower(queued.swingMode);
-    if (queuedSwingMode) {
-      void callHaService('climate', 'set_swing_mode', {
-        entity_id: entityId,
-        swing_mode: queuedSwingMode,
-      });
-    }
-
-    const queuedSwingHorizontalMode = normalizeLower(queued.swingHorizontalMode);
-    if (queuedSwingHorizontalMode) {
-      void callHaService('climate', 'set_swing_horizontal_mode', {
-        entity_id: entityId,
-        swing_horizontal_mode: queuedSwingHorizontalMode,
-      });
-    }
-  };
-
-  const queueClimateCommandDispatch = (
-    entityId: string,
-    patch: Partial<ClimateQueuedCommand>,
-  ) => {
-    const queuedCommands = climateQueuedCommandRef.current;
-    const currentCommand = queuedCommands[entityId] ?? {};
-    queuedCommands[entityId] = {
-      ...currentCommand,
-      ...patch,
-    };
-
-    const timers = climateSendDelayTimeoutRef.current;
-    const existingTimeout = timers[entityId];
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-    }
-    timers[entityId] = window.setTimeout(() => {
-      delete timers[entityId];
-      flushQueuedClimateCommand(entityId);
-    }, CLIMATE_SEND_DELAY_MS);
-  };
-
-  const setLightTogglePending = (entityId: string, targetOn: boolean) => {
-    const expiresAt = Date.now() + LIGHT_TOGGLE_PENDING_TTL_MS;
-    setEntityPendingWithExpiry(
-      entityId,
-      { targetOn, expiresAt },
-      LIGHT_TOGGLE_PENDING_TTL_MS,
-      lightTogglePendingTimeoutRef,
-      setLightTogglePendingByEntity,
-    );
-  };
-
-  const setLightBrightnessPending = (entityId: string, brightness: number) => {
-    const safeBrightness = clamp(Math.round(brightness), 0, 100);
-    const expiresAt = Date.now() + LIGHT_BRIGHTNESS_PENDING_TTL_MS;
-    setEntityPendingWithExpiry(
-      entityId,
-      { brightness: safeBrightness, expiresAt },
-      LIGHT_BRIGHTNESS_PENDING_TTL_MS,
-      lightBrightnessPendingTimeoutRef,
-      setLightBrightnessPendingByEntity,
-    );
-  };
-
-  const setLightColorPending = (entityId: string, hsColor: [number, number]) => {
-    const expiresAt = Date.now() + LIGHT_COLOR_PENDING_TTL_MS;
-    setEntityPendingWithExpiry(
-      entityId,
-      { hsColor, expiresAt },
-      LIGHT_COLOR_PENDING_TTL_MS,
-      lightColorPendingTimeoutRef,
-      setLightColorPendingByEntity,
-    );
-  };
-
-  const setSwitchTogglePending = (entityId: string, targetOn: boolean) => {
-    const expiresAt = Date.now() + SWITCH_TOGGLE_PENDING_TTL_MS;
-    setEntityPendingWithExpiry(
-      entityId,
-      { targetOn, expiresAt },
-      SWITCH_TOGGLE_PENDING_TTL_MS,
-      switchTogglePendingTimeoutRef,
-      setSwitchTogglePendingByEntity,
-    );
   };
 
   const setLockPending = (entityId: string, action: LockPendingAction) => {
@@ -8666,366 +7012,9 @@ export function MainBoard() {
     );
   };
 
-  const scheduleCoverPendingExpiry = (entityId: string) => {
-    const timers = coverPendingTimeoutRef.current;
-    const existingTimeout = timers[entityId];
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-    }
-    timers[entityId] = window.setTimeout(() => {
-      setCoverPendingByEntity((current) => {
-        if (!(entityId in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[entityId];
-        return next;
-      });
-      delete timers[entityId];
-    }, COVER_PENDING_TTL_MS);
-  };
-
-  const upsertCoverPending = (
-    entityId: string,
-    patch: Partial<Omit<CoverPendingState, 'expiresAt'>>,
-  ) => {
-    const expiresAt = Date.now() + COVER_PENDING_TTL_MS;
-    setCoverPendingByEntity((current) => {
-      const nextEntry: CoverPendingState = {
-        ...(current[entityId] ?? { expiresAt }),
-        ...patch,
-        expiresAt,
-      };
-      if (!hasCoverPendingValues(nextEntry)) {
-        if (!(entityId in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[entityId];
-        return next;
-      }
-      return {
-        ...current,
-        [entityId]: nextEntry,
-      };
-    });
-    scheduleCoverPendingExpiry(entityId);
-  };
-
-  const toggleLightEntity = (widget?: Widget) => {
-    const targetWidget = widget ?? activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const applyLocalToggle = (nextOn: boolean) => {
-      if (targetWidget?.kind !== 'light') {
-        return;
-      }
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => {
-        const nextLayout = resolveLightLayoutForState(current, nextOn);
-        return {
-          ...current,
-          isOn: nextOn,
-          status: nextOn ? 'Opening' : 'Closed',
-          value: nextOn ? Math.max(40, current.value ?? 0) : 0,
-          layout: nextLayout,
-        };
-      });
-    };
-    if (isHaConnected && entityId) {
-      const liveEntity = haStatesForUi[entityId];
-      const currentIsOn =
-        typeof liveEntity?.toggleOn === 'boolean'
-          ? liveEntity.toggleOn
-          : targetWidget?.isOn ?? false;
-      const nextIsOn = !currentIsOn;
-      setLightTogglePending(entityId, nextIsOn);
-      applyLocalToggle(nextIsOn);
-      void callHaService('light', 'toggle', { entity_id: entityId });
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      applyLocalToggle(!targetWidget.isOn);
-      return;
-    }
-    actions.toggleLamp();
-  };
-
-  const toggleSwitchEntity = (widget?: Widget) => {
-    const targetWidget = widget?.kind === 'switch' ? widget : activeWidget?.kind === 'switch' ? activeWidget : undefined;
-    if (!targetWidget) {
-      return;
-    }
-    const entityId = targetWidget.entityId;
-    const applyLocalToggle = (nextOn: boolean) => {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
-        ...current,
-        isOn: nextOn,
-        status: nextOn ? 'on' : 'off',
-        value: nextOn ? 1 : 0,
-        layout: resolveSwitchLayout(current),
-      }));
-      setActiveDevice((current) =>
-        current?.type === 'switch' && current.id === targetWidget.id
-          ? { ...current, status: nextOn ? 'Acceso' : 'Spento' }
-          : current,
-      );
-    };
-
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const currentIsOn =
-      typeof liveEntity?.toggleOn === 'boolean'
-        ? liveEntity.toggleOn
-        : normalizeLower(liveEntity?.stateLabel ?? liveEntity?.state ?? targetWidget.status) === 'on' ||
-          targetWidget.isOn;
-    const nextIsOn = !currentIsOn;
-    if (isHaConnected && entityId) {
-      setSwitchTogglePending(entityId, nextIsOn);
-      applyLocalToggle(nextIsOn);
-      const entityDomain = entityId.split('.')[0]?.trim() || 'homeassistant';
-      const serviceDomain = ['switch', 'input_boolean', 'fan'].includes(entityDomain)
-        ? entityDomain
-        : 'homeassistant';
-      void callHaService(serviceDomain, nextIsOn ? 'turn_on' : 'turn_off', { entity_id: entityId });
-      return;
-    }
-    applyLocalToggle(nextIsOn);
-  };
-
-  const setLightBrightness = (value: number, options?: LightCommandOptions) => {
-    const targetWidget = activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const safeValue = clamp(Math.round(value), 0, 100);
-    if (isHaConnected && entityId) {
-      setLightBrightnessPending(entityId, safeValue);
-      setLightTogglePending(entityId, safeValue > 0);
-      if (safeValue <= 0) {
-        void callHaService('light', 'turn_off', { entity_id: entityId });
-      } else {
-        void callHaService('light', 'turn_on', {
-          entity_id: entityId,
-          brightness_pct: safeValue,
-          ...buildLightCommandOptionsPayload(options),
-        });
-      }
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => {
-        const nextOn = safeValue > 0;
-        const nextLayout = resolveLightLayoutForState(current, nextOn);
-        return {
-          ...current,
-          isOn: nextOn,
-          status: nextOn ? 'Opening' : 'Closed',
-          value: safeValue,
-          layout: nextLayout,
-        };
-      });
-      return;
-    }
-    actions.setLampBrightness(safeValue);
-  };
-
-  const scheduleHaLightBrightness = (entityId: string, safeValue: number) => {
-    const timers = lightBrightnessDebounceRef.current;
-    const existingTimeout = timers[entityId];
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-    }
-
-    timers[entityId] = window.setTimeout(() => {
-      if (safeValue <= 0) {
-        void callHaService('light', 'turn_off', { entity_id: entityId });
-      } else {
-        void callHaService('light', 'turn_on', { entity_id: entityId, brightness_pct: safeValue });
-      }
-      delete timers[entityId];
-    }, LIGHT_BRIGHTNESS_DEBOUNCE_MS);
-  };
-
-  const handleWidgetBrightnessChange = (widget: Widget, value: number) => {
-    if (widget.kind !== 'light' || isEditMode) {
-      return;
-    }
-
-    const safeValue = clamp(Math.round(value), 0, 100);
-    const nextOn = safeValue > 0;
-    const nextStatus = nextOn ? 'Opening' : 'Closed';
-
-    const applyLocal = () => {
-      setWidgets((prev) => {
-        const next = prev.map((entry) => {
-          if (entry.id !== widget.id) {
-            return entry;
-          }
-          const nextLayout = resolveLightLayoutForState(entry, nextOn);
-          if (
-            entry.value === safeValue &&
-            entry.isOn === nextOn &&
-            entry.status === nextStatus &&
-            sameLayout(entry.layout, nextLayout)
-          ) {
-            return entry;
-          }
-          return {
-            ...entry,
-            value: safeValue,
-            isOn: nextOn,
-            status: nextStatus,
-            layout: nextLayout,
-          };
-        });
-        const resolved = resolveAutoWidgetLayoutChanges(prev, next);
-        const changed =
-          resolved.length !== prev.length ||
-          resolved.some((entry, index) => {
-            const previous = prev[index];
-            return (
-              !previous ||
-              previous.id !== entry.id ||
-              previous.parentSectionId !== entry.parentSectionId ||
-              !sameLayout(previous.layout, entry.layout) ||
-              previous.value !== entry.value ||
-              previous.isOn !== entry.isOn ||
-              previous.status !== entry.status
-            );
-          });
-        return changed ? resolved : prev;
-      });
-    };
-
-    if (isHaConnected && widget.entityId) {
-      setLightBrightnessPending(widget.entityId, safeValue);
-      setLightTogglePending(widget.entityId, nextOn);
-      scheduleHaLightBrightness(widget.entityId, safeValue);
-      applyLocal();
-      return;
-    }
-
-    if (widget.id === 'light.living_room_lamp') {
-      actions.setLampBrightness(safeValue);
-    }
-    applyLocal();
-  };
-
-  const setLightColorTemp = (kelvin: number, options?: LightCommandOptions) => {
-    const targetWidget = activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const capabilities = resolveLightCapabilities(liveEntity);
-    const safeKelvin = clamp(Math.round(kelvin), capabilities.minColorTempKelvin, capabilities.maxColorTempKelvin);
-    if (isHaConnected && entityId) {
-      setLightTogglePending(entityId, true);
-      void callHaService('light', 'turn_on', {
-        entity_id: entityId,
-        color_temp_kelvin: safeKelvin,
-        ...buildLightCommandOptionsPayload(options),
-      });
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
-        ...current,
-        isOn: true,
-        status: 'Opening',
-        layout: resolveLightLayoutForState(current, true),
-      }));
-      return;
-    }
-    actions.setLampColorTemp(safeKelvin);
-  };
-
-  const setLightHsColor = (hs: [number, number], options?: LightCommandOptions, widget?: Widget) => {
-    const targetWidget = widget?.kind === 'light' ? widget : activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const safeHue = clamp(Math.round(hs[0]), 0, 360);
-    const safeSat = clamp(Math.round(hs[1]), 0, 100);
-    if (isHaConnected && entityId) {
-      const capabilities = resolveLightCapabilities(haStatesForUi[entityId]);
-      const preferredColorMode = capabilities.preferredColorMode ?? 'hs';
-      setLightTogglePending(entityId, true);
-      setLightColorPending(entityId, [safeHue, safeSat]);
-      void callHaService('light', 'turn_on', {
-        entity_id: entityId,
-        ...buildLightColorServicePayload(preferredColorMode, [safeHue, safeSat]),
-        ...buildLightCommandOptionsPayload(options),
-      });
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
-        ...current,
-        isOn: true,
-        status: 'Opening',
-        layout: resolveLightLayoutForState(current, true),
-      }));
-      return;
-    }
-    actions.setLampHsColor([safeHue, safeSat]);
-  };
-
-  const setLightWhite = (value: number, options?: LightCommandOptions) => {
-    const targetWidget = activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const safeValue = clamp(Math.round(value), 0, 100);
-    if (isHaConnected && entityId) {
-      setLightBrightnessPending(entityId, safeValue);
-      setLightTogglePending(entityId, safeValue > 0);
-      if (safeValue <= 0) {
-        void callHaService('light', 'turn_off', { entity_id: entityId });
-        return;
-      }
-      void callHaService('light', 'turn_on', {
-        entity_id: entityId,
-        white: percentToHaBrightness(safeValue),
-        ...buildLightCommandOptionsPayload(options),
-      });
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
-        ...current,
-        isOn: safeValue > 0,
-        status: safeValue > 0 ? 'Opening' : 'Closed',
-        value: safeValue,
-        layout: resolveLightLayoutForState(current, safeValue > 0),
-      }));
-      return;
-    }
-    actions.setLampBrightness(safeValue);
-  };
-
-  const setLightEffect = (effect: string, options?: LightCommandOptions) => {
-    const targetWidget = activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    const safeEffect = effect.trim();
-    if (!safeEffect) {
-      return;
-    }
-    if (isHaConnected && entityId) {
-      setLightTogglePending(entityId, true);
-      void callHaService('light', 'turn_on', {
-        entity_id: entityId,
-        effect: safeEffect,
-        ...buildLightCommandOptionsPayload(options),
-      });
-      return;
-    }
-    if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
-      updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
-        ...current,
-        isOn: true,
-        status: 'Opening',
-        layout: resolveLightLayoutForState(current, true),
-      }));
-    }
-  };
-
-  const flashLight = (mode: LightFlashMode) => {
-    const targetWidget = activeWidget;
-    const entityId = targetWidget?.kind === 'light' ? targetWidget.entityId : undefined;
-    if (isHaConnected && entityId) {
-      void callHaService('light', 'turn_on', { entity_id: entityId, flash: mode });
-    }
+  const reportUnconfirmedCommand = (reason: DeviceCommandRollbackReason, message: string) => {
+    if (reason === 'superseded' || reason === 'cancelled' || reason === 'connection_lost') return;
+    addNotification('alert', message);
   };
 
   const updateLivingRoomClimateMock = (
@@ -9095,7 +7084,26 @@ export function MainBoard() {
     }
 
     if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
-      void callHaService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: normalizedMode });
+      void commandCoordinator.run({
+        key: `climate-mode:${entityId}`,
+        entityId,
+        domain: 'climate',
+        service: 'set_hvac_mode',
+        timeoutMs: CLIMATE_PENDING_TTL_MS,
+        send: () => callHaService('climate', 'set_hvac_mode', {
+          entity_id: entityId,
+          hvac_mode: normalizedMode,
+        }),
+        confirm: (entity) => normalizeLower(
+          toTrimmedString(entity?.hvacMode) ??
+            toTrimmedString(entity?.rawAttributes?.hvac_mode) ??
+            toTrimmedString(entity?.state),
+        ) === normalizedMode,
+        onRollback: (reason) => reportUnconfirmedCommand(
+          reason,
+          'Il climatizzatore non ha confermato la nuova modalità.',
+        ),
+      });
       return;
     }
 
@@ -9275,16 +7283,39 @@ export function MainBoard() {
     const { targetWidget, entityId, liveEntity, isOn } = resolveClimateTargetContext(widget);
     if (isHaConnected && entityId && !isLivingRoomClimateMock(targetWidget)) {
       const capabilities = resolveClimateCapabilities(liveEntity);
+      let service: 'turn_off' | 'turn_on' | 'set_hvac_mode';
+      let payload: Record<string, unknown> = { entity_id: entityId };
+      let expectedMode: string | undefined;
       if (isOn && capabilities.supportsTurnOff) {
-        void callHaService('climate', 'turn_off', { entity_id: entityId });
-        return;
+        service = 'turn_off';
+        expectedMode = 'off';
+      } else if (!isOn && capabilities.supportsTurnOn) {
+        service = 'turn_on';
+      } else {
+        expectedMode = isOn ? 'off' : resolvePreferredHvacMode(liveEntity);
+        service = 'set_hvac_mode';
+        payload = { ...payload, hvac_mode: expectedMode };
       }
-      if (!isOn && capabilities.supportsTurnOn) {
-        void callHaService('climate', 'turn_on', { entity_id: entityId });
-        return;
-      }
-      const nextMode = isOn ? 'off' : resolvePreferredHvacMode(liveEntity);
-      void callHaService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: nextMode });
+      void commandCoordinator.run({
+        key: `climate-power:${entityId}`,
+        entityId,
+        domain: 'climate',
+        service,
+        timeoutMs: CLIMATE_PENDING_TTL_MS,
+        send: () => callHaService('climate', service, payload),
+        confirm: (entity) => {
+          const mode = normalizeLower(
+            toTrimmedString(entity?.hvacMode) ??
+              toTrimmedString(entity?.rawAttributes?.hvac_mode) ??
+              toTrimmedString(entity?.state),
+          );
+          return expectedMode ? mode === expectedMode : mode.length > 0 && mode !== 'off';
+        },
+        onRollback: (reason) => reportUnconfirmedCommand(
+          reason,
+          'Il climatizzatore non ha confermato il nuovo stato.',
+        ),
+      });
       return;
     }
     if (isLivingRoomClimateMock(targetWidget)) {
@@ -9470,8 +7501,9 @@ export function MainBoard() {
     const liveEntity = widget.entityId ? haStatesForUi[widget.entityId] : undefined;
     const rawAttributes = liveEntity?.rawAttributes;
     const codeArmRequired = typeof rawAttributes?.code_arm_required === 'boolean' ? rawAttributes.code_arm_required : false;
-    const unlockCode = widget.alarmUnlockCode?.trim() ?? '';
-    const localExtraCode = widget.alarmLocalExtraCode?.trim() ?? '';
+    const widgetSecrets = getWidgetSecrets(widget.id);
+    const unlockCode = widgetSecrets.alarmUnlockCode?.trim() ?? '';
+    const localExtraCode = widgetSecrets.alarmLocalExtraCode?.trim() ?? '';
     const codeFormat = typeof rawAttributes?.code_format === 'string'
       ? rawAttributes.code_format.toLowerCase()
       : undefined;
@@ -9503,6 +7535,7 @@ export function MainBoard() {
       return false;
     }
     if (quickAction.requiresBiometric || quickAction.requiresCode) {
+      void loadSecurityAuthModal();
       setPendingQuickAlarmAction(quickAction);
       setQuickAlarmAuthCode('');
       setQuickAlarmSubmissionError('');
@@ -9511,7 +7544,7 @@ export function MainBoard() {
     return callProtectedAlarmAction(service, undefined, widget);
   };
 
-  const callAlarmAction = (service: AlarmServiceName, code?: string, widget?: Widget) => {
+  const callAlarmAction = async (service: AlarmServiceName, code?: string, widget?: Widget) => {
     const { targetWidget, entityId } = resolveAlarmTargetContext(widget);
     const actionCode = code?.trim();
     if (isHomeAlarmMock(targetWidget)) {
@@ -9523,10 +7556,34 @@ export function MainBoard() {
       if (actionCode) {
         payload.code = actionCode;
       }
-      setAlarmPending(entityId, service);
-      scheduleAlarmActivityRefresh(entityId);
-      void callHaService('alarm_control_panel', service, payload);
-      return true;
+      const targetState = normalizeAlarmState(resolveAlarmNextState(service));
+      return commandCoordinator.run({
+        key: `alarm:${entityId}`,
+        entityId,
+        domain: 'alarm_control_panel',
+        service,
+        timeoutMs: ALARM_PENDING_TTL_MS,
+        onOptimistic: () => setAlarmPending(entityId, service),
+        send: () => callHaService('alarm_control_panel', service, payload),
+        confirm: (entity) => {
+          const liveState = normalizeAlarmState(
+            toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel),
+          );
+          return liveState === targetState;
+        },
+        onAwaitingConfirmation: () => scheduleAlarmActivityRefresh(entityId),
+        onConfirmed: () => {
+          removePendingEntities(setAlarmPendingByEntity, [entityId]);
+          clearTimeoutForEntity(alarmPendingTimeoutRef, entityId);
+        },
+        onRollback: (reason) => {
+          removePendingEntities(setAlarmPendingByEntity, [entityId]);
+          clearTimeoutForEntity(alarmPendingTimeoutRef, entityId);
+          if (reason !== 'superseded' && reason !== 'cancelled' && reason !== 'connection_lost') {
+            addNotification('alert', 'Home Assistant non ha confermato il nuovo stato dell’allarme.');
+          }
+        },
+      });
     }
     if (targetWidget?.kind === 'alarm') {
       const nextState = resolveAlarmNextState(service);
@@ -9540,7 +7597,7 @@ export function MainBoard() {
   };
 
   const requestAuthenticatedAlarmAction = async (service: AlarmServiceName, widget: Widget, code?: string) => {
-    if (isLockAuthBusy) {
+    if (isLockAuthBusy || isQuickAlarmAuthBusy) {
       return false;
     }
 
@@ -9550,43 +7607,14 @@ export function MainBoard() {
       return false;
     }
 
-    const available = await deviceAuth.isBiometricAvailable();
-    if (!available || !deviceAuth.isEnrolled) {
-      addNotification(
-        'warning',
-        available
-          ? 'Configura una passkey da Profilo > Sicurezza per modificare questo allarme.'
-          : 'Biometria non disponibile su questo browser o dispositivo.',
-      );
-      appendSecurityAuditEvent({
-        tone: 'warning',
-        message: 'Comando allarme bloccato: passkey dispositivo richiesta non disponibile.',
-        context: targetWidget.entityId || targetWidget.title,
-      });
-      return false;
-    }
-
-    setIsLockAuthBusy(true);
-    try {
-      const verified = await deviceAuth.authenticate('Allarme');
-      if (!verified) {
-        addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
-        appendSecurityAuditEvent({
-          tone: 'warning',
-          message: 'Verifica biometrica allarme annullata o non riuscita.',
-          context: targetWidget.entityId || targetWidget.title,
-        });
-        return false;
-      }
-      appendSecurityAuditEvent({
-        tone: 'success',
-        message: 'Comando allarme autorizzato con biometria.',
-        context: targetWidget.entityId || targetWidget.title,
-      });
-      return callAlarmAction(service, code, targetWidget);
-    } finally {
-      setIsLockAuthBusy(false);
-    }
+    const quickAction = buildAlarmQuickAuthAction(service, targetWidget);
+    if (!quickAction) return false;
+    void loadSecurityAuthModal();
+    setPendingQuickAlarmAction(quickAction);
+    setPendingQuickLockAction(null);
+    setQuickAlarmAuthCode('');
+    setQuickAlarmSubmissionError('');
+    return false;
   };
 
   const authorizeAlarmDeviceAuth = async (label: string) => {
@@ -9615,7 +7643,7 @@ export function MainBoard() {
   ) => {
     const targetWidget = widget?.kind === 'alarm' ? widget : activeWidget?.kind === 'alarm' ? activeWidget : undefined;
     if (service === 'alarm_disarm' && targetWidget?.alarmRequireAuthToDisarm) {
-      if (options?.deviceAuthVerified) {
+      if (options?.deviceAuthVerified || options?.manualCodeVerified) {
         return callAlarmAction(service, code, widget);
       }
       return requestAuthenticatedAlarmAction(service, targetWidget, code);
@@ -9624,10 +7652,11 @@ export function MainBoard() {
   };
 
   const closeQuickAlarmAuth = () => {
-    if (isQuickAlarmAuthBusy) {
+    if (isQuickAlarmAuthBusy || isLockAuthBusy) {
       return;
     }
     setPendingQuickAlarmAction(null);
+    setPendingQuickLockAction(null);
     setQuickAlarmAuthCode('');
     setQuickAlarmSubmissionError('');
   };
@@ -9652,6 +7681,7 @@ export function MainBoard() {
     const manualCodeSubmission = resolveAlarmManualCodeSubmission({
       inputCode: quickAlarmAuthCode,
       localExtraCode: quickAction.localExtraCode,
+      storedHaCode: quickAction.unlockCode,
       requiresCode: needsManualCode,
     });
     if (needsManualCode) {
@@ -9695,10 +7725,18 @@ export function MainBoard() {
           quickAction.service,
           manualCode,
           quickAction.widget,
+          { manualCodeVerified: true },
         );
       }
       if (didRun === false) {
-        return;
+        setQuickAlarmSubmissionError('Comando non autorizzato o non completato.');
+        setQuickAlarmAuthAttemptState(recordAuthFailure(quickAlarmAuthAttemptState));
+        appendSecurityAuditEvent({
+          tone: 'warning',
+          message: 'Comando allarme non autorizzato o non completato.',
+          context: quickAction.widget.entityId || quickAction.widget.title,
+        });
+        return false;
       }
       setQuickAlarmAuthAttemptState(recordAuthSuccess());
       if (needsManualCode) {
@@ -9782,20 +7820,18 @@ export function MainBoard() {
         toTrimmedString(liveEntity?.stateLabel) ??
         targetWidget?.status,
     );
-    const defaultCode = targetWidget?.lockCode?.trim() || undefined;
     return {
       targetWidget,
       entityId,
       liveEntity,
       rawAttributes,
       stateValue,
-      defaultCode,
     };
   };
 
-  const callLockAction = (service: 'lock' | 'unlock' | 'open', code?: string, widget?: Widget) => {
-    const { targetWidget, entityId, defaultCode } = resolveLockTargetContext(widget);
-    const actionCode = code?.trim() || defaultCode;
+  const callLockAction = async (service: 'lock' | 'unlock' | 'open', code?: string, widget?: Widget) => {
+    const { targetWidget, entityId } = resolveLockTargetContext(widget);
+    const actionCode = code?.trim();
     const nextState = service === 'lock' ? 'locked' : service === 'open' ? 'open' : 'unlocked';
 
     if (isHaConnected && entityId) {
@@ -9803,17 +7839,54 @@ export function MainBoard() {
       if (actionCode) {
         payload.code = actionCode;
       }
-      setLockPending(entityId, service);
-      scheduleLockActivityRefresh(entityId);
-      if (targetWidget) {
-        updateWidget(targetWidget.id, (current) => ({
-          ...current,
-          status: nextState,
-          isOn: isLockLockedState(nextState),
-        }));
-      }
-      void callHaService('lock', service, payload);
-      return;
+      return commandCoordinator.run({
+        key: `lock:${entityId}`,
+        entityId,
+        domain: 'lock',
+        service,
+        timeoutMs: LOCK_PENDING_TTL_MS,
+        onOptimistic: () => {
+          setLockPending(entityId, service);
+          if (targetWidget) {
+            updateWidget(targetWidget.id, (current) => ({
+              ...current,
+              status: nextState,
+              isOn: isLockLockedState(nextState),
+            }));
+          }
+        },
+        send: () => callHaService('lock', service, payload),
+        confirm: (entity) => {
+          const liveState = normalizeLockState(
+            toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel),
+          );
+          if (service === 'lock') return liveState === 'locked';
+          if (service === 'open') return liveState === 'open' || liveState === 'unlocked';
+          return liveState === 'unlocked' || liveState === 'open';
+        },
+        onAwaitingConfirmation: () => scheduleLockActivityRefresh(entityId),
+        onConfirmed: () => {
+          removePendingEntities(setLockPendingByEntity, [entityId]);
+          clearTimeoutForEntity(lockPendingTimeoutRef, entityId);
+        },
+        onRollback: (reason, entity) => {
+          removePendingEntities(setLockPendingByEntity, [entityId]);
+          clearTimeoutForEntity(lockPendingTimeoutRef, entityId);
+          const confirmedState = normalizeLockState(
+            toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel),
+          );
+          if (targetWidget && confirmedState !== 'unknown') {
+            updateWidget(targetWidget.id, (current) => ({
+              ...current,
+              status: confirmedState,
+              isOn: isLockLockedState(confirmedState),
+            }));
+          }
+          if (reason !== 'superseded' && reason !== 'cancelled' && reason !== 'connection_lost') {
+            addNotification('alert', 'Home Assistant non ha confermato il comando della serratura.');
+          }
+        },
+      });
     }
 
     if (!targetWidget) {
@@ -9825,21 +7898,26 @@ export function MainBoard() {
       status: nextState,
       isOn: isLockLockedState(nextState),
     }));
+    return true;
   };
 
   const lockDoor = (code?: string, widget?: Widget) => {
-    callLockAction('lock', code, widget);
+    void callLockAction('lock', code, widget);
   };
 
   const unlockDoor = (code?: string, widget?: Widget) => {
-    callLockAction('unlock', code, widget);
+    void callLockAction('unlock', code, widget);
   };
 
   const openDoor = (code?: string, widget?: Widget) => {
-    callLockAction('open', code, widget);
+    void callLockAction('open', code, widget);
   };
 
-  const requestAuthenticatedLockUnlock = async (widget: Widget, code?: string) => {
+  const requestAuthenticatedLockAction = async (
+    widget: Widget,
+    action: 'unlock' | 'open',
+    code?: string,
+  ) => {
     if (isLockAuthBusy) {
       return false;
     }
@@ -9850,40 +7928,60 @@ export function MainBoard() {
       return false;
     }
 
+    const configuredCode = code?.trim() || getWidgetSecrets(targetWidget.id).lockCode?.trim() || '';
+    const showCodeFallback = () => {
+      if (!configuredCode) {
+        addNotification('warning', 'Conferma dispositivo non disponibile e nessun codice serratura configurato.');
+        return false;
+      }
+      void loadSecurityAuthModal();
+      setPendingQuickLockAction({
+        widget: targetWidget,
+        action,
+        unlockCode: configuredCode,
+        numericCodeMode: /^\d+$/.test(configuredCode),
+      });
+      setPendingQuickAlarmAction(null);
+      setQuickAlarmAuthCode('');
+      setQuickAlarmSubmissionError('');
+      return false;
+    };
+
+    if (!targetWidget.lockRequireAuthToUnlock) {
+      return showCodeFallback();
+    }
+
     const available = await deviceAuth.isBiometricAvailable();
     if (!available || !deviceAuth.isEnrolled) {
-      addNotification(
-        'warning',
-        available
-          ? 'Configura una passkey da Profilo > Sicurezza per usare questa serratura.'
-          : 'Biometria non disponibile su questo browser o dispositivo.',
-      );
       appendSecurityAuditEvent({
         tone: 'warning',
-        message: 'Sblocco serratura bloccato: passkey dispositivo richiesta non disponibile.',
+        message: 'Conferma dispositivo serratura non disponibile: richiesto il codice di fallback.',
         context: targetWidget.entityId || targetWidget.title,
       });
-      return false;
+      return showCodeFallback();
     }
 
     setIsLockAuthBusy(true);
     try {
       const verified = await deviceAuth.authenticate('Serratura');
       if (!verified) {
-        addNotification('warning', 'Verifica biometrica annullata o non riuscita.');
         appendSecurityAuditEvent({
           tone: 'warning',
-          message: 'Verifica biometrica serratura annullata o non riuscita.',
+          message: 'Conferma dispositivo serratura annullata o non riuscita: richiesto il codice di fallback.',
           context: targetWidget.entityId || targetWidget.title,
         });
-        return false;
+        return showCodeFallback();
       }
       appendSecurityAuditEvent({
         tone: 'success',
         message: 'Sblocco serratura autorizzato con biometria.',
         context: targetWidget.entityId || targetWidget.title,
       });
-      unlockDoor(code, targetWidget);
+      if (action === 'open') {
+        openDoor(configuredCode || undefined, targetWidget);
+      } else {
+        unlockDoor(configuredCode || undefined, targetWidget);
+      }
       return true;
     } finally {
       setIsLockAuthBusy(false);
@@ -9905,8 +8003,9 @@ export function MainBoard() {
     }
     if (isLocked) {
       const targetWidget = widget?.kind === 'lock' ? widget : activeWidget?.kind === 'lock' ? activeWidget : undefined;
-      if (targetWidget?.lockRequireAuthToUnlock) {
-        void requestAuthenticatedLockUnlock(targetWidget);
+      const configuredCode = targetWidget ? getWidgetSecrets(targetWidget.id).lockCode?.trim() : '';
+      if (targetWidget && (targetWidget.lockRequireAuthToUnlock || configuredCode)) {
+        void requestAuthenticatedLockAction(targetWidget, 'unlock');
         return false;
       }
       unlockDoor(undefined, widget);
@@ -9918,11 +8017,23 @@ export function MainBoard() {
 
   const unlockDoorFromContext = (code?: string) => {
     const targetWidget = activeWidget?.kind === 'lock' ? activeWidget : undefined;
-    if (targetWidget?.lockRequireAuthToUnlock) {
-      void requestAuthenticatedLockUnlock(targetWidget, code);
+    const configuredCode = code?.trim() || (targetWidget ? getWidgetSecrets(targetWidget.id).lockCode?.trim() : '');
+    if (targetWidget && (targetWidget.lockRequireAuthToUnlock || configuredCode)) {
+      void requestAuthenticatedLockAction(targetWidget, 'unlock', code);
       return false;
     }
     unlockDoor(code, targetWidget);
+    return true;
+  };
+
+  const openDoorFromContext = (code?: string) => {
+    const targetWidget = activeWidget?.kind === 'lock' ? activeWidget : undefined;
+    const configuredCode = code?.trim() || (targetWidget ? getWidgetSecrets(targetWidget.id).lockCode?.trim() : '');
+    if (targetWidget && (targetWidget.lockRequireAuthToUnlock || configuredCode)) {
+      void requestAuthenticatedLockAction(targetWidget, 'open', code);
+      return false;
+    }
+    openDoor(code, targetWidget);
     return true;
   };
 
@@ -10012,11 +8123,18 @@ export function MainBoard() {
   const openCover = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        state: 'opening',
-        position: 100,
+      runCoverCommand({
+        entityId,
+        key: 'cover-motion',
+        service: 'open_cover',
+        pending: { state: 'opening', position: 100 },
+        fields: ['state', 'position'],
+        confirm: (entity) => {
+          const state = normalizeCoverState(toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel));
+          const position = toFiniteNumber(resolveCoverPositionAttribute(entity?.rawAttributes));
+          return state === 'open' || almostEqual(position, 100, 1);
+        },
       });
-      void callHaService('cover', 'open_cover', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10034,11 +8152,18 @@ export function MainBoard() {
   const closeCover = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        state: 'closing',
-        position: 0,
+      runCoverCommand({
+        entityId,
+        key: 'cover-motion',
+        service: 'close_cover',
+        pending: { state: 'closing', position: 0 },
+        fields: ['state', 'position'],
+        confirm: (entity) => {
+          const state = normalizeCoverState(toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel));
+          const position = toFiniteNumber(resolveCoverPositionAttribute(entity?.rawAttributes));
+          return state === 'closed' || almostEqual(position, 0, 1);
+        },
       });
-      void callHaService('cover', 'close_cover', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10056,11 +8181,23 @@ export function MainBoard() {
   const stopCover = (widget?: Widget) => {
     const { targetWidget, entityId, position } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        state: 'stopped',
-        position,
+      const previousUpdated = toTrimmedString(haStates[entityId]?.rawAttributes?.__last_updated);
+      runCoverCommand({
+        entityId,
+        key: 'cover-motion',
+        service: 'stop_cover',
+        pending: { state: 'stopped', position },
+        fields: ['state', 'position'],
+        confirm: (entity) => {
+          const state = normalizeCoverState(toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel));
+          const updated = toTrimmedString(entity?.rawAttributes?.__last_updated);
+          return (
+            state !== 'opening' &&
+            state !== 'closing' &&
+            (!previousUpdated || !updated || updated !== previousUpdated)
+          );
+        },
       });
-      void callHaService('cover', 'stop_cover', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10085,13 +8222,18 @@ export function MainBoard() {
           : safePosition < currentPosition
             ? 'closing'
             : 'stopped';
-      upsertCoverPending(entityId, {
-        state: pendingState,
-        position: safePosition,
-      });
-      void callHaService('cover', 'set_cover_position', {
-        entity_id: entityId,
-        position: safePosition,
+      runCoverCommand({
+        entityId,
+        key: 'cover-motion',
+        service: 'set_cover_position',
+        payload: { position: safePosition },
+        pending: { state: pendingState, position: safePosition },
+        fields: ['state', 'position'],
+        confirm: (entity) => almostEqual(
+          toFiniteNumber(resolveCoverPositionAttribute(entity?.rawAttributes)),
+          safePosition,
+          1,
+        ),
       });
       return;
     }
@@ -10113,10 +8255,14 @@ export function MainBoard() {
   const openCoverTilt = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        tiltPosition: 100,
+      runCoverCommand({
+        entityId,
+        key: 'cover-tilt',
+        service: 'open_cover_tilt',
+        pending: { tiltPosition: 100 },
+        fields: ['tiltPosition'],
+        confirm: (entity) => almostEqual(toFiniteNumber(resolveCoverTiltAttribute(entity?.rawAttributes)), 100, 1),
       });
-      void callHaService('cover', 'open_cover_tilt', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10132,10 +8278,14 @@ export function MainBoard() {
   const closeCoverTilt = (widget?: Widget) => {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        tiltPosition: 0,
+      runCoverCommand({
+        entityId,
+        key: 'cover-tilt',
+        service: 'close_cover_tilt',
+        pending: { tiltPosition: 0 },
+        fields: ['tiltPosition'],
+        confirm: (entity) => almostEqual(toFiniteNumber(resolveCoverTiltAttribute(entity?.rawAttributes)), 0, 1),
       });
-      void callHaService('cover', 'close_cover_tilt', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10151,10 +8301,18 @@ export function MainBoard() {
   const stopCoverTilt = (widget?: Widget) => {
     const { targetWidget, entityId, tiltPosition } = resolveCoverTargetContext(widget);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        tiltPosition,
+      const previousUpdated = toTrimmedString(haStates[entityId]?.rawAttributes?.__last_updated);
+      runCoverCommand({
+        entityId,
+        key: 'cover-tilt',
+        service: 'stop_cover_tilt',
+        pending: { tiltPosition },
+        fields: ['tiltPosition'],
+        confirm: (entity) => {
+          const updated = toTrimmedString(entity?.rawAttributes?.__last_updated);
+          return Boolean(updated && updated !== previousUpdated);
+        },
       });
-      void callHaService('cover', 'stop_cover_tilt', { entity_id: entityId });
       return;
     }
     if (!targetWidget) {
@@ -10171,12 +8329,18 @@ export function MainBoard() {
     const { targetWidget, entityId } = resolveCoverTargetContext(widget);
     const safePosition = clampPercent(position);
     if (canCallCoverService(entityId)) {
-      upsertCoverPending(entityId, {
-        tiltPosition: safePosition,
-      });
-      void callHaService('cover', 'set_cover_tilt_position', {
-        entity_id: entityId,
-        tilt_position: safePosition,
+      runCoverCommand({
+        entityId,
+        key: 'cover-tilt',
+        service: 'set_cover_tilt_position',
+        payload: { tilt_position: safePosition },
+        pending: { tiltPosition: safePosition },
+        fields: ['tiltPosition'],
+        confirm: (entity) => almostEqual(
+          toFiniteNumber(resolveCoverTiltAttribute(entity?.rawAttributes)),
+          safePosition,
+          1,
+        ),
       });
       return;
     }
@@ -10190,599 +8354,131 @@ export function MainBoard() {
     patchLocalCoverEntity(entityId, { tiltPosition: safePosition });
   };
 
-  const resolveVacuumTargetContext = (widget?: Widget) => {
-    const targetWidget = widget?.kind === 'vacuum' ? widget : activeWidget?.kind === 'vacuum' ? activeWidget : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const stateValue = normalizeVacuumState(
-      toTrimmedString(liveEntity?.stateLabel) ??
-        toTrimmedString(liveEntity?.state) ??
-        targetWidget?.status,
-    );
-    return {
-      targetWidget,
+  const confirmQuickLockAuth = () => {
+    const quickAction = pendingQuickLockAction;
+    if (!quickAction || isLockAuthBusy) {
+      return false;
+    }
+    const rateLimitStatus = getAuthRateLimitStatus(quickLockAuthAttemptState);
+    if (rateLimitStatus.isLocked) {
+      return false;
+    }
+    const submittedCode = quickAlarmAuthCode.trim();
+    if (!submittedCode) {
+      setQuickAlarmSubmissionError('Inserisci il codice per confermare.');
+      return false;
+    }
+    if (submittedCode !== quickAction.unlockCode) {
+      setQuickAlarmSubmissionError('Comando non autorizzato o non completato.');
+      setQuickLockAuthAttemptState(recordAuthFailure(quickLockAuthAttemptState));
+      appendSecurityAuditEvent({
+        tone: 'warning',
+        message: 'Autorizzazione locale serratura non completata.',
+        context: quickAction.widget.entityId || quickAction.widget.title,
+      });
+      return false;
+    }
+    setQuickLockAuthAttemptState(recordAuthSuccess());
+    if (quickAction.action === 'open') {
+      openDoor(quickAction.unlockCode, quickAction.widget);
+    } else {
+      unlockDoor(quickAction.unlockCode, quickAction.widget);
+    }
+    setPendingQuickLockAction(null);
+    setQuickAlarmAuthCode('');
+    setQuickAlarmSubmissionError('');
+    return true;
+  };
+
+  const runHaCoordinatedCommand = ({
+    key,
+    entityId,
+    domain,
+    service,
+    payload = {},
+    timeoutMs,
+    confirmation = 'entity_state',
+    confirm,
+    errorMessage,
+  }: {
+    key: string;
+    entityId: string;
+    domain: string;
+    service: string;
+    payload?: Record<string, unknown>;
+    timeoutMs: number;
+    confirmation?: 'entity_state' | 'service_response';
+    confirm?: (entity: MockEntityState | undefined) => boolean;
+    errorMessage: string;
+  }) => {
+    return commandCoordinator.run({
+      key: `${key}:${entityId}`,
       entityId,
-      liveEntity,
-      stateValue,
-    };
-  };
-
-  const cancelVacuumReturnTimer = (widgetId: string) => {
-    const timers = vacuumReturnToBaseTimeoutRef.current;
-    const timeoutId = timers[widgetId];
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-      delete timers[widgetId];
-    }
-  };
-
-  const scheduleVacuumDocking = (widgetId: string) => {
-    cancelVacuumReturnTimer(widgetId);
-    vacuumReturnToBaseTimeoutRef.current[widgetId] = window.setTimeout(() => {
-      setWidgets((prev) =>
-        prev.map((entry) => {
-          if (entry.id !== widgetId || entry.kind !== 'vacuum') {
-            return entry;
-          }
-          return {
-            ...entry,
-            status: 'docked',
-            isOn: false,
-          };
-        }),
-      );
-      delete vacuumReturnToBaseTimeoutRef.current[widgetId];
-    }, 3800);
-  };
-
-  const callVacuumService = (
-    service: 'start' | 'pause' | 'stop' | 'return_to_base' | 'locate' | 'clean_spot',
-    widget?: Widget,
-  ) => {
-    const { targetWidget, entityId } = resolveVacuumTargetContext(widget);
-    if (isHaConnected && entityId) {
-      void callHaService('vacuum', service, { entity_id: entityId });
-      return;
-    }
-
-    if (!targetWidget) {
-      return;
-    }
-
-    const fallbackStatus =
-      service === 'start'
-        ? 'cleaning'
-        : service === 'pause'
-          ? 'paused'
-          : service === 'return_to_base'
-            ? 'returning'
-            : service === 'clean_spot'
-              ? 'cleaning'
-              : service === 'locate'
-                ? targetWidget.status
-                : 'idle';
-    cancelVacuumReturnTimer(targetWidget.id);
-    updateWidget(targetWidget.id, (current) => {
-      const normalizedFallback = normalizeVacuumState(fallbackStatus);
-      const baseArea =
-        typeof current.vacuumCleanedArea === 'number' && Number.isFinite(current.vacuumCleanedArea)
-          ? current.vacuumCleanedArea
-          : 45;
-      const baseMinutes =
-        typeof current.vacuumCleaningMinutes === 'number' && Number.isFinite(current.vacuumCleaningMinutes)
-          ? current.vacuumCleaningMinutes
-          : 32;
-
-      const nextArea =
-        service === 'clean_spot'
-          ? Math.round((baseArea + 1.2) * 10) / 10
-          : Math.round(baseArea * 10) / 10;
-      const nextMinutes = service === 'clean_spot' ? Math.round(baseMinutes + 3) : Math.round(baseMinutes);
-
-      return {
-        ...current,
-        status: fallbackStatus,
-        isOn: ['cleaning', 'paused', 'returning'].includes(normalizedFallback),
-        vacuumCleanedArea: nextArea,
-        vacuumCleaningMinutes: nextMinutes,
-      };
-    });
-    if (service === 'return_to_base') {
-      scheduleVacuumDocking(targetWidget.id);
-    }
-  };
-
-  const startVacuum = (widget?: Widget) => {
-    callVacuumService('start', widget);
-  };
-
-  const pauseVacuum = (widget?: Widget) => {
-    callVacuumService('pause', widget);
-  };
-
-  const stopVacuum = (widget?: Widget) => {
-    callVacuumService('stop', widget);
-  };
-
-  const returnVacuumToBase = (widget?: Widget) => {
-    callVacuumService('return_to_base', widget);
-  };
-
-  const locateVacuum = (widget?: Widget) => {
-    callVacuumService('locate', widget);
-  };
-
-  const cleanVacuumSpot = (widget?: Widget) => {
-    callVacuumService('clean_spot', widget);
-  };
-
-  const cleanVacuumArea = (areaIds: string[], widget?: Widget) => {
-    const normalizedAreaIds = Array.from(
-      new Set(
-        areaIds
-          .map((areaId) => areaId.trim())
-          .filter((areaId) => areaId.length > 0),
-      ),
-    );
-    if (!normalizedAreaIds.length) {
-      return;
-    }
-
-    const { targetWidget, entityId } = resolveVacuumTargetContext(widget);
-    if (isHaConnected && entityId) {
-      void callHaService('vacuum', 'clean_area', {
-        entity_id: entityId,
-        cleaning_area_id: normalizedAreaIds,
-      });
-      return;
-    }
-    if (!targetWidget) {
-      return;
-    }
-    cancelVacuumReturnTimer(targetWidget.id);
-    updateWidget(targetWidget.id, (current) => {
-      const baseArea =
-        typeof current.vacuumCleanedArea === 'number' && Number.isFinite(current.vacuumCleanedArea)
-          ? current.vacuumCleanedArea
-          : 45;
-      const baseMinutes =
-        typeof current.vacuumCleaningMinutes === 'number' && Number.isFinite(current.vacuumCleaningMinutes)
-          ? current.vacuumCleaningMinutes
-          : 32;
-      return {
-        ...current,
-        status: 'cleaning',
-        isOn: true,
-        vacuumCleanedArea: Math.round((baseArea + Math.max(1, normalizedAreaIds.length) * 1.5) * 10) / 10,
-        vacuumCleaningMinutes: Math.round(baseMinutes + Math.max(1, normalizedAreaIds.length) * 4),
-      };
+      domain,
+      service,
+      timeoutMs,
+      confirmation,
+      send: () => callHaService(domain, service, { entity_id: entityId, ...payload }),
+      confirm,
+      onRollback: (reason) => reportUnconfirmedCommand(reason, errorMessage),
     });
   };
 
-  const setVacuumFanSpeed = (fanSpeed: string, widget?: Widget) => {
-    const trimmed = fanSpeed.trim();
-    if (!trimmed) {
-      return;
-    }
-    const { targetWidget, entityId } = resolveVacuumTargetContext(widget);
-    if (isHaConnected && entityId) {
-      void callHaService('vacuum', 'set_fan_speed', {
-        entity_id: entityId,
-        fan_speed: trimmed,
-      });
-      return;
-    }
-    if (!targetWidget) {
-      return;
-    }
-    updateWidget(targetWidget.id, (current) => ({
-      ...current,
-      status: current.status,
-      vacuumFanSpeed: trimmed,
-    }));
-  };
+  const {
+    startVacuum,
+    pauseVacuum,
+    stopVacuum,
+    returnVacuumToBase,
+    locateVacuum,
+    cleanVacuumSpot,
+    cleanVacuumArea,
+    setVacuumFanSpeed,
+    sendVacuumCommand,
+    toggleVacuumStartPause,
+    controlVacuumRelatedEntity,
+  } = useVacuumCommands({
+    activeWidget,
+    isHaConnected,
+    haStates,
+    haStatesForUi,
+    vacuumStateMocks,
+    setVacuumStateMocks,
+    setWidgets,
+    updateWidget,
+    commandCoordinator,
+    callHaService,
+    runHaCoordinatedCommand,
+    reportUnconfirmedCommand,
+    vacuumReturnToBaseTimeoutRef,
+  });
 
-  const sendVacuumCommand = (command: string, params?: unknown, widget?: Widget) => {
-    const trimmedCommand = command.trim();
-    if (!trimmedCommand) {
-      return;
-    }
-    const { entityId, targetWidget } = resolveVacuumTargetContext(widget);
-    if (isHaConnected && entityId) {
-      const payload: Record<string, unknown> = {
-        entity_id: entityId,
-        command: trimmedCommand,
-      };
-      if (params !== undefined) {
-        payload.params = params as Record<string, unknown> | unknown[];
-      }
-      void callHaService('vacuum', 'send_command', payload);
-      return;
-    }
-    if (!targetWidget) {
-      return;
-    }
-    const normalized = trimmedCommand.toLowerCase();
-    updateWidget(targetWidget.id, (current) => ({
-      ...current,
-      status:
-        normalized.includes('return')
-          ? 'returning'
-          : normalized.includes('pause')
-            ? 'paused'
-            : normalized.includes('start') || normalized.includes('clean')
-              ? 'cleaning'
-              : current.status,
-      isOn:
-        normalized.includes('return') ||
-        normalized.includes('pause') ||
-        normalized.includes('start') ||
-        normalized.includes('clean')
-          ? true
-          : current.isOn,
-    }));
-    if (normalized.includes('return')) {
-      scheduleVacuumDocking(targetWidget.id);
-    }
-  };
-
-  const toggleVacuumStartPause = (widget?: Widget) => {
-    const { stateValue } = resolveVacuumTargetContext(widget);
-    if (stateValue === 'cleaning') {
-      pauseVacuum(widget);
-      return;
-    }
-    startVacuum(widget);
-  };
-
-  const toggleMediaPlayback = (widget?: Widget) => {
-    const targetWidget = widget ?? activeWidget;
-    const entityId = targetWidget?.kind === 'media' ? targetWidget.entityId : undefined;
-    if (isHaConnected && entityId) {
-      const liveEntity = haStatesForUi[entityId];
-      const mediaState = resolveMediaState(liveEntity?.state ?? liveEntity?.stateLabel ?? targetWidget?.status);
-      if (mediaState === 'off' || mediaState === 'standby') {
-        void callHaService('media_player', 'turn_on', { entity_id: entityId });
-        return;
-      }
-      void callHaService('media_player', 'media_play_pause', { entity_id: entityId });
-      return;
-    }
-    if (targetWidget?.kind === 'media') {
-      updateWidget(targetWidget.id, (current) => {
-        const nextState = resolveMediaState(current.status);
-        const nextPlaying = nextState !== 'playing';
-        const nextStatus = nextPlaying ? 'playing' : 'paused';
-        const nextLayout = resolveMediaLayout(current);
-        return {
-          ...current,
-          isOn: nextPlaying,
-          status: nextStatus,
-          layout: nextLayout,
-        };
-      });
-      return;
-    }
-    actions.toggleSpeakerPlayback();
-  };
-
-  const toggleMediaPower = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    if (isHaConnected && entityId) {
-      const mediaState = resolveMediaState(liveEntity?.state ?? liveEntity?.stateLabel ?? targetWidget?.status);
-      const shouldTurnOn = ['idle', 'unavailable', 'unknown', 'off', 'standby'].includes(mediaState);
-      void callHaService('media_player', shouldTurnOn ? 'turn_on' : 'turn_off', { entity_id: entityId });
-      return;
-    }
-    actions.toggleSpeakerPower();
-  };
-
-  const previousMediaTrack = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'media_previous_track', { entity_id: entityId });
-      return;
-    }
-    actions.previousSpeakerTrack();
-  };
-
-  const nextMediaTrack = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'media_next_track', { entity_id: entityId });
-      return;
-    }
-    actions.nextSpeakerTrack();
-  };
-
-  const stopMediaPlayback = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'media_stop', { entity_id: entityId });
-      return;
-    }
-    if (targetWidget?.kind === 'media') {
-      updateWidget(targetWidget.id, (current) => ({
-        ...current,
-        isOn: false,
-        status: 'idle',
-        value: 0,
-      }));
-    }
-    if (state.speaker.isPlaying) {
-      actions.toggleSpeakerPlayback();
-    }
-  };
-
-  const clearMediaPlaylist = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'clear_playlist', { entity_id: entityId });
-    }
-  };
-
-  const seekMediaPosition = (nextPosition: number, widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const durationSeconds =
-      typeof liveEntity?.mediaDuration === 'number'
-        ? Math.max(0, Math.round(liveEntity.mediaDuration))
-        : contextSpeaker.durationSeconds ?? 0;
-    if (durationSeconds <= 0) {
-      if (!isHaConnected) {
-        actions.setSpeakerProgress(0);
-      }
-      return;
-    }
-    const safePosition = clamp(Math.round(nextPosition), 0, durationSeconds);
-
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'media_seek', {
-        entity_id: entityId,
-        seek_position: safePosition,
-      });
-      return;
-    }
-
-    const progress = Math.round((safePosition / durationSeconds) * 100);
-    if (targetWidget?.kind === 'media') {
-      updateWidget(targetWidget.id, (current) => ({
-        ...current,
-        value: progress,
-      }));
-    }
-    actions.setSpeakerProgress(progress);
-  };
-
-  const setMediaVolume = (nextVolume: number) => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
-    const entityId = targetWidget?.entityId;
-    const safeVolume = clamp(Math.round(nextVolume), 0, 100);
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'volume_set', {
-        entity_id: entityId,
-        volume_level: safeVolume / 100,
-      });
-      return;
-    }
-    actions.setSpeakerVolume(safeVolume);
-  };
-
-  const toggleMediaMute = () => {
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const currentMuted =
-      typeof liveEntity?.mediaMuted === 'boolean' ? liveEntity.mediaMuted : Boolean(contextSpeaker.muted);
-    const nextMuted = !currentMuted;
-    if (isHaConnected && entityId) {
-      // Optimistic fallback when the entity does not expose is_volume_muted.
-      if (typeof liveEntity?.mediaMuted !== 'boolean') {
-        actions.toggleSpeakerMute();
-      }
-      void callHaService('media_player', 'volume_mute', {
-        entity_id: entityId,
-        is_volume_muted: nextMuted,
-      });
-      return;
-    }
-    actions.toggleSpeakerMute();
-  };
-
-  const toggleMediaShuffle = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const currentShuffleRaw = toBoolean(liveEntity?.rawAttributes?.shuffle);
-    const currentShuffle =
-      typeof currentShuffleRaw === 'boolean'
-        ? currentShuffleRaw
-        : Boolean(contextSpeaker.shuffleEnabled);
-    const nextShuffle = !currentShuffle;
-
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'shuffle_set', {
-        entity_id: entityId,
-        shuffle: nextShuffle,
-      });
-      return;
-    }
-
-    actions.toggleSpeakerShuffle();
-  };
-
-  const cycleMediaRepeatMode = (widget?: Widget) => {
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    const liveEntity = entityId && isHaConnected ? haStatesForUi[entityId] : undefined;
-    const currentRepeatMode = resolveMediaRepeatMode(
-      liveEntity?.rawAttributes?.repeat ?? contextSpeaker.repeatMode ?? 'off',
-    );
-    const nextRepeatMode: MediaRepeatMode =
-      currentRepeatMode === 'off'
-        ? 'all'
-        : currentRepeatMode === 'all'
-          ? 'one'
-          : 'off';
-
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'repeat_set', {
-        entity_id: entityId,
-        repeat: nextRepeatMode,
-      });
-      return;
-    }
-
-    actions.cycleSpeakerRepeatMode();
-  };
-
-  const selectMediaOutputDevice = (deviceId: string, widget?: Widget) => {
-    const selectedSource = deviceId.trim();
-    if (!selectedSource) {
-      return;
-    }
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'select_source', {
-        entity_id: entityId,
-        source: selectedSource,
-      });
-      return;
-    }
-    actions.setSpeakerOutputDevice(selectedSource);
-  };
-
-  const selectMediaSoundMode = (soundMode: string, widget?: Widget) => {
-    const selectedSoundMode = soundMode.trim();
-    if (!selectedSoundMode) {
-      return;
-    }
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      void callHaService('media_player', 'select_sound_mode', {
-        entity_id: entityId,
-        sound_mode: selectedSoundMode,
-      });
-    }
-  };
-
-  const playMedia = (request: MediaPlayRequest, widget?: Widget) => {
-    const mediaContentId = request.mediaContentId.trim();
-    const mediaContentType = request.mediaContentType.trim();
-    if (!mediaContentId || !mediaContentType) {
-      return;
-    }
-    const targetWidget =
-      widget?.kind === 'media'
-        ? widget
-        : activeWidget?.kind === 'media'
-          ? activeWidget
-          : undefined;
-    const entityId = targetWidget?.entityId;
-    if (isHaConnected && entityId) {
-      const serviceData: Record<string, unknown> = {
-        entity_id: entityId,
-        media_content_id: mediaContentId,
-        media_content_type: mediaContentType,
-      };
-      if (request.enqueue) {
-        serviceData.enqueue = request.enqueue;
-      }
-      if (request.announce === true) {
-        serviceData.announce = true;
-      }
-      void callHaService('media_player', 'play_media', serviceData);
-      return;
-    }
-    if (targetWidget?.kind === 'media') {
-      updateWidget(targetWidget.id, (current) => ({
-        ...current,
-        isOn: true,
-        status: 'playing',
-        value: typeof current.value === 'number' ? current.value : 0,
-      }));
-    }
-    if (!state.speaker.isPlaying) {
-      actions.toggleSpeakerPlayback();
-    }
-  };
-
-  const toggleMediaGroupMember = (memberEntityId: string, shouldJoin: boolean) => {
-    const normalizedMemberId = memberEntityId.trim();
-    if (!normalizedMemberId) {
-      return;
-    }
-    const targetWidget = activeWidget?.kind === 'media' ? activeWidget : undefined;
-    const leaderEntityId = targetWidget?.entityId;
-    if (isHaConnected && leaderEntityId) {
-      if (shouldJoin) {
-        void callHaService('media_player', 'join', {
-          entity_id: leaderEntityId,
-          group_members: [normalizedMemberId],
-        });
-        return;
-      }
-      void callHaService('media_player', 'unjoin', {
-        entity_id: normalizedMemberId,
-      });
-      return;
-    }
-    actions.toggleSpeakerGroupMember(normalizedMemberId, shouldJoin);
-  };
+  const {
+    toggleMediaPlayback,
+    toggleMediaPower,
+    previousMediaTrack,
+    nextMediaTrack,
+    stopMediaPlayback,
+    clearMediaPlaylist,
+    seekMediaPosition,
+    setMediaVolume,
+    toggleMediaMute,
+    toggleMediaShuffle,
+    cycleMediaRepeatMode,
+    selectMediaOutputDevice,
+    selectMediaSoundMode,
+    playMedia,
+    toggleMediaGroupMember,
+  } = useMediaCommands({
+    activeWidget,
+    isHaConnected,
+    haStatesForUi,
+    updateWidget,
+    resolveMediaLayout,
+    runHaCoordinatedCommand,
+    contextSpeaker,
+    isSpeakerPlaying: state.speaker.isPlaying,
+    speakerActions: actions,
+  });
 
   const toggleMicroWidgetEntity = (entityId: string, nextActive: boolean) => {
     const normalizedEntityId = entityId.trim();
@@ -10798,9 +8494,20 @@ export function MainBoard() {
       if (!nextActive) {
         return;
       }
-      void callHaService(domain, 'press', {
-        entity_id: normalizedEntityId,
+      runHaCoordinatedCommand({
+        key: 'micro-press',
+        entityId: normalizedEntityId,
+        domain,
+        service: 'press',
+        timeoutMs: MEDIA_COMMAND_TTL_MS,
+        confirmation: 'service_response',
+        errorMessage: 'Il comando rapido non è stato accettato.',
       });
+      return;
+    }
+
+    if (domain === 'lock' && !nextActive) {
+      addNotification('warning', 'Apri la serratura dalla relativa card per completare la verifica di sicurezza.');
       return;
     }
 
@@ -10823,25 +8530,33 @@ export function MainBoard() {
         ? domain
         : domain || 'homeassistant';
 
-    void (async () => {
-      const primaryOk = await callHaService(primaryDomain, domainService, {
-        entity_id: normalizedEntityId,
-      });
-      if (primaryOk) {
-        return;
-      }
-
-      const fallbackOk = await callHaService('homeassistant', genericService, {
-        entity_id: normalizedEntityId,
-      });
-      if (fallbackOk) {
-        return;
-      }
-
-      void callHaService('homeassistant', 'toggle', {
-        entity_id: normalizedEntityId,
-      });
-    })();
+    void commandCoordinator.run({
+      key: `micro-toggle:${normalizedEntityId}`,
+      entityId: normalizedEntityId,
+      domain: primaryDomain,
+      service: domainService,
+      timeoutMs: MEDIA_COMMAND_TTL_MS,
+      send: async () => {
+        const primaryOk = await callHaService(primaryDomain, domainService, {
+          entity_id: normalizedEntityId,
+        });
+        if (primaryOk) return true;
+        const fallbackOk = await callHaService('homeassistant', genericService, {
+          entity_id: normalizedEntityId,
+        });
+        if (fallbackOk) return true;
+        return callHaService('homeassistant', 'toggle', { entity_id: normalizedEntityId });
+      },
+      confirm: (entity) => {
+        const state = normalizeLower(toTrimmedString(entity?.state) ?? toTrimmedString(entity?.stateLabel));
+        if (domain === 'cover') return nextActive ? state === 'open' : state === 'closed';
+        if (domain === 'lock') return state === 'locked';
+        if (domain === 'vacuum') return nextActive ? state === 'cleaning' : state === 'paused';
+        const isOn = typeof entity?.toggleOn === 'boolean' ? entity.toggleOn : state === 'on';
+        return isOn === nextActive;
+      },
+      onRollback: (reason) => reportUnconfirmedCommand(reason, 'Il controllo rapido non ha confermato il nuovo stato.'),
+    });
   };
 
   const setMicroSliderEntityValue = (entityId: string, value: number) => {
@@ -10855,9 +8570,18 @@ export function MainBoard() {
       return;
     }
 
-    void callHaService(serviceDomain, 'set_value', {
-      entity_id: normalizedEntityId,
-      value,
+    runHaCoordinatedCommand({
+      key: 'micro-value',
+      entityId: normalizedEntityId,
+      domain: serviceDomain,
+      service: 'set_value',
+      payload: { value },
+      timeoutMs: MEDIA_COMMAND_TTL_MS,
+      confirm: (entity) => almostEqual(
+        toFiniteNumber(entity?.numericValue) ?? toFiniteNumber(entity?.state),
+        value,
+      ),
+      errorMessage: 'Il controllo rapido non ha confermato il nuovo valore.',
     });
   };
 
@@ -11012,40 +8736,67 @@ export function MainBoard() {
     }));
   };
 
-  const moveCameraPtz = (direction: CameraPtzDirection) => {
+  const moveCameraPtz = (direction: CameraPtzDirection, requestedEntityId?: string) => {
     if (!isHaConnected) {
       return;
     }
     const targetWidget = activeWidget?.kind === 'camera' ? activeWidget : undefined;
-    const entityId = (contextCamera.entityId ?? targetWidget?.entityId ?? '').trim();
-    if (!entityId || !contextCamera.supportsPtz) {
+    const entityId = (requestedEntityId ?? contextCamera.entityId ?? targetWidget?.entityId ?? '').trim();
+    const liveEntity = haStatesForUi[entityId];
+    const rawAttributes = liveEntity?.rawAttributes;
+    const cameraEntityId =
+      toTrimmedString(rawAttributes?.camera_entity_id) ??
+      toTrimmedString(rawAttributes?.entity_id) ??
+      entityId;
+    const cameraFriendlyName =
+      toTrimmedString(rawAttributes?.friendly_name) ??
+      targetWidget?.title ??
+      entityId;
+    const targetPtzButtons = resolveCameraPtzButtons(cameraEntityId, cameraFriendlyName, haStatesForUi);
+    const targetHasPtzButtons = hasAnyCameraPtzButton(targetPtzButtons);
+    const targetSupportsPtz = targetHasPtzButtons || resolveCameraSupportsPtz(cameraEntityId, rawAttributes, haServiceRegistry);
+    if (!entityId || !targetSupportsPtz) {
       return;
     }
 
-    const buttonSequence = resolveCameraPtzButtonPressSequence(direction, cameraPtzButtons);
+    const buttonSequence = resolveCameraPtzButtonPressSequence(direction, targetPtzButtons);
     if (buttonSequence.length > 0) {
       cameraPtzControlModeRef.current = 'button';
-      void runCameraPtzButtonPresses(buttonSequence);
+      void commandCoordinator.run({
+        key: `camera-ptz:${entityId}`,
+        entityId,
+        domain: 'camera',
+        service: 'ptz',
+        confirmation: 'service_response',
+        send: () => runCameraPtzButtonPresses(buttonSequence),
+        onRollback: (reason) => reportUnconfirmedCommand(reason, 'La videocamera non ha accettato il movimento PTZ.'),
+      });
       return;
     }
-    if (cameraHasPtzButtons && !cameraPtzServiceTarget) {
+    if (targetHasPtzButtons && !cameraPtzServiceTarget) {
       return;
     }
 
     cameraPtzControlModeRef.current = 'service';
     const serviceTargets = resolveCameraPtzTargets();
-    void (async () => {
-      for (const serviceTarget of serviceTargets) {
-        const payloads = buildCameraPtzMovePayloads(entityId, direction, serviceTarget);
-        const success = await runCameraPtzPayloads(serviceTarget, payloads);
-        if (success) {
-          return;
+    void commandCoordinator.run({
+      key: `camera-ptz:${entityId}`,
+      entityId,
+      domain: 'camera',
+      service: 'ptz',
+      confirmation: 'service_response',
+      send: async () => {
+        for (const serviceTarget of serviceTargets) {
+          const payloads = buildCameraPtzMovePayloads(entityId, direction, serviceTarget);
+          if (await runCameraPtzPayloads(serviceTarget, payloads)) return true;
         }
-      }
-    })();
+        return false;
+      },
+      onRollback: (reason) => reportUnconfirmedCommand(reason, 'La videocamera non ha accettato il movimento PTZ.'),
+    });
   };
 
-  const stopCameraPtz = () => {
+  const stopCameraPtz = (requestedEntityId?: string) => {
     if (!isHaConnected) {
       return;
     }
@@ -11055,27 +8806,205 @@ export function MainBoard() {
       return;
     }
     const targetWidget = activeWidget?.kind === 'camera' ? activeWidget : undefined;
-    const entityId = (contextCamera.entityId ?? targetWidget?.entityId ?? '').trim();
-    if (!entityId || !contextCamera.supportsPtz) {
+    const entityId = (requestedEntityId ?? contextCamera.entityId ?? targetWidget?.entityId ?? '').trim();
+    const liveEntity = haStatesForUi[entityId];
+    const rawAttributes = liveEntity?.rawAttributes;
+    const cameraEntityId =
+      toTrimmedString(rawAttributes?.camera_entity_id) ??
+      toTrimmedString(rawAttributes?.entity_id) ??
+      entityId;
+    const cameraFriendlyName =
+      toTrimmedString(rawAttributes?.friendly_name) ??
+      targetWidget?.title ??
+      entityId;
+    const targetPtzButtons = resolveCameraPtzButtons(cameraEntityId, cameraFriendlyName, haStatesForUi);
+    const targetHasPtzButtons = hasAnyCameraPtzButton(targetPtzButtons);
+    const targetSupportsPtz = targetHasPtzButtons || resolveCameraSupportsPtz(cameraEntityId, rawAttributes, haServiceRegistry);
+    if (!entityId || !targetSupportsPtz) {
       cameraPtzControlModeRef.current = null;
       return;
     }
-    if (cameraHasPtzButtons && !cameraPtzServiceTarget) {
+    if (targetHasPtzButtons && !cameraPtzServiceTarget) {
       cameraPtzControlModeRef.current = null;
       return;
     }
     const serviceTargets = resolveCameraPtzTargets();
-    void (async () => {
-      for (const serviceTarget of serviceTargets) {
-        const payloads = buildCameraPtzStopPayloads(entityId, serviceTarget);
-        const success = await runCameraPtzPayloads(serviceTarget, payloads);
-        if (success) {
-          cameraPtzControlModeRef.current = null;
-          return;
+    void commandCoordinator.run({
+      key: `camera-ptz:${entityId}`,
+      entityId,
+      domain: 'camera',
+      service: 'ptz_stop',
+      confirmation: 'service_response',
+      send: async () => {
+        for (const serviceTarget of serviceTargets) {
+          const payloads = buildCameraPtzStopPayloads(entityId, serviceTarget);
+          if (await runCameraPtzPayloads(serviceTarget, payloads)) return true;
         }
+        return false;
+      },
+      onConfirmed: () => {
+        cameraPtzControlModeRef.current = null;
+      },
+      onRollback: (reason) => {
+        cameraPtzControlModeRef.current = null;
+        reportUnconfirmedCommand(reason, 'La videocamera non ha accettato l’arresto PTZ.');
+      },
+    });
+  };
+
+  const runCameraRelatedEntityAction = async (request: CameraRelatedEntityActionRequest) => {
+    const entityId = request.entity.entityId.trim();
+    const domain = entityId.split('.')[0]?.trim();
+    if (!entityId || !domain) {
+      return false;
+    }
+
+    const isLocalCameraMock = Boolean(cameraStateMocks[entityId]) && !haStates[entityId];
+    if (isLocalCameraMock) {
+      const current = cameraStateMocks[entityId];
+      if (!current) return false;
+      if (request.action === 'toggle') {
+        const nextOn = !Boolean(current.toggleOn ?? toBoolean(current.state));
+        setCameraStateMocks((states) => ({
+          ...states,
+          [entityId]: {
+            ...states[entityId],
+            state: nextOn ? 'on' : 'off',
+            stateLabel: nextOn ? 'Attivo' : 'Disattivato',
+            toggleOn: nextOn,
+          },
+        }));
+        return true;
       }
-      cameraPtzControlModeRef.current = null;
-    })();
+      if (request.action === 'select' && typeof request.value === 'string') {
+        setCameraStateMocks((states) => ({
+          ...states,
+          [entityId]: { ...states[entityId], state: request.value as string, stateLabel: request.value as string },
+        }));
+        return true;
+      }
+      if (request.action === 'set_value') {
+        const value = toFiniteNumber(request.value);
+        if (value === undefined) return false;
+        setCameraStateMocks((states) => ({
+          ...states,
+          [entityId]: { ...states[entityId], state: `${value}`, stateLabel: `${value}`, numericValue: value },
+        }));
+        return true;
+      }
+      if (request.action === 'press') {
+        const timestamp = new Date().toISOString();
+        setCameraStateMocks((states) => {
+          const camera = states[CAMERA_MAX_COMPAT_MOCK_ENTITY_ID];
+          const cameraAttributes = { ...(camera?.rawAttributes ?? {}) };
+          const previousEvents = Array.isArray(cameraAttributes.event_log) ? cameraAttributes.event_log : [];
+          cameraAttributes.event_log = [
+            {
+              title: 'Istantanea acquisita',
+              type: 'motion',
+              timestamp,
+              thumbnail_url: camera?.imageUrl,
+            },
+            ...previousEvents,
+          ].slice(0, 20);
+          return {
+            ...states,
+            [entityId]: { ...states[entityId], state: timestamp, stateLabel: 'Eseguito' },
+            [CAMERA_MAX_COMPAT_MOCK_ENTITY_ID]: { ...camera, rawAttributes: cameraAttributes },
+          };
+        });
+        return true;
+      }
+      return false;
+    }
+
+    if (!isHaConnected) {
+      return false;
+    }
+
+    if (request.action === 'press') {
+      if (domain !== 'button' && domain !== 'input_button') {
+        return false;
+      }
+      return runHaCoordinatedCommand({
+        key: 'camera-related-press',
+        entityId,
+        domain,
+        service: 'press',
+        timeoutMs: MEDIA_COMMAND_TTL_MS,
+        confirmation: 'service_response',
+        errorMessage: 'Il controllo della videocamera non ha accettato il comando.',
+      });
+    }
+
+    if (request.action === 'select') {
+      const option = toTrimmedString(request.value);
+      if (!option || (domain !== 'select' && domain !== 'input_select')) {
+        return false;
+      }
+      return runHaCoordinatedCommand({
+        key: 'camera-related-select',
+        entityId,
+        domain,
+        service: 'select_option',
+        payload: { option },
+        timeoutMs: MEDIA_COMMAND_TTL_MS,
+        confirm: (entity) => normalizeLower(toTrimmedString(entity?.state)) === normalizeLower(option),
+        errorMessage: 'Il controllo della videocamera non ha confermato la selezione.',
+      });
+    }
+
+    if (request.action === 'set_value') {
+      const value = toFiniteNumber(request.value);
+      if (value === undefined || (domain !== 'number' && domain !== 'input_number')) {
+        return false;
+      }
+      return runHaCoordinatedCommand({
+        key: 'camera-related-value',
+        entityId,
+        domain,
+        service: 'set_value',
+        payload: { value },
+        timeoutMs: MEDIA_COMMAND_TTL_MS,
+        confirm: (entity) => almostEqual(
+          toFiniteNumber(entity?.numericValue) ?? toFiniteNumber(entity?.state),
+          value,
+        ),
+        errorMessage: 'Il controllo della videocamera non ha confermato il valore.',
+      });
+    }
+
+    if (request.action === 'toggle') {
+      const liveEntity = haStatesForUi[entityId] ?? haStatesForUi[entityId.toLowerCase()];
+      const rawState = toTrimmedString(liveEntity?.state) ?? request.entity.state;
+      const normalizedState = normalizeLower(rawState);
+      const currentIsOn =
+        toBoolean(rawState) ??
+        ['open', 'opening', 'playing', 'recording', 'detected', 'active', 'home'].includes(normalizedState);
+      const nextService = currentIsOn ? 'turn_off' : 'turn_on';
+      const serviceDomain = domain === 'switch' || domain === 'input_boolean' || domain === 'light' || domain === 'fan' || domain === 'siren'
+        ? domain
+        : 'homeassistant';
+      const service = serviceDomain === 'homeassistant' ? 'toggle' : nextService;
+      return commandCoordinator.run({
+        key: `camera-related-toggle:${entityId}`,
+        entityId,
+        domain: serviceDomain,
+        service,
+        timeoutMs: MEDIA_COMMAND_TTL_MS,
+        send: () => callHaService(serviceDomain, service, { entity_id: entityId }),
+        confirm: (entity) => {
+          const state = normalizeLower(toTrimmedString(entity?.state));
+          const nextIsOn = typeof entity?.toggleOn === 'boolean'
+            ? entity.toggleOn
+            : ['on', 'open', 'playing', 'recording', 'detected', 'active', 'home'].includes(state);
+          return nextIsOn === !currentIsOn;
+        },
+        onRollback: (reason) => reportUnconfirmedCommand(reason, 'Il controllo della videocamera non ha confermato il nuovo stato.'),
+      });
+    }
+
+    return false;
   };
 
   const loadSensorHistory = useCallback(
@@ -11245,6 +9174,7 @@ export function MainBoard() {
   ]);
 
   const openLiveControls = (widget: Widget) => {
+    void loadRightSidebarManager();
     const liveEntity = isHaConnected ? haStatesForUi[widget.entityId] : undefined;
     const microWidgets = widget.widgets ?? [];
 
@@ -11505,6 +9435,7 @@ export function MainBoard() {
   };
 
   const openWeatherControls = () => {
+    void loadRightSidebarManager();
     setSelectedWidgetId(null);
     setSelectedSectionId(null);
     setSelectedSidebarPathId(null);
@@ -11696,13 +9627,42 @@ export function MainBoard() {
     openLiveControls(widget);
   };
 
-  const addWidget = (kind: WidgetKind) => {
-    const id = `${kind}.custom_${nextWidgetIdRef.current++}`;
-    const selectedStackSection = selectedSectionId
-      ? sections.find((section) => section.id === selectedSectionId && isStackSection(section))
+  const handleOpenHomeAttentionItem = (item: HomeAttentionItem) => {
+    const opensDeviceDiagnostics =
+      item.deviceId &&
+      (item.category === 'availability' ||
+        item.category === 'battery' ||
+        item.category === 'configuration');
+    if (opensDeviceDiagnostics) {
+      navigateWithinDashboard(`/settings/devices/${encodeURIComponent(item.deviceId!)}`);
+      return;
+    }
+    const matchingWidget = item.entityId
+      ? widgets.find(
+          (widget) => widget.entityId.trim().toLowerCase() === item.entityId?.trim().toLowerCase(),
+        )
       : undefined;
-    // Keep catalog insertion explicit:
-    // add into a stack only when that stack section is directly selected.
+    if (matchingWidget) {
+      handleWidgetClick(matchingWidget);
+      return;
+    }
+    if (item.deviceId) {
+      navigateWithinDashboard(`/settings/devices/${encodeURIComponent(item.deviceId)}`);
+      return;
+    }
+    if (item.areaId) {
+      navigateWithinDashboard('/rooms');
+      return;
+    }
+    navigateWithinDashboard('/settings/entities');
+  };
+
+  const addWidget = (kind: WidgetKind, destination: WidgetCatalogDestination) => {
+    beginDashboardEditorMutation();
+    const id = `${kind}.custom_${nextWidgetIdRef.current++}`;
+    const selectedStackSection = destination.type === 'stack'
+      ? sections.find((section) => section.id === destination.sectionId && isStackSection(section))
+      : undefined;
     const targetSection = selectedStackSection;
     const targetSectionId = targetSection?.id;
     const widgetWidth =
@@ -11713,7 +9673,7 @@ export function MainBoard() {
           : kind === 'media'
             ? MEDIA_WIDGET_MIN_WIDTH
             : kind === 'vacuum'
-              ? VACUUM_WIDGET_MIN_WIDTH
+              ? VACUUM_WIDGET_DEFAULT_WIDTH
               : kind === 'cover'
                 ? COVER_WIDGET_MIN_WIDTH
                 : kind === 'members'
@@ -11731,7 +9691,7 @@ export function MainBoard() {
             : kind === 'camera'
               ? CAMERA_WIDGET_MIN_HEIGHT
               : kind === 'vacuum'
-                ? VACUUM_WIDGET_MIN_HEIGHT
+                ? VACUUM_WIDGET_DEFAULT_HEIGHT
               : kind === 'cover'
                 ? COVER_WIDGET_MIN_HEIGHT
                 : kind === 'members'
@@ -11799,7 +9759,9 @@ export function MainBoard() {
         kind,
         title: `New ${kind}`,
         entityId: defaultEntityId,
-        isFavorite: true,
+        dataSource: haStates[defaultEntityId] ? 'ha' : 'mock',
+        isFavorite: Boolean(targetSection?.kind === 'stack-grid' && (targetSection.stackUseFavoritesGrid ?? false)),
+        placementPolicy: 'manual',
         status:
           kind === 'media'
             ? 'paused'
@@ -11851,10 +9813,12 @@ export function MainBoard() {
       return [...prev, newWidget];
     });
     setSelectedWidgetId(id);
-    setIsCatalogOpen(false);
+    setSelectedSectionId(null);
+    return id;
   };
 
   const addSection = (kind: SectionKind) => {
+    beginDashboardEditorMutation();
     const id = `section-${kind}-${nextSectionIdRef.current++}`;
     const nextY = sections.reduce((maxY, section) => Math.max(maxY, section.layout.y + section.layout.h), 0);
     setSections((prev) => [
@@ -11928,10 +9892,13 @@ export function MainBoard() {
           : {}),
       },
     ]);
-    setIsCatalogOpen(false);
+    setSelectedSectionId(id);
+    setSelectedWidgetId(null);
+    return id;
   };
 
   const removeSection = (id: string) => {
+    beginDashboardEditorMutation();
     const removedSection = sections.find((section) => section.id === id) ?? null;
     const remainingSections = sections.filter((section) => section.id !== id);
     const nextWidgets =
@@ -11988,11 +9955,21 @@ export function MainBoard() {
               return {
                 ...widget,
                 parentSectionId: undefined,
+                placementPolicy: 'manual' as const,
                 layout: nextLayout,
               };
             });
           })()
         : widgets.filter((widget) => widget.parentSectionId !== id);
+    const retainedWidgetIds = new Set(nextWidgets.map((widget) => widget.id));
+    widgets.forEach((widget) => {
+      if (!retainedWidgetIds.has(widget.id)) {
+        forgetWidgetSecrets(
+          widget.id,
+          typeof window === 'undefined' ? undefined : window.localStorage,
+        );
+      }
+    });
     const compacted = compactRootCanvasLayout(remainingSections, nextWidgets);
     setSections(compacted.sections);
     setWidgets(compacted.widgets);
@@ -12002,6 +9979,11 @@ export function MainBoard() {
     if (!selectedWidget) {
       return;
     }
+    beginDashboardEditorMutation();
+    forgetWidgetSecrets(
+      selectedWidget.id,
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    );
     const nextWidgets = widgets.filter((widget) => widget.id !== selectedWidget.id);
     if (selectedWidget.parentSectionId) {
       const parentSection = sections.find((section) => section.id === selectedWidget.parentSectionId);
@@ -12017,6 +9999,12 @@ export function MainBoard() {
   const requestToggleEditMode = () => {
     if (!canToggleEditMode) {
       return;
+    }
+    if (!isEditMode) {
+      void loadRightSidebarManager();
+      if (isConsumptionView) {
+        void loadConsumptionEditor();
+      }
     }
     setEditConfirm(isEditMode ? 'exit' : 'enter');
   };
@@ -12045,24 +10033,39 @@ export function MainBoard() {
       returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}`,
       issuedAt: Date.now(),
     };
+    const serializedState = JSON.stringify(statePayload);
     const authorizeUrl = buildHaOAuthAuthorizeUrl({
       hassUrl: normalizedUrl,
       clientId: window.location.origin,
       redirectUri: currentUrl.toString(),
-      state: JSON.stringify(statePayload),
+      state: serializedState,
     });
 
-    window.sessionStorage.setItem(HA_OAUTH_SESSION_NONCE_KEY, nonce);
+    window.sessionStorage.setItem(HA_OAUTH_SESSION_STATE_KEY, serializedState);
     setOAuthFlowError(null);
     window.location.assign(authorizeUrl);
   };
 
+  const returnToHomeAssistantConnection = () => {
+    disconnectHa();
+    clearHassAuthTokensStorage();
+    window.sessionStorage.removeItem(HA_OAUTH_SESSION_STATE_KEY);
+    setPendingStoredOAuthReconnectUrl(null);
+    setOAuthFlowError(null);
+    setHaToken('');
+    setHaRememberToken(false);
+    navigate('/setup?reconnect=1');
+  };
+
   const downloadConfigurationBackup = () => {
-    if (typeof window === 'undefined') {
+    if (
+      typeof window === 'undefined' ||
+      !dashboardSecurity.can('download_backup')
+    ) {
       return;
     }
 
-    const payload = createDashboardBackupPayload(window.localStorage);
+    const payload = createDashboardBackupPayload(window.localStorage, effectiveRuntimeMode);
     const backupJson = serializeDashboardBackup(payload);
     const safeTimestamp = payload.exportedAt.replace(/[:.]/g, '-');
     const fileName = `${BACKUP_FILENAME_PREFIX}-${safeTimestamp}.json`;
@@ -12080,41 +10083,190 @@ export function MainBoard() {
   };
 
   const restoreConfigurationFromFile = async (file: File) => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const shouldRestore = window.confirm(
-      'Ripristinare la configurazione dal file selezionato? La configurazione attuale verra sostituita.',
-    );
-    if (!shouldRestore) {
+    if (
+      typeof window === 'undefined' ||
+      !dashboardSecurity.can('restore_backup')
+    ) {
       return;
     }
 
     const rawBackup = await file.text();
     const payload = parseDashboardBackup(rawBackup);
-    restoreDashboardBackup(payload, window.localStorage);
+    if ((payload.scope ?? 'real') !== effectiveRuntimeMode) {
+      throw new Error(
+        effectiveRuntimeMode === 'demo'
+          ? 'Seleziona un backup creato nello spazio Demo.'
+          : 'Un backup Demo non può sostituire la dashboard reale.',
+      );
+    }
+    restoreDashboardBackup(payload, window.localStorage, effectiveRuntimeMode);
     window.location.reload();
   };
 
   const resetAllConfiguration = async () => {
-    if (typeof window === 'undefined') {
+    if (
+      typeof window === 'undefined' ||
+      !dashboardSecurity.can('reset_dashboard')
+    ) {
       return;
     }
 
-    const shouldReset = window.confirm(
-      'Resettare tutta la configurazione locale della dashboard? Questa azione e irreversibile.',
+    clearManagedDashboardStorage(
+      window.localStorage,
+      effectiveRuntimeMode === 'demo' ? 'demo' : 'all',
     );
-    if (!shouldReset) {
-      return;
-    }
-
-    clearManagedDashboardStorage(window.localStorage);
     window.location.reload();
   };
 
-  const confirmEditAction = () => {
+  const discardDashboardEditSession = useCallback(() => {
+    const baseline = editSessionBaselineRef.current;
+    if (baseline) applyDashboardEditorSnapshot(cloneDashboardEditorSnapshot(baseline));
+    editSessionBaselineRef.current = null;
+    editSessionCreatedAtRef.current = null;
+    editSessionRouteRef.current = null;
+    if (typeof window !== 'undefined') {
+      discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+    }
+    setHasUnsavedDashboardEdits(false);
+    setIsCatalogOpen(false);
+    setSelectedWidgetId(null);
+    setSelectedSectionId(null);
+    setSelectedSidebarPathId(null);
+    setIsEditMode(false);
+    setEditConfirm(null);
+  }, [applyDashboardEditorSnapshot, effectiveRuntimeMode]);
+
+  const discardPendingDashboardEditDraft = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+    }
+    setPendingDashboardEditDraft(null);
+  }, [effectiveRuntimeMode]);
+
+  const suspendDashboardEditSession = useCallback(() => {
+    if (typeof window !== 'undefined' && hasUnsavedDashboardEdits) {
+      try {
+        saveDashboardEditDraft(window.sessionStorage, {
+          runtimeMode: effectiveRuntimeMode,
+          createdAt: editSessionCreatedAtRef.current ?? Date.now(),
+          baseRevision: haDashboardLayoutPersistence.serverRevision,
+          dashboard: authoritativeDashboardLayout,
+        });
+        setPendingDashboardEditDraft(
+          readDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode),
+        );
+      } catch {
+        // Closing fail-closed remains more important than draft recovery.
+      }
+    }
+    const baseline = editSessionBaselineRef.current;
+    if (baseline) applyDashboardEditorSnapshot(cloneDashboardEditorSnapshot(baseline));
+    editSessionBaselineRef.current = null;
+    editSessionCreatedAtRef.current = null;
+    editSessionRouteRef.current = null;
+    setHasUnsavedDashboardEdits(false);
+    setIsCatalogOpen(false);
+    setSelectedWidgetId(null);
+    setSelectedSectionId(null);
+    setSelectedSidebarPathId(null);
+    setIsEditMode(false);
+    setEditConfirm(null);
+  }, [
+    applyDashboardEditorSnapshot,
+    authoritativeDashboardLayout,
+    effectiveRuntimeMode,
+    haDashboardLayoutPersistence.serverRevision,
+    hasUnsavedDashboardEdits,
+  ]);
+
+  const resumePendingDashboardEditDraft = useCallback(() => {
+    const draft = pendingDashboardEditDraft;
+    if (!draft || !dashboardSecurity.can('edit_dashboard') || typeof window === 'undefined') return;
+    const recoveryResult = createDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage);
+    if (!recoveryResult.ok) {
+      addNotification('alert', 'Impossibile preparare il recupero della bozza.');
+      return;
+    }
+    editSessionBaselineRef.current = cloneDashboardEditorSnapshot(dashboardEditorSnapshot);
+    editSessionCreatedAtRef.current = draft.createdAt;
+    editSessionRouteRef.current = canUseBrowserRouteNavigation
+      ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+      : internalNavigationRoute;
+    applyDashboardEditorSnapshot({
+      sections: draft.dashboard.sections,
+      widgets: draft.dashboard.widgets,
+      widgetTypeLayoutOverrides: draft.dashboard.widgetTypeLayoutOverrides,
+      responsiveLayouts: draft.dashboard.responsiveLayouts,
+      widgetLayoutOverrides: draft.dashboard.widgetLayoutOverrides,
+    });
+    setPendingDashboardEditDraft(null);
+    setIsEditMode(true);
+  }, [
+    addNotification,
+    applyDashboardEditorSnapshot,
+    dashboardEditorSnapshot,
+    dashboardSecurity,
+    effectiveRuntimeMode,
+    canUseBrowserRouteNavigation,
+    internalNavigationRoute,
+    pendingDashboardEditDraft,
+    routerLocation.hash,
+    routerLocation.pathname,
+    routerLocation.search,
+  ]);
+
+  const reloadAfterDashboardConflict = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      saveDashboardEditDraft(window.sessionStorage, {
+        runtimeMode: effectiveRuntimeMode,
+        createdAt: editSessionCreatedAtRef.current ?? Date.now(),
+        baseRevision: haDashboardLayoutPersistence.serverRevision,
+        dashboard: authoritativeDashboardLayout,
+      });
+    } catch {
+      // Reload still returns to the authoritative HA layout.
+    }
+    allowDashboardUnloadRef.current = true;
+    window.location.reload();
+  }, [
+    authoritativeDashboardLayout,
+    effectiveRuntimeMode,
+    haDashboardLayoutPersistence.serverRevision,
+  ]);
+
+  const applyPendingDashboardRemoteUpdate = useCallback(() => {
+    if (!haDashboardLayoutPersistence.pendingRemoteUpdate) return;
+    const applied = haDashboardLayoutPersistence.applyPendingRemoteUpdate();
+    if (!applied) return;
+    editSessionBaselineRef.current = null;
+    editSessionCreatedAtRef.current = null;
+    editSessionRouteRef.current = null;
+    if (typeof window !== 'undefined') {
+      discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+    }
+    setHasUnsavedDashboardEdits(false);
+    setIsCatalogOpen(false);
+    setSelectedWidgetId(null);
+    setSelectedSectionId(null);
+    setSelectedSidebarPathId(null);
+    setEditConfirm(null);
+    setIsDashboardConflictOpen(false);
+    setIsEditMode(false);
+  }, [
+    effectiveRuntimeMode,
+    haDashboardLayoutPersistence.applyPendingRemoteUpdate,
+    haDashboardLayoutPersistence.pendingRemoteUpdate,
+  ]);
+
+  useEffect(() => {
+    if (isEditMode && !canToggleEditMode) suspendDashboardEditSession();
+  }, [canToggleEditMode, isEditMode, suspendDashboardEditSession]);
+
+  const confirmEditAction = async () => {
+    if (isDashboardSaveBusy) return;
     if (editConfirm === 'refresh') {
+      allowDashboardUnloadRef.current = true;
       window.location.reload();
       return;
     }
@@ -12122,8 +10274,89 @@ export function MainBoard() {
       setEditConfirm(null);
       return;
     }
+    if (editConfirm === 'enter') {
+      if (typeof window === 'undefined') {
+        setEditConfirm(null);
+        return;
+      }
+      if (effectiveRuntimeMode === 'real' && !requiresDashboardLayoutMigration) {
+        const appliedNewerRevision = await haDashboardLayoutPersistence.checkForRemoteUpdate();
+        if (appliedNewerRevision) {
+          setEditConfirm(null);
+          return;
+        }
+      }
+      const baselineSaveResult = requiresDashboardLayoutMigration
+        ? await haDashboardLayoutPersistence.initializeFromCurrentDashboard()
+        : await saveDashboardLayoutNow();
+      if (baselineSaveResult.ok === false) {
+        if (baselineSaveResult.code === 'server_conflict') setIsDashboardConflictOpen(true);
+        const bridgeNeedsUpgrade = isHaManagedByParent &&
+          panelHaBridgeConnection.bridgeProtocolVersion === null;
+        const failureMessage = baselineSaveResult.code === 'server_unsupported'
+          ? 'Il panel bridge installato non supporta il salvataggio condiviso. Aggiorna anche ha-dashboard-builder-panel.js e riavvia Home Assistant.'
+          : baselineSaveResult.code === 'server_unauthorized'
+            ? 'Home Assistant ha rifiutato il salvataggio: accedi con un account Owner o Admin.'
+            : baselineSaveResult.code === 'server_conflict'
+              ? 'Esiste già una configurazione più recente su Home Assistant. Ricarica la pagina prima di riprovare.'
+              : baselineSaveResult.code === 'migration_required'
+                ? 'L’archivio condiviso non è ancora inizializzato. Riprova il trasferimento del layout.'
+                : bridgeNeedsUpgrade
+                  ? 'App e panel bridge non risultano allineati. Copia anche ha-dashboard-builder-panel.js della stessa release, aggiorna module_url e riavvia Home Assistant.'
+                  : isHaManagedByParent
+                    ? 'Il panel bridge non ha confermato il salvataggio. Controlla la console e la configurazione module_url del pannello.'
+                    : 'Home Assistant non ha confermato il salvataggio. Controlla la connessione e riprova.';
+        addNotification(
+          'alert',
+          failureMessage,
+        );
+        setEditConfirm(null);
+        return;
+      }
+      const recoveryResult = createDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage);
+      if (!recoveryResult.ok) {
+        addNotification('alert', 'Impossibile creare la copia di recupero. Edit Mode non attivato.');
+        setEditConfirm(null);
+        return;
+      }
+      editSessionBaselineRef.current = cloneDashboardEditorSnapshot(dashboardEditorSnapshot);
+      editSessionCreatedAtRef.current = Date.now();
+      editSessionRouteRef.current = canUseBrowserRouteNavigation
+        ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+        : internalNavigationRoute;
+      discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+      setPendingDashboardEditDraft(null);
+      setHasUnsavedDashboardEdits(false);
+    }
     if (editConfirm === 'exit') {
-      saveDashboardLayout(sections, widgets, widgetTypeLayoutOverrides, responsiveLayouts, widgetLayoutOverrides);
+      if (!dashboardSecurity.can('edit_dashboard')) {
+        discardDashboardEditSession();
+        return;
+      }
+      if (hasUnsavedDashboardEdits) {
+        setIsDashboardSaveBusy(true);
+        const saveResult = await saveDashboardLayoutNow();
+        if (saveResult.ok === false) {
+          setIsDashboardSaveBusy(false);
+          if (saveResult.code === 'server_conflict') setIsDashboardConflictOpen(true);
+          addNotification(
+            'alert',
+            saveResult.code === 'server_conflict'
+              ? 'Il layout è stato modificato da un altro dispositivo. Le tue modifiche restano aperte.'
+              : 'Home Assistant non ha confermato il salvataggio. Le modifiche restano aperte e non sono state perse.',
+          );
+          setEditConfirm(null);
+          return;
+        }
+        setIsDashboardSaveBusy(false);
+      }
+      editSessionBaselineRef.current = null;
+      editSessionCreatedAtRef.current = null;
+      editSessionRouteRef.current = null;
+      if (typeof window !== 'undefined') {
+        discardDashboardEditDraft(window.sessionStorage, effectiveRuntimeMode);
+      }
+      setHasUnsavedDashboardEdits(false);
       setIsCatalogOpen(false);
       setSelectedWidgetId(null);
       setSelectedSectionId(null);
@@ -12134,19 +10367,11 @@ export function MainBoard() {
   };
 
   const handleSidebarPathClick = (entry: { id: string; path: string }) => {
-    const path = entry.path;
-    const target = path.trim();
+    const target = resolveApplicationRoutePath(entry.id, entry.path);
     if (!target || typeof window === 'undefined') {
       return;
     }
-    const normalized =
-      target.startsWith('/') ||
-      target.startsWith('#') ||
-      target.startsWith('?') ||
-      target.startsWith('http://') ||
-      target.startsWith('https://')
-        ? target
-        : `/${target}`;
+    const normalized = target;
 
     if (isEditMode) {
       setSelectedSidebarPathId(entry.id);
@@ -12247,21 +10472,57 @@ export function MainBoard() {
     };
     handleSidebarPathClick(pageEntry);
   };
-  const dashboardWallpaperClass = `dashboard-wallpaper-${wallpaper}`;
+  const dashboardBackgroundClass = `dashboard-background-${background}`;
   const profileUserEmail =
     haCurrentUser?.email ??
     (haCurrentUser?.username && haCurrentUser.username.includes('@') ? haCurrentUser.username : undefined);
   const profileUserRoleLabel = haCurrentUser?.isOwner ? 'Creatore' : haCurrentUser?.isAdmin ? 'Admin' : 'Utente';
-  const canManageRooms = Boolean(haCurrentUser?.isOwner || haCurrentUser?.isAdmin);
+  const canManageRooms = dashboardSecurity.can('manage_rooms');
+  const securityAlarmProfiles = useMemo(
+    () =>
+      widgets
+        .filter((widget) => widget.kind === 'alarm' && widget.entityId.trim().length > 0)
+        .map((widget) => {
+          const secrets = getWidgetSecrets(widget.id);
+          return {
+            widgetId: widget.id,
+            entityId: widget.entityId,
+            unlockCode: secrets.alarmUnlockCode ?? '',
+            localExtraCode: secrets.alarmLocalExtraCode ?? '',
+            requireDeviceConfirmation: widget.alarmRequireAuthToDisarm ?? false,
+          };
+        }),
+    [activeWidgetSecrets.values, widgets],
+  );
+  const handleDeveloperModeChange = (nextValue: boolean) => {
+    if (!dashboardSecurity.can('developer_mode')) {
+      return;
+    }
+    setDeveloperMode(nextValue);
+  };
   const profileUserOwnedDeviceCount = profileMovementSource.trackerDeviceCount;
   const isSecurityImmersiveView = isSecurityView && isSecurityCamerasView;
   const isConsumptionImmersiveView = isConsumptionView && isConsumptionDetailView;
   const isImmersiveView = isSecurityImmersiveView || isConsumptionImmersiveView;
   const isDashboardCanvasView =
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView && !isSettingsView;
+  const viewportPreviewGridWidth = resolveDashboardViewportPreviewWidth(viewportPreviewMode);
+  const availableViewportPreviewModes: readonly DashboardViewportPreviewMode[] = isDesktopViewport
+    ? ['auto', 'desktop', 'tablet', 'compact', 'mobile']
+    : ['auto', 'tablet', 'compact', 'mobile'];
   const shouldShowMobileSidebarShell =
     !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView && !isProfileOpen;
-  const shouldShowBottomBar = !isImmersiveView && isXsViewport && !isEditMode && !isCatalogOpen && !isProfileOpen;
+  const currentNavigationRoute = canUseBrowserRouteNavigation
+    ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+    : internalNavigationRoute;
+  const isNestedDashboardPage = isNestedDashboardNavigationTarget(currentNavigationRoute);
+  const shouldShowBottomBar =
+    !isImmersiveView &&
+    isXsViewport &&
+    !isEditMode &&
+    !isCatalogOpen &&
+    !isProfileOpen &&
+    !isNestedDashboardPage;
 
   useEffect(() => {
     if (!shouldShowMobileSidebarShell) {
@@ -12269,12 +10530,20 @@ export function MainBoard() {
     }
   }, [shouldShowMobileSidebarShell]);
 
-  const getCurrentNavigationRoute = () =>
-    canUseBrowserRouteNavigation
-      ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
-      : internalNavigationRoute;
+  const getCurrentNavigationRoute = () => currentNavigationRoute;
+  const activeNavigationRoute = getCurrentNavigationRoute();
+  const settingsPath = activeNavigationRoute.split(/[?#]/, 1)[0].replace(/\/+$/, '');
+  const settingsManagementSection: SettingsManagementSectionId | null =
+    settingsPath === '/settings/access'
+      ? 'members'
+      : settingsPath === '/settings/connections'
+        ? 'ha'
+        : settingsPath === '/settings/data'
+          ? 'config'
+          : null;
 
   const navigateWithinDashboard = (path: string) => {
+    prefetchDashboardWorkspace(path);
     if (canUseBrowserRouteNavigation) {
       const currentRoute = `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`;
       if (path !== currentRoute) {
@@ -12309,6 +10578,28 @@ export function MainBoard() {
     }
   };
   const quickAlarmRequiresCode = Boolean(pendingQuickAlarmAction?.requiresCode);
+  const quickLockRequiresCode = Boolean(pendingQuickLockAction);
+  const isQuickSecurityAuthOpen = Boolean(pendingQuickAlarmAction || pendingQuickLockAction);
+  const visibleDashboardRecovery =
+    pendingDashboardRecovery &&
+    (runtimeMode === 'demo' || dashboardSecurity.can('edit_dashboard'))
+      ? pendingDashboardRecovery
+      : null;
+  const visibleDashboardEditDraft =
+    pendingDashboardEditDraft &&
+    !isEditMode &&
+    !visibleDashboardRecovery &&
+    dashboardSecurity.can('edit_dashboard') &&
+    (effectiveRuntimeMode === 'demo' || haDashboardLayoutPersistence.loadStatus === 'ready')
+      ? pendingDashboardEditDraft
+      : null;
+  const dashboardEditDraftHasRevisionConflict = Boolean(
+    visibleDashboardEditDraft &&
+    effectiveRuntimeMode === 'real' &&
+    visibleDashboardEditDraft.baseRevision !== null &&
+    haDashboardLayoutPersistence.serverRevision !== null &&
+    visibleDashboardEditDraft.baseRevision !== haDashboardLayoutPersistence.serverRevision,
+  );
   const quickAlarmCodeTypeLabel =
     pendingQuickAlarmAction?.credentialKind === 'combined_code'
       ? 'PIN allarme + extra'
@@ -12317,7 +10608,17 @@ export function MainBoard() {
   const quickAlarmRateLimitMessage = formatAuthRateLimitMessage(quickAlarmRateLimitStatus);
   const quickAlarmAuthError = quickAlarmRateLimitMessage || quickAlarmSubmissionError;
 
+  useEffect(() => {
+    if (isQuickSecurityAuthOpen) {
+      setHasMountedQuickSecurityAuth(true);
+    }
+  }, [isQuickSecurityAuthOpen]);
+  const quickLockRateLimitMessage = formatAuthRateLimitMessage(getAuthRateLimitStatus(quickLockAuthAttemptState));
+  const quickSecurityAuthError = quickLockRateLimitMessage || quickAlarmAuthError;
+
   return (
+    <DashboardSecurityProvider value={dashboardSecurity}>
+    <SensitiveActionGateProvider user={deviceAuthUser}>
     <div
       className={`apple-bg-main relative h-[100dvh] min-h-screen font-sans overflow-hidden flex ${
         isImmersiveView
@@ -12328,30 +10629,125 @@ export function MainBoard() {
           ? '!pt-[calc(env(safe-area-inset-top)+4rem)]'
           : ''
       } ${
-        theme === 'light'
+        appearance === 'light'
           ? 'dashboard-theme-light text-[var(--dashboard-text)]'
           : 'dashboard-theme-dark text-[var(--dashboard-text)]'
-      } dashboard-shell ${dashboardWallpaperClass}`}
+      } dashboard-shell ${dashboardBackgroundClass}`}
     >
-      <div aria-hidden className="dashboard-wallpaper-layer" />
+      <div aria-hidden className="dashboard-background-layer" />
+      <a href="#dashboard-main-content" className="dashboard-skip-link">
+        Vai al contenuto principale
+      </a>
+
+      {canPersistDashboardLayout && !isCompactViewport ? (
+        <div className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[215] -translate-x-1/2 md:top-6 lg:hidden">
+          <DashboardEditToolbar
+            saveStatus={dashboardLayoutSaveStatus}
+            canUndo={canUndoDashboardEdit}
+            canRedo={canRedoDashboardEdit}
+            onUndo={undoDashboardEdit}
+            onRedo={redoDashboardEdit}
+            remoteRevision={haDashboardLayoutPersistence.pendingRemoteUpdate?.revision}
+            onRemoteUpdateClick={() => setIsDashboardConflictOpen(true)}
+          />
+        </div>
+      ) : null}
+
+      {canPersistDashboardLayout && isDashboardCanvasView && !isCatalogOpen && !isXsViewport ? (
+        <div className="fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[215] flex justify-center md:bottom-5">
+          <DashboardViewportPreviewBar
+            previewMode={viewportPreviewMode}
+            canvasBreakpoint={canvasGridBreakpoint}
+            onPreviewModeChange={setViewportPreviewMode}
+            availableModes={availableViewportPreviewModes}
+            primaryAction={
+              <button
+                type="button"
+                data-tour-target="widget-catalog"
+                onClick={() => setIsCatalogOpen(true)}
+                className="flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-[color:var(--ui-accent)] transition-colors hover:bg-[color:var(--ui-fill-tertiary)]"
+                aria-label="Apri catalogo componenti"
+              >
+                <Plus size={15} aria-hidden />
+                <span className="hidden text-xs font-semibold sm:inline">Catalogo</span>
+              </button>
+            }
+            desktopActions={
+              <DashboardEditToolbar
+                embedded
+                saveStatus={dashboardLayoutSaveStatus}
+                canUndo={canUndoDashboardEdit}
+                canRedo={canRedoDashboardEdit}
+                onUndo={undoDashboardEdit}
+                onRedo={redoDashboardEdit}
+                remoteRevision={haDashboardLayoutPersistence.pendingRemoteUpdate?.revision}
+                onRemoteUpdateClick={() => setIsDashboardConflictOpen(true)}
+              />
+            }
+          />
+        </div>
+      ) : null}
+
+      {runtimeMode === 'demo' ? (
+        <button
+          type="button"
+          onClick={() => navigateWithinDashboard('/setup')}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] right-3 top-auto z-[210] rounded-full border border-amber-200/30 bg-amber-400/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100 shadow-lg backdrop-blur-2xl transition hover:bg-amber-400/22 sm:bottom-auto sm:top-3"
+        >
+          Demo · Collega la tua casa
+        </button>
+      ) : null}
+
+      {effectiveRuntimeMode === 'real' && isHaConnectionRecoveryStatus(haStatus) ? (
+        <HomeAssistantRecoveryBanner
+          status={haStatus}
+          error={oauthFlowError ?? haError}
+          isRetrying={haStatus === 'reconnecting'}
+          lastUpdatedAt={haLastUpdatedAt}
+          onRetry={connectHa}
+          onReconnect={returnToHomeAssistantConnection}
+        />
+      ) : null}
 
       {shouldShowMobileSidebarShell ? (
         <>
-          <div className="fixed inset-x-0 top-0 z-[174] flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.65rem)] md:hidden">
+          <div
+            role={isEditMode ? 'toolbar' : undefined}
+            aria-label={isEditMode ? 'Cronologia modifiche' : undefined}
+            className={`fixed top-0 z-[174] md:hidden ${
+            isEditMode
+              ? 'liquid-glass-navigation left-3 right-3 mt-[calc(env(safe-area-inset-top)+0.5rem)] flex items-center gap-1 p-1'
+              : 'inset-x-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.65rem)]'
+          }`}
+          >
             {isEditMode ? (
               <>
                 <button
                   type="button"
+                  data-tour-target="widget-catalog"
                   onClick={() => setIsCatalogOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[color:var(--ui-accent)] transition-colors hover:bg-[color:var(--ui-fill-tertiary)] active:scale-95"
                   aria-label="Apri catalogo componenti"
                 >
-                  <Plus size={18} />
+                  <Plus size={17} aria-hidden />
+                  <span className="text-xs font-semibold">Catalogo</span>
                 </button>
+                <div className="flex min-w-0 flex-1 justify-center overflow-hidden">
+                  <DashboardEditToolbar
+                    embedded
+                    saveStatus={dashboardLayoutSaveStatus}
+                    canUndo={canUndoDashboardEdit}
+                    canRedo={canRedoDashboardEdit}
+                    onUndo={undoDashboardEdit}
+                    onRedo={redoDashboardEdit}
+                    remoteRevision={haDashboardLayoutPersistence.pendingRemoteUpdate?.revision}
+                    onRemoteUpdateClick={() => setIsDashboardConflictOpen(true)}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={requestToggleEditMode}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[color:var(--ui-text-primary)] transition-colors hover:bg-[color:var(--ui-fill-tertiary)] active:scale-95"
                   aria-label="Esci dalla modalita modifica"
                 >
                   <X size={18} />
@@ -12362,22 +10758,33 @@ export function MainBoard() {
                 <button
                   type="button"
                   onClick={() => setIsMobileSidebarOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--profile-sheet-border)] bg-[color:var(--profile-sheet-surface)] text-[color:var(--profile-sheet-title)] shadow-[0_10px_26px_var(--profile-sheet-shadow)] backdrop-blur-2xl transition-all hover:bg-[color:var(--profile-sheet-surface-strong)] active:scale-95"
+                  className="liquid-glass-control inline-flex h-11 w-11 items-center justify-center text-[color:var(--ui-text-primary)] transition-all hover:brightness-110 active:scale-95"
                   aria-label="Apri menu laterale"
                   aria-expanded={isMobileSidebarOpen}
                 >
                   <Menu size={18} />
                 </button>
-                <XsNotificationBell />
+                <div className="flex min-w-0 items-center gap-2">
+                  <XsNotificationBell />
+                  <XsProfileChip
+                    userAvatarUrl={currentUserAvatarUrl}
+                    userName={stateWithConnectedUser.userName}
+                    haStatus={haStatus}
+                    onOpenProfile={() => openProfileRoute('members')}
+                  />
+                </div>
               </>
             )}
           </div>
           <MobileSidebarDrawer
             isOpen={isMobileSidebarOpen}
             isEditMode={isEditMode}
+            isEditTourActive={isGuidedEditTargetActive}
             canToggleEditMode={canToggleEditMode}
             quickPaths={visibleSidebarPaths}
             selectedPathId={selectedSidebarPathId}
+            activeRoute={activeNavigationRoute}
+            isSettingsActive={isSettingsView}
             userAvatarUrl={currentUserAvatarUrl}
             userAvatarAlt={stateWithConnectedUser.userName}
             userEmail={profileUserEmail}
@@ -12388,6 +10795,8 @@ export function MainBoard() {
             onOpenSettings={openSettingsRoute}
             onDisconnectHomeAssistant={disconnectHa}
             onClose={() => setIsMobileSidebarOpen(false)}
+            onPrefetchRoute={prefetchDashboardWorkspace}
+            onPrefetchEditMode={() => void loadRightSidebarManager()}
           />
         </>
       ) : null}
@@ -12400,16 +10809,25 @@ export function MainBoard() {
           haStatus={haStatus}
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
+          activeRoute={activeNavigationRoute}
+          isEditTourActive={isGuidedEditTargetActive}
           canToggleEditMode={canToggleEditMode}
           onPathClick={handleSidebarPathClick}
           onToggleEditMode={requestToggleEditMode}
           onOpenProfile={() => openProfileRoute('members')}
           onOpenSettings={openSettingsRoute}
+          onPrefetchRoute={prefetchDashboardWorkspace}
+          onPrefetchEditMode={() => void loadRightSidebarManager()}
           isSettingsActive={isSettingsView}
         />
       ) : null}
 
-      <main className={isImmersiveView ? 'h-full min-h-0 flex-1 min-w-0 flex overflow-hidden' : 'h-full min-h-0 flex-1 min-w-0 flex gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6 overflow-hidden'}>
+      <main
+        id="dashboard-main-content"
+        tabIndex={-1}
+        className={isImmersiveView ? 'h-full min-h-0 flex-1 min-w-0 flex overflow-hidden outline-none' : 'h-full min-h-0 flex-1 min-w-0 flex gap-1.5 overflow-hidden outline-none sm:gap-2 md:gap-2.5 lg:gap-4 xl:gap-6'}
+      >
+        <React.Suspense fallback={<SecondaryWorkspaceLoading />}>
         {isConsumptionView ? (
           <>
             <div className="h-full min-h-0 flex-1 overflow-hidden">
@@ -12472,6 +10890,7 @@ export function MainBoard() {
         ) : isRoomsView ? (
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <RoomsDashboard
+              isEditMode={isEditMode}
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
               isLoading={haStatus === 'connecting'}
@@ -12481,20 +10900,30 @@ export function MainBoard() {
               haStates={haStatesForUi}
               onCallService={callHaService}
               onCallApi={callHaApi}
+              cameraPtzEntityIds={cameraPtzEntityIds}
+              onCameraPtzMove={(entityId, direction) => moveCameraPtz(direction, entityId)}
+              onCameraPtzStop={(entityId) => stopCameraPtz(entityId)}
             />
           </div>
         ) : isSecurityView ? (
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <SecurityDashboard
               isEditMode={isEditMode}
+              canManageSecurity={dashboardSecurity.can('manage_security_config')}
+              runtimeMode={effectiveRuntimeMode}
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
               haConnected={isHaConnected}
               haStates={haStatesForUi}
               alarmEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('alarm_control_panel.'))}
-              sensorEntityOptions={haEntityIds.filter((entityId) => entityId.startsWith('binary_sensor.'))}
+              alarmSecurityProfiles={securityAlarmProfiles}
+              sensorEntityOptions={knownHaEntityIds.filter((entityId) => entityId.startsWith('binary_sensor.'))}
+              cameraEntityOptions={knownHaEntityIds.filter((entityId) => entityId.startsWith('camera.'))}
+              cameraPtzEntityIds={cameraPtzEntityIds}
               deviceAuthUser={deviceAuthUser}
               onCallService={callHaService}
+              onCameraPtzMove={(entityId, direction) => moveCameraPtz(direction, entityId)}
+              onCameraPtzStop={(entityId) => stopCameraPtz(entityId)}
             />
           </div>
         ) : isSettingsView ? (
@@ -12505,25 +10934,86 @@ export function MainBoard() {
               haError={oauthFlowError ?? haError}
               haStates={haStatesForUi}
               haAreas={haAreas}
+              haEntityRegistry={haEntityRegistry}
+              haDeviceRegistry={haDeviceRegistry}
               sections={sections}
               widgets={widgets}
               houseMembers={profileHouseMembers}
-              currentLayoutId={activeGridBreakpoint}
+              currentLayoutId={canvasGridBreakpoint}
               sensorHistoryByEntity={sensorHistoryByEntity}
-              onDeveloperModeChange={setDeveloperMode}
+              onDeveloperModeChange={handleDeveloperModeChange}
               onDownloadBackup={downloadConfigurationBackup}
               onRestoreBackup={restoreConfigurationFromFile}
               onResetAll={resetAllConfiguration}
+              layoutRevisions={haDashboardLayoutPersistence.revisions}
+              layoutRevisionHistoryStatus={haDashboardLayoutPersistence.revisionHistoryStatus}
+              onRefreshLayoutRevisions={haDashboardLayoutPersistence.refreshRevisionHistory}
+              onRestoreLayoutRevision={haDashboardLayoutPersistence.restoreRevision}
               onCallService={callHaService}
+              navigationRoute={activeNavigationRoute}
+              onNavigate={navigateWithinDashboard}
+              managedSectionContent={
+                settingsManagementSection ? (
+                  <React.Suspense fallback={<SecondaryWorkspaceLoading label="Apertura impostazioni…" />}>
+                    <SettingsManagementPanel
+                      key={settingsManagementSection}
+                      isOpen
+                      presentation="embedded"
+                      onClose={() => navigateWithinDashboard('/settings')}
+                      initialSection={settingsManagementSection}
+                      userAvatarUrl={currentUserAvatarUrl}
+                      userAvatarAlt={stateWithConnectedUser.userName}
+                      userEmail={profileUserEmail}
+                      userRoleLabel={profileUserRoleLabel}
+                      houseMembers={profileHouseMembers}
+                      appearance={appearance}
+                      developerMode={developerMode}
+                      onDeveloperModeChange={handleDeveloperModeChange}
+                      haUrl={haUrl}
+                      onUrlChange={setHaUrl}
+                      haToken={haToken}
+                      onTokenChange={setHaToken}
+                      haRememberToken={haRememberToken}
+                      onRememberTokenChange={setHaRememberToken}
+                      haStatus={haStatus}
+                      haError={oauthFlowError ?? haError}
+                      haManagedByParent={isHaManagedByParent}
+                      onConnect={connectHa}
+                      onDisconnect={disconnectHa}
+                      onStartOAuth={startHomeAssistantOAuth}
+                      isOAuthBusy={isOAuthFlowBusy}
+                      onDownloadBackup={downloadConfigurationBackup}
+                      onRestoreBackup={restoreConfigurationFromFile}
+                      onResetAll={resetAllConfiguration}
+                      onOpenLayoutVersions={() => navigateWithinDashboard('/settings/data/history')}
+                    />
+                  </React.Suspense>
+                ) : undefined
+              }
             />
           </div>
         ) : (
           <>
+            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2">
+            {!isEditMode ? (
+              <HomeAttentionCenter
+                runtimeMode={effectiveRuntimeMode}
+                connected={isHaConnected}
+                states={haStates}
+                entityRegistry={haEntityRegistry}
+                deviceRegistry={haDeviceRegistry}
+                areas={haAreas}
+                widgets={widgets}
+                onOpenItem={handleOpenHomeAttentionItem}
+              />
+            ) : null}
             <GridCanvas
               isEditMode={isEditMode}
+              layoutRevision={dashboardEditorLayoutRevision}
+              previewGridWidth={viewportPreviewGridWidth}
               developerMode={developerMode}
               isXsViewport={isXsViewport}
-              onActiveBreakpointChange={setActiveGridBreakpoint}
+              onActiveBreakpointChange={setCanvasGridBreakpoint}
               state={stateWithConnectedUser}
               houseMembers={profileHouseMembers}
               sections={sections}
@@ -12535,7 +11025,6 @@ export function MainBoard() {
               widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
               widgetLayoutOverrides={widgetLayoutOverrides}
               responsiveLayouts={responsiveLayouts}
-              onOpenCatalog={() => setIsCatalogOpen(true)}
               onCloseCatalog={() => setIsCatalogOpen(false)}
               onSelectWidget={(id) => {
                 setSelectedWidgetId(id);
@@ -12650,6 +11139,12 @@ export function MainBoard() {
                 }
                 toggleVacuumStartPause(widget);
               }}
+              onWidgetVacuumStop={(widget) => {
+                if (widget.kind !== 'vacuum') {
+                  return;
+                }
+                stopVacuum(widget);
+              }}
               onWidgetVacuumReturnToBase={(widget) => {
                 if (widget.kind !== 'vacuum') {
                   return;
@@ -12666,6 +11161,11 @@ export function MainBoard() {
                 if (widget.kind !== 'lock') {
                   return;
                 }
+                const configuredCode = getWidgetSecrets(widget.id).lockCode?.trim();
+                if (widget.lockRequireAuthToUnlock || configuredCode) {
+                  void requestAuthenticatedLockAction(widget, 'open');
+                  return;
+                }
                 openDoor(undefined, widget);
               }}
               onWidgetCoverPositionChange={(widget, position) => {
@@ -12680,7 +11180,27 @@ export function MainBoard() {
                 }
                 setCoverTiltPosition(position, widget);
               }}
-              onOpenMembersPanel={() => openProfileRoute('members')}
+              onWidgetCoverOpen={(widget) => {
+                if (widget.kind !== 'cover') {
+                  return;
+                }
+                openCover(widget);
+              }}
+              onWidgetCoverStop={(widget) => {
+                if (widget.kind !== 'cover') {
+                  return;
+                }
+                stopCover(widget);
+              }}
+              onWidgetCoverClose={(widget) => {
+                if (widget.kind !== 'cover') {
+                  return;
+                }
+                closeCover(widget);
+              }}
+              onOpenMembersPanel={() => {
+                navigateWithinDashboard('/settings/access');
+              }}
               onWeatherClick={openWeatherControls}
               onSceneTrigger={triggerSceneAction}
               onWidgetLayoutChange={handleWidgetLayoutChange}
@@ -12696,11 +11216,22 @@ export function MainBoard() {
               sensorHistoryByEntity={sensorHistoryByEntity}
               onWidgetDisplayMetricsChange={handleWidgetDisplayMetricsChange}
             />
+            </div>
 
-            <RightSidebarManager
+            {isEditMode || activeDevice ? (
+              <React.Suspense
+                fallback={
+                  <DashboardSidebarPlaceholder
+                    isCompactViewport={isCompactViewport}
+                    loading
+                  />
+                }
+              >
+              <RightSidebarManager
               isEditMode={isEditMode}
+              commandsEnabled={effectiveRuntimeMode === 'demo' || isHaConnected}
               isCompactViewport={isCompactViewport}
-              theme={theme}
+              theme={appearance}
               activeDevice={activeDevice}
               onCloseContextSidebar={clearContextSelection}
               state={contextState}
@@ -12709,11 +11240,7 @@ export function MainBoard() {
               vacuum={contextVacuum}
               lock={contextLock}
               cover={contextCover}
-              vacuumAreas={
-                isHaConnected
-                  ? haAreas.map((area) => ({ id: area.area_id, name: area.name }))
-                  : VACUUM_DEMO_AREA_OPTIONS
-              }
+              vacuumAreas={contextVacuum.areaOptions}
               actions={{
                 toggleLamp: () => toggleLightEntity(),
                 toggleSwitch: () => toggleSwitchEntity(),
@@ -12772,9 +11299,10 @@ export function MainBoard() {
                 cleanVacuumArea: (areaIds) => cleanVacuumArea(areaIds),
                 setVacuumFanSpeed: (fanSpeed) => setVacuumFanSpeed(fanSpeed),
                 sendVacuumCommand: (command, params) => sendVacuumCommand(command, params),
+                controlVacuumRelatedEntity: (request) => controlVacuumRelatedEntity(request),
                 lockDoor: (code) => lockDoor(code),
                 unlockDoor: (code) => unlockDoorFromContext(code),
-                openDoor: (code) => openDoor(code),
+                openDoor: (code) => openDoorFromContext(code),
                 openCover: () => openCover(),
                 closeCover: () => closeCover(),
                 stopCover: () => stopCover(),
@@ -12785,6 +11313,7 @@ export function MainBoard() {
                 setCoverTiltPosition: (position) => setCoverTiltPosition(position),
                 moveCameraPtz: (direction) => moveCameraPtz(direction),
                 stopCameraPtz: () => stopCameraPtz(),
+                runCameraRelatedEntityAction: (request) => runCameraRelatedEntityAction(request),
               }}
               onAuthorizeAlarmDeviceAuth={authorizeAlarmDeviceAuth}
               onToggleMicroWidget={toggleMicroWidgetEntity}
@@ -12799,7 +11328,7 @@ export function MainBoard() {
               selectedSidebarPath={selectedSidebarPath}
               sidebarPaths={visibleSidebarPaths}
               weatherConfig={weatherSection}
-              activeGridBreakpoint={activeGridBreakpoint}
+              activeGridBreakpoint={canvasGridBreakpoint}
               widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
               widgetLayoutOverrides={widgetLayoutOverrides}
               entityOptions={ENTITY_OPTIONS}
@@ -12819,9 +11348,14 @@ export function MainBoard() {
                   setSelectedSidebarPathId(null);
                 }
               }}
-            />
+              />
+              </React.Suspense>
+            ) : (
+              <DashboardSidebarPlaceholder isCompactViewport={isCompactViewport} />
+            )}
           </>
         )}
+        </React.Suspense>
 
       </main>
 
@@ -12837,17 +11371,19 @@ export function MainBoard() {
             <div className="mb-2 flex justify-center">
               <span className="liquid-glass-drag-handle" />
             </div>
-            <ConsumptionEditorSidebar
-              selectedCardId={selectedConsumptionCardId}
-              onSelectCard={setSelectedConsumptionCardId}
-              config={consumptionConfig}
-              haEntityIds={haEntityIds}
-              haConnected={isHaConnected}
-              onUpdateConfigField={updateConsumptionConfigField}
-              onResetConfig={resetConsumptionConfig}
-              variant="sheet"
-              onClose={() => setSelectedConsumptionCardId(null)}
-            />
+            <React.Suspense fallback={<SecondaryWorkspaceLoading label="Apertura configurazione…" />}>
+              <ConsumptionEditorSidebar
+                selectedCardId={selectedConsumptionCardId}
+                onSelectCard={setSelectedConsumptionCardId}
+                config={consumptionConfig}
+                haEntityIds={haEntityIds}
+                haConnected={isHaConnected}
+                onUpdateConfigField={updateConsumptionConfigField}
+                onResetConfig={resetConsumptionConfig}
+                variant="sheet"
+                onClose={() => setSelectedConsumptionCardId(null)}
+              />
+            </React.Suspense>
           </div>
         </>
       ) : null}
@@ -12857,176 +11393,268 @@ export function MainBoard() {
           isEditMode={isEditMode}
           quickPaths={visibleSidebarPaths}
           selectedPathId={selectedSidebarPathId}
+          activeRoute={activeNavigationRoute}
+          isSettingsActive={isSettingsView}
           onPathClick={handleSidebarPathClick}
           onOpenSettings={openSettingsRoute}
+          onPrefetchRoute={prefetchDashboardWorkspace}
         />
       ) : null}
 
-      <ProfilePanel
-        isOpen={isProfileOpen}
-        onClose={closeProfileRoute}
-        mode="profile"
-        initialSection={profileInitialSection}
-        userAvatarUrl={currentUserAvatarUrl}
-        userAvatarAlt={stateWithConnectedUser.userName}
-        userEmail={profileUserEmail}
-        dashboardCurrentUserId={deviceAuthUser.id}
-        userRoleLabel={profileUserRoleLabel}
-        houseMembers={profileHouseMembers}
-        userOwnedDeviceCount={profileUserOwnedDeviceCount}
-        movementTimeline={profileMovementTimeline}
-        movementPoints={profileMovementPoints}
-        movementUpdatedLabel={profileMovementUpdatedLabel}
-        theme={theme}
-        themeMode={themeMode}
-        onThemeChange={setTheme}
-        onThemeModeChange={setThemeMode}
-        wallpaper={wallpaper}
-        onWallpaperChange={setWallpaper}
-        developerMode={developerMode}
-        onDeveloperModeChange={setDeveloperMode}
-        haUrl={haUrl}
-        onUrlChange={setHaUrl}
-        haToken={haToken}
-        onTokenChange={setHaToken}
-        haRememberToken={haRememberToken}
-        onRememberTokenChange={setHaRememberToken}
-        haStatus={haStatus}
-        haError={oauthFlowError ?? haError}
-        haManagedByParent={isHaManagedByParent}
-        onConnect={connectHa}
-        onDisconnect={disconnectHa}
-        onStartOAuth={startHomeAssistantOAuth}
-        isOAuthBusy={isOAuthFlowBusy}
-        onDownloadBackup={downloadConfigurationBackup}
-        onRestoreBackup={restoreConfigurationFromFile}
-        onResetAll={resetAllConfiguration}
-      />
+      {isProfileOpen ? (
+        <React.Suspense fallback={<SecondaryWorkspaceLoading label="Apertura profilo…" overlay />}>
+          <ModernProfilePage
+            isOpen
+            onClose={closeProfileRoute}
+            initialSection={profileInitialSection}
+            currentUserId={deviceAuthUser.id}
+            userAvatarUrl={currentUserAvatarUrl}
+            userAvatarAlt={stateWithConnectedUser.userName}
+            userEmail={profileUserEmail}
+            userRoleLabel={profileUserRoleLabel}
+            houseMembers={profileHouseMembers}
+            userOwnedDeviceCount={profileUserOwnedDeviceCount}
+            movementTimeline={profileMovementTimeline}
+            movementPoints={profileMovementPoints}
+            movementUpdatedLabel={profileMovementUpdatedLabel}
+            haStatus={haStatus}
+            appearanceMode={appearanceMode}
+            onAppearanceModeChange={setAppearanceMode}
+            background={background}
+            onBackgroundChange={setBackground}
+            navigationRoute={activeNavigationRoute}
+            onNavigate={navigateWithinDashboard}
+          />
+        </React.Suspense>
+      ) : null}
 
       {activeMainGuide ? (
-        <GuidedSetupOverlay
-          isOpen
-          tag={activeMainGuide.tag}
-          heading={activeMainGuide.heading}
-          steps={activeMainGuide.steps}
-          onDismiss={dismissActiveMainGuide}
-          completeLabel={activeMainGuide.completeLabel}
-          skipLabel={activeMainGuide.skipLabel}
-        />
+        <React.Suspense fallback={<SecondaryWorkspaceLoading label="Preparazione guida…" overlay />}>
+          <GuidedSetupOverlay
+            isOpen
+            tag={activeMainGuide.tag}
+            heading={activeMainGuide.heading}
+            description={activeMainGuide.description}
+            steps={activeMainGuideSteps}
+            onDismiss={dismissActiveMainGuide}
+            onStepChange={(step) => setActiveMainGuideStepId(step.id ?? null)}
+            isStepComplete={(step) => step.id === 'edit-mode' && isEditMode}
+            completeLabel={activeMainGuide.completeLabel}
+            skipLabel={activeMainGuide.skipLabel}
+          />
+        </React.Suspense>
       ) : null}
 
-      <SecurityAuthModal
-        isOpen={Boolean(pendingQuickAlarmAction)}
-        pendingAlarmState={pendingQuickAlarmAction?.state ?? null}
-        pendingStateRequiresCode={quickAlarmRequiresCode}
-        title={
-          pendingQuickAlarmAction?.requiresBiometric
-            ? 'Verifica dispositivo'
-            : 'Conferma comando'
-        }
+      {isQuickSecurityAuthOpen || hasMountedQuickSecurityAuth ? (
+        <React.Suspense fallback={<SecondaryWorkspaceLoading label="Preparazione verifica…" overlay />}>
+          <SecurityAuthModal
+            isOpen={isQuickSecurityAuthOpen}
+            pendingAlarmState={pendingQuickAlarmAction?.state ?? null}
+            pendingStateRequiresCode={quickAlarmRequiresCode || quickLockRequiresCode}
+            title={
+              pendingQuickLockAction
+                ? 'Conferma sblocco'
+                : pendingQuickAlarmAction?.requiresBiometric
+                ? 'Verifica dispositivo'
+                : 'Conferma comando'
+            }
+            description={
+              pendingQuickLockAction
+                ? 'Inserisci il codice serratura. Ad Home Assistant verrà inviato soltanto dopo la conferma.'
+                : quickAlarmRequiresCode
+                ? 'Inserisci il PIN allarme per continuare.'
+                : 'Verifica il dispositivo per continuare.'
+            }
+            authError={quickSecurityAuthError}
+            isAuthBusy={isQuickAlarmAuthBusy || isLockAuthBusy}
+            isAlarmCodeNumeric={pendingQuickLockAction?.numericCodeMode ?? pendingQuickAlarmAction?.numericCodeMode ?? true}
+            alarmCodeTypeLabel={pendingQuickLockAction ? 'Codice serratura' : quickAlarmCodeTypeLabel}
+            authPinInput={quickAlarmAuthCode}
+            preferDeviceAuth={Boolean(pendingQuickAlarmAction?.requiresBiometric)}
+            deviceAuthLabel="Verifica dispositivo"
+            onVerifyWithDevice={
+              pendingQuickAlarmAction?.requiresBiometric
+                ? async () => Boolean(await confirmQuickAlarmAuth(true))
+                : undefined
+            }
+            onPinInputChange={(value) => {
+              setQuickAlarmSubmissionError('');
+              setQuickAlarmAuthCode(
+                (pendingQuickLockAction?.numericCodeMode ?? pendingQuickAlarmAction?.numericCodeMode) === false
+                  ? value.slice(0, 12)
+                  : value.replace(/[^\d]/g, '').slice(0, 12),
+              );
+            }}
+            onVerifyWithPin={() => pendingQuickLockAction ? confirmQuickLockAuth() : confirmQuickAlarmAuth(false)}
+            onPushPinDigit={(digit) => {
+              setQuickAlarmSubmissionError('');
+              setQuickAlarmAuthCode((current) => `${current}${digit}`.slice(0, 12));
+            }}
+            onPopPinDigit={() => {
+              setQuickAlarmSubmissionError('');
+              setQuickAlarmAuthCode((current) => current.slice(0, -1));
+            }}
+            onClearPin={() => {
+              setQuickAlarmSubmissionError('');
+              setQuickAlarmAuthCode('');
+            }}
+            onClose={closeQuickAlarmAuth}
+            usePortal
+          />
+        </React.Suspense>
+      ) : null}
+
+      <GlassModal
+        isOpen={Boolean(editConfirm)}
+        onClose={() => {
+          if (!isDashboardSaveBusy) setEditConfirm(null);
+        }}
+        eyebrow={editConfirm === 'enter' ? 'Modalità edit' : editConfirm === 'refresh' ? 'Ricarica pagina' : 'Uscita edit'}
+        title={editConfirm === 'enter' ? 'Attivare la modalità modifica?' : editConfirm === 'refresh' ? 'Ricaricare la pagina?' : 'Uscire dalla modalità modifica?'}
         description={
-          quickAlarmRequiresCode
-            ? 'Inserisci il PIN allarme per continuare.'
-            : 'Verifica il dispositivo per continuare.'
+          editConfirm === 'enter'
+            ? requiresDashboardLayoutMigration
+              ? 'Il layout corrente è salvato solo su questo dispositivo. Verrà trasferito su Home Assistant e diventerà disponibile anche sugli altri dispositivi.'
+              : 'Potrai trascinare e configurare tutte le card della dashboard.'
+            : editConfirm === 'refresh'
+              ? hasUnsavedDashboardEdits
+                ? 'Le modifiche non sono ancora state salvate. Premi Annulla per continuare a modificare.'
+                : 'Non ci sono modifiche da perdere.'
+              : hasUnsavedDashboardEdits
+                ? 'Le modifiche verranno salvate una sola volta su Home Assistant prima di uscire.'
+                : 'Non sono state effettuate modifiche durante questa sessione.'
         }
-        authError={quickAlarmAuthError}
-        isAuthBusy={isQuickAlarmAuthBusy || isLockAuthBusy}
-        isAlarmCodeNumeric={pendingQuickAlarmAction?.numericCodeMode ?? true}
-        alarmCodeTypeLabel={quickAlarmCodeTypeLabel}
-        authPinInput={quickAlarmAuthCode}
-        preferDeviceAuth={Boolean(pendingQuickAlarmAction?.requiresBiometric)}
-        deviceAuthLabel="Verifica dispositivo"
-        onVerifyWithDevice={
-          pendingQuickAlarmAction?.requiresBiometric
-            ? async () => Boolean(await confirmQuickAlarmAuth(true))
-            : undefined
+        variant="responsive"
+        size="md"
+        zIndex={230}
+        showCloseButton={false}
+        backdropClassName="bg-black/60 backdrop-blur-3xl"
+        bodyClassName="hidden"
+        footer={
+          <>
+            <button type="button" disabled={isDashboardSaveBusy} onClick={() => setEditConfirm(null)} className="glass-button rounded-xl px-4 py-2 text-sm text-white/70 disabled:opacity-45">
+              Annulla
+            </button>
+            {editConfirm === 'exit' && hasUnsavedDashboardEdits ? (
+              <button
+                type="button"
+                disabled={isDashboardSaveBusy}
+                onClick={discardDashboardEditSession}
+                className="glass-button rounded-xl px-4 py-2 text-sm font-semibold text-[color:var(--ui-text-secondary)]"
+              >
+                Scarta modifiche
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={isDashboardSaveBusy}
+              onClick={confirmEditAction}
+              className={`glass-button rounded-xl px-4 py-2 text-sm font-semibold ${
+                editConfirm === 'enter'
+                  ? 'border-blue-300/45 bg-blue-500/16 text-blue-100 hover:bg-blue-500/26'
+                  : 'border-rose-300/45 bg-rose-500/16 text-rose-100 hover:bg-rose-500/26'
+              }`}
+            >
+              {isDashboardSaveBusy
+                ? 'Salvataggio…'
+                : editConfirm === 'enter'
+                ? requiresDashboardLayoutMigration
+                  ? 'Trasferisci e attiva'
+                  : 'Attiva'
+                : editConfirm === 'refresh'
+                  ? 'Ricarica'
+                  : hasUnsavedDashboardEdits
+                    ? 'Salva ed esci'
+                    : 'Esci'}
+            </button>
+          </>
         }
-        onPinInputChange={(value) => {
-          setQuickAlarmSubmissionError('');
-          setQuickAlarmAuthCode(
-            pendingQuickAlarmAction?.numericCodeMode === false
-              ? value.slice(0, 12)
-              : value.replace(/[^\d]/g, '').slice(0, 12),
-          );
-        }}
-        onVerifyWithPin={() => confirmQuickAlarmAuth(false)}
-        onPushPinDigit={(digit) => {
-          setQuickAlarmSubmissionError('');
-          setQuickAlarmAuthCode((current) => `${current}${digit}`.slice(0, 12));
-        }}
-        onPopPinDigit={() => {
-          setQuickAlarmSubmissionError('');
-          setQuickAlarmAuthCode((current) => current.slice(0, -1));
-        }}
-        onClearPin={() => {
-          setQuickAlarmSubmissionError('');
-          setQuickAlarmAuthCode('');
-        }}
-        onClose={closeQuickAlarmAuth}
-        usePortal
       />
 
-      {editConfirm ? (
-        <div className="fixed inset-0 z-[230] flex items-stretch justify-stretch p-0 md:items-center md:justify-center md:p-8">
-          <button
-            type="button"
-            onClick={() => setEditConfirm(null)}
-            className="absolute inset-0 bg-black/60 backdrop-blur-3xl"
-            aria-label="Chiudi conferma"
+      <GlassModal
+        isOpen={isDashboardConflictOpen}
+        onClose={() => setIsDashboardConflictOpen(false)}
+        eyebrow={haDashboardLayoutPersistence.pendingRemoteUpdate ? 'Aggiornamento layout' : 'Conflitto layout'}
+        title={haDashboardLayoutPersistence.pendingRemoteUpdate
+          ? `È disponibile la versione ${haDashboardLayoutPersistence.pendingRemoteUpdate.revision}`
+          : 'Il layout è cambiato su un altro dispositivo'}
+        description={haDashboardLayoutPersistence.pendingRemoteUpdate
+          ? hasUnsavedDashboardEdits
+            ? 'La tua bozza non verrà sovrascritta. Puoi continuare a modificarla oppure scartarla e applicare direttamente la nuova versione.'
+            : 'Puoi applicare direttamente la nuova versione senza ricaricare la pagina.'
+          : 'La tua bozza è stata conservata in questa scheda. Ricarica la versione Home Assistant e potrai scegliere se riprendere la bozza locale.'}
+        variant="responsive"
+        size="md"
+        zIndex={240}
+        showCloseButton={false}
+        backdropClassName="bg-black/65 backdrop-blur-3xl"
+        bodyClassName="hidden"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsDashboardConflictOpen(false)}
+              className="glass-button rounded-xl px-4 py-2 text-sm text-[color:var(--ui-text-secondary)]"
+            >
+              {hasUnsavedDashboardEdits ? 'Continua a modificare' : 'Più tardi'}
+            </button>
+            <button
+              type="button"
+              onClick={haDashboardLayoutPersistence.pendingRemoteUpdate
+                ? applyPendingDashboardRemoteUpdate
+                : reloadAfterDashboardConflict}
+              className="glass-button rounded-xl border-blue-300/45 bg-blue-500/16 px-4 py-2 text-sm font-semibold text-blue-100"
+            >
+              {haDashboardLayoutPersistence.pendingRemoteUpdate
+                ? hasUnsavedDashboardEdits
+                  ? 'Scarta bozza e applica'
+                  : 'Applica aggiornamento'
+                : 'Carica da Home Assistant'}
+            </button>
+          </>
+        }
+      />
+
+      {visibleDashboardRecovery ? (
+        <React.Suspense fallback={<SecondaryWorkspaceLoading label="Verifica recupero…" overlay />}>
+          <DashboardRecoveryModal
+            snapshot={visibleDashboardRecovery}
+            onKeepCurrent={() => {
+              if (typeof window === 'undefined') {
+                return;
+              }
+              const result = discardDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage);
+              if (!result.ok) {
+                addNotification('alert', 'Impossibile eliminare la copia di recupero.');
+                return;
+              }
+              setPendingDashboardRecovery(null);
+            }}
+            onRestore={() => {
+              if (typeof window === 'undefined' || !dashboardSecurity.can('edit_dashboard')) {
+                return;
+              }
+              const result = restoreDashboardRecoverySnapshot(effectiveRuntimeMode, window.localStorage);
+              if (!result.ok) {
+                addNotification('alert', 'Ripristino del layout non riuscito. La copia è stata conservata.');
+                return;
+              }
+              window.location.reload();
+            }}
           />
-          <div
-            className="liquid-glass-panel relative h-full w-full overflow-y-auto rounded-none border-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] glass-scrollbar md:h-auto md:max-w-md md:rounded-[2rem] md:border md:p-6 md:overflow-visible"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-white/55">
-              {editConfirm === 'enter'
-                ? 'Modalita edit'
-                : editConfirm === 'refresh'
-                  ? 'Ricarica pagina'
-                  : 'Uscita edit'}
-            </p>
-            <h3 className="mt-2 text-xl font-semibold">
-              {editConfirm === 'enter'
-                ? 'Attivare la modalita modifica?'
-                : editConfirm === 'refresh'
-                  ? 'Ricaricare la pagina?'
-                  : 'Uscire dalla modalita modifica?'}
-            </h3>
-            <p className="mt-3 text-sm text-white/60">
-              {editConfirm === 'enter'
-                ? 'Potrai trascinare e configurare tutte le card della dashboard.'
-                : editConfirm === 'refresh'
-                  ? 'Potresti perdere modifiche non salvate. Premi Annulla per continuare a modificare.'
-                  : 'Se hai modifiche in corso, premi Annulla per continuare a modificare.'}
-            </p>
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setEditConfirm(null)}
-                className="glass-button rounded-xl px-4 py-2 text-sm text-white/70"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={confirmEditAction}
-                className={`glass-button rounded-xl px-4 py-2 text-sm font-semibold ${
-                  editConfirm === 'enter'
-                    ? 'border-blue-300/45 bg-blue-500/16 text-blue-100 hover:bg-blue-500/26'
-                    : 'border-rose-300/45 bg-rose-500/16 text-rose-100 hover:bg-rose-500/26'
-                }`}
-              >
-                {editConfirm === 'enter' ? 'Attiva' : editConfirm === 'refresh' ? 'Ricarica' : 'Esci'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </React.Suspense>
       ) : null}
+
+      <DashboardEditDraftRecoveryModal
+        draft={visibleDashboardEditDraft}
+        hasRevisionConflict={dashboardEditDraftHasRevisionConflict}
+        onResume={resumePendingDashboardEditDraft}
+        onDiscard={discardPendingDashboardEditDraft}
+      />
     </div>
+    </SensitiveActionGateProvider>
+    </DashboardSecurityProvider>
   );
 }
 
 export default MainBoard;
-
-
-

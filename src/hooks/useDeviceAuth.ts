@@ -9,6 +9,13 @@ export type AuthUserContext = {
 const DEVICE_AUTH_CREDENTIAL_STORAGE_PREFIX = 'ha.dashboard.deviceAuth.credentialId.';
 const LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY = 'ha.dashboard.security.biometricCredentialId';
 const DEVICE_AUTH_RP_NAME = 'Home Assistant Dashboard';
+const DEVICE_AUTH_CREDENTIAL_CHANGE_EVENT = 'ha-dashboard-device-auth-credential-change';
+export const DEVICE_AUTH_VERIFICATION_TIMEOUT_MS = 20_000;
+
+type DeviceAuthCredentialChangeDetail = {
+  storageKey: string;
+  credentialId: string;
+};
 
 function hasWebAuthnSupport() {
   return (
@@ -58,6 +65,17 @@ function readStoredCredentialId(storageKey: string) {
   );
 }
 
+function notifyCredentialChange(storageKey: string, credentialId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent<DeviceAuthCredentialChangeDetail>(DEVICE_AUTH_CREDENTIAL_CHANGE_EVENT, {
+      detail: { storageKey, credentialId },
+    }),
+  );
+}
+
 export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
   const userKey = useMemo(() => {
     const fallbackId = 'current_user';
@@ -96,6 +114,8 @@ export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
       !window.localStorage.getItem(credentialStorageKey)
     ) {
       window.localStorage.setItem(credentialStorageKey, storedCredentialId);
+      window.localStorage.removeItem(LEGACY_DEVICE_AUTH_CREDENTIAL_STORAGE_KEY);
+      notifyCredentialChange(credentialStorageKey, storedCredentialId);
     }
   }, [credentialStorageKey]);
 
@@ -109,9 +129,19 @@ export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
         setCredentialId(event.newValue?.trim() ?? '');
       }
     };
+    const syncCredentialIdInCurrentDocument = (event: Event) => {
+      const detail = (event as CustomEvent<DeviceAuthCredentialChangeDetail>).detail;
+      if (detail?.storageKey === credentialStorageKey) {
+        setCredentialId(detail.credentialId.trim());
+      }
+    };
 
     window.addEventListener('storage', syncCredentialId);
-    return () => window.removeEventListener('storage', syncCredentialId);
+    window.addEventListener(DEVICE_AUTH_CREDENTIAL_CHANGE_EVENT, syncCredentialIdInCurrentDocument);
+    return () => {
+      window.removeEventListener('storage', syncCredentialId);
+      window.removeEventListener(DEVICE_AUTH_CREDENTIAL_CHANGE_EVENT, syncCredentialIdInCurrentDocument);
+    };
   }, [credentialStorageKey]);
 
   const isBiometricAvailable = useCallback(async (): Promise<boolean> => {
@@ -158,6 +188,7 @@ export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
         const nextCredentialId = bytesToBase64Url((credential as PublicKeyCredential).rawId);
         window.localStorage.setItem(credentialStorageKey, nextCredentialId);
         setCredentialId(nextCredentialId);
+        notifyCredentialChange(credentialStorageKey, nextCredentialId);
         return true;
       } catch (error) {
         console.warn(`[DeviceAuth] Registrazione fallita o annullata per ${actionName}:`, error);
@@ -177,19 +208,33 @@ export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
         return false;
       }
 
+      const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      let timeoutId: number | null = null;
       try {
-        const credential = await navigator.credentials.get({
+        const credentialRequest = navigator.credentials.get({
           publicKey: {
             challenge: createChallenge(),
             allowCredentials: [{ id: base64UrlToArrayBuffer(credentialId), type: 'public-key' }],
-            timeout: 45000,
+            timeout: DEVICE_AUTH_VERIFICATION_TIMEOUT_MS,
             userVerification: 'required',
           },
+          signal: abortController?.signal,
         });
+        const applicationTimeout = new Promise<null>((resolve) => {
+          timeoutId = window.setTimeout(() => {
+            abortController?.abort();
+            resolve(null);
+          }, DEVICE_AUTH_VERIFICATION_TIMEOUT_MS);
+        });
+        const credential = await Promise.race([credentialRequest, applicationTimeout]);
         return Boolean(credential);
       } catch (error) {
         console.warn(`[DeviceAuth] Autenticazione fallita o annullata per ${actionName}:`, error);
         return false;
+      } finally {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
       }
     },
     [credentialId],
@@ -198,6 +243,7 @@ export function useDeviceAuth(currentUser?: Partial<AuthUserContext>) {
   const clearCredential = useCallback(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(credentialStorageKey);
+      notifyCredentialChange(credentialStorageKey, '');
     }
     setCredentialId('');
   }, [credentialStorageKey]);

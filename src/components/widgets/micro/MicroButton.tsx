@@ -226,28 +226,28 @@ export function MicroButton({
           : undefined
       }
       disabled={mode === 'switch' ? isPending : false}
-      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-left text-white transition-all duration-200 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/55 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+      className={`min-h-[4.25rem] rounded-2xl border px-3 py-2.5 text-left text-[color:var(--ui-text-primary)] transition-all duration-200 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/55 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
         visualActive
           ? 'border-blue-300/45 bg-blue-500/18 shadow-[0_0_24px_rgba(56,189,248,0.24)]'
-          : 'border-white/10 bg-white/[0.06] hover:border-white/22 hover:bg-white/[0.08] hover:-translate-y-[1px] hover:shadow-[0_8px_24px_rgba(15,23,42,0.22)]'
+          : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:-translate-y-[1px] hover:shadow-[0_8px_24px_var(--ui-shadow-soft)]'
       } ${isPressed || tapPulse ? 'scale-[0.995]' : ''} ${isPending && mode === 'switch' ? 'cursor-wait opacity-80' : ''}`}
       aria-label={label}
       title={label}
     >
       <div className="flex h-full min-w-0 items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight text-white/92">{label}</p>
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-white/58">{displayStatusText}</p>
+          <p className="truncate text-sm font-semibold leading-tight text-[color:var(--ui-text-primary)]">{label}</p>
+          <p className="mt-0.5 truncate text-[11px] leading-tight text-[color:var(--ui-text-tertiary)]">{displayStatusText}</p>
         </div>
         <span
-          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white/90 ${
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[color:var(--ui-text-primary)] ${
             visualActive
               ? 'border-blue-200/55 bg-blue-400/28'
-              : 'border-white/15 bg-white/10'
+              : 'border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)]'
           }`}
         >
           {isPending && mode !== 'page' ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/85 border-t-transparent" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[color:var(--ui-text-secondary)] border-t-transparent" />
           ) : mode === 'page' ? (
             <ChevronRight size={16} />
           ) : mode === 'push' ? (
