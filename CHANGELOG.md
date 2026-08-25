@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-beta.8 — 2026-08-25
+
+### Corretto
+
+- registrazione del pannello compatibile con le API Home Assistant correnti e future;
+- `handle_safe_area` viene inviato solo quando la versione installata di Home Assistant lo supporta.
+
 ## 0.1.0-beta.7 — 2026-08-25
 
 ### Corretto

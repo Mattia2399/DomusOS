@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
@@ -62,21 +64,25 @@ async def async_setup_entry(
             "panel_custom entry before setting up the HACS integration."
         )
 
-    await panel_custom.async_register_panel(
-        hass=hass,
-        frontend_url_path=PANEL_URL_PATH,
-        webcomponent_name=PANEL_WEB_COMPONENT,
-        module_url=f"{STATIC_URL_PATH}/ha-dashboard-builder-panel.js?v={VERSION}",
-        sidebar_title=PANEL_TITLE,
-        sidebar_icon=PANEL_ICON,
-        require_admin=False,
-        handle_safe_area=True,
-        config={
+    panel_options: dict[str, Any] = {
+        "frontend_url_path": PANEL_URL_PATH,
+        "webcomponent_name": PANEL_WEB_COMPONENT,
+        "module_url": f"{STATIC_URL_PATH}/ha-dashboard-builder-panel.js?v={VERSION}",
+        "sidebar_title": PANEL_TITLE,
+        "sidebar_icon": PANEL_ICON,
+        "require_admin": False,
+        "config": {
             "app_url": f"{STATIC_URL_PATH}/index.html?v={VERSION}",
             "integration_domain": DOMAIN,
             "version": VERSION,
         },
-    )
+    }
+    if "handle_safe_area" in inspect.signature(
+        panel_custom.async_register_panel
+    ).parameters:
+        panel_options["handle_safe_area"] = True
+
+    await panel_custom.async_register_panel(hass=hass, **panel_options)
 
     entry.async_on_unload(
         entry.add_update_listener(_async_update_listener)
