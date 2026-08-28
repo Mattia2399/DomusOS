@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0-beta.11 — 2026-08-28
+
+### Migliorato
+
+- nuova immagine di presentazione responsive usata nel repository GitHub e
+  nella scheda informativa HACS;
+- separazione completa tra fixture Demo e dati reali: card, catalogo e pannelli
+  non usano più valori simulati durante una sessione Home Assistant;
+- Rooms conserva preferenze distinte per Demo e casa reale e non genera più
+  stanze fittizie quando Home Assistant non espone aree;
+- pagine secondarie di Consumi uniformate all'header nidificato condiviso;
+- log di Security vuoto nelle case reali e chiaramente identificato come
+  dimostrativo nella Demo.
+
+### Corretto
+
+- gli stack mantengono la larghezza configurata quando una Light cambia stato:
+  l'espansione automatica può usare più righe senza ridimensionare le card
+  vicine o modificare il layout persistente;
+- pannello Light resiliente alle entità che non espongono `hs_color`;
+- comandi e fallback delle card reali non ereditano più capacità o valori dalle
+  entità mock della Demo;
+- piccoli allineamenti responsive di Light, Climate, Consumi e App Library.
+
 ## 0.1.0-beta.10 — 2026-08-28
 
 ### Aggiunto

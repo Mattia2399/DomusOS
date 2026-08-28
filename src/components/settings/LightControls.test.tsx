@@ -43,4 +43,30 @@ describe('LightControlsPanel', () => {
     expect(onBrightnessChange).toHaveBeenCalledTimes(1);
     expect(onBrightnessChange).toHaveBeenCalledWith(37, undefined);
   });
+
+  it('keeps the panel available when Home Assistant does not expose hs_color', () => {
+    const { getByText } = render(
+      <LightControlsPanel
+        lamp={{
+          name: 'Luce senza colore',
+          isOn: false,
+          brightness: 0,
+          status: 'off',
+          colorTemp: 3200,
+          supportsBrightness: true,
+          supportsColor: true,
+          supportsColorTemp: false,
+        }}
+        onToggle={() => undefined}
+        onBrightnessChange={() => undefined}
+        onColorTempChange={() => undefined}
+        onColorChange={() => undefined}
+        onWhiteChange={() => undefined}
+        onEffectChange={() => undefined}
+        onFlash={() => undefined}
+      />,
+    );
+
+    expect(getByText('Luce senza colore')).not.toBeNull();
+  });
 });

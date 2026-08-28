@@ -1202,6 +1202,8 @@ export function GridCanvas({
   const compactDragArmedElementRef = useRef<HTMLElement | null>(null);
   const hasCanvasDragMovedRef = useRef(false);
   const stableRuntimeGridWidthRef = useRef(0);
+  const resolvedRuntimeStackWidthsRef = useRef<Set<string>>(new Set());
+  const runtimeStackWidthSettleTimersRef = useRef<Map<string, number>>(new Map());
   const lastLiveGridEngineLayoutsRef = useRef<GridLayouts>({});
   const [isMounted, setIsMounted] = useState(false);
   const [runtimeGridWidth, setRuntimeGridWidth] = useState(0);
@@ -1214,6 +1216,13 @@ export function GridCanvas({
   const [selectedCatalogSectionKind, setSelectedCatalogSectionKind] = useState<SectionKind | null>(null);
   const [catalogFeedback, setCatalogFeedback] = useState<string | null>(null);
   const [keyboardLayoutAnnouncement, setKeyboardLayoutAnnouncement] = useState('');
+  useEffect(
+    () => () => {
+      runtimeStackWidthSettleTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      runtimeStackWidthSettleTimersRef.current.clear();
+    },
+    [],
+  );
   // The canvas content box is the single source of truth for responsive
   // geometry. Using window.innerWidth here disagrees with RGL whenever a
   // sidebar, Builder or an embedded shell narrows the actual canvas and can
@@ -2224,13 +2233,35 @@ export function GridCanvas({
       if (!currentItem) {
         return;
       }
+      const runtimeStackWidthKey = `${gridEngineActiveBreakpoint}:${sectionId}`;
+      const hasResolvedRuntimeWidth = resolvedRuntimeStackWidthsRef.current.has(runtimeStackWidthKey);
+      const canAutoFitWidth =
+        section?.stackColumnsMode !== 'manual' &&
+        (isEditMode || !hasResolvedRuntimeWidth);
       const nextSpan = resolveGridStackContainerSpan({
         geometry,
         availableCols: gridEngineActiveCols,
         currentCols: currentItem.w,
-        widthMode: section?.stackColumnsMode === 'manual' ? 'manual' : 'auto',
+        // Runtime state changes (for example a Light auto-expanding when it is
+        // switched on) may change the rows used by a stack, but must never
+        // recalculate its saved width. Otherwise neighbouring sections appear
+        // to shrink or grow whenever an entity changes state.
+        widthMode: canAutoFitWidth ? 'auto' : 'manual',
         headerVisible,
       });
+      if (!isEditMode && !hasResolvedRuntimeWidth) {
+        const currentTimer = runtimeStackWidthSettleTimersRef.current.get(runtimeStackWidthKey);
+        if (currentTimer !== undefined) {
+          window.clearTimeout(currentTimer);
+        }
+        runtimeStackWidthSettleTimersRef.current.set(
+          runtimeStackWidthKey,
+          window.setTimeout(() => {
+            resolvedRuntimeStackWidthsRef.current.add(runtimeStackWidthKey);
+            runtimeStackWidthSettleTimersRef.current.delete(runtimeStackWidthKey);
+          }, 250),
+        );
+      }
       const safeRows = nextSpan.h;
       const safeCols = nextSpan.w;
       const currentRows = Math.max(1, Math.round(currentItem.h));
@@ -2253,7 +2284,12 @@ export function GridCanvas({
         ...liveGridEngineLayouts,
         [gridEngineActiveBreakpoint]: nextActiveLayout,
       } as ResponsiveLayouts<GridBreakpoint>);
-      commitGridEngineLayouts(committed, nextActiveLayout);
+      // Geometry produced by live entity state is presentation state. Persist
+      // it only while editing the dashboard; normal controls must not mutate
+      // the configured layout.
+      if (isEditMode) {
+        commitGridEngineLayouts(committed, nextActiveLayout);
+      }
     },
     [
       sectionById,
@@ -2262,6 +2298,7 @@ export function GridCanvas({
       liveGridEngineLayouts,
       gridEngineActiveBreakpoint,
       gridEngineActiveCols,
+      isEditMode,
       updateGridEngineLayouts,
       commitGridEngineLayouts,
     ],

@@ -8,8 +8,6 @@ import type {
 } from '../types/widgetTypeLayout';
 import {
   GREETING_SECTION_ROWS,
-  INITIAL_SECTIONS,
-  INITIAL_WIDGETS,
   ROOT_CANVAS_COLS,
   ROOT_CANVAS_LEGACY_COLS,
   ROOT_CANVAS_LEGACY_ROW_UNITS,
@@ -22,6 +20,7 @@ import {
   WEATHER_SECTION_CHIP_ROWS,
   createDefaultSectionLayout,
 } from '../types/dashboardModels';
+import { getInitialDashboardFixtures, normalizeWidgetsForRuntime } from '../demo/dashboardDemoFixtures';
 import { normalizeSensorDisplayPrecision } from '../utils/sensorValue';
 import {
   mergeWidgetSecretsIntoWidgets,
@@ -1137,24 +1136,25 @@ export function loadDashboardLayout(runtimeMode: DashboardRuntimeMode = 'real'):
   widgetLayoutOverrides: WidgetLayoutOverrides;
   responsiveLayouts: DashboardResponsiveLayouts;
 } {
+  const initial = getInitialDashboardFixtures(runtimeMode);
   if (typeof window === 'undefined') {
     return {
-      sections: INITIAL_SECTIONS,
-      widgets: INITIAL_WIDGETS,
+      sections: initial.sections,
+      widgets: initial.widgets,
       widgetTypeLayoutOverrides: {},
       widgetLayoutOverrides: {},
-      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+      responsiveLayouts: createInitialResponsiveLayouts(initial.sections, initial.widgets),
     };
   }
 
   const parsed = safeParse(window.localStorage.getItem(getDashboardLayoutStorageKey(runtimeMode)));
   if (!parsed) {
     return {
-      sections: INITIAL_SECTIONS,
-      widgets: INITIAL_WIDGETS,
+      sections: initial.sections,
+      widgets: initial.widgets,
       widgetTypeLayoutOverrides: {},
       widgetLayoutOverrides: {},
-      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+      responsiveLayouts: createInitialResponsiveLayouts(initial.sections, initial.widgets),
     };
   }
   const migratedV2 = parsed.version === 1 ? migrateStoredLayoutV1ToV2(parsed) : parsed;
@@ -1172,11 +1172,11 @@ export function loadDashboardLayout(runtimeMode: DashboardRuntimeMode = 'real'):
   const hydrated = migratedV13.version === 13 ? migrateStoredLayoutV13ToV14(migratedV13) : migratedV13;
   if (hydrated.version !== STORAGE_VERSION) {
     return {
-      sections: INITIAL_SECTIONS,
-      widgets: INITIAL_WIDGETS,
+      sections: initial.sections,
+      widgets: initial.widgets,
       widgetTypeLayoutOverrides: {},
       widgetLayoutOverrides: {},
-      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+      responsiveLayouts: createInitialResponsiveLayouts(initial.sections, initial.widgets),
     };
   }
 
@@ -1203,18 +1203,19 @@ export function loadDashboardLayout(runtimeMode: DashboardRuntimeMode = 'real'):
   if (runtimeMode === 'real') {
     migrateLegacyWidgetSecretsFromWidgets(normalizedWidgets, window.localStorage);
   }
-  const widgets =
+  const widgetsWithSecrets =
     runtimeMode === 'real'
       ? mergeWidgetSecretsIntoWidgets(normalizedWidgets, window.localStorage)
       : stripWidgetSecretsFromWidgets(normalizedWidgets);
+  const widgets = normalizeWidgetsForRuntime(widgetsWithSecrets, runtimeMode);
 
   if (!sections.length && !widgets.length) {
     return {
-      sections: INITIAL_SECTIONS,
-      widgets: INITIAL_WIDGETS,
+      sections: initial.sections,
+      widgets: initial.widgets,
       widgetTypeLayoutOverrides: {},
       widgetLayoutOverrides: {},
-      responsiveLayouts: createInitialResponsiveLayouts(INITIAL_SECTIONS, INITIAL_WIDGETS),
+      responsiveLayouts: createInitialResponsiveLayouts(initial.sections, initial.widgets),
     };
   }
 

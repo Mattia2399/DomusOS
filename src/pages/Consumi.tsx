@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Bolt, Droplets, Flame, Gauge, Leaf, MoreHorizontal, Radio } from 'lucide-react';
+import { BarChart3, Bolt, Droplets, Flame, FlaskConical, Gauge, Leaf, MoreHorizontal, Radio } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { GuidedSetupOverlay, type GuidedSetupStep } from '../components/settings/GuidedSetupOverlay';
@@ -896,9 +896,18 @@ export function ConsumptionDashboardPage({
           <div className="h-full min-h-0 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] sm:p-6 sm:pb-[calc(env(safe-area-inset-bottom)+1.5rem)] lg:p-10">
             <div className="flex min-h-full flex-col">
               <header>
-                <h1 className="dashboard-page-title">
-                  Hub Sostenibilità e Consumi
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="dashboard-page-title">
+                    Hub Sostenibilità e Consumi
+                  </h1>
+                  <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 text-[10px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ui-text-secondary)]">
+                    <FlaskConical size={13} />
+                    Anteprima beta
+                  </span>
+                </div>
+                <p className="mt-2 max-w-3xl text-xs leading-relaxed text-[color:var(--ui-text-tertiary)] sm:text-sm">
+                  I valori collegati arrivano da Home Assistant; storici, confronti e dati mancanti possono essere dimostrativi.
+                </p>
                 <div className="mt-4 max-w-3xl" aria-live="polite">
                   <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                     <span
@@ -914,7 +923,7 @@ export function ConsumptionDashboardPage({
                       />
                     </span>
                     <span className="text-[0.68rem] font-semibold uppercase leading-none tracking-[0.18em] text-[color:var(--ui-text-tertiary)]">
-                      Monitoraggio live
+                      Monitoraggio
                     </span>
                     <span className="h-px w-10 bg-gradient-to-r from-[color:var(--ui-separator)] to-transparent" aria-hidden="true" />
                     <span

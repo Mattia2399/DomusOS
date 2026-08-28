@@ -67,10 +67,15 @@ import type { HaArea } from '../hooks/useHaLiveConnection';
 import type { DashboardSection, SceneKey, Widget, WidgetKind } from '../types/dashboardModels';
 import type { MockEntityState, MockEntityStateMap } from '../types/ha';
 import { translateMediaPlayerState } from '../utils/mediaPlayerState';
+import type { DashboardRuntimeMode } from '../security/dashboardAccess';
 
 const CUSTOM_ROOMS_STORAGE_KEY = 'ha.dashboard.rooms.customRooms.v1';
 const ACTIVE_ROOM_STORAGE_KEY = 'ha.dashboard.rooms.activeRoomId.v1';
 const ROOM_ENTITY_VISIBILITY_STORAGE_KEY = 'ha.dashboard.rooms.hiddenEntitiesByRoom.v1';
+
+function getRoomsRuntimeStorageKey(baseKey: string, runtimeMode: DashboardRuntimeMode) {
+  return runtimeMode === 'demo' ? `${baseKey}.demo` : baseKey;
+}
 const ROOM_ID_CUSTOM_PREFIX = 'custom:';
 const ROOM_TITLE_TRANSITION = { duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const;
 const ROOM_MODAL_INPUT_CLASS =
@@ -361,6 +366,7 @@ type SectionDeviceSheetMode = 'add' | 'move' | null;
 type HiddenRoomEntitiesByRoom = Record<string, string[]>;
 
 type RoomsDashboardProps = {
+  runtimeMode?: DashboardRuntimeMode;
   isEditMode?: boolean;
   suppressBrowserNavigation?: boolean;
   navigationRoute?: string;
@@ -1236,18 +1242,20 @@ function parseCustomRooms(raw: string | null): CustomRoomRecord[] {
   }
 }
 
-function readStoredCustomRooms() {
+function readStoredCustomRooms(runtimeMode: DashboardRuntimeMode) {
   if (typeof window === 'undefined') {
     return [];
   }
-  return parseCustomRooms(window.localStorage.getItem(CUSTOM_ROOMS_STORAGE_KEY));
+  return parseCustomRooms(
+    window.localStorage.getItem(getRoomsRuntimeStorageKey(CUSTOM_ROOMS_STORAGE_KEY, runtimeMode)),
+  );
 }
 
-function readStoredActiveRoomId() {
+function readStoredActiveRoomId(runtimeMode: DashboardRuntimeMode) {
   if (typeof window === 'undefined') {
     return '';
   }
-  const raw = window.localStorage.getItem(ACTIVE_ROOM_STORAGE_KEY);
+  const raw = window.localStorage.getItem(getRoomsRuntimeStorageKey(ACTIVE_ROOM_STORAGE_KEY, runtimeMode));
   return typeof raw === 'string' ? raw.trim() : '';
 }
 
@@ -1276,11 +1284,13 @@ function parseHiddenRoomEntitiesByRoom(raw: string | null): HiddenRoomEntitiesBy
   }
 }
 
-function readStoredHiddenRoomEntitiesByRoom() {
+function readStoredHiddenRoomEntitiesByRoom(runtimeMode: DashboardRuntimeMode) {
   if (typeof window === 'undefined') {
     return {};
   }
-  return parseHiddenRoomEntitiesByRoom(window.localStorage.getItem(ROOM_ENTITY_VISIBILITY_STORAGE_KEY));
+  return parseHiddenRoomEntitiesByRoom(
+    window.localStorage.getItem(getRoomsRuntimeStorageKey(ROOM_ENTITY_VISIBILITY_STORAGE_KEY, runtimeMode)),
+  );
 }
 
 function createEmptyBuckets(): RoomEntityBuckets {
@@ -1778,6 +1788,7 @@ function ClimateAction({
 }
 
 export function RoomsDashboard({
+  runtimeMode = 'real',
   isEditMode = false,
   isLoading = false,
   haConnected,
@@ -1805,12 +1816,13 @@ export function RoomsDashboard({
   const mediaSwiperSuppressClickRef = React.useRef(false);
   const sectionTargetLongPressRef = React.useRef<RoomSectionTargetLongPressState | null>(null);
   const suppressNextSectionTargetClickRef = React.useRef<string | null>(null);
-  const [customRooms, setCustomRooms] = React.useState<CustomRoomRecord[]>(readStoredCustomRooms);
+  const [customRooms, setCustomRooms] = React.useState<CustomRoomRecord[]>(() => readStoredCustomRooms(runtimeMode));
   const [hiddenRoomEntitiesByRoom, setHiddenRoomEntitiesByRoom] =
-    React.useState<HiddenRoomEntitiesByRoom>(readStoredHiddenRoomEntitiesByRoom);
+    React.useState<HiddenRoomEntitiesByRoom>(() => readStoredHiddenRoomEntitiesByRoom(runtimeMode));
+  const [roomsStateRuntime, setRoomsStateRuntime] = React.useState<DashboardRuntimeMode>(runtimeMode);
   const [createdHaAreas, setCreatedHaAreas] = React.useState<HaArea[]>([]);
   const [deletedHaAreaIds, setDeletedHaAreaIds] = React.useState<string[]>([]);
-  const [activeRoomId, setActiveRoomId] = React.useState<string>(readStoredActiveRoomId);
+  const [activeRoomId, setActiveRoomId] = React.useState<string>(() => readStoredActiveRoomId(runtimeMode));
   const [activeCameraViewerEntityId, setActiveCameraViewerEntityId] = React.useState<string | null>(null);
   const [selectedFloorId, setSelectedFloorId] = React.useState<string>('all');
   const [selectedClimateEntityId, setSelectedClimateEntityId] = React.useState('');
@@ -1866,6 +1878,14 @@ export function RoomsDashboard({
     'demo-monitoring': true,
   });
   const [sceneByRoomId, setSceneByRoomId] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    if (roomsStateRuntime === runtimeMode) return;
+    setCustomRooms(readStoredCustomRooms(runtimeMode));
+    setHiddenRoomEntitiesByRoom(readStoredHiddenRoomEntitiesByRoom(runtimeMode));
+    setActiveRoomId(readStoredActiveRoomId(runtimeMode));
+    setRoomsStateRuntime(runtimeMode);
+  }, [roomsStateRuntime, runtimeMode]);
 
   React.useEffect(() => {
     if (canManageRooms) {
@@ -2012,20 +2032,20 @@ export function RoomsDashboard({
 
   const customRoomTabs = React.useMemo<RoomTab[]>(
     () =>
-      [...customRooms]
+      [...(roomsStateRuntime === runtimeMode ? customRooms : [])]
         .sort((a, b) => a.createdAt - b.createdAt)
         .map((room) => ({
           id: room.id,
           name: room.name,
           source: 'custom',
         })),
-    [customRooms],
+    [customRooms, roomsStateRuntime, runtimeMode],
   );
 
   const allRoomTabs = React.useMemo<RoomTab[]>(() => {
     const merged = [...haRoomTabs, ...customRoomTabs];
-    return merged.length > 0 ? merged : DEMO_ROOM_TABS;
-  }, [customRoomTabs, haRoomTabs]);
+    return merged.length > 0 ? merged : runtimeMode === 'demo' ? DEMO_ROOM_TABS : [];
+  }, [customRoomTabs, haRoomTabs, runtimeMode]);
   const roomTabs = React.useMemo<RoomTab[]>(() => {
     if (selectedFloorId === 'all') {
       return allRoomTabs;
@@ -2105,29 +2125,35 @@ export function RoomsDashboard({
   }, [isManageOpen, resetRoomForm]);
 
   React.useEffect(() => {
-    if (!canManageRooms || typeof window === 'undefined') {
+    if (!canManageRooms || roomsStateRuntime !== runtimeMode || typeof window === 'undefined') {
       return;
     }
-    window.localStorage.setItem(CUSTOM_ROOMS_STORAGE_KEY, JSON.stringify(customRooms));
-  }, [canManageRooms, customRooms]);
+    window.localStorage.setItem(
+      getRoomsRuntimeStorageKey(CUSTOM_ROOMS_STORAGE_KEY, runtimeMode),
+      JSON.stringify(customRooms),
+    );
+  }, [canManageRooms, customRooms, roomsStateRuntime, runtimeMode]);
 
   React.useEffect(() => {
-    if (!canManageRooms || typeof window === 'undefined') {
+    if (!canManageRooms || roomsStateRuntime !== runtimeMode || typeof window === 'undefined') {
       return;
     }
-    window.localStorage.setItem(ROOM_ENTITY_VISIBILITY_STORAGE_KEY, JSON.stringify(hiddenRoomEntitiesByRoom));
-  }, [canManageRooms, hiddenRoomEntitiesByRoom]);
+    window.localStorage.setItem(
+      getRoomsRuntimeStorageKey(ROOM_ENTITY_VISIBILITY_STORAGE_KEY, runtimeMode),
+      JSON.stringify(hiddenRoomEntitiesByRoom),
+    );
+  }, [canManageRooms, hiddenRoomEntitiesByRoom, roomsStateRuntime, runtimeMode]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (roomsStateRuntime !== runtimeMode || typeof window === 'undefined') {
       return;
     }
     if (!activeRoomId) {
-      window.localStorage.removeItem(ACTIVE_ROOM_STORAGE_KEY);
+      window.localStorage.removeItem(getRoomsRuntimeStorageKey(ACTIVE_ROOM_STORAGE_KEY, runtimeMode));
       return;
     }
-    window.localStorage.setItem(ACTIVE_ROOM_STORAGE_KEY, activeRoomId);
-  }, [activeRoomId]);
+    window.localStorage.setItem(getRoomsRuntimeStorageKey(ACTIVE_ROOM_STORAGE_KEY, runtimeMode), activeRoomId);
+  }, [activeRoomId, roomsStateRuntime, runtimeMode]);
 
   React.useEffect(() => {
     setEditingRoomSection(null);
@@ -6647,6 +6673,29 @@ export function RoomsDashboard({
             label="Carico stanze"
             description="Sincronizzo aree e dispositivi"
           />
+        </div>
+      </div>
+    );
+  }
+
+  if (roomTabs.length === 0) {
+    return (
+      <div className="rooms-dashboard dashboard-page-scroll">
+        <div className="dashboard-page-content dashboard-page-content-wide flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4">
+          <section className="dashboard-content-surface flex w-full max-w-xl flex-col items-center rounded-[2rem] px-6 py-10 text-center sm:px-10 sm:py-12">
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
+              <House size={24} />
+            </span>
+            <h1 className="mt-5 text-2xl font-semibold tracking-tight text-[color:var(--ui-text-primary)]">
+              Nessuna stanza configurata
+            </h1>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-[color:var(--ui-text-secondary)]">
+              DomusOS mostrerà qui soltanto le aree realmente disponibili nella tua casa Home Assistant.
+            </p>
+            <p className="mt-5 text-xs font-medium text-[color:var(--ui-text-tertiary)]">
+              Crea o assegna le aree da Home Assistant, quindi torna qui per visualizzarle.
+            </p>
+          </section>
         </div>
       </div>
     );

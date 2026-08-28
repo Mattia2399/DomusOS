@@ -33,7 +33,7 @@ export function LightCard({
   liveLightState,
   onDisplayMetricsChange,
 }: LightCardProps) {
-  const isPrimaryLamp = widget.id === 'light.living_room_lamp';
+  const isPrimaryLamp = widget.dataSource === 'mock' && widget.id === 'light.living_room_lamp';
   const { ref: cardRef, size: observedSize } = useObservedElementSize<HTMLDivElement>(widget.id);
   const measuredSize = observedSize?.identity === widget.id ? observedSize : null;
   const measuredVariant = measuredSize

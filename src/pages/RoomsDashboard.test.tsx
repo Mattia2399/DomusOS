@@ -1,12 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RoomsDashboard } from './RoomsDashboard';
 
 afterEach(cleanup);
+beforeEach(() => window.localStorage.clear());
 
 function renderRooms(canManageRooms: boolean) {
   return render(
     <RoomsDashboard
+      runtimeMode="demo"
       haConnected={false}
       canManageRooms={canManageRooms}
       haAreas={[]}
@@ -16,6 +18,44 @@ function renderRooms(canManageRooms: boolean) {
 }
 
 describe('RoomsDashboard permissions', () => {
+  it('keeps locally created Demo rooms out of the real house', () => {
+    window.localStorage.setItem(
+      'ha.dashboard.rooms.customRooms.v1.demo',
+      JSON.stringify([{ id: 'custom-demo-room', name: 'Stanza Demo', createdAt: 1 }]),
+    );
+
+    render(
+      <RoomsDashboard
+        runtimeMode="real"
+        haConnected
+        canManageRooms
+        haAreas={[]}
+        haStates={{}}
+      />,
+    );
+
+    expect(screen.queryByText('Stanza Demo')).toBeNull();
+    expect(screen.getByText('Nessuna stanza configurata')).not.toBeNull();
+  });
+
+  it('does not invent rooms when the real Home Assistant registry is empty', () => {
+    render(
+      <RoomsDashboard
+        runtimeMode="real"
+        haConnected
+        canManageRooms
+        haAreas={[]}
+        haStates={{}}
+      />,
+    );
+
+    expect(screen.getByText('Nessuna stanza configurata')).not.toBeNull();
+    expect(screen.queryByText('Soggiorno')).toBeNull();
+    expect(screen.queryByText('Camera')).toBeNull();
+    expect(screen.queryByText('Cucina')).toBeNull();
+    expect(screen.queryByText('Bagno')).toBeNull();
+  });
+
   it('keeps room management entry points hidden for a limited user', () => {
     renderRooms(false);
 

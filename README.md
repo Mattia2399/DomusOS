@@ -10,7 +10,7 @@
   ![Beta](https://img.shields.io/badge/status-public%20beta-f5a623?style=flat-square)
 </div>
 
-![DomusOS su desktop](docs/images/domusos-desktop.jpg)
+![DomusOS su desktop, tablet e smartphone](docs/images/domusos-showcase.png)
 
 ## Perché DomusOS
 

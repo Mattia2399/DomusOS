@@ -20,6 +20,17 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeHsColor(value: unknown): [number, number] {
+  if (!Array.isArray(value) || value.length < 2) {
+    return [0, 0];
+  }
+  const rawHue = Number(value[0]);
+  const rawSaturation = Number(value[1]);
+  const hue = Number.isFinite(rawHue) ? ((rawHue % 360) + 360) % 360 : 0;
+  const saturation = Number.isFinite(rawSaturation) ? clamp(rawSaturation, 0, 100) : 0;
+  return [hue, saturation];
+}
+
 function hsToRgb(hue: number, saturation: number): [number, number, number] {
   const h = ((Number(hue) || 0) % 360 + 360) % 360;
   const s = clamp((Number(saturation) || 0) / 100, 0, 1);
@@ -100,7 +111,7 @@ interface LightControlsProps {
     isOn: boolean;
     brightness: number;
     status: string;
-    hsColor: [number, number];
+    hsColor?: [number, number] | number[];
     colorTemp: number;
     supportsBrightness?: boolean;
     supportsColorTemp?: boolean;
@@ -148,6 +159,7 @@ export function LightControlsPanel({
   const supportsEffects = lamp.supportsEffects ?? false;
   const supportsFlash = lamp.supportsFlash ?? false;
   const supportsTransition = lamp.supportsTransition ?? false;
+  const hsColor = useMemo(() => normalizeHsColor(lamp.hsColor), [lamp.hsColor]);
   const colorTempMin = Math.min(lamp.minColorTempKelvin ?? 2000, lamp.maxColorTempKelvin ?? 6500);
   const colorTempMax = Math.max(lamp.minColorTempKelvin ?? 2000, lamp.maxColorTempKelvin ?? 6500);
   const commandOptions = supportsTransition && transitionSeconds > 0 ? { transition: transitionSeconds } : undefined;
@@ -186,18 +198,18 @@ export function LightControlsPanel({
     let nearest = 0;
     let nearestDiff = Number.POSITIVE_INFINITY;
     QUICK_COLOR_PRESETS.forEach((preset, index) => {
-      const diff = Math.abs(preset.hue - lamp.hsColor[0]);
+      const diff = Math.abs(preset.hue - hsColor[0]);
       if (diff < nearestDiff) {
         nearest = index;
         nearestDiff = diff;
       }
     });
     return nearest;
-  }, [lamp.hsColor]);
+  }, [hsColor]);
 
   const displayedBrightness = lamp.isOn ? brightnessDraft : 0;
   const displayedWhite = lamp.isOn ? whiteDraft : 0;
-  const currentColorHex = useMemo(() => rgbToHex(hsToRgb(lamp.hsColor[0], lamp.hsColor[1])), [lamp.hsColor]);
+  const currentColorHex = useMemo(() => rgbToHex(hsToRgb(hsColor[0], hsColor[1])), [hsColor]);
   const [pickerColor, setPickerColor] = useState(currentColorHex);
 
   useEffect(() => {

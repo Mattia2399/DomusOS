@@ -26,7 +26,7 @@ test('secondary workspaces load on demand without replacing the dashboard shell'
 
   await page.goto('/rooms');
   await expect(page.locator('.dashboard-shell')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Apri lista piani:/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Nessuna stanza configurata' })).toBeVisible();
   await expect(page.getByText('Carichiamo soltanto gli strumenti necessari.')).toHaveCount(0);
 
   const workspaces = [

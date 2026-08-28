@@ -151,7 +151,6 @@ import type { SettingsManagementSectionId } from '../settings/settingsManagement
 import type { ProfileHouseMember } from '../settings/settingsHouseAccessModel';
 import type { GuidedSetupStep } from '../settings/GuidedSetupOverlay';
 import {
-  ENTITY_OPTIONS,
   FAVORITES_GRID_TITLE,
   GREETING_SECTION_ROWS,
   ROOT_CANVAS_COLS,
@@ -172,6 +171,10 @@ import {
   type WidgetCatalogDestination,
   type WidgetKind,
 } from '../../types/dashboardModels';
+import {
+  getEntityOptionsForRuntime,
+  normalizeWidgetsForRuntime,
+} from '../../demo/dashboardDemoFixtures';
 import {
   DASHBOARD_LAYOUT_STORAGE_VERSION,
   loadDashboardLayout,
@@ -1673,6 +1676,10 @@ export function MainBoard() {
     }),
   );
   const effectiveRuntimeMode: DashboardRuntimeMode = runtimeMode ?? 'demo';
+  const entityOptions = useMemo(
+    () => getEntityOptionsForRuntime(effectiveRuntimeMode),
+    [effectiveRuntimeMode],
+  );
   const explicitMockEntityIdsRef = useRef<Set<string>>(new Set());
   const [initialLayout] = useState(() => loadDashboardLayout(effectiveRuntimeMode));
   const [pendingDashboardRecovery, setPendingDashboardRecovery] = useState(() =>
@@ -1700,7 +1707,7 @@ export function MainBoard() {
   );
   explicitMockEntityIdsRef.current = new Set(
     widgets
-      .filter((widget) => widget.dataSource === 'mock' && !haStates[widget.entityId.trim()])
+      .filter((widget) => effectiveRuntimeMode === 'demo' && widget.dataSource === 'mock' && !haStates[widget.entityId.trim()])
       .map((widget) => widget.entityId.trim())
       .filter(Boolean),
   );
@@ -1987,25 +1994,7 @@ export function MainBoard() {
   const baseHaStatesForUi = useMemo<MockEntityStateMap>(() => {
     if (!isHaConnected) {
       if (effectiveRuntimeMode === 'real') {
-        const explicitMockIds = explicitMockEntityIdsRef.current;
-        if (explicitMockIds.size === 0) {
-          return haStates;
-        }
-        const availableMocks: MockEntityStateMap = {
-          ...mediaPlayerStateMocks,
-          ...coverStateMocks,
-          ...lockStateMocks,
-          ...cameraStateMocks,
-          ...vacuumStateMocks,
-          [CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]: livingRoomClimateMock,
-          [HOME_ALARM_MOCK_ENTITY_ID]: homeAlarmMock,
-        };
-        const explicitMocks = Object.fromEntries(
-          [...explicitMockIds]
-            .filter((entityId) => availableMocks[entityId])
-            .map((entityId) => [entityId, availableMocks[entityId]]),
-        );
-        return { ...haStates, ...explicitMocks };
+        return haStates;
       }
       return {
         ...haStates,
@@ -2307,37 +2296,22 @@ export function MainBoard() {
       };
     });
 
-    if (!haStates[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]) {
-      ensureNextStates()[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID] = livingRoomClimateMock;
+    if (effectiveRuntimeMode === 'demo') {
+      if (!haStates[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID]) {
+        ensureNextStates()[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID] = livingRoomClimateMock;
+      }
+      if (!haStates[HOME_ALARM_MOCK_ENTITY_ID]) {
+        ensureNextStates()[HOME_ALARM_MOCK_ENTITY_ID] = homeAlarmMock;
+      }
+      [mediaPlayerStateMocks, coverStateMocks, lockStateMocks, cameraStateMocks, vacuumStateMocks]
+        .forEach((fixtureMap) => {
+          Object.entries(fixtureMap).forEach(([entityId, entity]) => {
+            if (!haStates[entityId]) {
+              ensureNextStates()[entityId] = entity;
+            }
+          });
+        });
     }
-    if (!haStates[HOME_ALARM_MOCK_ENTITY_ID]) {
-      ensureNextStates()[HOME_ALARM_MOCK_ENTITY_ID] = homeAlarmMock;
-    }
-    Object.entries(mediaPlayerStateMocks).forEach(([entityId, entity]) => {
-      if (!haStates[entityId]) {
-        ensureNextStates()[entityId] = entity;
-      }
-    });
-    Object.entries(coverStateMocks).forEach(([entityId, entity]) => {
-      if (!haStates[entityId]) {
-        ensureNextStates()[entityId] = entity;
-      }
-    });
-    Object.entries(lockStateMocks).forEach(([entityId, entity]) => {
-      if (!haStates[entityId]) {
-        ensureNextStates()[entityId] = entity;
-      }
-    });
-    Object.entries(cameraStateMocks).forEach(([entityId, entity]) => {
-      if (!haStates[entityId]) {
-        ensureNextStates()[entityId] = entity;
-      }
-    });
-    Object.entries(vacuumStateMocks).forEach(([entityId, entity]) => {
-      if (!haStates[entityId]) {
-        ensureNextStates()[entityId] = entity;
-      }
-    });
 
     return nextStates ?? haStates;
   }, [alarmPendingByEntity, cameraStateMocks, climatePendingByEntity, coverPendingByEntity, coverStateMocks, effectiveRuntimeMode, haStates, homeAlarmMock, isHaConnected, lightBrightnessPendingByEntity, lightColorPendingByEntity, lightTogglePendingByEntity, livingRoomClimateMock, lockPendingByEntity, lockStateMocks, mediaPlayerStateMocks, switchTogglePendingByEntity, vacuumStateMocks]);
@@ -3721,7 +3695,7 @@ export function MainBoard() {
       return state.lamp;
     }
     const liveEntity = haStatesForUi[activeWidget.entityId];
-    const rawAttributes = liveEntity?.rawAttributes ?? state.speaker.rawAttributes;
+    const useDemoFallback = effectiveRuntimeMode === 'demo' && activeWidget.dataSource === 'mock';
     const capabilities = resolveLightCapabilities(liveEntity);
     return {
       name: activeWidget.title,
@@ -3729,13 +3703,13 @@ export function MainBoard() {
       brightness:
         typeof liveEntity?.brightness === 'number'
           ? liveEntity.brightness
-          : activeWidget.value ?? state.lamp.brightness,
+          : activeWidget.value ?? (useDemoFallback ? state.lamp.brightness : 0),
       status: liveEntity?.stateLabel ?? liveEntity?.state ?? activeWidget.status,
-      hsColor: liveEntity?.hsColor ?? liveEntity?.hs_color ?? state.lamp.hsColor,
+      hsColor: liveEntity?.hsColor ?? liveEntity?.hs_color ?? (useDemoFallback ? state.lamp.hsColor : undefined),
       colorTemp:
         typeof liveEntity?.colorTempKelvin === 'number'
           ? liveEntity.colorTempKelvin
-          : liveEntity?.color_temp_kelvin ?? state.lamp.colorTemp,
+          : liveEntity?.color_temp_kelvin ?? (useDemoFallback ? state.lamp.colorTemp : undefined),
       supportsBrightness: capabilities.supportsBrightness,
       supportsColorTemp: capabilities.supportsColorTemp,
       supportsColor: capabilities.supportsColor,
@@ -3749,7 +3723,7 @@ export function MainBoard() {
       effect: capabilities.activeEffect,
       effectList: capabilities.effectList,
     };
-  }, [activeWidget, haStatesForUi, isHaConnected, state.lamp]);
+  }, [activeWidget, effectiveRuntimeMode, haStatesForUi, state.lamp]);
 
   const contextClimate = useMemo(() => {
     if (activeWidget?.kind !== 'climate') {
@@ -3757,6 +3731,44 @@ export function MainBoard() {
     }
     const liveEntity = haStatesForUi[activeWidget.entityId];
     if (!liveEntity) {
+      if (effectiveRuntimeMode !== 'demo' || activeWidget.dataSource !== 'mock') {
+        return {
+          ...state.climate,
+          name: activeWidget.title || 'Clima',
+          mode: 'off',
+          isOn: false,
+          status: 'Non disponibile',
+          currentTemp: Number.NaN,
+          targetTemp: Number.NaN,
+          minTemp: Number.NaN,
+          maxTemp: Number.NaN,
+          targetTempLow: undefined,
+          targetTempHigh: undefined,
+          hvacModes: [],
+          fanMode: undefined,
+          fanModes: [],
+          supportedFeatures: 0,
+          currentHumidity: undefined,
+          targetHumidity: undefined,
+          presetMode: undefined,
+          presetModes: [],
+          swingMode: undefined,
+          swingModes: [],
+          swingHorizontalMode: undefined,
+          swingHorizontalModes: [],
+          supportsTargetTemperature: false,
+          supportsTargetTemperatureRange: false,
+          supportsTargetHumidity: false,
+          supportsFanMode: false,
+          supportsPresetMode: false,
+          supportsSwingMode: false,
+          supportsSwingHorizontalMode: false,
+          supportsTurnOn: false,
+          supportsTurnOff: false,
+          temperatureUnit: '',
+          rawAttributes: {},
+        };
+      }
       return {
         ...state.climate,
         name: activeWidget.title || state.climate.name,
@@ -3889,7 +3901,7 @@ export function MainBoard() {
         '',
       rawAttributes,
     };
-  }, [activeWidget, haStatesForUi, state.climate]);
+  }, [activeWidget, effectiveRuntimeMode, haStatesForUi, state.climate]);
 
   const cameraPtzServiceTarget = useMemo(
     () => resolveCameraPtzServiceTarget(haServiceRegistry),
@@ -4051,6 +4063,8 @@ export function MainBoard() {
   );
   const cameraHistoryEntityKey = cameraHistoryEntityIds.join('|');
   const isActiveCameraMock =
+    effectiveRuntimeMode === 'demo' &&
+    activeWidget?.dataSource === 'mock' &&
     contextCamera.entityId === CAMERA_MAX_COMPAT_MOCK_ENTITY_ID &&
     !haStates[CAMERA_MAX_COMPAT_MOCK_ENTITY_ID];
 
@@ -4160,16 +4174,36 @@ export function MainBoard() {
     if (activeWidget?.kind !== 'media') {
       return state.speaker;
     }
+    const useDemoFallback = effectiveRuntimeMode === 'demo' && activeWidget.dataSource === 'mock';
+    const fallbackSpeaker = useDemoFallback
+      ? state.speaker
+      : {
+          ...state.speaker,
+          progress: 0,
+          positionSeconds: 0,
+          durationSeconds: 0,
+          volumeLevel: 0,
+          muted: false,
+          shuffleEnabled: false,
+          repeatMode: 'off' as const,
+          trackTitle: undefined,
+          trackArtist: undefined,
+          coverUrl: undefined,
+          selectedOutputDeviceId: undefined,
+          outputDevices: [],
+          multiroomDevices: [],
+          rawAttributes: {},
+        };
     const liveEntity = haStatesForUi[activeWidget.entityId];
-    const rawAttributes = liveEntity?.rawAttributes ?? state.speaker.rawAttributes;
+    const rawAttributes = liveEntity?.rawAttributes ?? fallbackSpeaker.rawAttributes;
     const rawMediaStateValue = liveEntity?.state ?? liveEntity?.stateLabel ?? activeWidget.status;
     const mediaState = resolveMediaState(rawMediaStateValue);
-    const mediaStateLabel = translateMediaPlayerState(rawMediaStateValue, activeWidget.status ?? state.speaker.status);
+    const mediaStateLabel = translateMediaPlayerState(rawMediaStateValue, activeWidget.status ?? fallbackSpeaker.status);
     const capabilities = resolveMediaCapabilities(liveEntity);
     const resolvedDuration =
       typeof liveEntity?.mediaDuration === 'number'
         ? Math.max(0, Math.round(liveEntity.mediaDuration))
-        : state.speaker.durationSeconds ?? 0;
+        : fallbackSpeaker.durationSeconds ?? 0;
     const mediaPositionUpdatedAt =
       typeof liveEntity?.mediaPositionUpdatedAt === 'number' && Number.isFinite(liveEntity.mediaPositionUpdatedAt)
         ? liveEntity.mediaPositionUpdatedAt
@@ -4185,7 +4219,7 @@ export function MainBoard() {
           )
         : undefined;
     const fallbackProgress =
-      typeof activeWidget.value === 'number' ? activeWidget.value : state.speaker.progress;
+      typeof activeWidget.value === 'number' ? activeWidget.value : fallbackSpeaker.progress;
     const resolvedProgress =
       resolvedPositionFromEntity !== undefined
         ? Math.max(0, Math.min(100, Math.round((resolvedPositionFromEntity / resolvedDuration) * 100)))
@@ -4198,15 +4232,15 @@ export function MainBoard() {
     const resolvedShuffleEnabled =
       typeof parsedShuffleValue === 'boolean'
         ? parsedShuffleValue
-        : Boolean(state.speaker.shuffleEnabled);
+        : Boolean(fallbackSpeaker.shuffleEnabled);
     const resolvedRepeatMode = resolveMediaRepeatMode(
-      rawAttributes?.repeat ?? state.speaker.repeatMode ?? 'off',
+      rawAttributes?.repeat ?? fallbackSpeaker.repeatMode ?? 'off',
     );
     const liveSourceList = toStringArray(rawAttributes?.source_list);
     const liveSoundModeList = toStringArray(rawAttributes?.sound_mode_list);
     const selectedSoundMode = toTrimmedString(rawAttributes?.sound_mode);
     const selectedSource =
-      toTrimmedString(rawAttributes?.source) ?? state.speaker.selectedOutputDeviceId ?? '';
+      toTrimmedString(rawAttributes?.source) ?? fallbackSpeaker.selectedOutputDeviceId ?? '';
     const outputSourceNames = Array.from(
       new Set(
         [selectedSource, ...liveSourceList]
@@ -4223,14 +4257,14 @@ export function MainBoard() {
           }))
         : isHaConnected
           ? []
-          : state.speaker.outputDevices;
+          : fallbackSpeaker.outputDevices;
     const groupedMemberIds = toStringArray(rawAttributes?.group_members).filter(
       (entityId) => entityId !== activeWidget.entityId,
     );
     const groupedSet = new Set(groupedMemberIds);
     const multiroomDevices = (() => {
       if (!isHaConnected) {
-        return state.speaker.multiroomDevices;
+        return fallbackSpeaker.multiroomDevices;
       }
       const candidateMap = new Map<
         string,
@@ -4281,20 +4315,20 @@ export function MainBoard() {
       progress: resolvedProgress,
       positionSeconds: resolvedPosition,
       trackTitle:
-        liveEntity?.mediaTitle?.trim() || liveEntity?.nowPlaying?.trim() || state.speaker.trackTitle,
-      trackArtist: liveEntity?.mediaArtist?.trim() || state.speaker.trackArtist,
+        liveEntity?.mediaTitle?.trim() || liveEntity?.nowPlaying?.trim() || fallbackSpeaker.trackTitle,
+      trackArtist: liveEntity?.mediaArtist?.trim() || fallbackSpeaker.trackArtist,
       durationSeconds: resolvedDuration,
       coverUrl:
         liveEntity?.imageUrl ||
         liveEntity?.mediaImageUrl ||
         toTrimmedString(rawAttributes?.media_image_url) ||
         toTrimmedString(rawAttributes?.entity_picture) ||
-        state.speaker.coverUrl,
+        fallbackSpeaker.coverUrl,
       volumeLevel:
         typeof liveEntity?.volumeLevel === 'number'
           ? Math.max(0, Math.min(100, Math.round(liveEntity.volumeLevel)))
-          : state.speaker.volumeLevel,
-      muted: typeof liveEntity?.mediaMuted === 'boolean' ? liveEntity.mediaMuted : state.speaker.muted,
+          : fallbackSpeaker.volumeLevel,
+      muted: typeof liveEntity?.mediaMuted === 'boolean' ? liveEntity.mediaMuted : fallbackSpeaker.muted,
       supportsSeek: capabilities.supportsSeek,
       supportsVolume: capabilities.supportsVolume,
       supportsMute: capabilities.supportsMute,
@@ -4321,15 +4355,15 @@ export function MainBoard() {
       volumeStep:
         typeof liveEntity?.volumeStep === 'number'
           ? liveEntity.volumeStep
-          : toFiniteNumber(rawAttributes?.volume_step) ?? state.speaker.volumeStep,
+          : toFiniteNumber(rawAttributes?.volume_step) ?? fallbackSpeaker.volumeStep,
       outputDevices,
       selectedOutputDeviceId:
         selectedSource ||
-        (isHaConnected ? undefined : state.speaker.selectedOutputDeviceId),
+        (isHaConnected ? undefined : fallbackSpeaker.selectedOutputDeviceId),
       multiroomDevices,
       rawAttributes,
     };
-  }, [activeWidget, haStatesForUi, isHaConnected, state.speaker]);
+  }, [activeWidget, effectiveRuntimeMode, haStatesForUi, isHaConnected, state.speaker]);
 
   const contextVacuum = useMemo(() => {
     if (activeWidget?.kind !== 'vacuum') {
@@ -4460,6 +4494,8 @@ export function MainBoard() {
     );
     const supportedFeatures = resolveAlarmSupportedFeatures(liveEntity);
     const useMockAlarm =
+      effectiveRuntimeMode === 'demo' &&
+      activeWidget.dataSource === 'mock' &&
       activeWidget.entityId === HOME_ALARM_MOCK_ENTITY_ID &&
       (!isHaConnected || !haStates[HOME_ALARM_MOCK_ENTITY_ID]);
     const activityLogLimit = resolveActivityMaxEntries(activeWidget.activityLogLimit);
@@ -5327,6 +5363,8 @@ export function MainBoard() {
   const activeActivityFallbackActor = activeActivityTarget?.fallbackActor;
   const activeActivityRefreshKey = activeActivityTarget?.refreshKey;
   const activeActivityUsesMockAlarm =
+    effectiveRuntimeMode === 'demo' &&
+    activeWidget?.dataSource === 'mock' &&
     activeActivityKind === 'alarm' &&
     activeActivityEntityId === HOME_ALARM_MOCK_ENTITY_ID &&
     !haStates[HOME_ALARM_MOCK_ENTITY_ID];
@@ -5610,13 +5648,21 @@ export function MainBoard() {
             layout: nextLayout,
           };
         }
-        if (widget.id === 'sensor.nest_wifi_download') {
+        if (
+          effectiveRuntimeMode === 'demo' &&
+          widget.dataSource === 'mock' &&
+          widget.id === 'sensor.nest_wifi_download'
+        ) {
           if (widget.value === state.wifiDownloadMbps) {
             return widget;
           }
           return { ...widget, value: state.wifiDownloadMbps };
         }
-        if (widget.id === 'light.living_room_lamp') {
+        if (
+          effectiveRuntimeMode === 'demo' &&
+          widget.dataSource === 'mock' &&
+          widget.id === 'light.living_room_lamp'
+        ) {
           const nextLayout = resolveLightLayoutForState(widget, state.lamp.isOn);
           if (
             widget.status === state.lamp.status &&
@@ -5634,7 +5680,11 @@ export function MainBoard() {
             layout: nextLayout,
           };
         }
-        if (widget.id === 'climate.air_conditioner') {
+        if (
+          effectiveRuntimeMode === 'demo' &&
+          widget.dataSource === 'mock' &&
+          widget.id === 'climate.air_conditioner'
+        ) {
           const nextLayout = resolveClimateLayout(widget);
           if (
             widget.status === state.climate.status &&
@@ -5694,6 +5744,12 @@ export function MainBoard() {
         }
         if (widget.kind === 'vacuum') {
           const nextLayout = resolveVacuumLayout(widget);
+          if (effectiveRuntimeMode !== 'demo' || widget.dataSource !== 'mock') {
+            if (sameLayout(widget.layout, nextLayout)) {
+              return widget;
+            }
+            return { ...widget, layout: nextLayout };
+          }
           const nextArea =
             typeof widget.vacuumCleanedArea === 'number' && Number.isFinite(widget.vacuumCleanedArea)
               ? widget.vacuumCleanedArea
@@ -5718,6 +5774,12 @@ export function MainBoard() {
         }
         if (widget.kind === 'cover') {
           const nextLayout = resolveCoverLayout(widget);
+          if (effectiveRuntimeMode !== 'demo' || widget.dataSource !== 'mock') {
+            if (sameLayout(widget.layout, nextLayout)) {
+              return widget;
+            }
+            return { ...widget, layout: nextLayout };
+          }
           const nextPosition = resolveCoverPosition(
             normalizeCoverState(widget.status),
             widget.value,
@@ -5787,6 +5849,7 @@ export function MainBoard() {
   }, [
     haStatesForUi,
     haStatus,
+    effectiveRuntimeMode,
     state.wifiDownloadMbps,
     state.lamp.name,
     state.lamp.status,
@@ -5919,7 +5982,11 @@ export function MainBoard() {
       setWidgets((prev) => {
         let changed = false;
         const next = prev.map((widget) => {
-          if (widget.kind !== 'vacuum') {
+          if (
+            widget.kind !== 'vacuum' ||
+            effectiveRuntimeMode !== 'demo' ||
+            widget.dataSource !== 'mock'
+          ) {
             return widget;
           }
           const liveEntity = isHaConnected ? haStates[widget.entityId] : undefined;
@@ -5972,7 +6039,7 @@ export function MainBoard() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [haStates, isHaConnected]);
+  }, [effectiveRuntimeMode, haStates, isHaConnected]);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -6340,16 +6407,15 @@ export function MainBoard() {
   }), [responsiveLayouts, sections, widgetLayoutOverrides, widgetTypeLayoutOverrides, widgets]);
   const hydrateAuthoritativeDashboardLayout = useCallback((layout: typeof authoritativeDashboardLayout) => {
     setSections(layout.sections);
-    setWidgets(
-      typeof window === 'undefined'
-        ? layout.widgets
-        : mergeWidgetSecretsIntoWidgets(layout.widgets, window.localStorage),
-    );
+    const widgetsWithSecrets = typeof window === 'undefined'
+      ? layout.widgets
+      : mergeWidgetSecretsIntoWidgets(layout.widgets, window.localStorage);
+    setWidgets(normalizeWidgetsForRuntime(widgetsWithSecrets, effectiveRuntimeMode));
     setWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides);
     setActiveWidgetTypeLayoutOverrides(layout.widgetTypeLayoutOverrides);
     setResponsiveLayouts(layout.responsiveLayouts);
     setWidgetLayoutOverrides(layout.widgetLayoutOverrides);
-  }, []);
+  }, [effectiveRuntimeMode]);
   const handleAuthoritativeDashboardReset = useCallback((marker: DashboardResetMarker) => {
     if (typeof window === 'undefined') return;
     invalidateLocalDashboardAfterAuthoritativeReset(
@@ -7050,6 +7116,8 @@ export function MainBoard() {
   };
 
   const isLivingRoomClimateMock = (widget: Widget | undefined) =>
+    effectiveRuntimeMode === 'demo' &&
+    widget?.dataSource === 'mock' &&
     widget?.entityId === CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID &&
     !haStates[CLIMATE_LIVING_ROOM_MOCK_ENTITY_ID];
 
@@ -7500,6 +7568,8 @@ export function MainBoard() {
   };
 
   const isHomeAlarmMock = (widget: Widget | undefined) =>
+    effectiveRuntimeMode === 'demo' &&
+    widget?.dataSource === 'mock' &&
     widget?.entityId === HOME_ALARM_MOCK_ENTITY_ID &&
     (!isHaConnected || !haStates[HOME_ALARM_MOCK_ENTITY_ID]);
 
@@ -8877,7 +8947,11 @@ export function MainBoard() {
       return false;
     }
 
-    const isLocalCameraMock = Boolean(cameraStateMocks[entityId]) && !haStates[entityId];
+    const isLocalCameraMock =
+      effectiveRuntimeMode === 'demo' &&
+      activeWidget?.dataSource === 'mock' &&
+      Boolean(cameraStateMocks[entityId]) &&
+      !haStates[entityId];
     if (isLocalCameraMock) {
       const current = cameraStateMocks[entityId];
       if (!current) return false;
@@ -9724,8 +9798,8 @@ export function MainBoard() {
       : kind === 'light'
         ? LIGHT_WIDGET_HEIGHT_OFF
         : widgetBaseHeight;
-    const defaultEntityId = ENTITY_OPTIONS[kind][0];
-    const isVacuumDemo = kind === 'vacuum' && isDemoVacuumEntity(defaultEntityId);
+    const defaultEntityId = entityOptions[kind][0] ?? '';
+    const isVacuumDemo = effectiveRuntimeMode === 'demo' && kind === 'vacuum' && isDemoVacuumEntity(defaultEntityId);
     setWidgets((prev) => {
       const baseLayout: GridItem = { i: id, x: 0, y: 0, w: widgetWidth, h: widgetHeight };
 
@@ -9777,11 +9851,12 @@ export function MainBoard() {
         kind,
         title: `New ${kind}`,
         entityId: defaultEntityId,
-        dataSource: haStates[defaultEntityId] ? 'ha' : 'mock',
+        dataSource: effectiveRuntimeMode === 'demo' && Boolean(defaultEntityId) ? 'mock' : 'ha',
         isFavorite: Boolean(targetSection?.kind === 'stack-grid' && (targetSection.stackUseFavoritesGrid ?? false)),
         placementPolicy: 'manual',
-        status:
-          kind === 'media'
+        status: !defaultEntityId
+          ? 'Non configurata'
+          : kind === 'media'
             ? 'paused'
             : kind === 'switch'
               ? 'off'
@@ -9794,8 +9869,10 @@ export function MainBoard() {
                 : kind === 'cover'
                   ? 'open'
                 : 'Idle',
-        isOn: kind === 'lock' || kind === 'cover',
-        value:
+        isOn: Boolean(defaultEntityId) && (kind === 'lock' || kind === 'cover'),
+        value: !defaultEntityId
+          ? undefined
+          :
           kind === 'sensor' ? 40 : kind === 'climate' ? 23 : kind === 'vacuum' ? 100 : kind === 'cover' ? 70 : 0,
         unit:
           kind === 'sensor' || kind === 'media' || kind === 'vacuum' || kind === 'cover'
@@ -9813,15 +9890,15 @@ export function MainBoard() {
           : {}),
         ...(kind === 'vacuum'
           ? {
-              vacuumFanSpeed: 'balanced',
+              vacuumFanSpeed: isVacuumDemo ? 'balanced' : undefined,
               vacuumMapUrl: isVacuumDemo ? VACUUM_DEMO_MAP_URL : undefined,
-              vacuumCleanedArea: 45,
-              vacuumCleaningMinutes: 32,
+              vacuumCleanedArea: isVacuumDemo ? 45 : undefined,
+              vacuumCleaningMinutes: isVacuumDemo ? 32 : undefined,
             }
           : {}),
         ...(kind === 'cover'
           ? {
-              coverTiltPosition: 50,
+              coverTiltPosition: defaultEntityId ? 50 : undefined,
             }
           : {}),
         parentSectionId: targetSectionId,
@@ -10940,6 +11017,7 @@ export function MainBoard() {
         ) : isRoomsView ? (
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <RoomsDashboard
+              runtimeMode={effectiveRuntimeMode}
               isEditMode={isEditMode}
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
@@ -11380,7 +11458,7 @@ export function MainBoard() {
               activeGridBreakpoint={canvasGridBreakpoint}
               widgetTypeLayoutOverrides={widgetTypeLayoutOverrides}
               widgetLayoutOverrides={widgetLayoutOverrides}
-              entityOptions={ENTITY_OPTIONS}
+              entityOptions={entityOptions}
               haEntityIds={haEntityIds}
               haConnected={isHaConnected}
               haStates={haStatesForUi}

@@ -2719,7 +2719,7 @@ function IrrigationDashboardView({
       mobileHeaderHidden
       mobileBackInNavigation
       mobileNavigationHidden={activeWorkspaceSection === 'configuration' || activeWorkspaceSection === 'zonesManagement'}
-      contentClassName="bg-[color:var(--ui-bg-grouped)]"
+      contentClassName="bg-[color:var(--ui-bg-grouped)] md:bg-transparent"
       backLabel="Torna alla libreria"
     >
       {activeWorkspaceSection === 'configuration' ? (
@@ -2767,7 +2767,7 @@ function IrrigationDashboardView({
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className={`relative isolate grid min-h-full content-start grid-cols-1 bg-[color:var(--ui-bg-grouped)] pb-6 xl:grid-cols-12 ${activeWorkspaceSection === 'overview' ? 'gap-0 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10' : 'gap-4 px-3 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-5 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10'}`}
+        className={`relative isolate grid min-h-full content-start grid-cols-1 bg-[color:var(--ui-bg-grouped)] pb-6 md:bg-transparent xl:grid-cols-12 ${activeWorkspaceSection === 'overview' ? 'gap-0 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10' : 'gap-4 px-3 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-5 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10'}`}
         style={{ '--irrigation-scroll-progress': 0 }}
       >
         <motion.section

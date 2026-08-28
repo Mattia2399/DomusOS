@@ -209,7 +209,7 @@ function isEquivalentMode(currentMode: string, candidateMode: string) {
 }
 
 function resolveActiveMode(entity: MockEntityState | undefined, widget: Widget, state: DashboardStateShape) {
-  const isDemoClimate = !entity && widget.entityId === 'climate.air_conditioner';
+  const isDemoClimate = !entity && widget.dataSource === 'mock' && widget.entityId === 'climate.air_conditioner';
   const fallbackFromState =
     isDemoClimate
       ? toCanonicalClimateMode(state.climate.mode)
@@ -476,7 +476,7 @@ export function ClimateCard({
   const cardWidth = measuredSize?.width ?? 0;
   const cardHeight = measuredSize?.height ?? 0;
   const hasCardSize = measuredSize !== null;
-  const isDemoClimate = !liveEntity && widget.entityId === 'climate.air_conditioner';
+  const isDemoClimate = !liveEntity && widget.dataSource === 'mock' && widget.entityId === 'climate.air_conditioner';
   const rawAttributes = liveEntity?.rawAttributes;
   const activeMode = resolveActiveMode(liveEntity, widget, state);
   const fallbackStatus = modeToLabel(activeMode);

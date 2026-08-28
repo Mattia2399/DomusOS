@@ -73,6 +73,15 @@ describe('/security alarm authorization', () => {
 
   afterEach(cleanup);
 
+  it('does not present invented security events in real mode', async () => {
+    const view = renderSecurity();
+
+    await view.findByText('Nessun evento registrato in questa sessione.');
+    expect(view.queryByText('Dati demo')).toBeNull();
+    expect(view.queryByText('Movimento rilevato')).toBeNull();
+    expect(view.queryByText('Allarme inserito')).toBeNull();
+  });
+
   it('validates the combined local credential and sends only the HA PIN', async () => {
     const { getByRole, findAllByText, findByText, queryByText, onCallService } = renderSecurity();
 

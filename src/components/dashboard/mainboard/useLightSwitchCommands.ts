@@ -247,6 +247,8 @@ export function useLightSwitchCommands({
       return;
     }
 
+    if (targetWidget?.dataSource !== 'mock') return;
+
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       applyLocalToggle(!targetWidget.isOn);
       return;
@@ -327,7 +329,7 @@ export function useLightSwitchCommands({
       });
       return;
     }
-    applyLocalToggle(nextIsOn);
+    if (targetWidget.dataSource === 'mock') applyLocalToggle(nextIsOn);
   };
 
   const setLightBrightness = (value: number, options?: LightCommandOptions) => {
@@ -340,6 +342,7 @@ export function useLightSwitchCommands({
       scheduleHaLightBrightness(entityId, safeValue, options);
       return;
     }
+    if (targetWidget?.dataSource !== 'mock') return;
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
         ...current,
@@ -405,6 +408,7 @@ export function useLightSwitchCommands({
       applyLocal();
       return;
     }
+    if (widget.dataSource !== 'mock') return;
     if (widget.id === 'light.living_room_lamp') actions.setLampBrightness(safeValue);
     applyLocal();
   };
@@ -454,6 +458,7 @@ export function useLightSwitchCommands({
       });
       return;
     }
+    if (targetWidget?.dataSource !== 'mock') return;
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
         ...current,
@@ -511,6 +516,7 @@ export function useLightSwitchCommands({
       });
       return;
     }
+    if (targetWidget?.dataSource !== 'mock') return;
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
         ...current,
@@ -569,6 +575,7 @@ export function useLightSwitchCommands({
       });
       return;
     }
+    if (targetWidget?.dataSource !== 'mock') return;
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
         ...current,
@@ -617,6 +624,7 @@ export function useLightSwitchCommands({
       });
       return;
     }
+    if (targetWidget?.dataSource !== 'mock') return;
     if (targetWidget?.kind === 'light' && targetWidget.id !== 'light.living_room_lamp') {
       updateWidgetWithAutoLayout(targetWidget.id, (current) => ({
         ...current,

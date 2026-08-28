@@ -3664,9 +3664,11 @@ export function RightSidebarManager({
                 placeholder="Es. light.sala, climate.ac"
               />
               <p className={BUILDER_HELPER_CLASS}>
-                {haConnected && entitySuggestions.length > 0
-                  ? 'Suggerimenti live da Home Assistant + catalogo locale.'
-                  : 'Puoi scegliere dal catalogo o digitare una entita personalizzata.'}
+                {haConnected && liveEntitySuggestions.length > 0
+                  ? 'Suggerimenti live dalle entita disponibili in Home Assistant.'
+                  : staticSuggestions.length > 0
+                    ? 'Entita dimostrative disponibili esclusivamente nella Demo.'
+                    : 'Digita un entity ID oppure verifica la connessione a Home Assistant.'}
               </p>
             </label>
             {selectedWidget.kind === 'switch' ? (

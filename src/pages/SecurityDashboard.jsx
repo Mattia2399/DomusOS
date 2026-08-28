@@ -152,7 +152,7 @@ const ALARM_ACTION_BY_STATE = {
   triggered: 'trigger',
 };
 
-const INITIAL_LOGS = [
+const DEMO_SECURITY_LOGS = [
   { id: 1, time: '14:20', message: 'Movimento rilevato', type: 'warning' },
   { id: 2, time: '18:30', message: 'Allarme inserito', type: 'info' },
 ];
@@ -917,7 +917,8 @@ export function SecurityDashboard({
   onCameraPtzMove,
   onCameraPtzStop,
 }) {
-  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [logs, setLogs] = useState(() => (runtimeMode === 'demo' ? DEMO_SECURITY_LOGS : []));
+  const logsRuntimeRef = useRef(runtimeMode);
   const [sensorSearchQuery, setSensorSearchQuery] = useState('');
   const [selectedAlarmEntityId, setSelectedAlarmEntityId] = useState(() => readStorageValue(STORAGE_KEYS.alarmEntityId));
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -940,6 +941,12 @@ export function SecurityDashboard({
   const [armingTargetState, setArmingTargetState] = useState(null);
   const [isCameraDirectoryView, setIsCameraDirectoryView] = useState(() => resolveSecurityCamerasFromLocation());
   const [isSensorDirectoryView, setIsSensorDirectoryView] = useState(() => resolveSecuritySensorsFromLocation());
+
+  useEffect(() => {
+    if (logsRuntimeRef.current === runtimeMode) return;
+    logsRuntimeRef.current = runtimeMode;
+    setLogs(runtimeMode === 'demo' ? DEMO_SECURITY_LOGS : []);
+  }, [runtimeMode]);
   const [visibleSensorEntityIds, setVisibleSensorEntityIds] = useState(() => readStoredEntitySelection(STORAGE_KEYS.visibleSensorEntityIds));
   const [visibleCameraEntityIds, setVisibleCameraEntityIds] = useState(() => readStoredEntitySelection(STORAGE_KEYS.visibleCameraEntityIds));
   const [activeCameraEntityId, setActiveCameraEntityId] = useState(null);
@@ -1815,6 +1822,12 @@ export function SecurityDashboard({
                     <p className="text-[11px] font-light uppercase tracking-[0.28em] text-[color:var(--ui-text-tertiary)]">Eventi Recenti</p>
                     <h3 className="mt-2 text-xl font-semibold text-[color:var(--ui-text-primary)]">Log Sicurezza</h3>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {runtimeMode === 'demo' ? (
+                      <span className="inline-flex h-8 items-center rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ui-text-secondary)]">
+                        Dati demo
+                      </span>
+                    ) : null}
                   {triggerSupported ? (
                     <button
                       type="button"
@@ -1825,6 +1838,7 @@ export function SecurityDashboard({
                       <AlertTriangle className="h-3.5 w-3.5" />SOS
                     </button>
                   ) : null}
+                  </div>
                 </div>
                 <ul className="mt-4 space-y-2">
                   {logs.map((log) => (
@@ -1837,6 +1851,11 @@ export function SecurityDashboard({
                       </div>
                     </li>
                   ))}
+                  {logs.length === 0 ? (
+                    <li className="dashboard-content-surface-soft rounded-2xl px-4 py-5 text-center text-xs text-[color:var(--ui-text-tertiary)]">
+                      Nessun evento registrato in questa sessione.
+                    </li>
+                  ) : null}
                 </ul>
               </section>
             ) : null}
