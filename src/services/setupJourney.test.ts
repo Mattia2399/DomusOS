@@ -92,6 +92,34 @@ describe('setup journey', () => {
     });
   });
 
+  it('restores the fast path for a house that already has a shared configuration', () => {
+    saveSetupJourney(
+      {
+        phase: 'existing',
+        mode: 'real',
+        hassUrl: 'https://ha.example.test',
+        connectionMethod: 'direct',
+        existingConfiguration: {
+          revision: 44,
+          updatedAt: '2026-08-26T08:30:00.000Z',
+          sections: 3,
+          widgets: 12,
+        },
+      },
+      window.localStorage,
+    );
+
+    expect(readSetupJourney(window.localStorage)).toMatchObject({
+      phase: 'existing',
+      mode: 'real',
+      existingConfiguration: {
+        revision: 44,
+        sections: 3,
+        widgets: 12,
+      },
+    });
+  });
+
   it('keeps Demo navigation limited to Home and Rooms', () => {
     expect(isDemoRouteAllowed('/home')).toBe(true);
     expect(isDemoRouteAllowed('/rooms/kitchen')).toBe(true);

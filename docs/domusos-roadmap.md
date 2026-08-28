@@ -1,6 +1,6 @@
 # DomusOS roadmap
 
-Aggiornata: 2026-08-04
+Aggiornata: 2026-08-28
 
 ## Obiettivo
 
@@ -712,6 +712,60 @@ Done quando:
 - test automatici ed E2E coprono creazione, uso, scadenza, revoca, replay,
   offline e permessi insufficienti.
 
+### Aggiornamento post-beta prioritario - DomusOS Irrigation Core
+
+Stato: pianificato come primo intervento strutturale dopo la beta pubblica.
+La UI Irrigazione, la configurazione condivisa, il calendario, i consumi e i
+comandi supervisionati sono disponibili nella beta. La programmazione autonoma
+non viene ancora presentata come motore affidabile per utilizzo non presidiato:
+le automazioni generate e i timer del browser verranno sostituiti da un'unica
+autorita residente nell'integrazione HACS DomusOS.
+
+Architettura prevista:
+
+- aggiungere un `IrrigationManager` Python all'integrazione HACS gia installata,
+  senza richiedere componenti, add-on o configurazioni YAML aggiuntive;
+- conservare zone, programmi, soglie, stato pausa e sessioni attive nello
+  storage versionato di Home Assistant, lasciando il browser come sola cache;
+- pianificare i cicli nel processo Home Assistant e ricostruirli dopo ogni
+  riavvio, gestendo fuso orario e cambio ora;
+- eseguire apertura e chiusura attraverso i servizi ufficiali `valve` e
+  `switch`, verificando lo stato restituito dal dispositivo;
+- applicare un watchdog server-side e un limite massimo autorevole a ogni
+  sessione manuale o programmata;
+- in caso di riavvio, sessione incoerente o stato non verificabile, chiudere le
+  valvole configurate e segnalare l'anomalia;
+- rendere pioggia, disponibilita sensori, umidita terreno e temperatura
+  condizioni fail-closed configurabili, controllate subito prima dell'avvio e
+  durante il ciclo;
+- impedire sovrapposizioni non consentite e predisporre il supporto a pompa
+  principale, ritardi idraulici e politica una/piu zone simultanee;
+- registrare azioni HA `domusos.start_irrigation_zone`,
+  `domusos.stop_irrigation_zone`, `domusos.stop_all_irrigation`,
+  `domusos.pause_irrigation` e `domusos.resume_irrigation`;
+- esporre comandi WebSocket tipizzati per configurazione, stato live, timer,
+  cronologia e sottoscrizione push della UI;
+- applicare nel backend i permessi Owner/Admin per la configurazione e i
+  permessi HA effettivi per ogni comando;
+- migrare i programmi correnti e rilevare le vecchie automazioni
+  `automation.irrigation_*`, impedendo l'esecuzione contemporanea dei due
+  motori;
+- aggiungere diagnostica, Repairs e test per riavvio HA, browser chiuso,
+  sensori offline, timeout, pioggia durante il ciclo e valvole senza conferma.
+
+Done quando:
+
+- nessun timer operativo dipende da una pagina browser aperta;
+- chiudere DomusOS o riavviare Home Assistant non puo lasciare una valvola
+  aperta senza watchdog;
+- programmazione, pausa globale e arresto di emergenza sono autorevoli e
+  condivisi tra tutti i dispositivi;
+- configurazione e stato vengono confermati dal backend e aggiornati in push;
+- vecchie automazioni e nuovo scheduler non possono comandare insieme la
+  stessa zona;
+- la matrice di collaudo hardware e i test automatici di sicurezza risultano
+  verdi prima di dichiarare affidabile l'uso non presidiato.
+
 ### Aggiornamento post-beta - DomusOS Security Core
 
 Stato: pianificato dopo la prima beta pubblica; non blocca il rilascio iniziale.
@@ -787,7 +841,7 @@ Comportamento richiesto:
 - mostrare una schermata dedicata, ad esempio: `Abbiamo trovato una casa su questo server`;
 - indicare in modo chiaro account, server e riepilogo iniziale disponibili, senza mostrare token o altri segreti;
 - consentire di confermare la casa rilevata oppure cambiare connessione;
-- dopo la conferma proseguire normalmente con analisi, scelta layout e organizzazione;
+- dopo la conferma verificare prima lo storage condiviso: una casa nuova prosegue con analisi, scelta layout e organizzazione, mentre una casa DomusOS esistente usa il percorso rapido;
 - mostrare la guida della Home soltanto dopo il completamento effettivo del setup;
 - distinguere primo accesso, riconnessione e installazione gia configurata, senza riaprire passaggi non pertinenti.
 
@@ -801,6 +855,14 @@ Risultato:
 - il bridge alimenta direttamente analisi e organizzazione senza richiedere un token manuale;
 - resta sempre disponibile la scelta esplicita per configurare un altro server;
 - un test E2E in iframe copre rilevamento, conferma, analisi e arrivo alla scelta del layout.
+
+Aggiornamento 26 agosto 2026: anche un client con origine nuova, ad esempio
+`localhost` durante lo sviluppo, interroga ora la configurazione condivisa subito
+dopo l'autenticazione. Se trova un documento DomusOS valido mostra revisione,
+data, sezioni e card, quindi permette di ereditare direttamente la casa senza
+ripetere layout e organizzazione. Una risposta assente avvia il setup completo;
+una risposta non verificabile o non valida blocca invece il percorso per evitare
+la sostituzione accidentale di dati esistenti.
 
 Priorita: P1 prima della distribuzione del panel bridge.
 

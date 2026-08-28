@@ -15,6 +15,10 @@ import {
   HA_DASHBOARD_RESET_MARKER_KEY,
   parseDashboardResetMarker,
 } from '../services/dashboardReset';
+import {
+  HA_APP_CONFIGURATIONS_KEY,
+  parseSharedAppConfigurationsDocument,
+} from '../services/haAppConfigurationsRepository';
 
 type HaPanelPayloadBase = {
   type: string;
@@ -77,6 +81,7 @@ const REQUEST_ID_PATTERN = /^ha-panel-call-(?:service|api)-\d{10,}-[a-z0-9]+$/;
 const MAX_BRIDGE_STATES = 20_000;
 const PANEL_BRIDGE_CAPABILITIES = new Set([
   'shared_configuration',
+  'app_configurations',
   'revision_history',
   'dashboard_reset_marker',
 ]);
@@ -158,13 +163,15 @@ export function validatePanelApiMessage(message: unknown): message is Record<str
   if (message.type === 'frontend/get_system_data') {
     return message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY ||
       message.key === HA_DASHBOARD_REVISION_HISTORY_KEY ||
-      message.key === HA_DASHBOARD_RESET_MARKER_KEY;
+      message.key === HA_DASHBOARD_RESET_MARKER_KEY ||
+      message.key === HA_APP_CONFIGURATIONS_KEY;
   }
   if (message.type === 'frontend/set_system_data') {
     if (message.value === null) {
       return message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY ||
         message.key === HA_DASHBOARD_REVISION_HISTORY_KEY ||
-        message.key === HA_DASHBOARD_RESET_MARKER_KEY;
+        message.key === HA_DASHBOARD_RESET_MARKER_KEY ||
+        message.key === HA_APP_CONFIGURATIONS_KEY;
     }
     if (message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY) {
       return parseSharedHouseConfiguration(message.value) !== null;
@@ -177,6 +184,9 @@ export function validatePanelApiMessage(message: unknown): message is Record<str
     }
     if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) {
       return parseDashboardResetMarker(message.value) !== null;
+    }
+    if (message.key === HA_APP_CONFIGURATIONS_KEY) {
+      return parseSharedAppConfigurationsDocument(message.value) !== null;
     }
     return false;
   }
@@ -640,6 +650,7 @@ export function useHaPanelBridgeConnection() {
     bridgeProtocolVersion,
     bridgeCapabilities,
     supportsSharedConfiguration: bridgeCapabilities.includes('shared_configuration'),
+    supportsAppConfigurations: bridgeCapabilities.includes('app_configurations'),
     hassUrl: hassUrlRef.current,
     status,
     error,

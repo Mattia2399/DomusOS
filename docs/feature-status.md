@@ -14,7 +14,7 @@ Questa pagina distingue ciò che è utilizzabile nella beta dalle funzioni in an
 | Consumi | Operativa beta | Visualizzazioni basate sui dati realmente disponibili in HA |
 | Profilo | Operativa beta | Preferenze personali e tema del dispositivo |
 | Impostazioni | Operativa beta | Casa, entità, persone, sistema, backup, versioni e attenzione |
-| App Gallery | Parziale | Launcher e Irrigazione disponibili; Locale Tecnico e Piscina & Spa mostrano uno stato “Prossimamente” |
+| App Gallery | Parziale | Launcher e Irrigazione beta disponibili; Locale Tecnico e Piscina & Spa mostrano uno stato “Prossimamente” |
 | Automazioni | Prossimamente | Il vecchio workspace resta disattivato finché il flusso non sarà pronto per la beta |
 
 ## Card e controlli

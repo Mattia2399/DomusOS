@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.1.0-beta.10 — 2026-08-28
+
+### Aggiunto
+
+- App Irrigazione ridisegnata come workspace indipendente e responsive, con
+  Panoramica, Zone, Calendario, Consumi e configurazione condivisa della casa;
+- configurazione guidata di valvole, sensori meteo, terreno e contatori con
+  suggerimenti basati sulle entità disponibili in Home Assistant;
+- storico consumi reale con periodi 7 giorni, 30 giorni e 12 mesi, cache dei
+  dati e aggiornamento senza sostituire i valori disponibili con `N/D`;
+- mockup dimostrativi di Locale Tecnico e Piscina & Spa, chiaramente separati
+  dalle funzioni interattive;
+- riconoscimento della configurazione condivisa DomusOS da una nuova origine,
+  incluso `localhost`, per evitare di ripetere il setup di una casa esistente;
+- roadmap del motore Irrigazione server-side, con scheduler, watchdog,
+  ripristino sicuro e controlli fail-closed nell'integrazione HACS.
+
+### Migliorato
+
+- onboarding panel/iframe distinto tra casa nuova e installazione DomusOS già
+  configurata;
+- layout mobile e desktop dell'App Library, navigazione contestuale e pagine
+  immersive;
+- gestione numerica dei sensori Irrigazione con arrotondamento coerente e unità
+  di misura leggibili;
+- persistenza della configurazione delle app condivisa tramite Home Assistant,
+  mantenendo il browser come cache locale.
+
+### Corretto
+
+- rimozione della card Scenari dal Builder;
+- recupero della configurazione condivisa e allowlist del panel bridge per i
+  nuovi flussi di inizializzazione e reset;
+- padding mobile, stati di caricamento e aggiornamento delle card Consumi.
+
+### Limitazioni note
+
+- l'attuale Irrigazione beta non sostituisce ancora un controller autonomo con
+  watchdog server-side; i comandi manuali devono essere supervisionati e la
+  programmazione non deve essere l'unica protezione di un impianto reale.
+
 ## 0.1.0-beta.9 — 2026-08-25
 
 ### Aggiunto

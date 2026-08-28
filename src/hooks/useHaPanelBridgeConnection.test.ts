@@ -33,6 +33,10 @@ describe('Home Assistant panel bridge schema', () => {
       key: 'premium-home.dashboard-reset.v1',
     })).toBe(true);
     expect(validatePanelApiMessage({
+      type: 'frontend/get_system_data',
+      key: 'domusos.app-configurations.v1',
+    })).toBe(true);
+    expect(validatePanelApiMessage({
       type: 'frontend/set_system_data',
       key: 'premium-home.dashboard-revisions.v1',
       value: {
@@ -63,6 +67,18 @@ describe('Home Assistant panel bridge schema', () => {
         requestedAt: '2026-08-25T10:00:00.000Z',
         completedAt: '2026-08-25T10:00:01.000Z',
         requestedByUserId: 'owner-1',
+      },
+    })).toBe(true);
+    expect(validatePanelApiMessage({
+      type: 'frontend/set_system_data',
+      key: 'domusos.app-configurations.v1',
+      value: {
+        schema: 'domusos-app-configurations',
+        version: 1,
+        revision: 1,
+        updatedAt: '2026-08-26T10:00:00.000Z',
+        updatedByUserId: 'owner-1',
+        apps: { irrigation: {} },
       },
     })).toBe(true);
     expect(validatePanelApiMessage({
@@ -104,11 +120,12 @@ describe('Home Assistant panel bridge schema', () => {
   it('accepts only declared persistence capabilities from the panel bridge', () => {
     expect(parsePanelBridgeCapabilities([
       'shared_configuration',
+      'app_configurations',
       'revision_history',
       'dashboard_reset_marker',
       'unknown_capability',
       42,
-    ])).toEqual(['shared_configuration', 'revision_history', 'dashboard_reset_marker']);
+    ])).toEqual(['shared_configuration', 'app_configurations', 'revision_history', 'dashboard_reset_marker']);
     expect(parsePanelBridgeCapabilities(null)).toEqual([]);
   });
 });

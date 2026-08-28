@@ -53,6 +53,8 @@ describe('mainBoardNavigation', () => {
     expect(isNestedDashboardNavigationTarget('/profile/appearance')).toBe(true);
     expect(isNestedDashboardNavigationTarget('/rooms/living-room')).toBe(true);
     expect(isNestedDashboardNavigationTarget('/security/cameras')).toBe(true);
+    expect(isNestedDashboardNavigationTarget('/appgallery/irrigation')).toBe(true);
+    expect(isNestedDashboardNavigationTarget('/appgallery')).toBe(false);
   });
 
   it('recognizes nested routes in embedded and query-based navigation', () => {

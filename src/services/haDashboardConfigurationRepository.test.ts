@@ -7,6 +7,7 @@ import {
 } from './dashboardConfigurationRepository';
 import { HA_DASHBOARD_REVISION_HISTORY_KEY } from './dashboardRevisionHistory';
 import { HA_DASHBOARD_RESET_MARKER_KEY } from './dashboardReset';
+import { HA_APP_CONFIGURATIONS_KEY } from './haAppConfigurationsRepository';
 import { createHaDashboardConfigurationRepository } from './haDashboardConfigurationRepository';
 import {
   createLocalDashboardConfigurationCache,
@@ -258,12 +259,14 @@ describe('HA dashboard configuration repository', () => {
     let storedConfiguration: unknown = buildDocument(4);
     let storedHistory: unknown = { entries: [{ revision: 3 }] };
     let storedResetMarker: unknown = null;
+    let storedAppConfigurations: unknown = { schema: 'domusos-app-configurations' };
     const progress: string[] = [];
     const callApi = vi.fn(async (message: Record<string, unknown>) => {
       if (message.type === 'frontend/set_system_data') {
         if (message.key === HA_DASHBOARD_REVISION_HISTORY_KEY) storedHistory = message.value;
         if (message.key === HA_SHARED_HOUSE_CONFIGURATION_KEY) storedConfiguration = message.value;
         if (message.key === HA_DASHBOARD_RESET_MARKER_KEY) storedResetMarker = message.value;
+        if (message.key === HA_APP_CONFIGURATIONS_KEY) storedAppConfigurations = message.value;
         return null;
       }
       return {
@@ -271,6 +274,8 @@ describe('HA dashboard configuration repository', () => {
           ? storedHistory
           : message.key === HA_DASHBOARD_RESET_MARKER_KEY
             ? storedResetMarker
+            : message.key === HA_APP_CONFIGURATIONS_KEY
+              ? storedAppConfigurations
             : storedConfiguration,
       };
     });
@@ -291,6 +296,7 @@ describe('HA dashboard configuration repository', () => {
     ]);
     expect(storedHistory).toBeNull();
     expect(storedConfiguration).toBeNull();
+    expect(storedAppConfigurations).toBeNull();
     expect(storedResetMarker).toMatchObject({
       schema: 'domusos-dashboard-reset',
       status: 'complete',

@@ -1,13 +1,43 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import GlassToggle from '../components/ui/GlassToggle';
 import GlassSlider from '../components/ui/GlassSlider';
 import GlassModal from '../components/ui/GlassModal';
-import FeatureAvailabilityPage from '../components/ui/FeatureAvailabilityPage';
+import AppWorkspaceShell from '../components/apps/AppWorkspaceShell';
+import ComingSoonAppDemo from '../components/apps/ComingSoonAppDemo';
+import {
+  IrrigationHero,
+  IrrigationConsumptionSnapshotCard,
+  IrrigationMobileOverview,
+  IrrigationMoistureCard,
+  IrrigationScheduleSnapshotCard,
+  IrrigationZoneCard,
+  IrrigationZonesSnapshotCard,
+} from '../components/apps/irrigation/IrrigationDashboardCards';
+import IrrigationConfigurationPage from '../components/apps/irrigation/IrrigationConfigurationPage';
+import IrrigationCalendarPage from '../components/apps/irrigation/IrrigationCalendarPage';
+import IrrigationConsumptionPage from '../components/apps/irrigation/IrrigationConsumptionPage';
+import IrrigationZonesManagementPage from '../components/apps/irrigation/IrrigationZonesManagementPage';
+import {
+  buildIrrigationConsumptionSeries,
+  irrigationConsumptionPeriodDays,
+  irrigationConsumptionPeriodStart,
+  waterUnitMultiplier,
+} from '../components/apps/irrigation/irrigationConsumptionModel';
+import {
+  IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
+  IRRIGATION_MINIMUM_MAX_DURATION_MIN,
+  formatIrrigationEntityStateLabel,
+  validateIrrigationConfiguration,
+} from '../components/apps/irrigation/irrigationConfigurationModel';
+import {
+  createHaAppConfigurationsRepository,
+  IRRIGATION_CONFIGURATION_CACHE_KEY,
+} from '../services/haAppConfigurationsRepository';
 import { loadHassAuthTokensFromStorage, normalizeHassUrl } from '../services/haLive';
 import {
-  ArrowLeft,
   ChevronRight,
+  CalendarDays,
   Clock3,
   CloudRain,
   Cpu,
@@ -16,13 +46,14 @@ import {
   Gauge,
   Leaf,
   LeafyGreen,
+  LayoutDashboard,
   MapPinned,
   Minus,
-  Pause,
   Play,
   Plus,
   Square,
   Sprout,
+  Settings2,
   TreePine,
   Trees,
   Waves,
@@ -130,6 +161,27 @@ const SYSTEM_PORTALS = [
   },
 ];
 
+const IRRIGATION_WORKSPACE_NAVIGATION = [
+  { id: 'overview', label: 'Panoramica', icon: LayoutDashboard },
+  { id: 'zones', label: 'Zone', icon: Sprout },
+  { id: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { id: 'usage', label: 'Consumi', icon: Gauge },
+  { id: 'configuration', label: 'Impostazioni', icon: Settings2, placement: 'footer', mobileHidden: true },
+];
+
+const IRRIGATION_SECTION_ROUTES = {
+  overview: '/appgallery/irrigation',
+  zones: '/appgallery/irrigation/zones',
+  zonesManagement: '/appgallery/irrigation/zones/manage',
+  calendar: '/appgallery/irrigation/calendar',
+  usage: '/appgallery/irrigation/consumption',
+  configuration: '/appgallery/irrigation/settings',
+};
+
+const COMING_SOON_WORKSPACE_NAVIGATION = [
+  { id: 'overview', label: 'Panoramica', icon: LayoutDashboard },
+];
+
 const IRRIGATION_ZONE_ICON_OPTIONS = [
   { key: 'sprout', label: 'Germoglio', icon: Sprout },
   { key: 'leaf', label: 'Foglia', icon: Leaf },
@@ -206,7 +258,7 @@ const DEFAULT_IRRIGATION_ZONES = [
 ];
 
 const WATER_USAGE_BARS = [52, 74, 63, 100, 47, 65, 32];
-const IRRIGATION_CONFIG_STORAGE_KEY = 'ha.dashboard.appgallery.irrigation.config.v1';
+const IRRIGATION_CONSUMPTION_CACHE_TTL_MS = 5 * 60 * 1000;
 const IRRIGATION_WEEKDAY_TOKENS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const IRRIGATION_WEEKDAY_LABELS = {
   mon: 'L',
@@ -234,6 +286,8 @@ const DEFAULT_ZONE_BASE_DURATION = 10;
 
 const DEFAULT_IRRIGATION_CONFIG = {
   rainSensorEnabled: true,
+  blockOnRainSensorUnavailable: true,
+  maximumManualDurationMin: 30,
   rainSensorEntityId: 'binary_sensor.rain_sensor',
   weatherEntityId: '',
   humidityEntityId: 'sensor.outdoor_humidity',
@@ -348,6 +402,7 @@ function normalizeIrrigationZone(rawZone, index, fallbackZone = DEFAULT_IRRIGATI
     enabled: false,
     iconKey: DEFAULT_NEW_ZONE_ICON_KEY,
     entityId: '',
+    soilMoistureEntityId: '',
     manualDurationMin: 10,
     days: [...DEFAULT_ZONE_DAYS],
     startTimes: [...DEFAULT_ZONE_START_TIMES],
@@ -378,10 +433,13 @@ function normalizeIrrigationZone(rawZone, index, fallbackZone = DEFAULT_IRRIGATI
     enabled: typeof source.enabled === 'boolean' ? source.enabled : Boolean(fallback.enabled),
     iconKey: IRRIGATION_ZONE_ICON_COMPONENTS[iconSource] ? iconSource : fallback.iconKey,
     entityId: normalizeEntityId(source.entityId ?? source.entity_id ?? source.zoneEntity ?? fallback.entityId),
+    soilMoistureEntityId: normalizeEntityId(
+      source.soilMoistureEntityId ?? source.soil_moisture_entity_id ?? fallback.soilMoistureEntityId,
+    ),
     manualDurationMin: clamp(
       Math.round(manualDurationSource ?? fallback.manualDurationMin ?? 10),
       1,
-      240,
+      IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
     ),
     days: normalizeWeekdays(source.days ?? source.selectedDays, fallback.days ?? DEFAULT_ZONE_DAYS),
     startTimes: normalizeStartTimes(
@@ -391,7 +449,7 @@ function normalizeIrrigationZone(rawZone, index, fallbackZone = DEFAULT_IRRIGATI
     baseDuration: clamp(
       Math.round(baseDurationSource ?? fallback.baseDuration ?? fallback.manualDurationMin ?? DEFAULT_ZONE_BASE_DURATION),
       1,
-      240,
+      IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
     ),
   };
 }
@@ -440,6 +498,19 @@ function normalizeIrrigationConfig(raw) {
         : typeof source.rainBypass === 'boolean'
           ? !source.rainBypass
           : DEFAULT_IRRIGATION_CONFIG.rainSensorEnabled,
+    blockOnRainSensorUnavailable:
+      typeof source.blockOnRainSensorUnavailable === 'boolean'
+        ? source.blockOnRainSensorUnavailable
+        : DEFAULT_IRRIGATION_CONFIG.blockOnRainSensorUnavailable,
+    maximumManualDurationMin: clamp(
+      Math.round(
+        toNumberOrUndefined(source.maximumManualDurationMin) ??
+        toNumberOrUndefined(source.maxManualDurationMin) ??
+        DEFAULT_IRRIGATION_CONFIG.maximumManualDurationMin,
+      ),
+      IRRIGATION_MINIMUM_MAX_DURATION_MIN,
+      IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
+    ),
     rainSensorEntityId: normalizeEntityId(
       source.rainSensorEntityId ?? source.globalRainSensor ?? DEFAULT_IRRIGATION_CONFIG.rainSensorEntityId,
     ),
@@ -467,7 +538,7 @@ function readStoredIrrigationConfig() {
   if (typeof window === 'undefined') {
     return cloneDefaultIrrigationConfig();
   }
-  const raw = window.localStorage.getItem(IRRIGATION_CONFIG_STORAGE_KEY);
+  const raw = window.localStorage.getItem(IRRIGATION_CONFIGURATION_CACHE_KEY);
   if (!raw) {
     return cloneDefaultIrrigationConfig();
   }
@@ -737,7 +808,7 @@ function buildZoneConfigFromZone(zone, index) {
     baseDuration: clamp(
       Math.round(toNumberOrUndefined(zone?.baseDuration) ?? toNumberOrUndefined(zone?.manualDurationMin) ?? DEFAULT_ZONE_BASE_DURATION),
       1,
-      240,
+      IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
     ),
   };
 }
@@ -876,6 +947,67 @@ function readViewFromPath(pathLike) {
     return null;
   }
   return normalizeAppGalleryViewToken(segments[index + 1] ?? 'launcher');
+}
+
+function resolveOptionalNumericEntityValue(states, entityId) {
+  return resolveNumericEntityValue(states, entityId, null);
+}
+
+function getEntityAttributes(entity) {
+  return entity?.rawAttributes ?? entity?.attributes ?? {};
+}
+
+function buildDemoConsumptionSeries(period) {
+  const source = period === '7d'
+    ? WATER_USAGE_BARS
+    : period === '30d'
+      ? [55, 68, 42, 76, 62, 88, 51, 70, 59, 81, 46, 65, 72, 57, 39]
+      : [48, 55, 67, 74, 82, 96, 100, 91, 73, 61, 52, 46];
+  const total = period === '7d' ? 1240 : period === '30d' ? 5314 : 64657;
+  const weight = source.reduce((sum, value) => sum + value, 0);
+  const monthNames = ['Set', 'Ott', 'Nov', 'Dic', 'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago'];
+  return source.map((value, index) => ({
+    key: `demo-${period}-${index}`,
+    label: period === '7d'
+      ? ['Lu', 'Ma', 'Me', 'Gi', 'Ve', 'Sa', 'Do'][index]
+      : period === '12m'
+        ? monthNames[index]
+        : `${index * 2 + 1}`,
+    value: Math.round((total * value / Math.max(weight, 1)) * 10) / 10,
+  }));
+}
+
+function resolveIrrigationSectionFromTarget(pathLike) {
+  const fallback = 'overview';
+  try {
+    const parsed = new URL(pathLike || '/appgallery/irrigation', 'http://dashboard.local');
+    const candidates = [parsed.pathname, parsed.hash.replace(/^#/, '')];
+    for (const candidate of candidates) {
+      const segments = `${candidate ?? ''}`
+        .split('/')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean);
+      const irrigationIndex = segments.findIndex((entry) => entry === 'irrigation');
+      if (irrigationIndex === -1) continue;
+      const token = segments[irrigationIndex + 1] ?? '';
+      if (!token || token === 'overview') return 'overview';
+      if (token === 'zones' || token === 'zone') {
+        const nestedToken = segments[irrigationIndex + 2] ?? '';
+        return nestedToken === 'manage' || nestedToken === 'edit' ? 'zonesManagement' : 'zones';
+      }
+      if (token === 'calendar' || token === 'schedule') return 'calendar';
+      if (token === 'consumption' || token === 'usage' || token === 'consumi') return 'usage';
+      if (token === 'settings' || token === 'configuration' || token === 'config') return 'configuration';
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+function resolveIrrigationSectionFromLocation() {
+  if (typeof window === 'undefined') return 'overview';
+  return resolveIrrigationSectionFromTarget(window.location.href);
 }
 
 function resolveAppGalleryViewFromLocation() {
@@ -1111,7 +1243,7 @@ function ZoneConfigModal({
                 <span className="text-xs uppercase tracking-[0.16em] text-white/55">Durata (minuti)</span>
                 <GlassSlider
                   min={1}
-                  max={240}
+                  max={IRRIGATION_ABSOLUTE_MAX_DURATION_MIN}
                   value={zoneConfig.baseDuration}
                   onChange={(event) => onBaseDurationChange(event.target.value)}
                   className="mt-2"
@@ -1183,8 +1315,25 @@ function LauncherView({ onNavigate = navigateTo }) {
   );
 }
 
+function IrrigationRouteHeader({ eyebrow, title, description, action }) {
+  return (
+    <header className="xl:col-span-12">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[color:var(--ui-text-tertiary)]">{eyebrow}</p>
+          <h1 className="mt-1 text-[1.9rem] font-semibold leading-none tracking-[-0.045em] text-[color:var(--ui-text-primary)] sm:text-[2.35rem]">{title}</h1>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-[color:var(--ui-text-secondary)] sm:text-sm">{description}</p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </header>
+  );
+}
+
 function IrrigationDashboardView({
-  isEditMode = false,
+  canConfigureApps = false,
+  currentUserId = null,
+  runtimeMode = 'real',
   haConnected = false,
   haStates = {},
   haEntityIds = [],
@@ -1193,10 +1342,23 @@ function IrrigationDashboardView({
   onCallService,
   onCallApi,
   onNotify,
+  navigationRoute = '',
   onNavigate = navigateTo,
 }) {
+  // App settings live in the dedicated house-wide configuration page.
+  // Keep the legacy inline editor unreachable until its markup is removed.
+  const isEditMode = false;
+  const [activeWorkspaceSection, setActiveWorkspaceSection] = React.useState(() => {
+    const initialSection = navigationRoute
+      ? resolveIrrigationSectionFromTarget(navigationRoute)
+      : resolveIrrigationSectionFromLocation();
+    return ['configuration', 'zonesManagement'].includes(initialSection) && !canConfigureApps ? 'overview' : initialSection;
+  });
   const [masterControlState, setMasterControlState] = React.useState('stopped');
   const [irrigationConfig, setIrrigationConfig] = React.useState(() => readStoredIrrigationConfig());
+  const [irrigationConfigurationDraft, setIrrigationConfigurationDraft] = React.useState(
+    () => readStoredIrrigationConfig(),
+  );
   const [zoneEnabled, setZoneEnabled] = React.useState(() =>
     Object.fromEntries(irrigationConfig.zones.map((zone) => [zone.id, Boolean(zone.enabled)])),
   );
@@ -1208,14 +1370,262 @@ function IrrigationDashboardView({
   const [manualZoneSessions, setManualZoneSessions] = React.useState({});
   const [manualNowTs, setManualNowTs] = React.useState(() => Date.now());
   const [isRainSensorSyncing, setIsRainSensorSyncing] = React.useState(false);
+  const [zoneCommandPending, setZoneCommandPending] = React.useState({});
+  const [configurationStatus, setConfigurationStatus] = React.useState(haConnected ? 'loading' : 'offline');
+  const [configurationRevision, setConfigurationRevision] = React.useState(null);
+  const [persistedConfigurationSignature, setPersistedConfigurationSignature] = React.useState('');
+  const [consumptionPeriod, setConsumptionPeriod] = React.useState('7d');
+  const [consumptionHistory, setConsumptionHistory] = React.useState({
+    status: runtimeMode === 'demo' ? 'available' : 'empty',
+    points: runtimeMode === 'demo' ? buildDemoConsumptionSeries('7d') : [],
+    isRefreshing: false,
+    isStale: false,
+    updatedAt: runtimeMode === 'demo' ? Date.now() : null,
+  });
+  const consumptionHistoryCacheRef = React.useRef(new Map());
   const manualZoneTimeoutsRef = React.useRef({});
+  const haStatesRef = React.useRef(haStates);
+  const irrigationProgressRootRef = React.useRef(null);
+  const configuredConsumptionEntityId = normalizeEntityId(irrigationConfig.waterUsageEntityId);
+  const configuredConsumptionEntity = configuredConsumptionEntityId ? haStates[configuredConsumptionEntityId] : null;
+  const configuredConsumptionUnit = getEntityAttributes(configuredConsumptionEntity).unit_of_measurement ?? '';
+
+  React.useEffect(() => {
+    if (!navigationRoute) return;
+    const nextSection = resolveIrrigationSectionFromTarget(navigationRoute);
+    setActiveWorkspaceSection(['configuration', 'zonesManagement'].includes(nextSection) && !canConfigureApps ? 'overview' : nextSection);
+  }, [canConfigureApps, navigationRoute]);
+
+  React.useEffect(() => {
+    if (navigationRoute) return undefined;
+    const syncSection = () => {
+      const nextSection = resolveIrrigationSectionFromLocation();
+      setActiveWorkspaceSection(['configuration', 'zonesManagement'].includes(nextSection) && !canConfigureApps ? 'overview' : nextSection);
+    };
+    window.addEventListener('popstate', syncSection);
+    window.addEventListener('hashchange', syncSection);
+    return () => {
+      window.removeEventListener('popstate', syncSection);
+      window.removeEventListener('hashchange', syncSection);
+    };
+  }, [canConfigureApps, navigationRoute]);
+
+  React.useEffect(() => {
+    if (activeWorkspaceSection === 'configuration' || activeWorkspaceSection === 'zonesManagement') return undefined;
+    const root = irrigationProgressRootRef.current;
+    const scrollContainer = root?.closest('main');
+    if (!root || !scrollContainer) return undefined;
+
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    let animationFrame = 0;
+    const updateProgress = () => {
+      animationFrame = 0;
+      const progress = reduceMotion ? 1 : Math.max(0, Math.min(1, scrollContainer.scrollTop / 220));
+      root.style.setProperty('--irrigation-scroll-progress', progress.toFixed(4));
+    };
+    const handleScroll = () => {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(updateProgress);
+    };
+
+    updateProgress();
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
+  }, [activeWorkspaceSection]);
+
+  React.useEffect(() => {
+    haStatesRef.current = haStates;
+  }, [haStates]);
+
+  React.useEffect(() => {
+    if (activeWorkspaceSection !== 'usage') return undefined;
+
+    if (runtimeMode === 'demo') {
+      setConsumptionHistory({
+        status: 'available',
+        points: buildDemoConsumptionSeries(consumptionPeriod),
+        isRefreshing: false,
+        isStale: false,
+        updatedAt: Date.now(),
+      });
+      return undefined;
+    }
+
+    const entityId = configuredConsumptionEntityId;
+    const cacheKey = `${entityId}|${configuredConsumptionUnit}|${consumptionPeriod}`;
+    const cached = consumptionHistoryCacheRef.current.get(cacheKey) ?? null;
+
+    if (!haConnected) {
+      setConsumptionHistory(cached
+        ? { status: 'available', points: cached.points, isRefreshing: false, isStale: true, updatedAt: cached.updatedAt }
+        : { status: 'offline', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+      return undefined;
+    }
+
+    if (!entityId || !configuredConsumptionEntity) {
+      setConsumptionHistory({ status: 'empty', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+      return undefined;
+    }
+
+    if (typeof onCallApi !== 'function') {
+      setConsumptionHistory(cached
+        ? { status: 'available', points: cached.points, isRefreshing: false, isStale: true, updatedAt: cached.updatedAt }
+        : { status: 'error', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+      return undefined;
+    }
+
+    const cacheIsFresh = cached && Date.now() - cached.updatedAt < IRRIGATION_CONSUMPTION_CACHE_TTL_MS;
+    if (cacheIsFresh) {
+      setConsumptionHistory({
+        status: 'available',
+        points: cached.points,
+        isRefreshing: false,
+        isStale: false,
+        updatedAt: cached.updatedAt,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    const endTime = new Date();
+    const startTime = irrigationConsumptionPeriodStart(consumptionPeriod, endTime);
+    const multiplier = waterUnitMultiplier(configuredConsumptionUnit);
+    setConsumptionHistory(cached
+      ? { status: 'available', points: cached.points, isRefreshing: true, isStale: false, updatedAt: cached.updatedAt }
+      : { status: 'loading', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+
+    const loadConsumptionHistory = async () => {
+      let payload = null;
+      try {
+        payload = await onCallApi({
+          type: 'history/history_during_period',
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          entity_ids: [entityId],
+          include_start_time_state: true,
+          significant_changes_only: false,
+          minimal_response: true,
+          no_attributes: true,
+        }, { reportError: false });
+      } catch {
+        payload = null;
+      }
+
+      if (payload === null) {
+        const normalizedUrl = normalizeHassUrl(haUrl);
+        const token = haToken.trim();
+        if (normalizedUrl && token) {
+          try {
+            const endpoint = new URL(`${normalizedUrl}/api/history/period/${encodeURIComponent(startTime.toISOString())}`);
+            endpoint.searchParams.set('filter_entity_id', entityId);
+            endpoint.searchParams.set('end_time', endTime.toISOString());
+            endpoint.searchParams.set('minimal_response', '1');
+            endpoint.searchParams.set('no_attributes', '1');
+            endpoint.searchParams.set('significant_changes_only', '0');
+            const response = await fetch(endpoint.toString(), {
+              headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+            });
+            if (response.ok) payload = await response.json();
+          } catch {
+            payload = null;
+          }
+        }
+      }
+
+      if (cancelled) return;
+      if (payload === null) {
+        setConsumptionHistory(cached
+          ? { status: 'available', points: cached.points, isRefreshing: false, isStale: true, updatedAt: cached.updatedAt }
+          : { status: 'error', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+        return;
+      }
+      const points = buildIrrigationConsumptionSeries(payload, entityId, consumptionPeriod, multiplier);
+      if (points.length) {
+        const updatedAt = Date.now();
+        consumptionHistoryCacheRef.current.set(cacheKey, { points, updatedAt });
+        setConsumptionHistory({ status: 'available', points, isRefreshing: false, isStale: false, updatedAt });
+      } else if (cached) {
+        setConsumptionHistory({ status: 'available', points: cached.points, isRefreshing: false, isStale: true, updatedAt: cached.updatedAt });
+      } else {
+        setConsumptionHistory({ status: 'insufficient', points: [], isRefreshing: false, isStale: false, updatedAt: null });
+      }
+    };
+
+    void loadConsumptionHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceSection, configuredConsumptionEntityId, Boolean(configuredConsumptionEntity), configuredConsumptionUnit, consumptionPeriod, haConnected, haToken, haUrl, onCallApi, runtimeMode]);
+  const appConfigurationsRepository = React.useMemo(
+    () => typeof onCallApi === 'function'
+      ? createHaAppConfigurationsRepository({
+          callApi: onCallApi,
+          isConnected: () => haConnected,
+          canManage: () => canConfigureApps,
+        })
+      : null,
+    [canConfigureApps, haConnected, onCallApi],
+  );
+  const irrigationConfigurationSignature = React.useMemo(
+    () => JSON.stringify(normalizeIrrigationConfig(irrigationConfigurationDraft)),
+    [irrigationConfigurationDraft],
+  );
+  const hasUnsavedConfigurationChanges = irrigationConfigurationSignature !== persistedConfigurationSignature;
 
   React.useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
-    window.localStorage.setItem(IRRIGATION_CONFIG_STORAGE_KEY, JSON.stringify(irrigationConfig));
+    window.localStorage.setItem(IRRIGATION_CONFIGURATION_CACHE_KEY, JSON.stringify(irrigationConfig));
   }, [irrigationConfig]);
+
+  React.useEffect(() => {
+    if (!haConnected || !appConfigurationsRepository) {
+      setConfigurationStatus('offline');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setConfigurationStatus('loading');
+    const loadSharedConfiguration = async () => {
+      const result = await appConfigurationsRepository.load();
+      if (cancelled) return;
+      if (result.status === 'found') {
+        const storedIrrigation = result.document.apps.irrigation;
+        setConfigurationRevision(result.document.revision);
+        if (storedIrrigation && typeof storedIrrigation === 'object') {
+          const normalized = normalizeIrrigationConfig(storedIrrigation);
+          setIrrigationConfig(normalized);
+          setIrrigationConfigurationDraft(normalized);
+          setPersistedConfigurationSignature(JSON.stringify(normalized));
+        } else {
+          setPersistedConfigurationSignature('');
+        }
+        setConfigurationStatus('ready');
+        return;
+      }
+      if (result.status === 'empty') {
+        setConfigurationRevision(null);
+        setPersistedConfigurationSignature('');
+        setConfigurationStatus('ready');
+        return;
+      }
+      setConfigurationStatus(result.status);
+    };
+    void loadSharedConfiguration();
+    return () => {
+      cancelled = true;
+    };
+  }, [appConfigurationsRepository, haConnected]);
+
+  React.useEffect(() => {
+    if (configurationStatus === 'saved' && hasUnsavedConfigurationChanges) {
+      setConfigurationStatus('ready');
+    }
+  }, [configurationStatus, hasUnsavedConfigurationChanges]);
 
   React.useEffect(() => {
     setZoneEnabled((current) => {
@@ -1246,7 +1656,7 @@ function IrrigationDashboardView({
           baseDuration: clamp(
             Math.round(toNumberOrUndefined(previous.baseDuration) ?? normalized.baseDuration),
             1,
-            240,
+            IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
           ),
         };
       });
@@ -1358,27 +1768,6 @@ function IrrigationDashboardView({
         : rainSensorActive
           ? 'Pioggia rilevata'
           : 'Sensore operativo';
-  const rainStatusClassName = !rainSensorEnabled
-    ? 'text-amber-100'
-    : rainSensorUnavailable
-      ? 'text-rose-200'
-      : rainSensorActive
-        ? 'text-cyan-200'
-        : 'text-white/75';
-  const rainControlCardClassName = !rainSensorEnabled
-    ? 'border-amber-300/30 bg-amber-400/10'
-    : rainSensorUnavailable
-      ? 'border-rose-300/30 bg-rose-500/10'
-      : rainSensorActive
-        ? 'border-cyan-300/30 bg-cyan-400/10'
-        : 'border-white/10 bg-white/[0.04]';
-  const rainControlIconWrapClassName = !rainSensorEnabled
-    ? 'border-amber-300/35 bg-amber-400/18 text-amber-100'
-    : rainSensorUnavailable
-      ? 'border-rose-300/35 bg-rose-500/18 text-rose-200'
-      : rainSensorActive
-        ? 'border-cyan-300/35 bg-cyan-400/18 text-cyan-100'
-        : 'border-white/20 bg-white/8 text-white/70';
   let rainSummaryTitle = '';
   let rainSummaryDescription = '';
 
@@ -1435,9 +1824,6 @@ function IrrigationDashboardView({
       : moisturePct > 70
         ? 'Terreno ben idratato'
         : 'Umidita terreno nel range ideale';
-  const moistureTextClassName =
-    moisturePct < 35 ? 'text-amber-300/90' : moisturePct > 70 ? 'text-emerald-300/90' : 'text-cyan-200/90';
-
   const waterUsageLiters = Math.max(
     0,
     Math.round(resolveNumericEntityValue(haStates, irrigationConfig.waterUsageEntityId, 1240)),
@@ -1451,9 +1837,61 @@ function IrrigationDashboardView({
   const savingsLabel = `${isPositiveSavings ? '-' : '+'}${Math.abs(savingsPct)}% ${
     isPositiveSavings ? 'Risparmio' : 'Consumo'
   }`;
-  const savingsClassName = isPositiveSavings ? 'text-emerald-300' : 'text-rose-300';
-
   const configuredZonesCount = irrigationConfig.zones.filter((zone) => normalizeEntityId(zone.entityId)).length;
+  const consumptionTotalLiters = consumptionHistory.status === 'available'
+    ? Math.round(consumptionHistory.points.reduce((sum, point) => sum + point.value, 0) * 10) / 10
+    : null;
+  const consumptionDays = irrigationConsumptionPeriodDays(consumptionPeriod);
+  const consumptionDailyAverageLiters = consumptionTotalLiters === null
+    ? null
+    : Math.round((consumptionTotalLiters / consumptionDays) * 10) / 10;
+  const configuredAverageRaw = resolveOptionalNumericEntityValue(haStates, irrigationConfig.waterAverageEntityId);
+  const configuredAverageEntity = normalizeEntityId(irrigationConfig.waterAverageEntityId)
+    ? haStates[normalizeEntityId(irrigationConfig.waterAverageEntityId)]
+    : null;
+  const configuredAverageMultiplier = waterUnitMultiplier(
+    getEntityAttributes(configuredAverageEntity).unit_of_measurement,
+  );
+  const consumptionReferenceLiters = runtimeMode === 'demo'
+    ? consumptionTotalLiters === null ? null : consumptionTotalLiters / 0.86
+    : configuredAverageRaw === null
+      ? null
+      : configuredAverageRaw * configuredAverageMultiplier * (consumptionDays / 7);
+  const consumptionComparisonPct = consumptionTotalLiters === null || consumptionReferenceLiters === null || consumptionReferenceLiters <= 0
+    ? null
+    : Math.round(((consumptionTotalLiters - consumptionReferenceLiters) / consumptionReferenceLiters) * 100);
+  const plannedWeeklyMinutes = irrigationConfig.zones.reduce((sum, zone) => {
+    const daysCount = Array.isArray(zone.days) ? zone.days.length : 0;
+    const startsCount = Array.isArray(zone.startTimes) ? zone.startTimes.length : 0;
+    const duration = clamp(Math.round(toNumberOrUndefined(zone.baseDuration) ?? 0), 0, IRRIGATION_ABSOLUTE_MAX_DURATION_MIN);
+    return sum + daysCount * startsCount * duration;
+  }, 0);
+  const consumptionZoneBreakdown = irrigationConfig.zones
+    .map((zone) => {
+      const daysCount = Array.isArray(zone.days) ? zone.days.length : 0;
+      const startsCount = Array.isArray(zone.startTimes) ? zone.startTimes.length : 0;
+      const duration = clamp(Math.round(toNumberOrUndefined(zone.baseDuration) ?? 0), 0, IRRIGATION_ABSOLUTE_MAX_DURATION_MIN);
+      const plannedMinutes = daysCount * startsCount * duration;
+      const share = plannedWeeklyMinutes > 0 ? Math.round((plannedMinutes / plannedWeeklyMinutes) * 100) : 0;
+      return {
+        id: zone.id,
+        name: zone.name?.trim() || 'Zona irrigazione',
+        plannedMinutes,
+        share,
+        liters: consumptionTotalLiters === null ? null : Math.round(consumptionTotalLiters * share) / 100,
+      };
+    })
+    .filter((zone) => zone.plannedMinutes > 0)
+    .sort((first, second) => second.plannedMinutes - first.plannedMinutes);
+  const consumptionDataSourceLabel = runtimeMode === 'demo'
+    ? 'Dati dimostrativi'
+    : consumptionHistory.isRefreshing
+      ? 'Aggiornamento in corso'
+      : consumptionHistory.isStale
+        ? 'Ultimi dati disponibili'
+        : consumptionHistory.status === 'available'
+          ? 'Storico Home Assistant'
+          : 'Dato non disponibile';
 
   const zones = React.useMemo(
     () =>
@@ -1466,7 +1904,11 @@ function IrrigationDashboardView({
         let status = zone.status;
         let detail = zone.detail;
         let progress = zone.progress;
-        const manualDurationMin = clamp(Math.round(toNumberOrUndefined(zone.manualDurationMin) ?? 10), 1, 240);
+        const manualDurationMin = clamp(
+          Math.round(toNumberOrUndefined(zone.manualDurationMin) ?? 10),
+          1,
+          irrigationConfig.maximumManualDurationMin,
+        );
         const manualSession = manualZoneSessions[zone.id];
         const manualRemainingSeconds = manualSession
           ? Math.max(0, Math.ceil((manualSession.endAt - manualNowTs) / 1000))
@@ -1480,7 +1922,7 @@ function IrrigationDashboardView({
             progress = 0;
           } else if (entity) {
             status = enabled ? 'active' : 'idle';
-            detail = `Stato: ${(entity.stateLabel ?? entity.state ?? 'off').toString()}`;
+            detail = `Stato: ${formatIrrigationEntityStateLabel(entity.stateLabel ?? entity.state ?? 'off')}`;
             const liveProgress = toNumberOrUndefined(entity.progress);
             if (liveProgress !== undefined) {
               progress = clamp(Math.round(liveProgress), 0, 100);
@@ -1512,22 +1954,125 @@ function IrrigationDashboardView({
           entityId,
           icon: Icon,
           manualDurationMin,
+          maximumManualDurationMin: irrigationConfig.maximumManualDurationMin,
           manualRemainingSeconds,
           isManualActive: Boolean(manualSession),
+          isCommandPending: Boolean(zoneCommandPending[zone.id]),
         };
       }),
-    [haConnected, haStates, irrigationConfig.zones, manualNowTs, manualZoneSessions, zoneEnabled],
+    [haConnected, haStates, irrigationConfig.maximumManualDurationMin, irrigationConfig.zones, manualNowTs, manualZoneSessions, zoneCommandPending, zoneEnabled],
   );
 
-  const gaugeRadius = 80;
-  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
-  const gaugeDashOffset = gaugeCircumference * (1 - moisturePct / 100);
+  const calendarZones = React.useMemo(
+    () => zones.map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      icon: zone.icon,
+      days: normalizeWeekdays(zone.days, []),
+      startTimes: normalizeStartTimes(zone.startTimes, []),
+      durationMin: clamp(
+        Math.round(toNumberOrUndefined(zone.baseDuration) ?? zone.manualDurationMin ?? DEFAULT_ZONE_BASE_DURATION),
+        1,
+        irrigationConfig.maximumManualDurationMin,
+      ),
+      scheduleEnabled: irrigationConfig.zones.find((configuredZone) => configuredZone.id === zone.id)?.enabled !== false,
+      available: runtimeMode === 'demo' || !haConnected || Boolean(zone.entityId && haStates[zone.entityId] && !isEntityUnavailableState(haStates[zone.entityId].state)),
+      running: zone.isManualActive,
+    })),
+    [haConnected, haStates, irrigationConfig.maximumManualDurationMin, irrigationConfig.zones, runtimeMode, zones],
+  );
+
+  const overviewNextCycleLabel = React.useMemo(() => {
+    const nextZone = irrigationConfig.zones
+      .filter((zone) => zone.enabled !== false)
+      .map((zone) => ({
+        zone,
+        slot: findNextIrrigationSlot(zone.days, zone.startTimes),
+      }))
+      .filter((entry) => entry.slot)
+      .sort((left, right) => left.slot.date.getTime() - right.slot.date.getTime())[0];
+
+    if (!nextZone) return 'Nessun ciclo programmato';
+    const displayName = nextZone.zone.name?.trim() || 'Zona irrigazione';
+    return `${displayName} · ${formatNextIrrigationLabel(nextZone.zone.days, nextZone.zone.startTimes)}`;
+  }, [irrigationConfig.zones]);
+
+  const overviewScheduleItems = React.useMemo(() => irrigationConfig.zones
+    .filter((zone) => zone.enabled !== false)
+    .map((zone, index) => ({
+      zone,
+      index,
+      slot: findNextIrrigationSlot(zone.days, zone.startTimes),
+    }))
+    .filter((entry) => entry.slot)
+    .sort((left, right) => left.slot.date.getTime() - right.slot.date.getTime())
+    .slice(0, 3)
+    .map(({ zone, index }) => ({
+      id: zone.id,
+      name: zone.name?.trim() || `Zona ${index + 1}`,
+      when: formatNextIrrigationLabel(zone.days, zone.startTimes),
+      durationMin: clamp(
+        Math.round(toNumberOrUndefined(zone.baseDuration) ?? DEFAULT_ZONE_BASE_DURATION),
+        1,
+        irrigationConfig.maximumManualDurationMin,
+      ),
+    })), [irrigationConfig.maximumManualDurationMin, irrigationConfig.zones]);
 
   const updateConfigField = (field, value) => {
     setIrrigationConfig((current) => ({
       ...current,
-      [field]: normalizeEntityId(value),
+      [field]: field === 'rainSensorEnabled' ? Boolean(value) : normalizeEntityId(value),
     }));
+  };
+
+  const updateConfigurationDraftField = (field, value) => {
+    setIrrigationConfigurationDraft((current) => ({
+      ...current,
+      [field]: field === 'rainSensorEnabled' || field === 'blockOnRainSensorUnavailable'
+        ? Boolean(value)
+        : field === 'maximumManualDurationMin'
+          ? clamp(
+              Math.round(toNumberOrUndefined(value) ?? current.maximumManualDurationMin),
+              IRRIGATION_MINIMUM_MAX_DURATION_MIN,
+              IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
+            )
+          : normalizeEntityId(value),
+    }));
+  };
+
+  const applySuggestedIrrigationConfiguration = (nextConfig) => {
+    setIrrigationConfigurationDraft(normalizeIrrigationConfig(nextConfig));
+  };
+
+  const updateZoneConfigurationField = (zoneId, field, value) => {
+    if (!['name', 'entityId', 'soilMoistureEntityId', 'iconKey', 'enabled'].includes(field)) return;
+    setIrrigationConfigurationDraft((current) => ({
+      ...current,
+      zones: current.zones.map((zone) => zone.id === zoneId
+        ? {
+            ...zone,
+            [field]: field === 'name'
+              ? value
+              : field === 'enabled'
+                ? Boolean(value)
+                : field === 'iconKey'
+                  ? IRRIGATION_ZONE_ICON_COMPONENTS[value] ? value : zone.iconKey
+                  : normalizeEntityId(value),
+          }
+        : zone),
+    }));
+  };
+
+  const moveConfigurationZone = (zoneId, direction) => {
+    setIrrigationConfigurationDraft((current) => {
+      const currentIndex = current.zones.findIndex((zone) => zone.id === zoneId);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.zones.length) return current;
+      const zones = [...current.zones];
+      const [movedZone] = zones.splice(currentIndex, 1);
+      zones.splice(nextIndex, 0, movedZone);
+      return { ...current, zones };
+    });
   };
 
   const updateZoneEntity = (zoneId, value) => {
@@ -1581,7 +2126,11 @@ function IrrigationDashboardView({
 
   const updateZoneManualDuration = (zoneId, value) => {
     const parsedValue = toNumberOrUndefined(value);
-    const nextDurationMin = clamp(Math.round(parsedValue ?? 10), 1, 240);
+    const nextDurationMin = clamp(
+      Math.round(parsedValue ?? 10),
+      1,
+      irrigationConfig.maximumManualDurationMin,
+    );
 
     setIrrigationConfig((current) => ({
       ...current,
@@ -1596,8 +2145,7 @@ function IrrigationDashboardView({
     }));
   };
 
-  const addZone = () => {
-    setIrrigationConfig((current) => {
+  const appendNewZone = (current) => {
       const nextZoneNumber = current.zones.length + 1;
       const nextId = buildUniqueZoneId(current.zones, `zona-${nextZoneNumber}`);
       const nextZone = normalizeIrrigationZone(
@@ -1622,7 +2170,14 @@ function IrrigationDashboardView({
         ...current,
         zones: [...current.zones, nextZone],
       };
-    });
+  };
+
+  const addZone = () => {
+    setIrrigationConfig(appendNewZone);
+  };
+
+  const addConfigurationZone = () => {
+    setIrrigationConfigurationDraft(appendNewZone);
   };
 
   const resetIrrigationConfig = () => {
@@ -1722,7 +2277,11 @@ function IrrigationDashboardView({
     const parsed = toNumberOrUndefined(value);
     updateEditingZoneConfig((zoneConfig) => ({
       ...zoneConfig,
-      baseDuration: clamp(Math.round(parsed ?? zoneConfig.baseDuration ?? DEFAULT_ZONE_BASE_DURATION), 1, 240),
+      baseDuration: clamp(
+        Math.round(parsed ?? zoneConfig.baseDuration ?? DEFAULT_ZONE_BASE_DURATION),
+        1,
+        IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
+      ),
     }));
   };
 
@@ -1857,7 +2416,7 @@ function IrrigationDashboardView({
       baseDuration: clamp(
         Math.round(toNumberOrUndefined(editingZoneConfig.baseDuration) ?? DEFAULT_ZONE_BASE_DURATION),
         1,
-        240,
+        IRRIGATION_ABSOLUTE_MAX_DURATION_MIN,
       ),
     };
 
@@ -1924,9 +2483,36 @@ function IrrigationDashboardView({
     }
   };
 
+  const waitForZoneStateConfirmation = async (entityId, shouldTurnOn, timeoutMs = 6000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      const entity = haStatesRef.current?.[entityId];
+      if (entity && !isEntityUnavailableState(entity.state) && isEntityOnState(entity.state) === shouldTurnOn) {
+        return true;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    return false;
+  };
+
   const setZonePowerState = async (zone, shouldTurnOn) => {
     const entityId = normalizeEntityId(zone.entityId);
-    if (entityId && haConnected && typeof onCallService === 'function') {
+    if (!entityId) return false;
+
+    if (runtimeMode === 'demo') {
+      setZoneEnabled((current) => ({ ...current, [zone.id]: shouldTurnOn }));
+      return true;
+    }
+
+    if (!haConnected || typeof onCallService !== 'function') {
+      if (typeof onNotify === 'function') {
+        onNotify('error', 'Home Assistant non è raggiungibile. Nessun comando è stato eseguito.');
+      }
+      return false;
+    }
+
+    setZoneCommandPending((current) => ({ ...current, [zone.id]: true }));
+    try {
       const domain = entityId.split('.')[0];
       let ok = false;
 
@@ -1944,20 +2530,21 @@ function IrrigationDashboardView({
         });
       }
 
-      if (ok) {
-        setZoneEnabled((current) => ({
-          ...current,
-          [zone.id]: shouldTurnOn,
-        }));
-        return true;
+      if (!ok) {
+        if (typeof onNotify === 'function') onNotify('error', 'Home Assistant ha rifiutato il comando alla zona.');
+        return false;
       }
-    }
 
-    setZoneEnabled((current) => ({
-      ...current,
-      [zone.id]: shouldTurnOn,
-    }));
-    return true;
+      const confirmed = await waitForZoneStateConfirmation(entityId, shouldTurnOn);
+      if (!confirmed) {
+        if (typeof onNotify === 'function') onNotify('warning', 'Comando inviato, ma lo stato della zona non è stato confermato.');
+        return false;
+      }
+      setZoneEnabled((current) => ({ ...current, [zone.id]: shouldTurnOn }));
+      return true;
+    } finally {
+      setZoneCommandPending((current) => ({ ...current, [zone.id]: false }));
+    }
   };
 
   const clearManualSession = (zoneId) => {
@@ -1994,12 +2581,26 @@ function IrrigationDashboardView({
       return;
     }
 
-    const durationMin = clamp(Math.round(toNumberOrUndefined(zone.manualDurationMin) ?? 10), 1, 240);
+    if (runtimeMode !== 'demo' && rainSensorEnabled && rainSensorActive) {
+      if (typeof onNotify === 'function') onNotify('warning', 'Avvio bloccato: il sensore segnala pioggia.');
+      return;
+    }
+    if (runtimeMode !== 'demo' && rainSensorEnabled && rainSensorUnavailable && irrigationConfig.blockOnRainSensorUnavailable) {
+      if (typeof onNotify === 'function') onNotify('warning', 'Avvio bloccato: il sensore pioggia non è verificabile.');
+      return;
+    }
+
+    const durationMin = clamp(
+      Math.round(toNumberOrUndefined(zone.manualDurationMin) ?? 10),
+      1,
+      irrigationConfig.maximumManualDurationMin,
+    );
     const durationMs = durationMin * 60 * 1000;
     const startedAt = Date.now();
     const endAt = startedAt + durationMs;
 
-    await setZonePowerState(zone, true);
+    const started = await setZonePowerState(zone, true);
+    if (!started) return;
     clearManualSession(zone.id);
 
     setManualZoneSessions((current) => ({
@@ -2030,12 +2631,6 @@ function IrrigationDashboardView({
   const masterIsStopped = masterControlState === 'stopped';
   const masterIsRunning = masterControlState === 'running';
   const masterTitle = masterIsRunning ? 'Sistema Attivo' : masterIsStopped ? 'Sistema Fermo' : 'Sistema in Pausa';
-  const MasterPrimaryIcon = masterIsRunning ? Pause : Play;
-  const masterPrimaryLabel = masterIsRunning ? 'Pausa' : 'Play';
-  const masterPrimaryClassName = masterIsRunning
-    ? 'border-amber-300/35 bg-amber-400/22 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.28)]'
-    : 'border-cyan-300/35 bg-cyan-400/22 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.32)]';
-
   const handleMasterPrimaryAction = () => {
     setMasterControlState((current) => (current === 'running' ? 'paused' : 'running'));
   };
@@ -2044,36 +2639,143 @@ function IrrigationDashboardView({
     setMasterControlState('stopped');
   };
 
-  return (
-    <div className="dashboard-page-content dashboard-page-content-wide gap-8 pb-10">
-      <motion.header
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="space-y-3"
-      >
-        <button
-          type="button"
-          onClick={() => onNavigate('/appgallery')}
-          className="inline-flex items-center gap-2 text-sm text-[color:var(--ui-text-secondary)] transition-colors hover:text-[color:var(--ui-text-primary)]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Torna alla Libreria</span>
-        </button>
-        <h1 className="dashboard-page-title">Irrigazione Smart</h1>
-      </motion.header>
+  const removeZone = (zoneId) => {
+    setIrrigationConfigurationDraft((current) => current.zones.length <= 1
+      ? current
+      : { ...current, zones: current.zones.filter((zone) => zone.id !== zoneId) });
+  };
 
+  const saveSharedIrrigationConfiguration = async () => {
+    if (!canConfigureApps || !appConfigurationsRepository || !haConnected || !currentUserId) {
+      setConfigurationStatus(haConnected ? 'error' : 'offline');
+      return;
+    }
+    const normalized = normalizeIrrigationConfig(irrigationConfigurationDraft);
+    const blockingIssues = validateIrrigationConfiguration(normalized, haStates)
+      .filter((issue) => issue.severity === 'error');
+    if (blockingIssues.length > 0) {
+      setConfigurationStatus('ready');
+      if (typeof onNotify === 'function') {
+        onNotify('warning', `Correggi ${blockingIssues.length} problemi prima di salvare la configurazione.`);
+      }
+      return;
+    }
+    setConfigurationStatus('saving');
+    const result = await appConfigurationsRepository.saveAppConfiguration(
+      'irrigation',
+      normalized,
+      configurationRevision,
+      currentUserId,
+    );
+    if (result.status === 'saved') {
+      setIrrigationConfig(normalized);
+      setIrrigationConfigurationDraft(normalized);
+      setConfigurationRevision(result.document.revision);
+      setPersistedConfigurationSignature(JSON.stringify(normalized));
+      setConfigurationStatus('saved');
+      if (typeof onNotify === 'function') onNotify('success', 'Configurazione irrigazione salvata per tutta la casa.');
+      return;
+    }
+    if (result.status === 'conflict') {
+      setConfigurationRevision(result.current?.revision ?? null);
+      setConfigurationStatus('conflict');
+      if (typeof onNotify === 'function') onNotify('warning', 'La configurazione è cambiata su un altro dispositivo. Controlla e salva nuovamente.');
+      return;
+    }
+    setConfigurationStatus(result.status);
+    if (typeof onNotify === 'function') onNotify('error', 'Impossibile salvare la configurazione irrigazione su Home Assistant.');
+  };
+
+  const handleWorkspaceNavigation = (sectionId) => {
+    if (!Object.prototype.hasOwnProperty.call(IRRIGATION_SECTION_ROUTES, sectionId)) return;
+    if ((sectionId === 'configuration' || sectionId === 'zonesManagement') && !canConfigureApps) return;
+    setActiveWorkspaceSection(sectionId);
+    onNavigate(IRRIGATION_SECTION_ROUTES[sectionId]);
+    window.requestAnimationFrame(() => {
+      const root = irrigationProgressRootRef.current;
+      const scrollContainer = root?.closest('main') ?? document.querySelector('[data-testid="app-workspace-shell"] main');
+      if (typeof scrollContainer?.scrollTo === 'function') {
+        scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    });
+  };
+
+  const workspaceNavigationItems = canConfigureApps
+    ? IRRIGATION_WORKSPACE_NAVIGATION
+    : IRRIGATION_WORKSPACE_NAVIGATION.filter((item) => item.id !== 'configuration');
+
+  return (
+    <AppWorkspaceShell
+      appName="Irrigazione Smart"
+      appSubtitle="Giardino e zone"
+      appIcon={Sprout}
+      accentColor="#34d399"
+      navigationItems={workspaceNavigationItems}
+      activeNavigationId={activeWorkspaceSection === 'zonesManagement' ? 'zones' : activeWorkspaceSection}
+      onNavigationChange={handleWorkspaceNavigation}
+      onBack={() => onNavigate('/appgallery')}
+      statusLabel={haConnected ? 'Home Assistant connesso' : 'Dati locali'}
+      mobileHeaderOverlay={!isEditMode && !['configuration', 'zonesManagement'].includes(activeWorkspaceSection)}
+      mobileHeaderHidden
+      mobileBackInNavigation
+      mobileNavigationHidden={activeWorkspaceSection === 'configuration' || activeWorkspaceSection === 'zonesManagement'}
+      contentClassName="bg-[color:var(--ui-bg-grouped)]"
+      backLabel="Torna alla libreria"
+    >
+      {activeWorkspaceSection === 'configuration' ? (
+        <IrrigationConfigurationPage
+          config={irrigationConfigurationDraft}
+          canConfigure={canConfigureApps}
+          status={configurationStatus}
+          revision={configurationRevision}
+          hasUnsavedChanges={hasUnsavedConfigurationChanges}
+          binarySensorOptions={binarySensorOptions}
+          weatherOptions={weatherOptions}
+          sensorOptions={sensorOptions}
+          zoneEntityOptions={zoneEntityOptions}
+          entityStates={haStates}
+          onFieldChange={updateConfigurationDraftField}
+          onApplySuggestedConfiguration={applySuggestedIrrigationConfiguration}
+          onSave={() => {
+            void saveSharedIrrigationConfiguration();
+          }}
+          onBack={() => handleWorkspaceNavigation('overview')}
+        />
+      ) : activeWorkspaceSection === 'zonesManagement' ? (
+        <IrrigationZonesManagementPage
+          config={irrigationConfigurationDraft}
+          canConfigure={canConfigureApps}
+          status={configurationStatus}
+          hasUnsavedChanges={hasUnsavedConfigurationChanges}
+          sensorOptions={sensorOptions}
+          zoneEntityOptions={zoneEntityOptions}
+          entityStates={haStates}
+          onZoneChange={updateZoneConfigurationField}
+          onAddZone={addConfigurationZone}
+          onRemoveZone={removeZone}
+          onMoveZone={moveConfigurationZone}
+          onSave={() => {
+            void saveSharedIrrigationConfiguration();
+          }}
+          onBack={() => handleWorkspaceNavigation('zones')}
+        />
+      ) : (
+      <>
       <motion.div
+        ref={irrigationProgressRootRef}
+        data-testid="irrigation-progressive-root"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 gap-6 pb-6 xl:grid-cols-12"
+        className={`relative isolate grid min-h-full content-start grid-cols-1 bg-[color:var(--ui-bg-grouped)] pb-6 xl:grid-cols-12 ${activeWorkspaceSection === 'overview' ? 'gap-0 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10' : 'gap-4 px-3 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-5 md:gap-5 md:px-6 md:pt-6 lg:px-8 xl:px-10'}`}
+        style={{ '--irrigation-scroll-progress': 0 }}
       >
         <motion.section
+          id="irrigation-overview"
           variants={cardVariants}
-          className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-8"
+          className={`relative scroll-mt-5 overflow-hidden xl:col-span-8 ${activeWorkspaceSection !== 'overview' ? 'hidden' : isEditMode ? 'mx-3 mt-3 rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl md:mx-0 md:mt-0 lg:p-8' : 'sticky top-0 z-0 md:static'}`}
         >
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-sky-500/15 blur-[90px]" />
+          {isEditMode ? <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-sky-500/15 blur-[90px]" /> : null}
 
           {isEditMode ? (
             <div className="space-y-5">
@@ -2149,102 +2851,118 @@ function IrrigationDashboardView({
               ) : null}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,0.95fr)]">
-              <div className="space-y-6">
-                <div>
-                  <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">
-                    Master Control
-                  </span>
-                  <h2 className="mt-4 text-3xl font-semibold text-white">{masterTitle}</h2>
-                  <p className="mt-2 text-sm text-white/55">
-                    Prossimo ciclo programmato: Domani alle 05:30
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3" role="group" aria-label="Controlli manuali irrigazione">
-                  <button
-                    type="button"
-                    onClick={handleMasterPrimaryAction}
-                    aria-pressed={masterIsRunning}
-                    className={`inline-flex h-[86px] w-[98px] flex-col items-center justify-center gap-2 rounded-2xl border text-xs font-semibold uppercase tracking-[0.14em] transition-colors ${masterPrimaryClassName}`}
-                  >
-                    <MasterPrimaryIcon className="h-5 w-5" />
-                    <span>{masterPrimaryLabel}</span>
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {!masterIsStopped ? (
-                      <motion.button
-                        key="master-stop"
-                        type="button"
-                        onClick={handleMasterStop}
-                        initial={{ opacity: 0, x: -10, scale: 0.92 }}
-                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -10, scale: 0.92 }}
-                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                        className="inline-flex h-[86px] w-[98px] flex-col items-center justify-center gap-2 rounded-2xl border border-rose-300/35 bg-rose-500/22 text-xs font-semibold uppercase tracking-[0.14em] text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.28)]"
-                      >
-                        <Square className="h-5 w-5" />
-                        <span>Arresta</span>
-                      </motion.button>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
-              </div>
-
-              <div className="hidden w-px bg-white/10 lg:block" />
-
-              <div className="space-y-4">
-                <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${rainControlCardClassName}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${rainControlIconWrapClassName}`}>
-                      <CloudRain className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Rain Control</p>
-                      <p className={`text-xs font-semibold ${rainStatusClassName}`}>{rainStatusLabel}</p>
-                    </div>
-                  </div>
-
-                  <div className="inline-flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      {isRainSensorSyncing ? 'Sincronizzo...' : rainSensorEnabled ? 'On' : 'Off'}
-                    </span>
-                    <GlassToggle
-                      checked={rainSensorEnabled}
-                      label="Attiva o disattiva sensore pioggia per la logica automazioni"
-                      onChange={() => {
-                        void handleRainSensorToggle();
-                      }}
-                      busy={isRainSensorSyncing}
-                      size="compact"
-                    />
-                  </div>
-                </div>
-
-                <h3 className="text-2xl font-semibold text-white">{rainSummaryTitle}</h3>
-                <p className="text-sm leading-relaxed text-white/55">
-                  {rainSummaryDescription}
-                </p>
-
-                <div className="flex flex-wrap gap-3 pt-2">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Umidita Aria</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{`${humidityValue}%`}</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Temp Ext</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{`${outdoorTempValue.toFixed(1)} C`}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <IrrigationHero
+              masterTitle={masterTitle}
+              masterIsRunning={masterIsRunning}
+              masterIsStopped={masterIsStopped}
+              temperature={outdoorTempValue}
+              humidity={humidityValue}
+              rainProbability={rainForecastProbability}
+              rainStatusLabel={rainStatusLabel}
+              rainSummaryTitle={rainSummaryTitle}
+              rainSummaryDescription={rainSummaryDescription}
+              rainSensorEnabled={rainSensorEnabled}
+              rainSensorSyncing={isRainSensorSyncing}
+              onRainSensorToggle={() => {
+                void handleRainSensorToggle();
+              }}
+              onPrimaryAction={handleMasterPrimaryAction}
+              onStop={handleMasterStop}
+            />
           )}
         </motion.section>
 
+        <div
+          data-testid="irrigation-progressive-sheet"
+          className={activeWorkspaceSection === 'overview'
+            ? 'sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 isolate -mt-28 min-h-[calc(100svh-env(safe-area-inset-top)-7.75rem)] rounded-t-[2rem] pb-4 pt-4 shadow-[0_-12px_34px_rgba(2,6,23,0.12)] md:contents md:min-h-0 md:rounded-none md:pb-0 md:pt-0 md:shadow-none'
+            : 'contents'}
+        >
+          {activeWorkspaceSection === 'overview' ? <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-20 overflow-hidden rounded-t-[2rem] md:hidden"
+            style={{
+              background: 'linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--ui-bg-grouped) 62%, transparent) 8rem, var(--ui-bg-grouped) 15rem)',
+            }}
+          /> : null}
+          {activeWorkspaceSection === 'overview' ? <div
+            data-testid="irrigation-progressive-sheet-backdrop"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 rounded-t-[2rem] bg-[color:var(--ui-bg-grouped)] motion-reduce:!opacity-100 md:hidden"
+            style={{ opacity: 'calc(var(--irrigation-scroll-progress) * 0.96)' }}
+          /> : null}
+
+          {activeWorkspaceSection === 'overview' ? <div className="relative z-10 mx-3 mb-3 md:hidden">
+            <IrrigationMobileOverview
+              masterTitle={masterTitle}
+              masterIsRunning={masterIsRunning}
+              masterIsStopped={masterIsStopped}
+              temperature={outdoorTempValue}
+              humidity={humidityValue}
+              rainProbability={rainForecastProbability}
+              rainStatusLabel={rainStatusLabel}
+              rainSummaryTitle={rainSummaryTitle}
+              rainSummaryDescription={rainSummaryDescription}
+              rainSensorEnabled={rainSensorEnabled}
+              rainSensorSyncing={isRainSensorSyncing}
+              onRainSensorToggle={() => {
+                void handleRainSensorToggle();
+              }}
+              onPrimaryAction={handleMasterPrimaryAction}
+              onStop={handleMasterStop}
+              onConfigure={canConfigureApps ? () => handleWorkspaceNavigation('configuration') : undefined}
+            />
+          </div> : null}
+
+          {activeWorkspaceSection === 'zones' ? (
+            <IrrigationRouteHeader
+              eyebrow="Irrigazione Smart"
+              title="Zone irrigazione"
+              description="Controlla ogni settore, avvia un ciclo manuale oppure apri la relativa programmazione."
+              action={canConfigureApps ? (
+                <button type="button" onClick={() => handleWorkspaceNavigation('zonesManagement')} className="liquid-glass-control inline-flex min-h-10 items-center gap-2 rounded-full px-3.5 text-xs font-semibold" aria-label="Gestisci zone irrigazione">
+                  <Settings2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Gestisci</span>
+                </button>
+              ) : null}
+            />
+          ) : null}
+
+          {activeWorkspaceSection === 'calendar' ? (
+            <>
+              <IrrigationRouteHeader
+                eyebrow="Programmazione"
+                title="Calendario irrigazione"
+                description="Una vista settimanale dei cicli realmente configurati nelle zone della casa."
+                action={canConfigureApps ? (
+                  <button type="button" onClick={() => handleWorkspaceNavigation('configuration')} className="liquid-glass-control flex h-10 w-10 items-center justify-center rounded-full" aria-label="Configura irrigazione">
+                    <Settings2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+              />
+              <motion.section variants={cardVariants} className="xl:col-span-12">
+                <IrrigationCalendarPage
+                  zones={calendarZones}
+                  rainProtectionActive={rainSensorEnabled}
+                  rainDetected={Boolean(rainSensorEntityId && !rainSensorUnavailable && rainSensorActive)}
+                  onOpenProgram={openZoneConfigModal}
+                  onOpenSettings={canConfigureApps ? () => handleWorkspaceNavigation('configuration') : undefined}
+                />
+              </motion.section>
+            </>
+          ) : null}
+
+          {activeWorkspaceSection === 'usage' ? (
+            <IrrigationRouteHeader
+              eyebrow="Risorse"
+              title="Consumi irrigazione"
+              description="Acqua utilizzata, confronto con la media e andamento settimanale del giardino."
+            />
+          ) : null}
+
         <motion.section
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-center text-white backdrop-blur-3xl lg:p-8 xl:col-span-4"
+          className={`${activeWorkspaceSection !== 'overview' ? 'hidden' : ''} xl:col-span-4 ${isEditMode ? 'mx-3 mb-3 rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-center text-white backdrop-blur-3xl md:mx-0 md:mb-0 lg:p-8' : 'mx-3 mb-3 md:mx-0 md:mb-0'}`}
         >
           {isEditMode ? (
             <div className="flex h-full flex-col justify-between text-left">
@@ -2276,38 +2994,47 @@ function IrrigationDashboardView({
               </label>
             </div>
           ) : (
-            <>
-              <div className="relative mx-auto mb-5 h-44 w-44">
-                <svg className="h-full w-full -rotate-90">
-                  <circle cx="88" cy="88" r={gaugeRadius} fill="transparent" stroke="rgba(255,255,255,0.12)" strokeWidth="12" />
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r={gaugeRadius}
-                    fill="transparent"
-                    stroke="rgba(34,211,238,0.95)"
-                    strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeDasharray={gaugeCircumference}
-                    strokeDashoffset={gaugeDashOffset}
-                    style={{ filter: 'drop-shadow(0 0 12px rgba(34,211,238,0.45))' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-4xl font-bold text-white">{`${moisturePct}%`}</span>
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-white/50">Terreno</span>
-                </div>
+            <div className="h-full xl:grid xl:grid-rows-2 xl:gap-5">
+              <IrrigationMoistureCard value={moisturePct} description={moistureText} />
+              <div className="hidden min-h-0 xl:block">
+                <IrrigationScheduleSnapshotCard
+                  items={overviewScheduleItems}
+                  onOpen={() => handleWorkspaceNavigation('calendar')}
+                />
               </div>
-              <h3 className="text-xl font-semibold text-white">Umidita del Terreno</h3>
-              <p className="mt-1 text-sm text-white/55">Livello medio rilevato dal sensore terreno</p>
-              <p className={`mt-1 text-sm ${moistureTextClassName}`}>{moistureText}</p>
-            </>
+            </div>
           )}
         </motion.section>
 
         <motion.section
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-8"
+          className={`${activeWorkspaceSection !== 'overview' ? 'hidden' : ''} mx-3 mb-3 md:mx-0 md:mb-0 xl:col-span-8`}
+        >
+          <IrrigationZonesSnapshotCard
+            zones={zones}
+            nextCycleLabel={overviewNextCycleLabel}
+            onOpen={() => handleWorkspaceNavigation('zones')}
+          />
+        </motion.section>
+
+        <motion.section
+          variants={cardVariants}
+          className={`${activeWorkspaceSection !== 'overview' ? 'hidden' : ''} mx-3 mb-3 md:mx-0 md:mb-0 xl:col-span-4`}
+        >
+          <IrrigationConsumptionSnapshotCard
+            usage={waterUsageLiters}
+            average={waterAverageLiters}
+            savingsLabel={savingsLabel}
+            positiveSavings={isPositiveSavings}
+            bars={WATER_USAGE_BARS}
+            onOpen={() => handleWorkspaceNavigation('usage')}
+          />
+        </motion.section>
+
+        <motion.section
+          id="irrigation-zones"
+          variants={cardVariants}
+          className={`scroll-mt-5 ${activeWorkspaceSection !== 'zones' ? 'hidden' : ''} xl:col-span-12 ${isEditMode ? 'rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8' : ''}`}
         >
           {isEditMode ? (
             <>
@@ -2406,6 +3133,37 @@ function IrrigationDashboardView({
             </>
           ) : (
             <>
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ui-text-tertiary)]">Settori</p>
+                    <h2 className="mt-0.5 text-xl font-semibold tracking-[-0.035em] text-[color:var(--ui-text-primary)]">Le tue zone</h2>
+                  </div>
+                  <span className="rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--ui-text-secondary)]">
+                    {configuredZonesCount}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-4">
+                  {zones.map((zone) => (
+                    <IrrigationZoneCard
+                      key={`mobile-${zone.id}`}
+                      zone={zone}
+                      onProgram={() => openZoneConfigModal(zone.id)}
+                      onDurationChange={(value) => updateZoneManualDuration(zone.id, value)}
+                      onManualToggle={() => {
+                        if (zone.isManualActive) {
+                          void stopZoneManualMode(zone);
+                          return;
+                        }
+                        void startZoneManualMode(zone);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {false ? (
+              <div className="hidden">
               <div className="mb-6 flex items-end justify-between gap-4">
                 <div>
                   <h3 className="text-2xl font-semibold text-white">Controllo Zone</h3>
@@ -2565,7 +3323,7 @@ function IrrigationDashboardView({
                             <button
                               type="button"
                               onClick={() => updateZoneManualDuration(zone.id, zone.manualDurationMin + 1)}
-                              disabled={isAlert || zone.manualDurationMin >= 240}
+                              disabled={isAlert || zone.manualDurationMin >= irrigationConfig.maximumManualDurationMin}
                               className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/15 text-white/75 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                               aria-label={`Aumenta timer ${zone.name}`}
                             >
@@ -2601,99 +3359,38 @@ function IrrigationDashboardView({
                   );
                 })}
               </div>
+              </div>
+              ) : null}
             </>
           )}
         </motion.section>
 
         <motion.section
+          id="irrigation-usage"
           variants={cardVariants}
-          className="rounded-[2rem] border border-white/10 bg-[#071723] p-6 text-white backdrop-blur-3xl lg:p-8 xl:col-span-4"
+          className={`scroll-mt-5 ${activeWorkspaceSection !== 'usage' ? 'hidden' : ''} xl:col-span-12`}
         >
-          {isEditMode ? (
-            <div className="space-y-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/55">Config Panel 4</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">Consumo Idrico</h3>
-                <p className="mt-1 text-sm text-white/50">Configura i sensori del report settimanale</p>
-              </div>
-
-              {[
-                {
-                  key: 'waterUsageEntityId',
-                  label: 'Sensore Acqua Erogata',
-                  options: buildEntityOptions(sensorOptions, irrigationConfig.waterUsageEntityId),
-                },
-                {
-                  key: 'waterAverageEntityId',
-                  label: 'Sensore Media Settimanale',
-                  options: buildEntityOptions(sensorOptions, irrigationConfig.waterAverageEntityId),
-                },
-              ].map((field) => (
-                <label key={field.key} className="block">
-                  <span className="text-xs uppercase tracking-[0.16em] text-white/55">{field.label}</span>
-                  <input
-                    type="text"
-                    value={irrigationConfig[field.key]}
-                    onChange={(event) => updateConfigField(field.key, event.target.value)}
-                    list={`edit-water-${field.key}-options`}
-                    placeholder="Scrivi entity_id o scegli dai suggerimenti"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="mt-2 w-full rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/40"
-                  />
-                  <datalist id={`edit-water-${field.key}-options`}>
-                    {field.options.map((entityId) => (
-                      <option
-                        key={`edit-water-${field.key}-${entityId}`}
-                        value={entityId}
-                        label={formatSelectOptionLabel(entityId, haStates)}
-                      />
-                    ))}
-                  </datalist>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <>
-              <div>
-                <h3 className="text-xl font-semibold text-white">Consumo Idrico</h3>
-                <p className="mt-1 text-sm text-white/50">Report settimanale</p>
-              </div>
-
-              <div className="mt-6">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">Acqua Erogata</p>
-                <div className="mt-2 flex items-end gap-2">
-                  <span className="text-5xl font-bold text-white">{waterUsageLiters.toLocaleString('it-IT')}</span>
-                  <span className="mb-1 text-lg font-semibold text-cyan-200">Litri</span>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <div className="mb-4 flex h-24 items-end gap-2">
-                  {WATER_USAGE_BARS.map((value, index) => (
-                    <span
-                      key={`bar-${index}`}
-                      className={`block w-full rounded-t-md ${
-                        index === 3
-                          ? 'bg-cyan-400/45 shadow-[0_0_16px_rgba(34,211,238,0.35)]'
-                          : 'bg-white/12'
-                      }`}
-                      style={{ height: `${value}%` }}
-                    />
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <div className={`inline-flex items-center gap-2 ${savingsClassName}`}>
-                    <Gauge className="h-4 w-4" />
-                    <span className="font-semibold">{savingsLabel}</span>
-                  </div>
-                  <span className="text-xs text-white/45">{`Media: ${waterAverageLiters.toLocaleString('it-IT')} L`}</span>
-                </div>
-              </div>
-            </>
-          )}
+          <IrrigationConsumptionPage
+            period={consumptionPeriod}
+            onPeriodChange={setConsumptionPeriod}
+            status={consumptionHistory.status}
+            totalLiters={consumptionTotalLiters}
+            dailyAverageLiters={consumptionDailyAverageLiters}
+            comparisonPct={consumptionComparisonPct}
+            points={consumptionHistory.points}
+            zones={consumptionZoneBreakdown}
+            configuredZones={configuredZonesCount}
+            plannedMinutes={plannedWeeklyMinutes}
+            dataSourceLabel={consumptionDataSourceLabel}
+            isRefreshing={Boolean(consumptionHistory.isRefreshing)}
+            isStale={Boolean(consumptionHistory.isStale)}
+            updatedAt={consumptionHistory.updatedAt}
+            isEstimatedBreakdown={consumptionTotalLiters !== null}
+            onOpenSettings={canConfigureApps ? () => handleWorkspaceNavigation('configuration') : undefined}
+            onManageZones={canConfigureApps ? () => handleWorkspaceNavigation('zonesManagement') : undefined}
+          />
         </motion.section>
+        </div>
       </motion.div>
 
       <ZoneConfigModal
@@ -2709,7 +3406,9 @@ function IrrigationDashboardView({
         onRemoveStartTime={handleEditingZoneRemoveStartTime}
         onBaseDurationChange={handleEditingZoneBaseDurationChange}
       />
-    </div>
+      </>
+      )}
+    </AppWorkspaceShell>
   );
 }
 
@@ -2719,26 +3418,38 @@ function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
     pool: 'Piscina & Spa',
   };
   const title = titleByView[view] ?? 'Plancia';
+  const portal = SYSTEM_PORTALS.find((entry) => entry.route.endsWith(`/${view}`));
+  const PortalIcon = view === 'pool' ? Waves : Cpu;
 
   return (
-    <FeatureAvailabilityPage
-      nested
-      title={title}
-      headline={`${title} è in preparazione`}
-      description="Questa plancia dedicata arriverà in un prossimo aggiornamento. Le funzioni già disponibili della Libreria restano utilizzabili."
+    <AppWorkspaceShell
+      appName={title}
+      appSubtitle={portal?.description ?? 'Plancia DomusOS'}
+      appIcon={PortalIcon}
+      accentColor={view === 'pool' ? '#22d3ee' : '#38bdf8'}
+      navigationItems={COMING_SOON_WORKSPACE_NAVIGATION}
+      activeNavigationId="overview"
+      onNavigationChange={() => undefined}
       onBack={() => onNavigate('/appgallery')}
-      backLabel="Libreria"
-      icon={view === 'pool' ? Waves : Cpu}
-    />
+      statusLabel="Demo · Prossimamente"
+      mobileHeaderHidden
+      mobileBackInNavigation
+      contentClassName="bg-[color:var(--ui-bg-grouped)]"
+      backLabel="Torna alla libreria"
+    >
+      <ComingSoonAppDemo variant={view === 'pool' ? 'pool' : 'technical'} />
+    </AppWorkspaceShell>
   );
 }
 
 /**
  * @typedef {Object} AppGalleryProps
- * @property {boolean=} isEditMode
+ * @property {boolean=} canConfigureApps
+ * @property {string | null=} currentUserId
  * @property {boolean=} suppressBrowserNavigation
  * @property {string=} navigationRoute
  * @property {boolean=} haConnected
+ * @property {'real' | 'demo'=} runtimeMode
  * @property {Record<string, unknown>=} haStates
  * @property {string[]=} haEntityIds
  * @property {string=} haUrl
@@ -2746,13 +3457,16 @@ function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
  * @property {(domain: string, service: string, serviceData?: Record<string, unknown>) => Promise<unknown>} [onCallService]
  * @property {(message: Record<string, unknown>, options?: { reportError?: boolean }) => Promise<unknown>} [onCallApi]
  * @property {(notification: unknown) => void} [onNotify]
+ * @property {(path: string) => void} [onNavigate]
  */
 
 /**
  * @param {AppGalleryProps} [props]
  */
 export function AppGallery({
-  isEditMode = false,
+  canConfigureApps = false,
+  currentUserId = null,
+  runtimeMode = 'real',
   suppressBrowserNavigation = false,
   navigationRoute = '',
   haConnected = false,
@@ -2763,17 +3477,23 @@ export function AppGallery({
   onCallService,
   onCallApi,
   onNotify,
+  onNavigate: externalOnNavigate,
 } = {}) {
   const [activeView, setActiveView] = React.useState(resolveAppGalleryViewFromLocation);
   const handleNavigate = React.useCallback(
     (path) => {
+      if (typeof externalOnNavigate === 'function') {
+        setActiveView(resolveAppGalleryViewFromTarget(path));
+        externalOnNavigate(path);
+        return;
+      }
       if (suppressBrowserNavigation) {
         setActiveView(resolveAppGalleryViewFromTarget(path));
         return;
       }
       navigateTo(path);
     },
-    [suppressBrowserNavigation],
+    [externalOnNavigate, suppressBrowserNavigation],
   );
 
   React.useEffect(() => {
@@ -2799,7 +3519,11 @@ export function AppGallery({
   }, [navigationRoute, suppressBrowserNavigation]);
 
   return (
-    <div className="dashboard-page-scroll relative bg-transparent custom-scrollbar">
+    <div
+      className={activeView === 'launcher'
+        ? 'dashboard-page-scroll relative bg-transparent custom-scrollbar'
+        : 'relative h-full min-h-0 w-full overflow-hidden bg-transparent'}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--ui-bg-canvas)_22%,transparent),transparent_36%,color-mix(in_srgb,var(--ui-bg-grouped)_28%,transparent)_100%)]"
@@ -2809,7 +3533,9 @@ export function AppGallery({
         <LauncherView onNavigate={handleNavigate} />
       ) : activeView === 'irrigation' ? (
         <IrrigationDashboardView
-          isEditMode={isEditMode}
+          canConfigureApps={canConfigureApps}
+          currentUserId={currentUserId}
+          runtimeMode={runtimeMode}
           haConnected={haConnected}
           haStates={haStates}
           haEntityIds={haEntityIds}
@@ -2818,10 +3544,14 @@ export function AppGallery({
           onCallService={onCallService}
           onCallApi={onCallApi}
           onNotify={onNotify}
+          navigationRoute={navigationRoute}
           onNavigate={handleNavigate}
         />
       ) : (
-        <ComingSoonPortalView view={activeView} onNavigate={handleNavigate} />
+        <ComingSoonPortalView
+          view={activeView}
+          onNavigate={handleNavigate}
+        />
       )}
     </div>
   );

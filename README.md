@@ -52,11 +52,17 @@ Non servono modifiche a `configuration.yaml`, token manuali o copie dentro `/www
 | Sicurezza | Operativa | Alarm, camere e sensori; non sostituisce un sistema certificato |
 | Consumi | Operativa | Riepiloghi e dati disponibili dalle entità HA |
 | Profilo e Impostazioni | Operativa | Preferenze personali separate dalla configurazione della casa |
-| App Gallery | Parziale | Irrigazione disponibile; Locale Tecnico e Piscina & Spa in preparazione |
+| App Gallery | Parziale | Irrigazione in beta; Locale Tecnico e Piscina & Spa in preparazione |
 | Automazioni | Prossimamente | L'interfaccia incompleta non è esposta come funzione utilizzabile |
 | Calendar, Mappa e Liste | Pianificata | Previste dopo la prima beta |
 
 Lo stato dettagliato e i limiti hardware verificati sono mantenuti in [Stato funzionalità](docs/feature-status.md).
+
+> **Irrigazione:** panoramica, configurazione, calendario, consumi e comandi
+> supervisionati sono disponibili. Il motore server-side con watchdog e
+> ripristino dopo riavvio e pianificato nel prossimo ciclo: fino ad allora non
+> usare la programmazione beta come unica protezione per irrigazioni non
+> presidiate.
 
 ## Card disponibili
 

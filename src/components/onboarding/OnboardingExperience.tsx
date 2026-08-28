@@ -43,6 +43,11 @@ import {
   type SetupScanSummary,
 } from '../../services/setupJourney';
 import {
+  HA_SHARED_HOUSE_CONFIGURATION_KEY,
+  parseSharedHouseConfiguration,
+  type SharedHouseConfiguration,
+} from '../../services/dashboardConfigurationRepository';
+import {
   resolveOAuthReturnPath,
   validateHaOAuthCallbackState,
   type HaOAuthStatePayload,
@@ -129,6 +134,37 @@ function settleSetupRequest<T>(request: Promise<T | null>, timeoutMs = SETUP_REQ
     const timeoutId = window.setTimeout(() => finish(null), timeoutMs);
     void request.then(finish).catch(() => finish(null));
   });
+}
+
+type SharedConfigurationProbeResult =
+  | { status: 'found'; document: SharedHouseConfiguration }
+  | { status: 'empty' }
+  | { status: 'unavailable' }
+  | { status: 'invalid' };
+
+async function probeSharedHouseConfiguration(
+  callApi: <T = unknown>(
+    message: Record<string, unknown>,
+    options?: { reportError?: boolean; throwOnError?: boolean },
+  ) => Promise<T | null>,
+): Promise<SharedConfigurationProbeResult> {
+  const response = await settleSetupRequest(callApi<unknown>({
+    type: 'frontend/get_system_data',
+    key: HA_SHARED_HOUSE_CONFIGURATION_KEY,
+  }, { reportError: false, throwOnError: true }));
+
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    return { status: 'unavailable' };
+  }
+  if (!Object.prototype.hasOwnProperty.call(response, 'value')) {
+    return { status: 'unavailable' };
+  }
+  const value = (response as { value?: unknown }).value;
+  if (value === null || value === undefined) {
+    return { status: 'empty' };
+  }
+  const document = parseSharedHouseConfiguration(value);
+  return document ? { status: 'found', document } : { status: 'invalid' };
 }
 
 function WelcomeStep({ onContinue }: { onContinue: () => void }) {
@@ -254,6 +290,8 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
   const [scanBusy, setScanBusy] = useState(false);
   const [scanProgress, setScanProgress] = useState(8);
   const [scanStage, setScanStage] = useState('Connessione sicura a Home Assistant…');
+  const [scanProbeError, setScanProbeError] = useState<string | null>(null);
+  const [scanRetryKey, setScanRetryKey] = useState(0);
   const oauthExchangePromiseRef = useRef<ReturnType<typeof exchangeHaOAuthCode> | null>(null);
   const connection = useHaLiveConnection({ url: hassUrl, token: '' });
   const panelConnection = useHaPanelBridgeConnection();
@@ -450,10 +488,44 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
       activeConnection.status !== 'connected'
     ) return;
     setScanBusy(true);
-    setScanProgress(18);
-    setScanStage('Lettura dei registri di Home Assistant…');
+    setScanProbeError(null);
+    setScanProgress(12);
+    setScanStage('Ricerca di una configurazione DomusOS condivisa…');
     let cancelled = false;
     const scan = async () => {
+      const sharedConfiguration = await probeSharedHouseConfiguration(activeConnection.callApi);
+      if (cancelled) return;
+      if (sharedConfiguration.status === 'found') {
+        const { document } = sharedConfiguration;
+        setScanProgress(100);
+        setScanStage('Configurazione DomusOS trovata');
+        persistJourney({
+          phase: 'existing',
+          mode: 'real',
+          hassUrl: usesPanelConnection ? panelConnection.hassUrl : hassUrl,
+          connectionMethod: usesPanelConnection ? 'panel' : 'direct',
+          existingConfiguration: {
+            revision: document.revision,
+            updatedAt: document.updatedAt,
+            sections: document.dashboard.sections.length,
+            widgets: document.dashboard.widgets.length,
+          },
+        }, onJourneyChange);
+        setScanBusy(false);
+        return;
+      }
+      if (sharedConfiguration.status === 'invalid' || sharedConfiguration.status === 'unavailable') {
+        setScanProbeError(
+          sharedConfiguration.status === 'invalid'
+            ? 'Home Assistant contiene una configurazione DomusOS non riconosciuta. Non verrà sostituita automaticamente.'
+            : 'Non siamo riusciti a verificare se questa casa usa già DomusOS. Controlla la connessione e riprova.',
+        );
+        setScanBusy(false);
+        return;
+      }
+
+      setScanProgress((current) => Math.max(current, 18));
+      setScanStage('Lettura dei registri di Home Assistant…');
       const [currentUserPayload, entityRegistryDisplay, deviceRegistryDisplay, areaRegistry] = await Promise.all([
         settleSetupRequest(activeConnection.callApi<unknown>({ type: 'auth/current_user' }, { reportError: false })),
         settleSetupRequest(activeConnection.callApi<unknown>({ type: 'config/entity_registry/list_for_display' }, { reportError: false })),
@@ -520,6 +592,7 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
     journey.summary,
     onJourneyChange,
     panelConnection.hassUrl,
+    scanRetryKey,
     usesPanelConnection,
   ]);
 
@@ -753,7 +826,8 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
     const connectionHasFailed =
       activeConnection.status === 'error' ||
       activeConnection.status === 'offline' ||
-      activeConnection.status === 'reauth_required';
+      activeConnection.status === 'reauth_required' ||
+      Boolean(scanProbeError);
     const requiresNewAccess =
       !usesPanelConnection && activeConnection.status === 'reauth_required';
     const entityGroups = summary
@@ -769,7 +843,7 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
               <GlassLoader size="md" ariaLabel="Preparazione della casa in corso" />
             )}
             <div className="mt-5 text-sm font-semibold text-[color:var(--ui-text-primary)]">{requiresNewAccess ? 'Sessione scaduta' : connectionHasFailed ? 'Connessione interrotta' : 'Preparazione della casa'}</div>
-            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--ui-text-secondary)]">{activeConnection.error || scanStage}</div>
+            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--ui-text-secondary)]">{activeConnection.error || scanProbeError || scanStage}</div>
             {!connectionHasFailed ? (
               <div className="mt-6 w-full max-w-md">
                 <div
@@ -793,7 +867,14 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
             ) : null}
             {connectionHasFailed ? (
               <div className="mt-5 flex w-full max-w-sm flex-col gap-2 sm:flex-row sm:justify-center">
-                {!requiresNewAccess ? <SetupSecondaryButton onClick={() => void activeConnection.connect()} className="w-full sm:w-auto"><RefreshCw size={14} /> Riprova</SetupSecondaryButton> : null}
+                {!requiresNewAccess ? <SetupSecondaryButton onClick={() => {
+                  if (scanProbeError && activeConnection.status === 'connected') {
+                    setScanProbeError(null);
+                    setScanRetryKey((current) => current + 1);
+                    return;
+                  }
+                  void activeConnection.connect();
+                }} className="w-full sm:w-auto"><RefreshCw size={14} /> Riprova</SetupSecondaryButton> : null}
                 <SetupActionButton onClick={returnToConnection} trailingArrow={false} className="w-full sm:w-auto"><LockKeyhole size={14} /> Torna alla connessione</SetupActionButton>
               </div>
             ) : null}
@@ -833,6 +914,68 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
             <WizardActions><SetupActionButton onClick={() => updateJourney({ phase: 'compose' })}>Continua</SetupActionButton></WizardActions>
           </>
         )}
+      </WizardShell>
+    );
+  }
+
+  if (effectivePhase === 'existing' && journey.existingConfiguration) {
+    const existing = journey.existingConfiguration;
+    const updatedLabel = new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(existing.updatedAt));
+    return (
+      <WizardShell
+        stepIndex={1}
+        title="DomusOS è già configurato"
+        description="Questa casa possiede già una configurazione condivisa. Puoi usarla su questo dispositivo senza ricreare layout, stanze o card."
+        onBack={returnToConnection}
+      >
+        <div className="onboarding-card overflow-hidden p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <span className="onboarding-choice-icon !h-12 !w-12 !rounded-full">
+              <Layers3 size={20} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Configurazione condivisa trovata</div>
+              <div className="mt-1 text-xs leading-5 text-[color:var(--ui-text-secondary)]">
+                Versione {existing.revision} · aggiornata {updatedLabel}
+              </div>
+            </div>
+            <span className="onboarding-pill shrink-0 gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--ui-text-primary)]">
+              <Check size={13} /> Pronta
+            </span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="onboarding-card p-3.5">
+              <div className="text-xl font-semibold text-[color:var(--ui-text-primary)]">{existing.sections}</div>
+              <div className="mt-1 text-[11px] text-[color:var(--ui-text-secondary)]">Sezioni</div>
+            </div>
+            <div className="onboarding-card p-3.5">
+              <div className="text-xl font-semibold text-[color:var(--ui-text-primary)]">{existing.widgets}</div>
+              <div className="mt-1 text-[11px] text-[color:var(--ui-text-secondary)]">Card</div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <SetupNotice icon={<ShieldCheck size={16} />} title="La casa resta sincronizzata">
+              Layout e configurazione comune verranno letti da Home Assistant. Tema, passkey e preferenze del dispositivo resteranno locali.
+            </SetupNotice>
+          </div>
+        </div>
+        <WizardActions>
+          <SetupActionButton onClick={() => {
+            persistJourney({
+              ...journey,
+              phase: 'done',
+              mode: 'real',
+            }, onJourneyChange);
+            navigateInsideApp('/home');
+          }}>
+            Usa questa configurazione
+          </SetupActionButton>
+        </WizardActions>
       </WizardShell>
     );
   }

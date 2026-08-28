@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SetupJourney } from '../../services/setupJourney';
 import { OnboardingExperience } from './OnboardingExperience';
 
-const panelCallApi = vi.fn(async () => null);
+const panelCallApi = vi.fn(async (_message?: Record<string, unknown>) => null as unknown);
 const panelConnect = vi.fn(async () => undefined);
 const panelDisconnect = vi.fn();
 
@@ -43,6 +44,7 @@ describe('OnboardingExperience panel discovery', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    panelCallApi.mockImplementation(async () => null);
   });
 
   it('shows discovery before confirmation and continues with the panel transport', async () => {
@@ -80,5 +82,81 @@ describe('OnboardingExperience panel discovery', () => {
         connectionMethod: 'panel',
       }),
     );
+  });
+
+  it('offers the shared configuration fast path before layout and organization', async () => {
+    panelCallApi.mockImplementation(async (message: Record<string, unknown>) => {
+      if (message.type !== 'frontend/get_system_data') return null;
+      return {
+        value: {
+          schema: 'premium-home-house-configuration',
+          version: 1,
+          revision: 44,
+          updatedAt: '2026-08-26T08:30:00.000Z',
+          updatedByUserId: 'owner-1',
+          dashboard: {
+            storageVersion: 14,
+            sections: [
+              { id: 'section-greeting', kind: 'greeting', layout: { i: 'section-greeting', x: 0, y: 0, w: 12, h: 2 } },
+            ],
+            widgets: [
+              {
+                id: 'light.kitchen',
+                kind: 'light',
+                title: 'Cucina',
+                entityId: 'light.kitchen',
+                layout: { i: 'light.kitchen', x: 0, y: 2, w: 2, h: 2 },
+              },
+            ],
+            widgetTypeLayoutOverrides: {},
+            widgetLayoutOverrides: {},
+            responsiveLayouts: {},
+          },
+          security: {
+            alarmEntityId: null,
+            visibleSensorEntityIds: null,
+            visibleCameraEntityIds: null,
+          },
+          rooms: {
+            customRooms: [],
+            hiddenEntitiesByRoom: {},
+          },
+        },
+      };
+    });
+
+    const initialJourney: SetupJourney = {
+      version: 2,
+      phase: 'scan',
+      mode: 'real',
+      connectionMethod: 'panel',
+      hassUrl: 'https://ha.example.test',
+      updatedAt: Date.now(),
+    };
+
+    function Harness() {
+      const [journey, setJourney] = useState(initialJourney);
+      return <OnboardingExperience journey={journey} onJourneyChange={setJourney} />;
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/setup']}>
+        <Harness />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'DomusOS è già configurato' })).toBeTruthy();
+    expect(screen.getByText(/Versione 44/)).toBeTruthy();
+    expect(screen.getByText('Sezioni')).toBeTruthy();
+    expect(screen.getByText('Card')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Scegli il punto di partenza' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usa questa configurazione' }));
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem('ha.dashboard.setupJourney.v2') ?? '{}')).toMatchObject({
+        phase: 'done',
+        mode: 'real',
+      });
+    });
   });
 });

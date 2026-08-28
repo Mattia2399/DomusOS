@@ -27,6 +27,7 @@ import {
   type DashboardResetMarker,
   type DashboardResetProgressReporter,
 } from './dashboardReset';
+import { HA_APP_CONFIGURATIONS_KEY } from './haAppConfigurationsRepository';
 
 export type DashboardHaApiCaller = (
   message: Record<string, unknown>,
@@ -390,7 +391,10 @@ export class HaDashboardConfigurationRepository implements DashboardConfiguratio
     const pendingMarker = createDashboardResetMarker(requestedByUserId, operationId);
 
     const clearKey = async (
-      key: typeof HA_DASHBOARD_REVISION_HISTORY_KEY | typeof HA_SHARED_HOUSE_CONFIGURATION_KEY,
+      key:
+        | typeof HA_DASHBOARD_REVISION_HISTORY_KEY
+        | typeof HA_SHARED_HOUSE_CONFIGURATION_KEY
+        | typeof HA_APP_CONFIGURATIONS_KEY,
     ) => {
       await this.options.callApi(
         {
@@ -421,6 +425,7 @@ export class HaDashboardConfigurationRepository implements DashboardConfiguratio
       await writeMarker(pendingMarker);
       reportProgress?.('clearing_history');
       await clearKey(HA_DASHBOARD_REVISION_HISTORY_KEY);
+      await clearKey(HA_APP_CONFIGURATIONS_KEY);
       reportProgress?.('clearing_shared_configuration');
       await clearKey(HA_SHARED_HOUSE_CONFIGURATION_KEY);
     } catch (error) {

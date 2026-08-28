@@ -1,6 +1,6 @@
 # Checklist rilascio beta
 
-Aggiornata: 2026-08-25
+Aggiornata: 2026-08-28
 
 ## Gate automatico
 
@@ -46,7 +46,7 @@ npm run release:gate
 - [x] Procedura aggiornamento e rollback.
 - [x] Pagina Sicurezza e privacy.
 - [x] Roadmap pubblica e limiti dichiarati.
-- [x] Numero versione tecnica `0.1.0-beta.9`.
+- [x] Numero versione tecnica `0.1.0-beta.10`.
 - [x] Versione leggibile nella pagina Impostazioni.
 - [x] Archivio release riproducibile, manifest file e checksum SHA-256.
 - [x] Diagnostica supporto aggregata e priva di segreti.

@@ -17,6 +17,7 @@ export type SetupPhase =
   | 'server'
   | 'authorize'
   | 'scan'
+  | 'existing'
   | 'compose'
   | 'organize'
   | 'complete'
@@ -35,6 +36,13 @@ export type SetupScanSummary = {
   canManageHa: boolean;
 };
 
+export type SetupExistingConfigurationSummary = {
+  revision: number;
+  updatedAt: string;
+  sections: number;
+  widgets: number;
+};
+
 export type SetupJourney = {
   version: typeof SETUP_JOURNEY_VERSION;
   phase: SetupPhase;
@@ -42,6 +50,7 @@ export type SetupJourney = {
   hassUrl?: string;
   connectionMethod?: SetupConnectionMethod;
   summary?: SetupScanSummary;
+  existingConfiguration?: SetupExistingConfigurationSummary;
   updatedAt: number;
 };
 
@@ -63,11 +72,35 @@ function isSetupPhase(value: unknown): value is SetupPhase {
     'server',
     'authorize',
     'scan',
+    'existing',
     'compose',
     'organize',
     'complete',
     'done',
   ].includes(String(value));
+}
+
+function parseExistingConfigurationSummary(value: unknown): SetupExistingConfigurationSummary | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<SetupExistingConfigurationSummary>;
+  if (
+    !Number.isSafeInteger(candidate.revision) ||
+    Number(candidate.revision) < 1 ||
+    typeof candidate.updatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(candidate.updatedAt)) ||
+    !Number.isSafeInteger(candidate.sections) ||
+    Number(candidate.sections) < 0 ||
+    !Number.isSafeInteger(candidate.widgets) ||
+    Number(candidate.widgets) < 0
+  ) {
+    return undefined;
+  }
+  return {
+    revision: Number(candidate.revision),
+    updatedAt: candidate.updatedAt,
+    sections: Number(candidate.sections),
+    widgets: Number(candidate.widgets),
+  };
 }
 
 function parseStoredJourney(raw: string | null): SetupJourney | null {
@@ -78,9 +111,11 @@ function parseStoredJourney(raw: string | null): SetupJourney | null {
       return null;
     }
     const mode = parsed.mode === 'real' || parsed.mode === 'demo' ? parsed.mode : null;
+    const existingConfiguration = parseExistingConfigurationSummary(parsed.existingConfiguration);
+    const phase = parsed.phase === 'existing' && !existingConfiguration ? 'scan' : parsed.phase;
     return {
       version: SETUP_JOURNEY_VERSION,
-      phase: parsed.phase,
+      phase,
       mode,
       hassUrl: typeof parsed.hassUrl === 'string' ? parsed.hassUrl : undefined,
       connectionMethod:
@@ -88,6 +123,7 @@ function parseStoredJourney(raw: string | null): SetupJourney | null {
           ? parsed.connectionMethod
           : undefined,
       summary: parsed.summary,
+      existingConfiguration,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
     };
   } catch {

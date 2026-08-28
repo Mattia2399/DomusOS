@@ -10,6 +10,7 @@ Il valore `name` in `configuration.yaml` deve essere esattamente `ha-dashboard-b
 const PANEL_BRIDGE_PROTOCOL_VERSION = 2;
 const PANEL_BRIDGE_CAPABILITIES = Object.freeze([
   "shared_configuration",
+  "app_configurations",
   "revision_history",
   "dashboard_reset_marker",
 ]);
@@ -33,6 +34,7 @@ const REQUEST_ID = /^ha-panel-call-(?:service|api)-\d{10,}-[a-z0-9]+$/;
 const SHARED_HOUSE_KEY = "premium-home.shared-house.v1";
 const DASHBOARD_REVISIONS_KEY = "premium-home.dashboard-revisions.v1";
 const DASHBOARD_RESET_MARKER_KEY = "premium-home.dashboard-reset.v1";
+const APP_CONFIGURATIONS_KEY = "domusos.app-configurations.v1";
 const isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const isValidService = (domain, service, data) =>
   typeof domain === "string" && HA_NAME.test(domain) &&
@@ -72,20 +74,29 @@ const isValidDashboardResetMarker = (value) =>
     (typeof value.completedAt === "string" && Number.isFinite(Date.parse(value.completedAt)))) &&
   (value.status !== "complete" ||
     (typeof value.completedAt === "string" && Number.isFinite(Date.parse(value.completedAt))));
+const isValidAppConfigurations = (value) =>
+  isRecord(value) &&
+  value.schema === "domusos-app-configurations" &&
+  value.version === 1 &&
+  Number.isSafeInteger(value.revision) && value.revision > 0 &&
+  typeof value.updatedAt === "string" && Number.isFinite(Date.parse(value.updatedAt)) &&
+  typeof value.updatedByUserId === "string" &&
+  isRecord(value.apps);
 const isValidWsMessage = (message) => {
   if (!isRecord(message) || typeof message.type !== "string" || !ALLOWED_WS_TYPES.has(message.type)) return false;
   if (message.type === "frontend/get_system_data") {
     return message.key === SHARED_HOUSE_KEY || message.key === DASHBOARD_REVISIONS_KEY ||
-      message.key === DASHBOARD_RESET_MARKER_KEY;
+      message.key === DASHBOARD_RESET_MARKER_KEY || message.key === APP_CONFIGURATIONS_KEY;
   }
   if (message.type === "frontend/set_system_data") {
     if (message.value === null) {
       return message.key === SHARED_HOUSE_KEY || message.key === DASHBOARD_REVISIONS_KEY ||
-        message.key === DASHBOARD_RESET_MARKER_KEY;
+        message.key === DASHBOARD_RESET_MARKER_KEY || message.key === APP_CONFIGURATIONS_KEY;
     }
     if (message.key === SHARED_HOUSE_KEY) return isValidSharedHouseDocument(message.value);
     if (message.key === DASHBOARD_REVISIONS_KEY) return isValidDashboardRevisionHistory(message.value);
     if (message.key === DASHBOARD_RESET_MARKER_KEY) return isValidDashboardResetMarker(message.value);
+    if (message.key === APP_CONFIGURATIONS_KEY) return isValidAppConfigurations(message.value);
     return false;
   }
   return message.type !== "call_service" ||

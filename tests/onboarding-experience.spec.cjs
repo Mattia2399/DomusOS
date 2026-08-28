@@ -65,7 +65,9 @@ test('a first panel installation confirms the detected home and still completes 
       if (event.data.type !== 'ha-panel-call-api') return;
       const type = event.data.message?.type;
       const result =
-        type === 'auth/current_user'
+        type === 'frontend/get_system_data'
+          ? { value: null }
+          : type === 'auth/current_user'
           ? { name: 'Mattia', is_owner: true, is_admin: true }
           : type?.includes('entity_registry')
             ? { entities: [{ entity_id: 'light.kitchen' }] }

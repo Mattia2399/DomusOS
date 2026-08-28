@@ -10543,9 +10543,15 @@ export function MainBoard() {
     setDeveloperMode(nextValue);
   };
   const profileUserOwnedDeviceCount = profileMovementSource.trackerDeviceCount;
+  const currentNavigationRoute = canUseBrowserRouteNavigation
+    ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
+    : internalNavigationRoute;
   const isSecurityImmersiveView = isSecurityView && isSecurityCamerasView;
   const isConsumptionImmersiveView = isConsumptionView && isConsumptionDetailView;
-  const isImmersiveView = isSecurityImmersiveView || isConsumptionImmersiveView;
+  const isAppGalleryImmersiveView =
+    isAppGalleryView && isNestedDashboardNavigationTarget(currentNavigationRoute);
+  const isImmersiveView =
+    isSecurityImmersiveView || isConsumptionImmersiveView || isAppGalleryImmersiveView;
   const isDashboardCanvasView =
     !isConsumptionView && !isAutomationView && !isAppGalleryView && !isRoomsView && !isSecurityView && !isSettingsView;
   const viewportPreviewGridWidth = resolveDashboardViewportPreviewWidth(viewportPreviewMode);
@@ -10554,9 +10560,6 @@ export function MainBoard() {
     : ['auto', 'tablet', 'compact', 'mobile'];
   const shouldShowMobileSidebarShell =
     !isImmersiveView && isCompactViewport && !isCatalogOpen && isDashboardCanvasView && !isProfileOpen;
-  const currentNavigationRoute = canUseBrowserRouteNavigation
-    ? `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`
-    : internalNavigationRoute;
   const isNestedDashboardPage = isNestedDashboardNavigationTarget(currentNavigationRoute);
   const shouldShowBottomBar =
     !isImmersiveView &&
@@ -10696,37 +10699,39 @@ export function MainBoard() {
       ) : null}
 
       {canPersistDashboardLayout && isDashboardCanvasView && !isCatalogOpen && !isXsViewport ? (
-        <div className="fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[215] flex justify-center md:bottom-5">
-          <DashboardViewportPreviewBar
-            previewMode={viewportPreviewMode}
-            canvasBreakpoint={canvasGridBreakpoint}
-            onPreviewModeChange={setViewportPreviewMode}
-            availableModes={availableViewportPreviewModes}
-            primaryAction={
-              <button
-                type="button"
-                data-tour-target="widget-catalog"
-                onClick={() => setIsCatalogOpen(true)}
-                className="flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-[color:var(--ui-accent)] transition-colors hover:bg-[color:var(--ui-fill-tertiary)]"
-                aria-label="Apri catalogo componenti"
-              >
-                <Plus size={15} aria-hidden />
-                <span className="hidden text-xs font-semibold sm:inline">Catalogo</span>
-              </button>
-            }
-            desktopActions={
-              <DashboardEditToolbar
-                embedded
-                saveStatus={dashboardLayoutSaveStatus}
-                canUndo={canUndoDashboardEdit}
-                canRedo={canRedoDashboardEdit}
-                onUndo={undoDashboardEdit}
-                onRedo={redoDashboardEdit}
-                remoteRevision={haDashboardLayoutPersistence.pendingRemoteUpdate?.revision}
-                onRemoteUpdateClick={() => setIsDashboardConflictOpen(true)}
-              />
-            }
-          />
+        <div className="pointer-events-none fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[215] flex justify-center md:bottom-5">
+          <div className="pointer-events-auto max-w-full">
+            <DashboardViewportPreviewBar
+              previewMode={viewportPreviewMode}
+              canvasBreakpoint={canvasGridBreakpoint}
+              onPreviewModeChange={setViewportPreviewMode}
+              availableModes={availableViewportPreviewModes}
+              primaryAction={
+                <button
+                  type="button"
+                  data-tour-target="widget-catalog"
+                  onClick={() => setIsCatalogOpen(true)}
+                  className="flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-[color:var(--ui-accent)] transition-colors hover:bg-[color:var(--ui-fill-tertiary)]"
+                  aria-label="Apri catalogo componenti"
+                >
+                  <Plus size={15} aria-hidden />
+                  <span className="hidden text-xs font-semibold sm:inline">Catalogo</span>
+                </button>
+              }
+              desktopActions={
+                <DashboardEditToolbar
+                  embedded
+                  saveStatus={dashboardLayoutSaveStatus}
+                  canUndo={canUndoDashboardEdit}
+                  canRedo={canRedoDashboardEdit}
+                  onUndo={undoDashboardEdit}
+                  onRedo={redoDashboardEdit}
+                  remoteRevision={haDashboardLayoutPersistence.pendingRemoteUpdate?.revision}
+                  onRemoteUpdateClick={() => setIsDashboardConflictOpen(true)}
+                />
+              }
+            />
+          </div>
         </div>
       ) : null}
 
@@ -10916,7 +10921,9 @@ export function MainBoard() {
         ) : isAppGalleryView ? (
           <div className="h-full min-h-0 flex-1 overflow-hidden">
             <AppGallery
-              isEditMode={isEditMode}
+              canConfigureApps={dashboardSecurity.can('edit_dashboard')}
+              currentUserId={haCurrentUser?.id ?? null}
+              runtimeMode={effectiveRuntimeMode}
               suppressBrowserNavigation={!canUseBrowserRouteNavigation}
               navigationRoute={internalNavigationRoute}
               haConnected={isHaConnected}
@@ -10926,6 +10933,7 @@ export function MainBoard() {
               haToken={haToken}
               onCallService={callHaService}
               onCallApi={callHaApi}
+              onNavigate={navigateWithinDashboard}
               onNotify={addNotification}
             />
           </div>

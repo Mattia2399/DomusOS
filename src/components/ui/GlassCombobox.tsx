@@ -19,10 +19,13 @@ type GlassComboboxProps = {
   className?: string;
   maxOptions?: number;
   emptyLabel?: string;
+  getOptionLabel?: (option: string) => string;
+  getOptionDescription?: (option: string) => string | undefined;
 };
 
-function scoreOption(option: string, query: string) {
+function scoreOption(option: string, query: string, searchableLabel = '') {
   const normalizedOption = option.trim().toLowerCase();
+  const normalizedSearchableLabel = searchableLabel.trim().toLowerCase();
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
     return 0;
@@ -41,6 +44,10 @@ function scoreOption(option: string, query: string) {
   if (includesIndex >= 0) {
     return 600 - includesIndex * 0.1;
   }
+  const labelIncludesIndex = normalizedSearchableLabel.indexOf(normalizedQuery);
+  if (labelIncludesIndex >= 0) {
+    return 500 - labelIncludesIndex * 0.1;
+  }
   return Number.NEGATIVE_INFINITY;
 }
 
@@ -54,6 +61,8 @@ export function GlassCombobox({
   className,
   maxOptions = 80,
   emptyLabel = 'Nessun risultato',
+  getOptionLabel = (option) => option,
+  getOptionDescription,
 }: GlassComboboxProps) {
   const [query, setQuery] = useState('');
   const normalizedOptions = useMemo(
@@ -75,7 +84,7 @@ export function GlassCombobox({
     return normalizedOptions
       .map((option) => ({
         option,
-        score: scoreOption(option, normalizedQuery),
+        score: scoreOption(option, normalizedQuery, getOptionLabel(option)),
       }))
       .filter((entry) => Number.isFinite(entry.score))
       .sort((first, second) => {
@@ -86,7 +95,7 @@ export function GlassCombobox({
       })
       .slice(0, maxOptions)
       .map((entry) => entry.option);
-  }, [maxOptions, normalizedOptions, query]);
+  }, [getOptionLabel, maxOptions, normalizedOptions, query]);
 
   return (
     <Combobox
@@ -142,7 +151,12 @@ export function GlassCombobox({
                 >
                   {({ selected }) => (
                     <>
-                      <span className="block truncate">{option}</span>
+                      <span className="block truncate">{getOptionLabel(option)}</span>
+                      {getOptionDescription?.(option) ? (
+                        <span className="mt-0.5 block truncate text-[10px] font-normal text-[color:var(--ui-text-tertiary)]">
+                          {getOptionDescription(option)}
+                        </span>
+                      ) : null}
                       {selected ? (
                         <span className="absolute inset-y-0 right-3 flex items-center text-[color:var(--ui-accent)]">
                           <Check aria-hidden="true" className="h-4 w-4" />
