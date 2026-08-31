@@ -87,6 +87,36 @@ describe('SettingsDashboard', () => {
     expect(onNavigate).toHaveBeenCalledWith('/settings/access');
   });
 
+  it('opens the system page at the top after scrolling the settings overview', () => {
+    const { container, rerender } = render(
+      <DashboardSecurityProvider value={security}>
+        <SettingsDashboard
+          {...baseProps}
+          navigationRoute="/settings"
+        />
+      </DashboardSecurityProvider>,
+    );
+
+    const overviewScroller = container.querySelector<HTMLElement>('.dashboard-page-scroll');
+    expect(overviewScroller).toBeTruthy();
+    overviewScroller!.scrollTop = 420;
+
+    rerender(
+      <DashboardSecurityProvider value={security}>
+        <SettingsDashboard
+          {...baseProps}
+          navigationRoute="/settings/system"
+        />
+      </DashboardSecurityProvider>,
+    );
+
+    const systemScroller = container.querySelector<HTMLElement>('.dashboard-page-scroll');
+    expect(systemScroller).toBeTruthy();
+    expect(systemScroller).not.toBe(overviewScroller);
+    expect(systemScroller?.scrollTop).toBe(0);
+    expect(screen.getByRole('heading', { name: 'Stato del sistema' })).toBeTruthy();
+  });
+
   it('opens shared alert preferences as a nested page', () => {
     const onNavigate = vi.fn();
     const { rerender } = render(

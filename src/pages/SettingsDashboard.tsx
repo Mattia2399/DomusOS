@@ -1184,7 +1184,7 @@ export default function SettingsDashboard({
 
   if (settingsPath === '/settings') {
     return (
-      <div className="dashboard-page-scroll text-[color:var(--ui-text-primary)]">
+      <div key={settingsPath} className="dashboard-page-scroll text-[color:var(--ui-text-primary)]">
         <header className="dashboard-page-content-wide">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -1722,7 +1722,7 @@ export default function SettingsDashboard({
   }
 
   return (
-    <div className="dashboard-page-scroll text-[color:var(--ui-text-primary)]">
+    <div key={settingsPath} className="dashboard-page-scroll text-[color:var(--ui-text-primary)]">
       <header className="dashboard-page-content-wide">
         <button
           type="button"
