@@ -18,6 +18,24 @@ function renderRooms(canManageRooms: boolean) {
 }
 
 describe('RoomsDashboard permissions', () => {
+  it('collapses the room header while keeping native touch scrolling', () => {
+    const { container } = renderRooms(false);
+    const dashboard = container.querySelector<HTMLElement>('.rooms-dashboard');
+    const header = screen.getByTestId('rooms-page-header');
+    const titleScroller = screen.getByTestId('rooms-title-scroller');
+
+    expect(header.getAttribute('data-compact')).toBe('false');
+    expect(titleScroller.className).toContain('touch-auto');
+
+    dashboard!.scrollTop = 64;
+    fireEvent.scroll(dashboard!);
+    expect(header.getAttribute('data-compact')).toBe('true');
+
+    dashboard!.scrollTop = 0;
+    fireEvent.scroll(dashboard!);
+    expect(header.getAttribute('data-compact')).toBe('false');
+  });
+
   it('keeps locally created Demo rooms out of the real house', () => {
     window.localStorage.setItem(
       'ha.dashboard.rooms.customRooms.v1.demo',

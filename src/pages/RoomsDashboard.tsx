@@ -79,7 +79,8 @@ function getRoomsRuntimeStorageKey(baseKey: string, runtimeMode: DashboardRuntim
   return runtimeMode === 'demo' ? `${baseKey}.demo` : baseKey;
 }
 const ROOM_ID_CUSTOM_PREFIX = 'custom:';
-const ROOM_TITLE_TRANSITION = { duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const;
+const ROOM_TITLE_TRANSITION = { duration: 0.2, ease: [0.22, 1, 0.36, 1] } as const;
+const ROOM_HEADER_COMPACT_SCROLL_PX = 48;
 const ROOM_MODAL_INPUT_CLASS =
   'ui-input min-h-10 w-full rounded-xl px-4 py-2.5 text-sm transition-all focus:outline-none';
 const ROOM_MODAL_PRIMARY_BUTTON_CLASS =
@@ -97,7 +98,7 @@ const FLOOR_CARD_CLASS =
 const FLOOR_ADD_CARD_CLASS =
   'snap-center flex h-80 w-64 flex-shrink-0 flex-col items-center justify-center gap-3 rounded-[2rem] border border-dashed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] p-6 transition-all duration-200 hover:bg-[color:var(--ui-fill-secondary)] active:scale-[0.98]';
 const FLOOR_CAROUSEL_DRAG_THRESHOLD_PX = 6;
-const ROOM_TITLE_DRAG_THRESHOLD_PX = 3;
+const ROOM_TITLE_DRAG_THRESHOLD_PX = 8;
 const ROOM_SWIPER_ANIMATION_MS = 280;
 const ROOM_SWIPER_FLICK_VELOCITY_PX_PER_MS = 0.42;
 const ROOM_SWIPER_MIN_SWIPE_DISTANCE_PX = 44;
@@ -1822,6 +1823,11 @@ export function RoomsDashboard({
   const sectionTargetLongPressRef = React.useRef<RoomSectionTargetLongPressState | null>(null);
   const suppressNextSectionTargetClickRef = React.useRef<string | null>(null);
   const [customRooms, setCustomRooms] = React.useState<CustomRoomRecord[]>(() => readStoredCustomRooms(runtimeMode));
+  const [isRoomsHeaderCompact, setIsRoomsHeaderCompact] = React.useState(false);
+  const [roomTitleScrollEdges, setRoomTitleScrollEdges] = React.useState({
+    start: false,
+    end: false,
+  });
   const [hiddenRoomEntitiesByRoom, setHiddenRoomEntitiesByRoom] =
     React.useState<HiddenRoomEntitiesByRoom>(() => readStoredHiddenRoomEntitiesByRoom(runtimeMode));
   const [roomsStateRuntime, setRoomsStateRuntime] = React.useState<DashboardRuntimeMode>(runtimeMode);
@@ -2093,16 +2099,64 @@ export function RoomsDashboard({
     [haStates],
   );
 
-  React.useLayoutEffect(() => {
+  const updateRoomTitleScrollEdges = React.useCallback(() => {
     const scroller = roomTitleScrollerRef.current;
-    if (!scroller || scroller.scrollLeft <= 1) {
+    if (!scroller) {
       return;
     }
-    scroller.scrollTo({
-      left: 0,
-      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const nextEdges = {
+      start: scroller.scrollLeft > 2,
+      end: scroller.scrollLeft < maxScrollLeft - 2,
+    };
+    setRoomTitleScrollEdges((current) => {
+      if (current.start === nextEdges.start && current.end === nextEdges.end) {
+        return current;
+      }
+      return nextEdges;
     });
-  }, [activeRoomTitleKey, prefersReducedMotion]);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    updateRoomTitleScrollEdges();
+    const scroller = roomTitleScrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const handleResize = () => updateRoomTitleScrollEdges();
+    window.addEventListener('resize', handleResize);
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(handleResize)
+        : null;
+    observer?.observe(scroller);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer?.disconnect();
+    };
+  }, [activeRoomTitleKey, roomTabs.length, updateRoomTitleScrollEdges]);
+
+  const roomTitleMaskStyle = React.useMemo<React.CSSProperties>(() => {
+    let maskImage = 'none';
+    if (roomTitleScrollEdges.start && roomTitleScrollEdges.end) {
+      maskImage =
+        'linear-gradient(90deg, transparent 0, #000 1.25rem, #000 calc(100% - 1.25rem), transparent 100%)';
+    } else if (roomTitleScrollEdges.start) {
+      maskImage = 'linear-gradient(90deg, transparent 0, #000 1.25rem, #000 100%)';
+    } else if (roomTitleScrollEdges.end) {
+      maskImage = 'linear-gradient(90deg, #000 0, #000 calc(100% - 1.25rem), transparent 100%)';
+    }
+    return {
+      maskImage,
+      WebkitMaskImage: maskImage,
+    };
+  }, [roomTitleScrollEdges.end, roomTitleScrollEdges.start]);
+
+  const handleRoomsPageScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const nextCompact = event.currentTarget.scrollTop >= ROOM_HEADER_COMPACT_SCROLL_PX;
+    setIsRoomsHeaderCompact((current) => (current === nextCompact ? current : nextCompact));
+  }, []);
 
   React.useEffect(() => {
     if (roomTabs.length === 0) {
@@ -6191,6 +6245,7 @@ export function RoomsDashboard({
     const target = event.target as Element | null;
     if (
       !scroller ||
+      event.pointerType !== 'mouse' ||
       target?.closest('button, a, input, textarea, select, [role="button"]') ||
       (event.pointerType === 'mouse' && event.button !== 0) ||
       scroller.scrollWidth <= scroller.clientWidth + 1
@@ -6222,6 +6277,7 @@ export function RoomsDashboard({
     dragState.didMove = true;
     event.preventDefault();
     scroller.scrollLeft = dragState.scrollLeft - dragOffset;
+    updateRoomTitleScrollEdges();
   };
 
   const handleRoomTitlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -6735,7 +6791,7 @@ export function RoomsDashboard({
   }
 
   return (
-    <div className="rooms-dashboard dashboard-page-scroll">
+    <div className="rooms-dashboard dashboard-page-scroll" onScroll={handleRoomsPageScroll}>
       <div
         className={cn(
           'dashboard-page-content dashboard-page-content-wide min-w-0 max-w-full transform-gpu',
@@ -6743,48 +6799,66 @@ export function RoomsDashboard({
         )}
       >
         <main className="relative z-10 min-w-0 max-w-full" style={roomsGridStyle}>
-          <header className="relative z-10 w-full" style={{ gridArea: 'header' }}>
+          <header
+            data-testid="rooms-page-header"
+            data-compact={isRoomsHeaderCompact ? 'true' : 'false'}
+            className={cn('rooms-page-header w-full', isRoomsHeaderCompact && 'rooms-page-header-compact')}
+            style={{ gridArea: 'header' }}
+          >
+            <div className="rooms-page-header-surface">
             <div className="flex min-w-0 items-baseline gap-3">
-              <div
-                ref={roomTitleScrollerRef}
-                onPointerDown={handleRoomTitlePointerDown}
-                onPointerMove={handleRoomTitlePointerMove}
-                onPointerUp={handleRoomTitlePointerEnd}
-                onPointerCancel={handleRoomTitlePointerEnd}
-                onClickCapture={handleRoomTitleClickCapture}
-                className="flex min-w-0 flex-1 cursor-grab touch-pan-y select-none items-baseline overflow-x-auto overscroll-x-contain pb-1 pl-1 pr-5 active:cursor-grabbing hide-scrollbar sm:pl-0 sm:pr-4"
-              >
-                <h1 className="dashboard-page-title shrink-0">
-                  <AnimatePresence initial={false} mode="wait">
+              <div className="flex min-w-0 flex-1 items-baseline">
+                <h1
+                  className="rooms-page-title dashboard-page-title relative max-w-[58%] shrink-0 truncate pl-1 sm:max-w-[48%] sm:pl-0 lg:max-w-[42%]"
+                  aria-live="polite"
+                  title={activeRoomTitle}
+                >
+                  <AnimatePresence initial={false} mode="popLayout">
                     <motion.span
                       key={activeRoomTitleKey}
-                      className="block will-change-transform"
-                      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 12, filter: 'blur(5px)' }}
+                      className="block truncate will-change-transform"
+                      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 8, filter: 'blur(3px)' }}
                       animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)' }}
-                      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10, filter: 'blur(5px)' }}
+                      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -7, filter: 'blur(3px)' }}
                       transition={ROOM_TITLE_TRANSITION}
                     >
                       {activeRoomTitle}
                     </motion.span>
                   </AnimatePresence>
                 </h1>
-                <nav className="ml-3 flex min-w-max items-center gap-1 sm:gap-2">
-                  {roomTabs
-                    .filter((tab) => tab.id !== activeRoomTab?.id)
-                    .map((tab) => (
-                      <RoomsTopTab
-                        key={tab.id}
-                        tab={tab}
-                        isActive={false}
-                        onClick={() => setActiveRoomId(tab.id)}
-                      />
-                    ))}
-                </nav>
+                <div
+                  ref={roomTitleScrollerRef}
+                  onPointerDown={handleRoomTitlePointerDown}
+                  onPointerMove={handleRoomTitlePointerMove}
+                  onPointerUp={handleRoomTitlePointerEnd}
+                  onPointerCancel={handleRoomTitlePointerEnd}
+                  onClickCapture={handleRoomTitleClickCapture}
+                  onScroll={updateRoomTitleScrollEdges}
+                  data-testid="rooms-title-scroller"
+                  style={roomTitleMaskStyle}
+                  className="ml-3 flex min-w-0 flex-1 cursor-default touch-auto select-none items-baseline overflow-x-auto overscroll-x-contain pb-1 pr-5 hide-scrollbar sm:pr-4"
+                >
+                  <nav aria-label="Seleziona stanza" className="flex min-w-max items-center gap-1 sm:gap-2">
+                    {roomTabs
+                      .filter((tab) => tab.id !== activeRoomTab?.id)
+                      .map((tab) => (
+                        <RoomsTopTab
+                          key={tab.id}
+                          tab={tab}
+                          isActive={false}
+                          onClick={() => setActiveRoomId(tab.id)}
+                        />
+                      ))}
+                  </nav>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsFloorLayerOpen(true)}
-                className="liquid-glass-control inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center p-0 text-xs font-semibold tracking-tight transition-all active:scale-95 sm:w-auto sm:gap-1 sm:px-4"
+                className={cn(
+                  'liquid-glass-control inline-flex shrink-0 cursor-pointer items-center justify-center p-0 text-xs font-semibold tracking-tight transition-all active:scale-95 sm:w-auto sm:gap-1 sm:px-4',
+                  isRoomsHeaderCompact ? 'h-9 w-9' : 'h-11 w-11',
+                )}
                 aria-label={`Apri lista piani: ${currentFloorLabel}`}
                 title={currentFloorLabel}
               >
@@ -6793,28 +6867,33 @@ export function RoomsDashboard({
                 <ChevronDown className="hidden h-3 w-3 text-[color:var(--ui-text-tertiary)] sm:block" />
               </button>
             </div>
-            <p className="mt-0.5 pl-1 text-xs font-medium text-[color:var(--ui-text-secondary)] sm:pl-0">
-              {roomAmbientSubtitle}
-            </p>
-            {roomStatusChips.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5 pl-1 sm:pl-0">
-                {roomStatusChips.map((chip) => (
-                  <span
-                    key={chip.id}
-                    className={cn(
-                      'rooms-chip inline-flex cursor-pointer items-center gap-2 rounded-full border border-[color:var(--ui-border)] px-3.5 py-1.5 shadow-sm transition-all duration-200 active:scale-95',
-                      chip.className,
-                    )}
-                  >
-                    {chip.icon}
-                    <span className="flex select-none flex-col leading-none">
-                      <span className="text-xs font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{chip.label}</span>
-                      <span className="mt-0.5 text-[10px] font-semibold tracking-tight text-[color:var(--ui-text-tertiary)]">{chip.status}</span>
-                    </span>
-                  </span>
-                ))}
+            <div className="rooms-page-header-details" aria-hidden={isRoomsHeaderCompact}>
+              <div className="min-h-0 overflow-hidden">
+                <p className="mt-0.5 pl-1 text-xs font-medium text-[color:var(--ui-text-secondary)] sm:pl-0">
+                  {roomAmbientSubtitle}
+                </p>
+                {roomStatusChips.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5 pl-1 sm:pl-0">
+                    {roomStatusChips.map((chip) => (
+                      <span
+                        key={chip.id}
+                        className={cn(
+                          'rooms-chip inline-flex cursor-pointer items-center gap-2 rounded-full border border-[color:var(--ui-border)] px-3.5 py-1.5 shadow-sm transition-all duration-200 active:scale-95',
+                          chip.className,
+                        )}
+                      >
+                        {chip.icon}
+                        <span className="flex select-none flex-col leading-none">
+                          <span className="text-xs font-semibold tracking-tight text-[color:var(--ui-text-primary)]">{chip.label}</span>
+                          <span className="mt-0.5 text-[10px] font-semibold tracking-tight text-[color:var(--ui-text-tertiary)]">{chip.status}</span>
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
+            </div>
           </header>
 
           {climateControlModel ? (
