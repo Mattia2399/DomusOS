@@ -145,7 +145,7 @@ describe('OnboardingExperience panel discovery', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'DomusOS è già configurato' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Domus UI è già configurato' })).toBeTruthy();
     expect(screen.getByText(/Versione 44/)).toBeTruthy();
     expect(screen.getByText('Sezioni')).toBeTruthy();
     expect(screen.getByText('Card')).toBeTruthy();

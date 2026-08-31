@@ -1,6 +1,6 @@
-# Sicurezza di DomusOS
+# Sicurezza di Domus UI
 
-DomusOS è in beta pubblica. Non è un sistema di allarme, sicurezza o safety certificato e Home Assistant resta l'autorità finale per identità, permessi e comandi.
+Domus UI è in beta pubblica. Non è un sistema di allarme, sicurezza o safety certificato e Home Assistant resta l'autorità finale per identità, permessi e comandi.
 
 ## Versioni supportate
 
@@ -12,7 +12,7 @@ Non aprire una issue pubblica per vulnerabilità, token, PIN, URL privati o dati
 
 Usa **Security → Report a vulnerability** nel repository GitHub. Includi:
 
-- versione DomusOS e Home Assistant;
+- versione Domus UI e Home Assistant;
 - metodo di installazione;
 - impatto e prerequisiti;
 - passaggi minimi per riprodurre il problema;

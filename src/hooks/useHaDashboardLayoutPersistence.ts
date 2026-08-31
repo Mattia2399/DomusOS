@@ -420,7 +420,7 @@ export function useHaDashboardLayoutPersistence({
       const isOwnPublication = result.document.publication?.originClientId === clientIdRef.current;
       const isEquivalentLayout = dashboardSignature(result.document.dashboard) ===
         dashboardSignature(dashboardRef.current);
-      console.info('[DomusOS:persistence] remote-check:newer', {
+      console.info('[DomusUI:persistence] remote-check:newer', {
         currentRevision,
         serverRevision: result.document.revision,
         isOwnPublication,
@@ -507,15 +507,15 @@ export function useHaDashboardLayoutPersistence({
   ): Promise<DashboardLayoutSaveResult> => {
     const run = async (): Promise<DashboardLayoutSaveResult> => {
       if (!active || !connectionRef.current) {
-        console.warn('[DomusOS:persistence] persist:blocked', { reason: 'connection-unavailable' });
+        console.warn('[DomusUI:persistence] persist:blocked', { reason: 'connection-unavailable' });
         return errorResult('server_unavailable');
       }
       if (!permissionRef.current) {
-        console.warn('[DomusOS:persistence] persist:blocked', { reason: 'permission-unavailable' });
+        console.warn('[DomusUI:persistence] persist:blocked', { reason: 'permission-unavailable' });
         return errorResult('server_unauthorized');
       }
       if (conflictRef.current) {
-        console.warn('[DomusOS:persistence] persist:blocked', { reason: 'unresolved-conflict' });
+        console.warn('[DomusUI:persistence] persist:blocked', { reason: 'unresolved-conflict' });
         return errorResult('server_conflict');
       }
       const signature = dashboardSignature(nextDashboard);
@@ -523,14 +523,14 @@ export function useHaDashboardLayoutPersistence({
       if (awaitingHydrationRef.current) {
         if (signature && signature === persistedSignatureRef.current) {
           awaitingHydrationRef.current = false;
-          console.info('[DomusOS:persistence] hydrate:confirmed');
+          console.info('[DomusUI:persistence] hydrate:confirmed');
         } else if (signature && current) {
           // MainBoard may immediately normalize minimum sizes and automatic card
           // expansion after applying the server document. That normalized render
           // is the local baseline, not an unsaved user edit.
           persistedSignatureRef.current = signature;
           awaitingHydrationRef.current = false;
-          console.info('[DomusOS:persistence] hydrate:normalized');
+          console.info('[DomusUI:persistence] hydrate:normalized');
           return {
             ok: true,
             savedAt: Date.parse(current.updatedAt) || Date.now(),
@@ -538,12 +538,12 @@ export function useHaDashboardLayoutPersistence({
             bytes: new Blob([signature]).size,
           };
         } else {
-          console.warn('[DomusOS:persistence] persist:blocked', { reason: 'hydration-invalid' });
+          console.warn('[DomusUI:persistence] persist:blocked', { reason: 'hydration-invalid' });
           return errorResult('server_unavailable');
         }
       }
       if (!current) {
-        console.warn('[DomusOS:persistence] persist:blocked', { reason: 'migration-required' });
+        console.warn('[DomusUI:persistence] persist:blocked', { reason: 'migration-required' });
         return errorResult('migration_required');
       }
 
@@ -569,7 +569,7 @@ export function useHaDashboardLayoutPersistence({
       if (latestBeforeArchive.status === 'found') {
         if (latestBeforeArchive.document.revision !== current.revision) {
           if (dashboardSignature(latestBeforeArchive.document.dashboard) === signature) {
-            console.info('[DomusOS:persistence] persist:already-published', {
+            console.info('[DomusUI:persistence] persist:already-published', {
               localRevision: current.revision,
               serverRevision: latestBeforeArchive.document.revision,
             });
@@ -676,7 +676,7 @@ export function useHaDashboardLayoutPersistence({
   }, [dashboard, persist]);
 
   const initializeFromCurrentDashboard = useCallback(async (): Promise<DashboardLayoutSaveResult> => {
-    console.info('[DomusOS:persistence] initialize:start', {
+    console.info('[DomusUI:persistence] initialize:start', {
       active,
       connected: connectionRef.current,
       canManage: permissionRef.current,
@@ -685,7 +685,7 @@ export function useHaDashboardLayoutPersistence({
       loadStatus,
     });
     if (!active || !connectionRef.current) {
-      console.warn('[DomusOS:persistence] initialize:blocked', {
+      console.warn('[DomusUI:persistence] initialize:blocked', {
         reason: !active ? 'inactive-runtime' : 'connection-unavailable',
       });
       const result = errorResult('server_unavailable');
@@ -693,7 +693,7 @@ export function useHaDashboardLayoutPersistence({
       return result;
     }
     if (!permissionRef.current || !userId) {
-      console.warn('[DomusOS:persistence] initialize:blocked', {
+      console.warn('[DomusUI:persistence] initialize:blocked', {
         reason: !permissionRef.current ? 'permission-unavailable' : 'identity-unavailable',
       });
       const result = errorResult('server_unauthorized');
@@ -701,7 +701,7 @@ export function useHaDashboardLayoutPersistence({
       return result;
     }
     if (documentRef.current) {
-      console.info('[DomusOS:persistence] initialize:document-already-present', {
+      console.info('[DomusUI:persistence] initialize:document-already-present', {
         revision: documentRef.current.revision,
       });
       return persist(dashboard);
@@ -723,7 +723,7 @@ export function useHaDashboardLayoutPersistence({
       },
     });
     const saved = await repository.saveSharedHouseConfiguration(initialDocument, null);
-    console.info('[DomusOS:persistence] initialize:repository-result', {
+    console.info('[DomusUI:persistence] initialize:repository-result', {
       status: saved.status,
       reason: saved.status === 'error' ? saved.reason ?? 'unknown' : undefined,
       revision: saved.status === 'saved' ? saved.document.revision : undefined,

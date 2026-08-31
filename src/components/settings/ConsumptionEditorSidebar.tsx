@@ -19,46 +19,26 @@ type ConfigField = {
   field: keyof ConsumptionEntityConfig;
   label: string;
   placeholder: string;
-  kind?: 'entity' | 'text' | 'route';
 };
 
 const ELECTRICITY_FIELDS: ConfigField[] = [
-  { field: 'solarPowerEntityId', label: 'Entita produzione solare', placeholder: 'sensor.solar_power_kw', kind: 'entity' },
-  { field: 'gridPowerEntityId', label: 'Entita potenza rete', placeholder: 'sensor.grid_power_kw', kind: 'entity' },
-  { field: 'homePowerEntityId', label: 'Entita consumo casa', placeholder: 'sensor.home_power_kw', kind: 'entity' },
-  { field: 'solarMixEntityId', label: 'Entita percentuale solare', placeholder: 'sensor.solar_mix_percent', kind: 'entity' },
-  { field: 'batteryPowerEntityId', label: 'Entita potenza batteria', placeholder: 'sensor.battery_power_kw', kind: 'entity' },
-  { field: 'batterySocEntityId', label: 'Entita carica batteria', placeholder: 'sensor.battery_soc', kind: 'entity' },
+  { field: 'solarPowerEntityId', label: 'Entita produzione solare', placeholder: 'sensor.solar_power_kw' },
+  { field: 'gridPowerEntityId', label: 'Entita potenza rete', placeholder: 'sensor.grid_power_kw' },
+  { field: 'homePowerEntityId', label: 'Entita consumo casa', placeholder: 'sensor.home_power_kw' },
+  { field: 'solarMixEntityId', label: 'Entita percentuale solare', placeholder: 'sensor.solar_mix_percent' },
+  { field: 'batteryPowerEntityId', label: 'Entita potenza batteria', placeholder: 'sensor.battery_power_kw' },
+  { field: 'batterySocEntityId', label: 'Entita carica batteria', placeholder: 'sensor.battery_soc' },
 ];
 
 const WATER_FIELDS: ConfigField[] = [
-  { field: 'waterCurrentEntityId', label: 'Entita consumo acqua', placeholder: 'sensor.water_today_liters', kind: 'entity' },
-  { field: 'waterGoalEntityId', label: 'Entita obiettivo giornaliero', placeholder: 'input_number.water_daily_goal_liters', kind: 'entity' },
-  { field: 'waterRainRecoveryEntityId', label: 'Entita recupero pioggia', placeholder: 'sensor.water_rain_recovery_lpm', kind: 'entity' },
+  { field: 'waterCurrentEntityId', label: 'Entita consumo acqua', placeholder: 'sensor.water_today_liters' },
+  { field: 'waterGoalEntityId', label: 'Entita obiettivo giornaliero', placeholder: 'input_number.water_daily_goal_liters' },
+  { field: 'waterRainRecoveryEntityId', label: 'Entita recupero pioggia', placeholder: 'sensor.water_rain_recovery_lpm' },
 ];
 
 const GAS_FIELDS: ConfigField[] = [
-  { field: 'gasTodayEntityId', label: 'Entita consumo gas giornaliero', placeholder: 'sensor.gas_today_m3', kind: 'entity' },
+  { field: 'gasTodayEntityId', label: 'Entita consumo gas giornaliero', placeholder: 'sensor.gas_today_m3' },
 ];
-
-const CARD_META_FIELDS: Record<ConsumptionCardId, ConfigField[]> = {
-  electricity: [
-    { field: 'electricityCardTitle', label: 'Titolo scheda', placeholder: 'Energia', kind: 'text' },
-    { field: 'electricityCardRoute', label: 'Percorso scheda', placeholder: '/consumi/energia', kind: 'route' },
-  ],
-  water: [
-    { field: 'waterCardTitle', label: 'Titolo scheda', placeholder: 'Acqua', kind: 'text' },
-    { field: 'waterCardRoute', label: 'Percorso scheda', placeholder: '/consumi/acqua', kind: 'route' },
-  ],
-  gas: [
-    { field: 'gasCardTitle', label: 'Titolo scheda', placeholder: 'Gas', kind: 'text' },
-    { field: 'gasCardRoute', label: 'Percorso scheda', placeholder: '/consumi/gas', kind: 'route' },
-  ],
-  trend: [
-    { field: 'trendCardTitle', label: 'Titolo scheda', placeholder: 'Report', kind: 'text' },
-    { field: 'trendCardRoute', label: 'Percorso scheda', placeholder: '/consumi/report', kind: 'route' },
-  ],
-};
 
 const CARD_OPTIONS: Array<{ id: ConsumptionCardId; label: string }> = [
   { id: 'electricity', label: 'Energia' },
@@ -73,25 +53,15 @@ function renderField(
   onUpdate: (field: keyof ConsumptionEntityConfig, value: string) => void,
   entitySuggestions: string[],
 ) {
-  const isEntityField = item.kind === 'entity';
   return (
     <label key={item.field} className="block">
       <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">{item.label}</p>
-      {isEntityField ? (
-        <GlassCombobox
-          value={value}
-          options={entitySuggestions}
-          onChange={(nextValue) => onUpdate(item.field, nextValue)}
-          placeholder={item.placeholder}
-        />
-      ) : (
-        <input
-          value={value}
-          onChange={(event) => onUpdate(item.field, event.target.value)}
-          placeholder={item.placeholder}
-          className="ui-input w-full rounded-xl px-3 py-2.5 text-sm"
-        />
-      )}
+      <GlassCombobox
+        value={value}
+        options={entitySuggestions}
+        onChange={(nextValue) => onUpdate(item.field, nextValue)}
+        placeholder={item.placeholder}
+      />
     </label>
   );
 }
@@ -115,7 +85,6 @@ export function ConsumptionEditorSidebar({
       entityId.startsWith('utility_meter.'),
   );
   const activeCardId = selectedCardId ?? 'electricity';
-  const cardMetaFields = CARD_META_FIELDS[activeCardId];
 
   let fields: ConfigField[] = [];
   if (activeCardId === 'electricity') {
@@ -185,11 +154,6 @@ export function ConsumptionEditorSidebar({
 
       <div className="mt-5 flex h-[calc(100%-9.5rem)] min-h-0 flex-col">
         <div className="glass-scrollbar space-y-5 overflow-y-auto pr-1">
-            <div className="dashboard-content-surface space-y-4 rounded-2xl p-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Scheda</p>
-            {cardMetaFields.map((item) => renderField(item, config[item.field], onUpdateConfigField, entitySuggestions))}
-            </div>
-
           {fields.length > 0 ? (
             <div className="dashboard-content-surface space-y-4 rounded-2xl p-4">
               <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--ui-text-tertiary)]">Sorgenti dati</p>
@@ -198,7 +162,7 @@ export function ConsumptionEditorSidebar({
           ) : (
             <div className="dashboard-content-surface rounded-2xl border-dashed p-4">
               <p className="text-sm text-[color:var(--ui-text-secondary)]">
-                Nessuna entita da configurare per questa scheda. Puoi personalizzare titolo e percorso.
+                Il report utilizza automaticamente i dati configurati nelle sezioni Energia, Acqua e Gas.
               </p>
             </div>
           )}

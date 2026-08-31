@@ -490,7 +490,7 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
     setScanBusy(true);
     setScanProbeError(null);
     setScanProgress(12);
-    setScanStage('Ricerca di una configurazione DomusOS condivisa…');
+    setScanStage('Ricerca di una configurazione Domus UI condivisa…');
     let cancelled = false;
     const scan = async () => {
       const sharedConfiguration = await probeSharedHouseConfiguration(activeConnection.callApi);
@@ -498,7 +498,7 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
       if (sharedConfiguration.status === 'found') {
         const { document } = sharedConfiguration;
         setScanProgress(100);
-        setScanStage('Configurazione DomusOS trovata');
+        setScanStage('Configurazione Domus UI trovata');
         persistJourney({
           phase: 'existing',
           mode: 'real',
@@ -517,8 +517,8 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
       if (sharedConfiguration.status === 'invalid' || sharedConfiguration.status === 'unavailable') {
         setScanProbeError(
           sharedConfiguration.status === 'invalid'
-            ? 'Home Assistant contiene una configurazione DomusOS non riconosciuta. Non verrà sostituita automaticamente.'
-            : 'Non siamo riusciti a verificare se questa casa usa già DomusOS. Controlla la connessione e riprova.',
+            ? 'Home Assistant contiene una configurazione Domus UI non riconosciuta. Non verrà sostituita automaticamente.'
+            : 'Non siamo riusciti a verificare se questa casa usa già Domus UI. Controlla la connessione e riprova.',
         );
         setScanBusy(false);
         return;
@@ -927,7 +927,7 @@ export function OnboardingExperience({ journey, onJourneyChange, forceConfigurat
     return (
       <WizardShell
         stepIndex={1}
-        title="DomusOS è già configurato"
+        title="Domus UI è già configurato"
         description="Questa casa possiede già una configurazione condivisa. Puoi usarla su questo dispositivo senza ricreare layout, stanze o card."
         onBack={returnToConnection}
       >

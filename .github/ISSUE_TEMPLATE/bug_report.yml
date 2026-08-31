@@ -1,5 +1,5 @@
 name: Segnala un problema
-description: Segnala un comportamento riproducibile di DomusOS
+description: Segnala un comportamento riproducibile di Domus UI
 title: "[Bug]: "
 labels:
   - bug
@@ -11,7 +11,7 @@ body:
   - type: input
     id: domusos_version
     attributes:
-      label: Versione DomusOS
+      label: Versione Domus UI
       placeholder: 0.1.0-beta.8
     validations:
       required: true

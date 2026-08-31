@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Crown, Lightbulb, LocateFixed, MapPin, Plus, Smartphone, Tablet, Users, Watch, X } from 'lucide-react';
+import { Crown, Lightbulb, LocateFixed, MapPin, Smartphone, Tablet, Users, Watch, X } from 'lucide-react';
 import { Map, Marker, type MapProps, type MapRef } from '@vis.gl/react-maplibre';
 import { ActiveDevice } from './types';
 import { ClimateControls } from './ClimateControls';
@@ -981,20 +981,7 @@ export function ContextSidebar({
                   />
                 );
               })}
-              {isEditMode ? (
-                <button
-                  type="button"
-                  onClick={() => console.log('Open Widget Box')}
-                  className="min-h-11 rounded-2xl border border-dashed border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-fill-secondary)] hover:text-[color:var(--ui-text-primary)]"
-                  aria-label="Aggiungi dispositivo correlato"
-                  title="Aggiungi dispositivo correlato"
-                >
-                  <span className="flex h-full items-center justify-center">
-                    <Plus size={18} />
-                  </span>
-                </button>
-              ) : null}
-              {microWidgets.length === 0 && !isEditMode ? (
+              {microWidgets.length === 0 ? (
                 <div className="context-content-surface-soft col-span-full rounded-2xl px-3 py-3 text-sm text-[color:var(--ui-text-tertiary)]">
                   Nessun dispositivo correlato.
                 </div>

@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Segnalazione privata di sicurezza
-    url: https://github.com/Mattia2399/DomusOS/security/advisories/new
+    url: https://github.com/Mattia2399/DomusUI/security/advisories/new
     about: Usa questo canale per vulnerabilità e dati sensibili.

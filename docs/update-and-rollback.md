@@ -4,7 +4,7 @@ Aggiornata: 2026-08-25
 
 ## Prima di aggiornare
 
-1. Scarica un backup della dashboard da DomusOS.
+1. Scarica un backup della dashboard da Domus UI.
 2. Crea un backup Home Assistant.
 3. Leggi il `CHANGELOG.md` della nuova release.
 4. Verifica che la release GitHub contenga `domusos.zip` e `SHA256SUMS`.
@@ -12,7 +12,7 @@ Aggiornata: 2026-08-25
 
 ## Aggiornamento tramite HACS
 
-1. Apri HACS e seleziona DomusOS.
+1. Apri HACS e seleziona Domus UI.
 2. Installa la release proposta.
 3. Riavvia Home Assistant quando richiesto.
 4. Fai un hard refresh del browser o riapri completamente l'app HA.
@@ -33,7 +33,7 @@ HACS aggiorna insieme integrazione, bridge e frontend. Non sovrascrivere manualm
 
 ## Rollback dell'integrazione
 
-1. In HACS apri DomusOS.
+1. In HACS apri Domus UI.
 2. Dal menu di download seleziona una release precedente tra quelle disponibili.
 3. Reinstalla e riavvia Home Assistant.
 4. Ricarica completamente il browser.
@@ -43,10 +43,10 @@ Il rollback HACS e il ripristino del layout sono operazioni diverse: il primo ca
 
 ## Ripristino di emergenza
 
-Se DomusOS non si apre:
+Se Domus UI non si apre:
 
 - usa la dashboard standard Home Assistant;
-- disabilita o rimuovi temporaneamente l'integrazione DomusOS;
+- disabilita o rimuovi temporaneamente l'integrazione Domus UI;
 - reinstalla da HACS una release nota e riavvia HA;
 - conserva versione installata, browser, sistema operativo e messaggi `domusos` dei log;
 - non condividere token, PIN o file di storage completi nei ticket.

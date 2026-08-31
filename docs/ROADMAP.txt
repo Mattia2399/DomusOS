@@ -86,7 +86,7 @@ prefers-reduced-motion è implementato solo su alcuni componenti.
 Drag, reorder e resize non hanno ancora un equivalente completo da tastiera.
 Contrasto dei testi white/40–45 da verificare su ogni tema.
 Nella Light compaiono due azioni accessibili identiche per cambiare modalità: [LightCardView.tsx (line 123)](C:/Users/bancoariccia1/Desktop/ha-dashboard-builder/src/components/widgets/LightCardView.tsx:123).
-Funzioni che aggiungerei per una vera esperienza DomusOS
+Funzioni che aggiungerei per una vera esperienza Domus UI
 Non altre card, almeno inizialmente. Aggiungerei un livello superiore alle card:
 Home Summary adattivo
 In alto: “Casa protetta”, “3 luci accese”, “finestra aperta”, “consumi sopra la media”. Non un elenco fisso, ma informazioni rilevanti per ora, presenza e stato.

@@ -83,7 +83,7 @@ describe('useHaDashboardLayoutPersistence', () => {
     expect(callApi.mock.calls.some(([message]) => message.type === 'frontend/set_system_data')).toBe(true);
   });
 
-  it('requires an explicit migration when HA has no DomusOS document', async () => {
+  it('requires an explicit migration when HA has no Domus UI document', async () => {
     const callApi = vi.fn(async (_message: Record<string, unknown>) => ({ value: null }));
     const { result } = renderHook(() => useHaDashboardLayoutPersistence({
       active: true,

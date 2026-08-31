@@ -98,7 +98,7 @@ describe('SettingsDataBackupSection', () => {
     renderSection({ props: { onResetAll } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset totale' }));
-    expect(await screen.findByRole('heading', { name: 'Ripristinare DomusOS?' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Ripristinare Domus UI?' })).toBeTruthy();
 
     const confirmButton = screen.getByRole('button', { name: 'Conferma' });
     expect(confirmButton.hasAttribute('disabled')).toBe(true);
@@ -122,7 +122,7 @@ describe('SettingsDataBackupSection', () => {
     fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'RESET' } });
     fireEvent.click(screen.getByRole('button', { name: 'Conferma' }));
 
-    expect(await screen.findByRole('heading', { name: 'Ripristino di DomusOS' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Ripristino di Domus UI' })).toBeTruthy();
     expect(screen.getByText('Eliminazione delle versioni')).toBeTruthy();
     expect(screen.getByRole('progressbar', { name: 'Avanzamento reset' }).getAttribute('aria-valuenow'))
       .toBe('35');

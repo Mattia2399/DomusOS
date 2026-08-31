@@ -48,7 +48,7 @@ export function AppWorkspaceShell({
   mobileHeaderHidden = false,
   mobileBackInNavigation = false,
   mobileNavigationHidden = false,
-  backLabel = 'Torna a DomusOS',
+  backLabel = 'Torna a Domus UI',
 }: AppWorkspaceShellProps) {
   const shellStyle = {
     '--app-workspace-accent': accentColor,

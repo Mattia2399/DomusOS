@@ -2,13 +2,13 @@
 
 Aggiornata: 2026-07-10
 
-> Nota: la roadmap tecnica aggiornata dopo l'audit completo di `/home` e disponibile in [`domusos-roadmap.md`](./domusos-roadmap.md). Questo documento conserva il piano beta e go-to-market originale; in caso di conflitto, prevale la roadmap DomusOS del 14 luglio 2026.
+> Nota: la roadmap tecnica aggiornata dopo l'audit completo di `/home` e disponibile in [`domusos-roadmap.md`](./domusos-roadmap.md). Questo documento conserva il piano beta e go-to-market originale; in caso di conflitto, prevale la roadmap Domus UI del 14 luglio 2026.
 
-Obiettivo: arrivare a una beta vendibile di DomusOS senza inseguire tutte le card subito. La priorita e' distribuire un nucleo stabile, bello e sicuro, raccogliere feedback reali e iniziare a validare il prezzo.
+Obiettivo: arrivare a una beta vendibile di Domus UI senza inseguire tutte le card subito. La priorita e' distribuire un nucleo stabile, bello e sicuro, raccogliere feedback reali e iniziare a validare il prezzo.
 
 ## Posizionamento beta
 
-DomusOS e' una dashboard premium per Home Assistant pensata per utenti che vogliono:
+Domus UI e' una dashboard premium per Home Assistant pensata per utenti che vogliono:
 
 - una UI piu' curata delle dashboard standard;
 - card responsive e configurabili;

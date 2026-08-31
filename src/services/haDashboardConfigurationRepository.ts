@@ -71,7 +71,7 @@ function logPersistence(
   details: Record<string, unknown> = {},
 ) {
   const logger = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
-  logger(`[DomusOS:persistence] ${event}`, details);
+  logger(`[DomusUI:persistence] ${event}`, details);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -12,7 +12,7 @@ const navigationItems = [
 ];
 
 describe('AppWorkspaceShell', () => {
-  it('exposes contextual navigation and a route back to DomusOS', () => {
+  it('exposes contextual navigation and a route back to Domus UI', () => {
     const onBack = vi.fn();
     const onNavigationChange = vi.fn();
 
@@ -40,7 +40,7 @@ describe('AppWorkspaceShell', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Configura' })[0]);
     expect(onNavigationChange).toHaveBeenCalledWith('configuration');
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Torna a DomusOS' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Torna a Domus UI' })[0]);
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 

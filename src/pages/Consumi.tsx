@@ -502,28 +502,8 @@ export function ConsumptionDashboardPage({
 }: Props) {
   const dashboardData = data ?? DEFAULT_DATA;
 
-  const cardTitles = React.useMemo<Record<ConsumptionCardId, string>>(
-    () => ({
-      electricity: config?.electricityCardTitle?.trim() || DEFAULT_CARD_TITLES.electricity,
-      water: config?.waterCardTitle?.trim() || DEFAULT_CARD_TITLES.water,
-      gas: config?.gasCardTitle?.trim() || DEFAULT_CARD_TITLES.gas,
-      trend: config?.trendCardTitle?.trim() || DEFAULT_CARD_TITLES.trend,
-    }),
-    [config?.electricityCardTitle, config?.waterCardTitle, config?.gasCardTitle, config?.trendCardTitle],
-  );
-
-  const routesByCard = React.useMemo<Record<ConsumptionCardId, string>>(
-    () => ({
-      electricity: normalizeRoute(
-        config?.electricityCardRoute ?? DEFAULT_CARD_ROUTES.electricity,
-        DEFAULT_CARD_ROUTES.electricity,
-      ),
-      water: normalizeRoute(config?.waterCardRoute ?? DEFAULT_CARD_ROUTES.water, DEFAULT_CARD_ROUTES.water),
-      gas: normalizeRoute(config?.gasCardRoute ?? DEFAULT_CARD_ROUTES.gas, DEFAULT_CARD_ROUTES.gas),
-      trend: normalizeRoute(config?.trendCardRoute ?? DEFAULT_CARD_ROUTES.trend, DEFAULT_CARD_ROUTES.trend),
-    }),
-    [config?.electricityCardRoute, config?.waterCardRoute, config?.gasCardRoute, config?.trendCardRoute],
-  );
+  const cardTitles = DEFAULT_CARD_TITLES;
+  const routesByCard = DEFAULT_CARD_ROUTES;
 
   const [activeView, setActiveView] = React.useState<ActiveView>(() => {
     if (typeof window === 'undefined') {

@@ -168,8 +168,8 @@ export function SettingsDataBackupSection({
     const authorized = await sensitiveGate.authorize({
       action: 'reset_dashboard',
       capability: 'reset_dashboard',
-      title: 'Ripristinare DomusOS?',
-      description: 'Verranno eliminati il layout condiviso, le cinque versioni disponibili, le preferenze e i dati DomusOS presenti su questo dispositivo. Gli utenti collegati alla stessa casa perderanno il layout attuale. Entità, dispositivi e configurazione di Home Assistant non verranno modificati. Questa azione non può essere annullata.',
+      title: 'Ripristinare Domus UI?',
+      description: 'Verranno eliminati il layout condiviso, le cinque versioni disponibili, le preferenze e i dati Domus UI presenti su questo dispositivo. Gli utenti collegati alla stessa casa perderanno il layout attuale. Entità, dispositivi e configurazione di Home Assistant non verranno modificati. Questa azione non può essere annullata.',
       confirmationPhrase: 'RESET',
     });
     if (!authorized) {
@@ -219,7 +219,7 @@ export function SettingsDataBackupSection({
     },
     clearing_shared_configuration: {
       label: 'Eliminazione del layout condiviso',
-      description: 'Rimuoviamo la configurazione DomusOS condivisa dalla casa.',
+      description: 'Rimuoviamo la configurazione Domus UI condivisa dalla casa.',
     },
     verifying_server: {
       label: 'Verifica con Home Assistant',
@@ -231,11 +231,11 @@ export function SettingsDataBackupSection({
     },
     clearing_device: {
       label: 'Pulizia del dispositivo',
-      description: 'Eliminiamo preferenze, cache e credenziali locali DomusOS.',
+      description: 'Eliminiamo preferenze, cache e credenziali locali Domus UI.',
     },
     restarting: {
       label: 'Reset completato',
-      description: 'DomusOS sta tornando alla schermata iniziale.',
+      description: 'Domus UI sta tornando alla schermata iniziale.',
     },
   };
 
@@ -502,7 +502,7 @@ export function SettingsDataBackupSection({
         isOpen={resetStage !== null}
         onClose={() => undefined}
         eyebrow="Reset totale"
-        title="Ripristino di DomusOS"
+        title="Ripristino di Domus UI"
         description="Non chiudere la pagina e non interrompere la connessione."
         variant="responsive"
         size="sm"

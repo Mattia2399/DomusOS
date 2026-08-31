@@ -2,7 +2,7 @@
 
 Aggiornata: 2026-08-03
 
-DomusOS è un’interfaccia client per Home Assistant. Non è un sistema di allarme certificato, non sostituisce Home Assistant e non costituisce una barriera server-side autonoma.
+Domus UI è un’interfaccia client per Home Assistant. Non è un sistema di allarme certificato, non sostituisce Home Assistant e non costituisce una barriera server-side autonoma.
 
 ## Autorità e permessi
 

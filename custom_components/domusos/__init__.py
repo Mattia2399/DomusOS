@@ -1,4 +1,4 @@
-"""DomusOS integration."""
+"""Domus UI integration."""
 
 from __future__ import annotations
 
@@ -28,21 +28,21 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up DomusOS."""
+    """Set up Domus UI."""
     return True
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> bool:
-    """Register the DomusOS static frontend and sidebar panel."""
+    """Register the Domus UI static frontend and sidebar panel."""
     frontend_directory = Path(__file__).parent / "frontend"
     index_file = frontend_directory / "index.html"
     panel_module = frontend_directory / "ha-dashboard-builder-panel.js"
 
     if not index_file.is_file() or not panel_module.is_file():
         raise FileNotFoundError(
-            "DomusOS frontend assets are missing. Reinstall the integration from HACS."
+            "Domus UI frontend assets are missing. Reinstall the integration from HACS."
         )
 
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -93,7 +93,7 @@ async def async_setup_entry(
 async def async_unload_entry(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> bool:
-    """Unload DomusOS and remove its sidebar panel."""
+    """Unload Domus UI and remove its sidebar panel."""
     if frontend.async_panel_exists(hass, PANEL_URL_PATH):
         frontend.async_remove_panel(hass, PANEL_URL_PATH)
     return True
@@ -102,5 +102,5 @@ async def async_unload_entry(
 async def _async_update_listener(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Reload DomusOS after an entry update."""
+    """Reload Domus UI after an entry update."""
     await hass.config_entries.async_reload(entry.entry_id)

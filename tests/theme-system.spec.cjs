@@ -20,12 +20,8 @@ function installCompletedDemo(page, preferences = {}) {
 
 async function enterEditMode(page) {
   const directEditButton = page.locator('button[aria-label="Toggle edit mode"]:visible').first();
-  if (await directEditButton.count()) {
-    await directEditButton.click();
-  } else {
-    await page.getByLabel('Apri altre sezioni').click();
-    await page.locator('button[aria-label="Toggle edit mode"]:visible').first().click();
-  }
+  await directEditButton.waitFor({ state: 'visible' });
+  await directEditButton.click();
   await page.getByRole('button', { name: 'Attiva', exact: true }).click();
 }
 

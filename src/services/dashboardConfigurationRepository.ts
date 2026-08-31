@@ -96,7 +96,7 @@ export type DashboardConfigurationSubscription = () => void;
 /**
  * Authoritative configuration transport. UI components consume this contract
  * and do not know whether the data came from the HA frontend store or a future
- * DomusOS integration.
+ * Domus UI integration.
  */
 export interface DashboardConfigurationRepository {
   readonly kind: DashboardConfigurationRepositoryKind;

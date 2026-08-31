@@ -16,14 +16,6 @@ export type ConsumptionEntityConfig = {
   waterGoalEntityId: string;
   waterRainRecoveryEntityId: string;
   gasTodayEntityId: string;
-  electricityCardTitle: string;
-  electricityCardRoute: string;
-  waterCardTitle: string;
-  waterCardRoute: string;
-  gasCardTitle: string;
-  gasCardRoute: string;
-  trendCardTitle: string;
-  trendCardRoute: string;
 };
 
 export type ConsumptionDashboardData = {
@@ -53,14 +45,6 @@ const DEFAULT_CONSUMPTION_CONFIG: ConsumptionEntityConfig = {
   waterGoalEntityId: 'input_number.water_daily_goal_liters',
   waterRainRecoveryEntityId: 'sensor.water_rain_recovery_lpm',
   gasTodayEntityId: 'sensor.gas_today_m3',
-  electricityCardTitle: 'Energia',
-  electricityCardRoute: '/consumi/energia',
-  waterCardTitle: 'Acqua',
-  waterCardRoute: '/consumi/acqua',
-  gasCardTitle: 'Gas',
-  gasCardRoute: '/consumi/gas',
-  trendCardTitle: 'Report',
-  trendCardRoute: '/consumi/report',
 };
 
 const DEFAULT_DASHBOARD_DATA: ConsumptionDashboardData = {
@@ -154,14 +138,6 @@ function readStoredConfig() {
       waterGoalEntityId: normalizeConfigValue(parsed.waterGoalEntityId, DEFAULT_CONSUMPTION_CONFIG.waterGoalEntityId),
       waterRainRecoveryEntityId: normalizeConfigValue(parsed.waterRainRecoveryEntityId, DEFAULT_CONSUMPTION_CONFIG.waterRainRecoveryEntityId),
       gasTodayEntityId: normalizeConfigValue(parsed.gasTodayEntityId, DEFAULT_CONSUMPTION_CONFIG.gasTodayEntityId),
-      electricityCardTitle: normalizeConfigValue(parsed.electricityCardTitle, DEFAULT_CONSUMPTION_CONFIG.electricityCardTitle),
-      electricityCardRoute: normalizeConfigValue(parsed.electricityCardRoute, DEFAULT_CONSUMPTION_CONFIG.electricityCardRoute),
-      waterCardTitle: normalizeConfigValue(parsed.waterCardTitle, DEFAULT_CONSUMPTION_CONFIG.waterCardTitle),
-      waterCardRoute: normalizeConfigValue(parsed.waterCardRoute, DEFAULT_CONSUMPTION_CONFIG.waterCardRoute),
-      gasCardTitle: normalizeConfigValue(parsed.gasCardTitle, DEFAULT_CONSUMPTION_CONFIG.gasCardTitle),
-      gasCardRoute: normalizeConfigValue(parsed.gasCardRoute, DEFAULT_CONSUMPTION_CONFIG.gasCardRoute),
-      trendCardTitle: normalizeConfigValue(parsed.trendCardTitle, DEFAULT_CONSUMPTION_CONFIG.trendCardTitle),
-      trendCardRoute: normalizeConfigValue(parsed.trendCardRoute, DEFAULT_CONSUMPTION_CONFIG.trendCardRoute),
     };
   } catch {
     return DEFAULT_CONSUMPTION_CONFIG;

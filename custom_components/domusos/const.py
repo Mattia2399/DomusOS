@@ -1,10 +1,10 @@
-"""Constants for DomusOS."""
+"""Constants for Domus UI."""
 
 from __future__ import annotations
 
 DOMAIN = "domusos"
-VERSION = "0.1.0-beta.11"
-PANEL_TITLE = "DomusOS"
+VERSION = "0.1.0-beta.12"
+PANEL_TITLE = "Domus UI"
 PANEL_ICON = "mdi:home-assistant"
 PANEL_URL_PATH = "domusos"
 PANEL_WEB_COMPONENT = "ha-dashboard-builder-panel"

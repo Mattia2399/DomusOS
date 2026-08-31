@@ -124,7 +124,7 @@ export function IrrigationConfigurationPage({
         <div className="mt-5 flex items-start gap-3 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-[color:var(--ui-text-secondary)]"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />La configurazione è visibile in sola lettura. Solo Owner e Admin possono modificarla.</div>
       ) : (
         <div className="mt-5 flex flex-col gap-3 rounded-[1.4rem] border border-[color:rgb(var(--ui-accent-rgb)/0.2)] bg-[color:rgb(var(--ui-accent-rgb)/0.08)] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--ui-accent)]" /><div><p className="text-sm font-semibold">Sorgenti suggerite</p><p className="mt-0.5 text-xs leading-4 text-[color:var(--ui-text-secondary)]">DomusOS riconosce device class, nome e disponibilità e completa soltanto le associazioni globali.</p></div></div>
+          <div className="flex min-w-0 items-start gap-3"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--ui-accent)]" /><div><p className="text-sm font-semibold">Sorgenti suggerite</p><p className="mt-0.5 text-xs leading-4 text-[color:var(--ui-text-secondary)]">Domus UI riconosce device class, nome e disponibilità e completa soltanto le associazioni globali.</p></div></div>
           <button type="button" onClick={handleApplySuggestions} className="liquid-glass-control inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-semibold"><Sparkles className="h-4 w-4" />Completa sorgenti</button>
         </div>
       )}

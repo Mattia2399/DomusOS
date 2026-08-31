@@ -1,13 +1,13 @@
 {
   "domain": "domusos",
-  "name": "DomusOS",
+  "name": "Domus UI",
   "codeowners": ["@Mattia2399"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "panel_custom"],
-  "documentation": "https://github.com/Mattia2399/DomusOS",
+  "documentation": "https://github.com/Mattia2399/DomusUI",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/Mattia2399/DomusOS/issues",
+  "issue_tracker": "https://github.com/Mattia2399/DomusUI/issues",
   "single_config_entry": true,
-  "version": "0.1.0-beta.11"
+  "version": "0.1.0-beta.12"
 }

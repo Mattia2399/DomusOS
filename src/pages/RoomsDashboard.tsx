@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  CircleHelp,
   CirclePlus,
   ChevronRight,
   Fan,
@@ -58,6 +59,7 @@ import GlassLoader from '../components/ui/GlassLoader';
 import GlassSlider from '../components/ui/GlassSlider';
 import GlassModal from '../components/ui/GlassModal';
 import GlassBottomSheet from '../components/ui/GlassBottomSheet';
+import RoomSectionInteractionGuide from '../components/rooms/RoomSectionInteractionGuide';
 import { SectionCardRenderer, WidgetCardRenderer } from '../components/widgets/CardRenderer';
 import { buildCameraCardModel } from '../components/widgets/cameraCardModel';
 import CameraViewer from '../components/camera/CameraViewer';
@@ -1057,7 +1059,7 @@ function resolveRoomSectionGridCols(sectionId: string | undefined, breakpoint: G
   }
 
   if (sectionId === 'security') {
-    return breakpoint === 'xs' || breakpoint === 'sm' ? 2 : 4;
+    return breakpoint === 'xs' || breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' ? 2 : 4;
   }
 
   return fallbackCols;
@@ -1070,7 +1072,7 @@ function resolveRoomSectionGridOptions(sectionId: string | undefined, breakpoint
         widget.kind === 'sensor'
           ? {
               ...span,
-              w: 2,
+              w: breakpoint === 'xs' || breakpoint === 'sm' ? 1 : 2,
               h: 2,
             }
           : span,
@@ -1083,9 +1085,12 @@ function resolveRoomSectionGridOptions(sectionId: string | undefined, breakpoint
     };
   }
 
-  if (sectionId === 'security' && (breakpoint === 'xs' || breakpoint === 'sm')) {
+  if (
+    sectionId === 'security' &&
+    (breakpoint === 'xs' || breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg')
+  ) {
     return {
-      resolveSpan: (widget, span) => (widget.kind === 'camera' ? { ...span, w: 2 } : span),
+      resolveSpan: (widget, span) => (widget.kind === 'camera' ? { ...span, w: 1 } : span),
     };
   }
 
@@ -1858,6 +1863,7 @@ export function RoomsDashboard({
   const [registryLoadAt, setRegistryLoadAt] = React.useState<number>(0);
   const [editingRoomSection, setEditingRoomSection] = React.useState<RoomSectionEditTarget | null>(null);
   const [isSectionTargetSelectionMode, setIsSectionTargetSelectionMode] = React.useState(false);
+  const [isSectionInteractionGuideOpen, setIsSectionInteractionGuideOpen] = React.useState(true);
   const [selectedSectionTargetIds, setSelectedSectionTargetIds] = React.useState<Record<string, boolean>>({});
   const [selectedSectionAddTargetIds, setSelectedSectionAddTargetIds] = React.useState<Record<string, boolean>>({});
   const [sectionDeviceSheetMode, setSectionDeviceSheetMode] = React.useState<SectionDeviceSheetMode>(null);
@@ -4122,6 +4128,7 @@ export function RoomsDashboard({
     if (!canEditActiveHaRoom) {
       return;
     }
+    setIsSectionInteractionGuideOpen(false);
     setIsSectionTargetSelectionMode(true);
     setSectionActionError(null);
   }, [canEditActiveHaRoom]);
@@ -5952,6 +5959,17 @@ export function RoomsDashboard({
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_28%,rgba(0,0,0,0.18))]" />
         <div className="relative z-10 flex h-full min-h-0 w-full flex-col p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:p-6 lg:p-8">
           <header className="relative flex shrink-0 items-start justify-center">
+            {!isSectionTargetSelectionMode ? (
+              <button
+                type="button"
+                onClick={() => setIsSectionInteractionGuideOpen((current) => !current)}
+                aria-label={isSectionInteractionGuideOpen ? 'Nascondi guida gestione dispositivi' : 'Mostra guida gestione dispositivi'}
+                aria-expanded={isSectionInteractionGuideOpen}
+                className="absolute left-0 top-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/58 transition-all hover:bg-white/10 hover:text-white active:scale-95"
+              >
+                <CircleHelp size={17} />
+              </button>
+            ) : null}
             <div className="min-w-0 text-center">
               <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.06] text-white/82 shadow-sm backdrop-blur-xl">
                 {isSectionTargetSelectionMode ? <Pencil size={20} /> : <Layers size={20} />}
@@ -5978,6 +5996,21 @@ export function RoomsDashboard({
               Fine
             </button>
           </header>
+
+          <AnimatePresence initial={false}>
+            {!isSectionTargetSelectionMode && isSectionInteractionGuideOpen ? (
+              <motion.div
+                key="room-section-interaction-guide"
+                initial={prefersReducedMotion ? false : { opacity: 0, y: -8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -6, height: 0 }}
+                transition={{ duration: prefersReducedMotion ? 0.01 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className="mt-5 shrink-0 overflow-hidden"
+              >
+                <RoomSectionInteractionGuide onDismiss={() => setIsSectionInteractionGuideOpen(false)} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
           {isSectionTargetSelectionMode ? (
             <div className="mt-8 flex shrink-0 items-start justify-center gap-3 sm:gap-4">
@@ -6690,7 +6723,7 @@ export function RoomsDashboard({
               Nessuna stanza configurata
             </h1>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-[color:var(--ui-text-secondary)]">
-              DomusOS mostrerà qui soltanto le aree realmente disponibili nella tua casa Home Assistant.
+              Domus UI mostrerà qui soltanto le aree realmente disponibili nella tua casa Home Assistant.
             </p>
             <p className="mt-5 text-xs font-medium text-[color:var(--ui-text-tertiary)]">
               Crea o assegna le aree da Home Assistant, quindi torna qui per visualizzarle.

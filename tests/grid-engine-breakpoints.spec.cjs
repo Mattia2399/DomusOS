@@ -116,16 +116,8 @@ async function dragBy(page, locator, dx, dy) {
 
 async function enterEditMode(page) {
   const directEditButton = page.locator('button[aria-label="Toggle edit mode"]:visible').first();
-  await page
-    .locator('button[aria-label="Toggle edit mode"], button[aria-label="Apri altre sezioni"]')
-    .first()
-    .waitFor({ state: 'visible' });
-  if (await directEditButton.count()) {
-    await directEditButton.click();
-  } else {
-    await page.getByLabel('Apri altre sezioni').click();
-    await page.locator('button[aria-label="Toggle edit mode"]:visible').first().click();
-  }
+  await directEditButton.waitFor({ state: 'visible' });
+  await directEditButton.click();
   await page.getByRole('button', { name: 'Attiva', exact: true }).click();
   await page.waitForSelector('.sections-grid.is-editing .react-grid-item');
 }

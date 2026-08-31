@@ -18,7 +18,7 @@ const MOCK_SAFE_CONFIGURATION_API_TYPES = new Set([
 /**
  * Persisting a card that references a mock entity is configuration, not an
  * entity command. Operational API requests remain blocked, while the shared
- * DomusOS document may safely describe mock cards.
+ * Domus UI document may safely describe mock cards.
  */
 export function shouldBlockMockEntityApiRequest(
   message: Record<string, unknown>,

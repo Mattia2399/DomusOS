@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-beta.12 — 2026-08-31
+
+### Modificato
+
+- il nome pubblico del prodotto diventa **Domus UI**, più aderente al ruolo di
+  dashboard e builder per Home Assistant;
+- repository pubblico rinominato in `Mattia2399/DomusUI`, con redirect GitHub
+  mantenuto dal precedente indirizzo;
+- titolo del pannello, Config Flow, HACS, onboarding, documentazione e messaggi
+  utente uniformati al nuovo marchio;
+- `domusos` resta il dominio tecnico compatibile per integrazione, storage,
+  URL interni e pacchetto HACS; nessun layout esistente deve essere migrato;
+- preparate icone 256/512 px e documentazione per Home Assistant Brands.
+
 ## 0.1.0-beta.11 — 2026-08-28
 
 ### Migliorato

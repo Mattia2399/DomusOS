@@ -1114,26 +1114,23 @@ function PortalCard({ portal, onNavigate = navigateTo }) {
 
 function CreateDashboardPlaceholder() {
   return (
-    <motion.button
-      type="button"
+    <motion.div
       variants={cardVariants}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={() => {
-        console.log('Create new dashboard');
-      }}
-      className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] p-6 text-center backdrop-blur-3xl transition-colors duration-300 hover:bg-[color:var(--ui-fill-secondary)]"
+      className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-3xl border border-dashed border-[color:var(--ui-border-strong)] bg-[color:var(--ui-fill-tertiary)] p-6 text-center backdrop-blur-3xl"
     >
       <div className="flex flex-col items-center gap-3">
-        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)] transition-colors duration-300 group-hover:bg-[color:var(--ui-fill-secondary)] group-hover:text-[color:var(--ui-text-primary)]">
+        <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-tertiary)] text-[color:var(--ui-text-secondary)]">
           <Plus className="h-6 w-6" />
         </span>
         <div>
           <p className="text-lg font-semibold text-[color:var(--ui-text-primary)]">Nuova Plancia</p>
-          <p className="mt-1 text-sm text-[color:var(--ui-text-tertiary)]">Crea una dashboard personalizzata</p>
+          <p className="mt-1 text-sm text-[color:var(--ui-text-tertiary)]">Dashboard personalizzate in arrivo</p>
+          <span className="mt-3 inline-flex rounded-full border border-[color:var(--ui-border)] bg-[color:var(--ui-fill-secondary)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-text-secondary)]">
+            Prossimamente
+          </span>
         </div>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
@@ -3424,7 +3421,7 @@ function ComingSoonPortalView({ view, onNavigate = navigateTo }) {
   return (
     <AppWorkspaceShell
       appName={title}
-      appSubtitle={portal?.description ?? 'Plancia DomusOS'}
+      appSubtitle={portal?.description ?? 'Plancia Domus UI'}
       appIcon={PortalIcon}
       accentColor={view === 'pool' ? '#22d3ee' : '#38bdf8'}
       navigationItems={COMING_SOON_WORKSPACE_NAVIGATION}

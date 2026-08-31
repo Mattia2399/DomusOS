@@ -870,7 +870,12 @@ function SecurityCameraSection({
 
       <div className={cn('pr-0 sm:pr-1 custom-scrollbar', isDedicatedPage ? 'overflow-visible px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:px-8 sm:py-6' : 'mt-4 max-h-none overflow-visible sm:max-h-[28rem] sm:overflow-y-auto')}>
         {visibleCameras.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
+          <div
+            className={cn(
+              'grid grid-cols-2 gap-3',
+              isDedicatedPage && 'lg:grid-cols-3 2xl:grid-cols-4',
+            )}
+          >
             {visibleCameras.map((camera) => (
               <div
                 key={camera.entityId}

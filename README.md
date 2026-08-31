@@ -1,18 +1,30 @@
 <div align="center">
-  <img src="brand/icon.png" width="112" alt="Logo DomusOS" />
-  <h1>DomusOS</h1>
+  <img src="brand/icon.png" width="112" alt="Logo Domus UI" />
+  <h1>Domus UI</h1>
   <p><strong>Una nuova esperienza Home Assistant, progettata per desktop, tablet e smartphone.</strong></p>
   <p>Dashboard reattiva, builder visuale e controlli avanzati con un'interfaccia coerente e premium.</p>
 
-  [![Release](https://img.shields.io/github/v/release/Mattia2399/DomusOS?include_prereleases&style=flat-square)](https://github.com/Mattia2399/DomusOS/releases)
-  [![Release gate](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusOS/release-gate.yml?branch=main&label=release%20gate&style=flat-square)](https://github.com/Mattia2399/DomusOS/actions/workflows/release-gate.yml)
-  [![HACS validation](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusOS/hacs.yml?branch=main&label=HACS&style=flat-square)](https://github.com/Mattia2399/DomusOS/actions/workflows/hacs.yml)
+  [![Release](https://img.shields.io/github/v/release/Mattia2399/DomusUI?include_prereleases&style=flat-square)](https://github.com/Mattia2399/DomusUI/releases)
+  [![Release gate](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/release-gate.yml?branch=main&label=release%20gate&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/release-gate.yml)
+  [![HACS validation](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/hacs.yml?branch=main&label=HACS&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/hacs.yml)
   ![Beta](https://img.shields.io/badge/status-public%20beta-f5a623?style=flat-square)
+  ![Responsive](https://img.shields.io/badge/desktop%20%C2%B7%20tablet%20%C2%B7%20mobile-responsive-1473e6?style=flat-square)
+  [![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f855a?style=flat-square)](LICENSE)
 </div>
 
-![DomusOS su desktop, tablet e smartphone](docs/images/domusos-showcase.png)
+![Domus UI su desktop, tablet e smartphone](docs/images/domusos-showcase.png)
 
-## Perché DomusOS
+## La casa, in un'unica esperienza
+
+| 🧩 Builder visuale | 📱 Layout realmente responsive | 🏠 Integrato in Home Assistant |
+| --- | --- | --- |
+| Card, stack, drag and drop, dimensioni e configurazione senza scrivere YAML. | Griglie dedicate a desktop, tablet e smartphone, sincronizzate nella stessa casa. | Installazione HACS, sessione HA, permessi e comandi autorizzati dal server. |
+
+| 🔒 Sicurezza esplicita | 🎨 Esperienza coerente | 🛠️ Diagnostica e ripristino |
+| --- | --- | --- |
+| Demo isolata, segreti esclusi dai layout e azioni sensibili protette. | Temi chiari e scuri, superfici glass e controlli ottimizzati per touch. | Versioni del layout, backup sanitizzati, rollback e report senza dati personali. |
+
+## Perché Domus UI
 
 - Layout condiviso dalla casa e sincronizzato tra i dispositivi.
 - Reset autorevole condiviso: nessun browser puo ripristinare accidentalmente un layout eliminato usando una cache precedente.
@@ -24,20 +36,20 @@
 - Permessi centralizzati: Home Assistant resta l'autorità per identità, ruoli e comandi.
 
 <div align="center">
-  <img src="docs/images/domusos-mobile.jpg" width="390" alt="DomusOS su smartphone" />
+  <img src="docs/images/domusos-mobile.jpg" width="390" alt="Domus UI su smartphone" />
 </div>
 
 ## Installazione con HACS
 
 HACS è l'unico metodo di installazione distribuito per la beta. La futura app ufficiale sarà il secondo canale supportato.
 
-[![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusOS&category=integration)
+[![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
 
 1. Installa e configura [HACS](https://www.hacs.xyz/) in Home Assistant.
-2. Apri il collegamento qui sopra oppure aggiungi `Mattia2399/DomusOS` come repository personalizzato di tipo **Integration**.
-3. Scarica **DomusOS** e riavvia Home Assistant.
+2. Apri il collegamento qui sopra oppure aggiungi `Mattia2399/DomusUI` come repository personalizzato di tipo **Integration**.
+3. Scarica **Domus UI** e riavvia Home Assistant.
 4. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
-5. Cerca **DomusOS**, conferma e apri la nuova voce nella barra laterale.
+5. Cerca **Domus UI**, conferma e apri la nuova voce nella barra laterale.
 
 Non servono modifiche a `configuration.yaml`, token manuali o copie dentro `/www`. Consulta la [guida completa](docs/installation-beta.md) per aggiornamento, rollback e risoluzione problemi.
 
@@ -75,7 +87,7 @@ Sensor, Light, Switch, Climate, Alarm, Lock, Cover, Camera, Media Player, Vacuum
 - Le modifiche strutturali sono riservate a Owner/Admin e funzionano in modalità fail-closed.
 - I comandi finali vengono comunque autorizzati dal server Home Assistant.
 - La conferma dispositivo WebAuthn è una protezione locale, non un secondo fattore server certificato.
-- DomusOS beta non è un sistema di allarme, sicurezza o safety certificato.
+- Domus UI beta non è un sistema di allarme, sicurezza o safety certificato.
 
 Leggi [Sicurezza e privacy](docs/security-and-privacy.md) e la [checklist beta](docs/security-beta-checklist.md) prima dell'uso su una casa reale.
 
@@ -107,6 +119,6 @@ Il packaging produce sia l'archivio diagnostico della web app sia `release-artif
 
 ## Licenza e supporto
 
-DomusOS è distribuito con licenza [GNU GPL-3.0](LICENSE). Può essere usato, studiato, modificato e ridistribuito nel rispetto della licenza. L'app ufficiale, eventuali servizi ospitati e il supporto commerciale potranno essere offerti separatamente.
+Domus UI è distribuito con licenza [GNU GPL-3.0](LICENSE). Può essere usato, studiato, modificato e ridistribuito nel rispetto della licenza. L'app ufficiale, eventuali servizi ospitati e il supporto commerciale potranno essere offerti separatamente.
 
 Per contribuire consulta [CONTRIBUTING.md](CONTRIBUTING.md). Le vulnerabilità devono essere inviate tramite il canale privato descritto in [SECURITY.md](SECURITY.md), mai tramite issue pubbliche.

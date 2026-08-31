@@ -1,4 +1,4 @@
-"""Config flow for DomusOS."""
+"""Config flow for Domus UI."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from homeassistant import config_entries
 from .const import DOMAIN
 
 
-class DomusOSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Create the single DomusOS configuration entry."""
+class DomusUIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Create the single Domus UI configuration entry."""
 
     VERSION = 1
 
@@ -22,6 +22,6 @@ class DomusOSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
-            return self.async_create_entry(title="DomusOS", data={})
+            return self.async_create_entry(title="Domus UI", data={})
 
         return self.async_show_form(step_id="user")

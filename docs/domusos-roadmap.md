@@ -1,10 +1,10 @@
-# DomusOS roadmap
+# Domus UI roadmap
 
-Aggiornata: 2026-08-28
+Aggiornata: 2026-08-31
 
 ## Obiettivo
 
-Portare DomusOS da beta avanzata a prodotto distribuibile e vendibile, mantenendo la qualita visiva attuale ma rendendo affidabili sicurezza, connessione Home Assistant, griglia responsive, persistenza e flussi di comando.
+Portare Domus UI da beta avanzata a prodotto distribuibile e vendibile, mantenendo la qualita visiva attuale ma rendendo affidabili sicurezza, connessione Home Assistant, griglia responsive, persistenza e flussi di comando.
 
 La regola fino alla chiusura dei gate P0 e': non aggiungere nuove famiglie di card. Prima consolidiamo quelle gia presenti e l'esperienza completa di `/home`.
 
@@ -61,7 +61,7 @@ I tre test unitari rossi riguardano:
 | P5 - Editor e griglia | Completato per lo scope beta | Le tre varianti pubbliche, persistenza, cronologia e collaudo geometrico finale sono verdi; le ulteriori migrazioni container-owned restano sospese e non bloccano la beta. |
 | P6 - Architettura e performance | In corso avanzato | Route secondarie, Profilo, Builder, pannelli contestuali e overlay rari sono caricati su richiesta; la separazione Profilo/Impostazioni e completata e il pannello ibrido e stato eliminato. Restano gli orchestratori della griglia e i warning di budget complessivo/CSS. |
 | P7 - Accessibilita e design system | Completato per la baseline beta | Lingua e metadati, focus, target touch primari, reduced motion, contrasto semantico, annunci live e modifica canvas/stack da tastiera sono coperti; la riduzione ulteriore del CSS arbitrario prosegue come manutenzione del design system. |
-| P8 - DomusOS | In corso | P8.1 Centro Attenzione e P8.2 inventario Dispositivi health-aware implementati; aggiunto il blocco P8.3 di rifinitura navigazione, notifiche ed Edit Mode prima della prossima release. |
+| P8 - Domus UI | In corso | P8.1 Centro Attenzione e P8.2 inventario Dispositivi health-aware implementati; aggiunto il blocco P8.3 di rifinitura navigazione, notifiche ed Edit Mode prima della prossima release. |
 | P9 - Distribuzione | In corso finale | Integrazione e pacchetto HACS, workflow release, README con screenshot e stato funzionalità completati; mancano collaudo HACS reale, licenza, canale feedback e materiali commerciali definitivi. |
 
 ### Gate tecnico verificato
@@ -184,7 +184,7 @@ Priorita: P0.
 
 Stato: completato per lo scope beta disponibile. Gate automatico riconfermato il 2026-07-22 con `307/307` test unitari, `28/28` scenari Playwright, type-check e build di produzione superati. Il collaudo HA reale ha verificato Light, Switch, Media Player e perdita fisica della connessione; Climate avanzato, Cover e Vacuum restano nella matrice hardware rinviata per assenza di entita reali compatibili. La macchina a stati condivisa `connected / reconnecting / offline / reauth_required / disconnected_by_user` dispone di watchdog WebSocket e panel bridge, ultimo snapshot conservato come dato non aggiornato, UI di recupero distinta e blocco centrale dei comandi quando la connessione reale non e affidabile. `useDeviceCommandCoordinator` gestisce `sending / awaiting_confirmation / confirmed / error / rollback`, timeout, perdita connessione e sostituzione sicura dei comandi concorrenti. Il coordinatore copre Light, Switch, Climate, Cover, Alarm, Lock, Media Player e Vacuum. Le regolazioni continue separano l'anteprima locale dal valore confermato; i comandi momentanei senza stato osservabile, come flash, cambio traccia, locate e PTZ, vengono confermati esplicitamente dalla risposta del servizio. Media e Vacuum espongono un feedback di attesa discreto. Gli script scena mantengono il proprio osservatore di esecuzione, mentre i servizi scena usano gia la risposta esplicita del servizio.
 
-Audit dati Demo/Reale completato il 2026-08-28: fixture iniziali e catalogo Demo sono centralizzati e non vengono caricati nel runtime reale; una casa senza layout o registri HA resta vuota, Rooms non inventa stanze, vecchie card `mock` vengono migrate alla sorgente `ha` e i fallback locali di Climate, Alarm, Light, Camera, Cover e Vacuum sono confinati alla Demo esplicita. Security marca i soli eventi dimostrativi e Consumi dichiara chiaramente le parti ancora in anteprima. L'affidabilita autonoma di Irrigazione resta assegnata al blocco post-beta `DomusOS Irrigation Core` con backend autorevole.
+Audit dati Demo/Reale completato il 2026-08-28: fixture iniziali e catalogo Demo sono centralizzati e non vengono caricati nel runtime reale; una casa senza layout o registri HA resta vuota, Rooms non inventa stanze, vecchie card `mock` vengono migrate alla sorgente `ha` e i fallback locali di Climate, Alarm, Light, Camera, Cover e Vacuum sono confinati alla Demo esplicita. Security marca i soli eventi dimostrativi e Consumi dichiara chiaramente le parti ancora in anteprima. L'affidabilita autonoma di Irrigazione resta assegnata al blocco post-beta `Domus Core Irrigation` con backend autorevole.
 
 Azioni:
 
@@ -420,7 +420,7 @@ Done quando:
 - i temi superano l'audit contrasto concordato;
 - le card condividono lo stesso linguaggio visivo senza duplicazioni CSS evitabili.
 
-### P8 - Livello DomusOS
+### P8 - Livello Domus UI
 
 Priorita: P1 dopo la stabilizzazione.
 
@@ -482,6 +482,24 @@ Done quando:
 ### P9 - Distribuzione e supporto commerciale
 
 Priorita: P1/P2.
+
+#### Gate identita e presentazione pubblica
+
+Stato: nome pubblico scelto il 31 agosto 2026; submission Home Assistant Brands aperta e in attesa di revisione.
+
+Architettura del marchio:
+
+- **Domus UI**: prodotto pubblico attuale, dashboard e builder per Home Assistant;
+- **Domus Core**: nome riservato al futuro motore server-side per scheduler, watchdog, automazioni e servizi autorevoli;
+- **Domus OS**: nome riservato a un eventuale ecosistema autonomo futuro e non utilizzabile finché il prodotto non costituisce realmente una piattaforma operativa completa.
+
+- [x] nome pubblico definitivo: **Domus UI**, aderente al ruolo di interfaccia e builder senza presentare il prodotto come un sistema operativo;
+- mantenere inizialmente `domusos` come dominio tecnico Home Assistant e namespace di storage, anche se cambia il nome visuale, per non interrompere installazioni, aggiornamenti e configurazioni esistenti;
+- [x] completate icone PNG 256/512 px nel pacchetto e aperta la [submission Home Assistant Brands](https://github.com/home-assistant/brands/pull/11076) per la visualizzazione in HACS;
+- [x] aggiornati nome, descrizione e topic GitHub usati dalla scheda HACS;
+- [x] completato README con hero, screenshot responsive, badge, matrice funzionale e limiti della beta;
+- eseguire un controllo visuale finale Light/Dark sulle route principali a 390, 820, 1180 e 1920 px;
+- non lasciare controlli interattivi senza un comportamento reale: rimuoverli oppure marcarli chiaramente come `Prossimamente`.
 
 Stato: la diagnostica per il supporto è ora scaricabile esplicitamente da `Impostazioni > Avanzate`. Il report contiene esclusivamente versione applicativa, modalità runtime, stato connessione, viewport e conteggi aggregati di registri, domini, widget e Device Health. Non legge il localStorage e non include URL Home Assistant, token, PIN, credential WebAuthn, identificativi, nomi, stanze, coordinate o valori delle entità. Il 25 agosto 2026 sono stati aggiunti integrazione HACS con Config Flow, pacchetto `domusos.zip`, validazione dedicata e workflow di pubblicazione GitHub Release. Il panel bridge manuale resta solo un percorso legacy interno.
 
@@ -714,14 +732,14 @@ Done quando:
 - test automatici ed E2E coprono creazione, uso, scadenza, revoca, replay,
   offline e permessi insufficienti.
 
-### Aggiornamento post-beta prioritario - DomusOS Irrigation Core
+### Aggiornamento post-beta prioritario - Domus Core Irrigation
 
 Stato: pianificato come primo intervento strutturale dopo la beta pubblica.
 La UI Irrigazione, la configurazione condivisa, il calendario, i consumi e i
 comandi supervisionati sono disponibili nella beta. La programmazione autonoma
 non viene ancora presentata come motore affidabile per utilizzo non presidiato:
 le automazioni generate e i timer del browser verranno sostituiti da un'unica
-autorita residente nell'integrazione HACS DomusOS.
+autorita residente nell'integrazione HACS Domus UI.
 
 Architettura prevista:
 
@@ -758,7 +776,7 @@ Architettura prevista:
 Done quando:
 
 - nessun timer operativo dipende da una pagina browser aperta;
-- chiudere DomusOS o riavviare Home Assistant non puo lasciare una valvola
+- chiudere Domus UI o riavviare Home Assistant non puo lasciare una valvola
   aperta senza watchdog;
 - programmazione, pausa globale e arresto di emergenza sono autorevoli e
   condivisi tra tutti i dispositivi;
@@ -768,23 +786,23 @@ Done quando:
 - la matrice di collaudo hardware e i test automatici di sicurezza risultano
   verdi prima di dichiarare affidabile l'uso non presidiato.
 
-### Aggiornamento post-beta - DomusOS Security Core
+### Aggiornamento post-beta - Domus Core Security
 
 Stato: pianificato dopo la prima beta pubblica; non blocca il rilascio iniziale.
 
 La beta continua a usare le entita `alarm_control_panel` e i permessi di Home
-Assistant come autorita effettiva. DomusOS non viene presentato come un
+Assistant come autorita effettiva. Domus UI non viene presentato come un
 sistema di allarme autonomo o certificato e non dipende da Alarmo o da altre
 integrazioni non ufficiali per offrire le funzioni attuali.
 
 L'evoluzione futura prevede un motore locale sempre attivo, posseduto e
 manutenuto dal progetto, distribuito insieme al frontend in una sola
-installazione DomusOS. Non sara implementato nel solo browser e non
+installazione Domus UI. Non sara implementato nel solo browser e non
 richiedera all'utente di installare separatamente una custom integration.
 
 Intervento futuro:
 
-- creare un `DomusOS Core` persistente per modalita, zone, ritardi,
+- creare un `Domus Core` persistente per modalita, zone, ritardi,
   esclusioni temporanee, stato di allarme e ripristino dopo riavvio;
 - ricevere da Home Assistant stati ed eventi di sensori, serrature, sirene e
   altri dispositivi, mantenendo nel Core la macchina a stati e le decisioni;
@@ -811,7 +829,7 @@ Done quando:
 
 - il motore continua a funzionare senza una pagina browser aperta e recupera
   deterministicamente lo stato dopo un riavvio;
-- l'utente installa un solo prodotto DomusOS senza YAML o componenti
+- l'utente installa un solo prodotto Domus UI senza YAML o componenti
   separati;
 - nessun comando o segreto sensibile dipende dal frontend come autorita;
 - disconnessioni, errori e dati mancanti non producono falsi stati di
@@ -843,7 +861,7 @@ Comportamento richiesto:
 - mostrare una schermata dedicata, ad esempio: `Abbiamo trovato una casa su questo server`;
 - indicare in modo chiaro account, server e riepilogo iniziale disponibili, senza mostrare token o altri segreti;
 - consentire di confermare la casa rilevata oppure cambiare connessione;
-- dopo la conferma verificare prima lo storage condiviso: una casa nuova prosegue con analisi, scelta layout e organizzazione, mentre una casa DomusOS esistente usa il percorso rapido;
+- dopo la conferma verificare prima lo storage condiviso: una casa nuova prosegue con analisi, scelta layout e organizzazione, mentre una casa Domus UI esistente usa il percorso rapido;
 - mostrare la guida della Home soltanto dopo il completamento effettivo del setup;
 - distinguere primo accesso, riconnessione e installazione gia configurata, senza riaprire passaggi non pertinenti.
 
@@ -860,7 +878,7 @@ Risultato:
 
 Aggiornamento 26 agosto 2026: anche un client con origine nuova, ad esempio
 `localhost` durante lo sviluppo, interroga ora la configurazione condivisa subito
-dopo l'autenticazione. Se trova un documento DomusOS valido mostra revisione,
+dopo l'autenticazione. Se trova un documento Domus UI valido mostra revisione,
 data, sezioni e card, quindi permette di ereditare direttamente la casa senza
 ripetere layout e organizzazione. Una risposta assente avvia il setup completo;
 una risposta non verificabile o non valida blocca invece il percorso per evitare
@@ -939,6 +957,32 @@ Risultato Greeting e meteo:
 - se Home Assistant non restituisce previsioni, card e pannello mostrano `Previsioni non disponibili` senza inventare giorni, temperature o probabilita di pioggia;
 - aggiunti test dedicati alla separazione Demo/Reale, alla Greeting e agli stati meteo non disponibili.
 
+#### Pannello contestuale Meteo - moduli ambientali evoluti
+
+Stato: pianificato post-beta. Il riferimento visuale ricevuto il 28 agosto 2026 introduce una composizione modulare di card ambientali compatte, da reinterpretare con il design system Domus UI e non da replicare come immagine statica.
+
+Moduli previsti:
+
+- andamento orario della temperatura, con curva, ore e valori allineati senza spostamenti di layout;
+- umidita con livello visivo morbido e classificazione testuale accessibile;
+- pressione atmosferica con indicatore semicircolare e valore in `hPa`;
+- indice UV con fascia cromatica, posizione corrente e livello di rischio espresso anche tramite testo;
+- vento con bussola, direzione cardinale, velocita e unita configurata da Home Assistant;
+- alba e tramonto con arco solare, orari locali e posizione del sole coerente con l'ora corrente.
+
+Regole di implementazione:
+
+- usare esclusivamente dati reali disponibili da `weather.*`, dalle entita `sensor.*` correlate e da `sun.sun`; ogni modulo non supportato viene nascosto o mostra uno stato non configurato esplicito, senza valori inventati;
+- consentire nel pannello di configurazione l'associazione automatica tramite Device/Entity Registry e la selezione manuale delle sole sorgenti mancanti;
+- mantenere una gerarchia responsive: temperatura e arco solare possono occupare tutta la larghezza, mentre i moduli quadrati si dispongono in una griglia adattiva;
+- usare container query per densita, tipografia e quantita di dettagli, evitando varianti dipendenti soltanto dal breakpoint della viewport;
+- rispettare tema, contrasto, `prefers-reduced-motion`, unita HA, localizzazione e formati orari dell'utente;
+- rendere grafici e indicatori comprensibili anche senza colore tramite etichette, valori e descrizioni accessibili;
+- condividere modello dati e componenti con una futura `WeatherCard` autonoma, evitando duplicazioni con Greeting e pannello contestuale;
+- aggiungere skeleton fedeli, stati loading/stale/offline, test Demo/Reale e test per capability parziali.
+
+Priorita: P1 post-beta, dopo la stabilizzazione della prima distribuzione pubblica.
+
 #### Centro notifiche post-beta
 
 Stato: rinviato dopo la prima beta; non blocca la distribuzione iniziale.
@@ -1014,6 +1058,6 @@ La beta puo essere distribuita a pagamento quando sono soddisfatti tutti questi 
 5. Editor, griglia e persistenza.
 6. Architettura, performance e accessibilita.
 7. Correzione onboarding iframe/panel, route non modificabili e rifinitura Greeting/meteo; snackbar essenziali nella beta e centro notifiche completo post-beta.
-8. Funzioni DomusOS.
+8. Funzioni Domus UI.
 9. Distribuzione e crescita commerciale.
 10. Calendar, Mappa e Liste dopo la specifica tecnica e la stabilizzazione beta.

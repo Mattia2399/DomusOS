@@ -2,7 +2,7 @@
 
 Aggiornata: 2026-08-25
 
-HACS è il solo canale di installazione distribuito per DomusOS beta. La futura app ufficiale sarà il secondo metodo supportato. Le precedenti installazioni manuali tramite `/www` e `panel_custom` sono considerate legacy e non fanno parte del percorso pubblico.
+HACS è il solo canale di installazione distribuito per Domus UI beta. La futura app ufficiale sarà il secondo metodo supportato. Le precedenti installazioni manuali tramite `/www` e `panel_custom` sono considerate legacy e non fanno parte del percorso pubblico.
 
 ## Requisiti
 
@@ -10,27 +10,27 @@ HACS è il solo canale di installazione distribuito per DomusOS beta. La futura 
 - HACS configurato;
 - accesso Owner/Admin per installare e aggiungere l'integrazione;
 - backup recente della configurazione Home Assistant;
-- una GitHub Release di DomusOS contenente `domusos.zip`.
+- una GitHub Release di Domus UI contenente `domusos.zip`.
 
 ## Installazione
 
 1. Apri il repository direttamente in HACS:
 
-   [![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusOS&category=integration)
+   [![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
 
 2. Se il collegamento non importa il repository, in HACS apri il menu dei repository personalizzati e aggiungi:
 
    ```text
-   https://github.com/Mattia2399/DomusOS
+   https://github.com/Mattia2399/DomusUI
    ```
 
    Categoria: `Integration`.
 
-3. Scarica l'ultima release di **DomusOS**.
+3. Scarica l'ultima release di **Domus UI**.
 4. Riavvia Home Assistant.
 5. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
-6. Cerca **DomusOS** e conferma il modulo.
-7. Apri **DomusOS** dalla barra laterale e completa il primo avvio.
+6. Cerca **Domus UI** e conferma il modulo.
+7. Apri **Domus UI** dalla barra laterale e completa il primo avvio.
 
 L'integrazione registra automaticamente il pannello e i file frontend. Non devi modificare `configuration.yaml`, creare token o copiare file in `/config/www`.
 
@@ -44,7 +44,7 @@ L'integrazione registra automaticamente il pannello e i file frontend. Non devi 
 
 ## Aggiornamento
 
-1. Crea un backup dalla sezione DomusOS e un backup Home Assistant.
+1. Crea un backup dalla sezione Domus UI e un backup Home Assistant.
 2. Installa l'aggiornamento proposto da HACS.
 3. Riavvia Home Assistant se HACS lo richiede.
 4. Ricarica completamente il browser o chiudi e riapri l'app Home Assistant.
@@ -54,13 +54,13 @@ HACS usa le GitHub Release pubblicate, non i soli tag Git. Il workflow `Publish 
 
 ## Rollback
 
-Da HACS apri DomusOS, seleziona una delle release precedenti e reinstalla. Dopo il riavvio verifica che la versione del layout sia ancora leggibile. Il rollback dell'integrazione non sostituisce il ripristino di una versione layout.
+Da HACS apri Domus UI, seleziona una delle release precedenti e reinstalla. Dopo il riavvio verifica che la versione del layout sia ancora leggibile. Il rollback dell'integrazione non sostituisce il ripristino di una versione layout.
 
 Consulta anche [Aggiornamento e rollback](update-and-rollback.md).
 
 ## Risoluzione problemi
 
-### DomusOS non appare tra le integrazioni
+### Domus UI non appare tra le integrazioni
 
 - riavvia Home Assistant dopo l'installazione HACS;
 - svuota la cache del browser;

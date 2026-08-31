@@ -1,6 +1,6 @@
-# Contribuire a DomusOS
+# Contribuire a Domus UI
 
-Grazie per voler migliorare DomusOS. Prima di iniziare una modifica ampia, apri una discussione o una issue per concordare obiettivo e compatibilità con la roadmap.
+Grazie per voler migliorare Domus UI. Prima di iniziare una modifica ampia, apri una discussione o una issue per concordare obiettivo e compatibilità con la roadmap.
 
 ## Preparazione
 

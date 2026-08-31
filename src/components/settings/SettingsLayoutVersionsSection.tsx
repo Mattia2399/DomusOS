@@ -142,7 +142,7 @@ export function SettingsLayoutVersionsSection({
           {status === 'offline'
             ? 'Riconnetti Home Assistant per recuperare le versioni del layout.'
             : status === 'unsupported'
-              ? 'Aggiorna il pannello DomusOS per utilizzare questa funzione.'
+              ? 'Aggiorna il pannello Domus UI per utilizzare questa funzione.'
               : 'Home Assistant non ha restituito un archivio valido.'}
         </p>
         <button
