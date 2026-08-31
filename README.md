@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="brand/icon.png" width="112" alt="Logo Domus UI" />
+  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/brand/icon.png" width="112" alt="Logo Domus UI" />
   <h1>Domus UI</h1>
   <p><strong>Una nuova esperienza Home Assistant, progettata per desktop, tablet e smartphone.</strong></p>
   <p>Dashboard reattiva, builder visuale e controlli avanzati con un'interfaccia coerente e premium.</p>
@@ -12,7 +12,7 @@
   [![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f855a?style=flat-square)](LICENSE)
 </div>
 
-![Domus UI su desktop, tablet e smartphone](docs/images/domusos-showcase.png)
+![Domus UI su desktop, tablet e smartphone](https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-showcase.png)
 
 ## La casa, in un'unica esperienza
 
@@ -36,7 +36,7 @@
 - Permessi centralizzati: Home Assistant resta l'autorità per identità, ruoli e comandi.
 
 <div align="center">
-  <img src="docs/images/domusos-mobile.jpg" width="390" alt="Domus UI su smartphone" />
+  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-mobile.jpg" width="390" alt="Domus UI su smartphone" />
 </div>
 
 ## Installazione con HACS
