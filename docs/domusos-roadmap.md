@@ -485,7 +485,7 @@ Priorita: P1/P2.
 
 #### Gate identita e presentazione pubblica
 
-Stato: nome pubblico scelto il 31 agosto 2026; submission Home Assistant Brands aperta e in attesa di revisione.
+Stato: nome pubblico scelto il 31 agosto 2026; asset locali conformi alla policy Home Assistant 2026.3. La submission centralizzata e stata chiusa perché non e più richiesta per le custom integration.
 
 Architettura del marchio:
 
@@ -495,7 +495,7 @@ Architettura del marchio:
 
 - [x] nome pubblico definitivo: **Domus UI**, aderente al ruolo di interfaccia e builder senza presentare il prodotto come un sistema operativo;
 - mantenere inizialmente `domusos` come dominio tecnico Home Assistant e namespace di storage, anche se cambia il nome visuale, per non interrompere installazioni, aggiornamenti e configurazioni esistenti;
-- [x] completate icone PNG 256/512 px nel pacchetto e aperta la [submission Home Assistant Brands](https://github.com/home-assistant/brands/pull/11076) per la visualizzazione in HACS;
+- [x] completate icone PNG 256/512 px nel pacchetto; la [submission di verifica](https://github.com/home-assistant/brands/pull/11076) ha confermato che da Home Assistant 2026.3 le custom integration forniscono direttamente i propri asset;
 - [x] aggiornati nome, descrizione e topic GitHub usati dalla scheda HACS;
 - [x] completato README con hero, screenshot responsive, badge, matrice funzionale e limiti della beta;
 - eseguire un controllo visuale finale Light/Dark sulle route principali a 390, 820, 1180 e 1920 px;

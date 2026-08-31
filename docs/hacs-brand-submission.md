@@ -1,9 +1,9 @@
-# Icona HACS e Home Assistant Brands
+# Icona HACS e Home Assistant
 
-La scheda HACS usa ancora il catalogo centralizzato Home Assistant Brands per
-mostrare l'icona delle custom integration. Gli asset inclusi direttamente in
-`custom_components/domusos/brand` restano utili per Home Assistant recente, ma
-non sostituiscono la submission al catalogo per tutti i client HACS.
+Da Home Assistant 2026.3 le custom integration possono distribuire direttamente
+i propri asset del brand. Domus UI include quindi le icone in
+`custom_components/domusos/brand`, senza dipendere dal catalogo centralizzato
+Home Assistant Brands.
 
 ## Asset pronti
 
@@ -18,20 +18,20 @@ Il comando che rigenera gli asset dal vettoriale sorgente e:
 node scripts/generate-brand-assets.mjs
 ```
 
-## Submission esterna
+## Verifica della policy
 
-Pull request aperta il 31 agosto 2026:
+La pull request di verifica aperta il 31 agosto 2026 e stata chiusa
+automaticamente perché il repository non accetta più icone per nuove custom
+integration:
 
 - <https://github.com/home-assistant/brands/pull/11076>
 
-Procedura utilizzata:
+La sorgente ufficiale indicata dal bot Home Assistant e:
 
-1. creare un fork di `home-assistant/brands`;
-2. aggiungere `icon.png` e `icon@2x.png` in
-   `custom_integrations/domusos/`;
-3. aprire una pull request seguendo il template del repository;
-4. attendere merge e propagazione della cache del CDN;
-5. verificare `https://brands.home-assistant.io/domusos/icon.png`.
+- <https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api>
+
+Per verificare una release e sufficiente controllare che `domusos.zip`
+contenga entrambi gli asset nella cartella `brand/`.
 
 Il nome della cartella deve restare uguale al dominio tecnico dichiarato nel
 manifest (`domusos`), anche se il nome visualizzato dall'integrazione cambia.
