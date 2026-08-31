@@ -419,6 +419,7 @@ function prefetchDashboardWorkspace(path: string) {
   if (normalizedPath.startsWith('/automations')) return void loadAutomationsBuilder();
   if (normalizedPath.startsWith('/appgallery')) return void loadAppGallery();
   if (normalizedPath.startsWith('/settings')) return void loadSettingsDashboard();
+  if (normalizedPath === '/support') return void loadSettingsDashboard();
   if (normalizedPath.startsWith('/profile')) return void loadModernProfilePage();
 }
 

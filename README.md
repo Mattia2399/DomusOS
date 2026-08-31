@@ -91,6 +91,16 @@ Sensor, Light, Switch, Climate, Alarm, Lock, Cover, Camera, Media Player, Vacuum
 
 Leggi [Sicurezza e privacy](docs/security-and-privacy.md) e la [checklist beta](docs/security-beta-checklist.md) prima dell'uso su una casa reale.
 
+## Supporto e feedback
+
+Domus UI include una pagina nativa **Profilo > Supporto e feedback**. Da lì puoi scaricare una diagnostica locale ripulita e scegliere il canale corretto:
+
+- [segnala un bug riproducibile](https://github.com/Mattia2399/DomusUI/issues/new?template=bug_report.yml);
+- [proponi un'idea o fai una domanda](https://github.com/Mattia2399/DomusUI/discussions);
+- [invia privatamente una vulnerabilità](https://github.com/Mattia2399/DomusUI/security/advisories/new).
+
+La diagnostica non viene inviata automaticamente e non contiene token, PIN, URL, nomi di entità, stanze o valori della casa. Prima di pubblicare screenshot o log, verifica comunque che non mostrino informazioni personali.
+
 ## Sviluppo
 
 Richiede Node.js 22.22.0 o superiore.

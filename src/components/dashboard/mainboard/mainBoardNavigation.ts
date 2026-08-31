@@ -113,6 +113,7 @@ const DASHBOARD_NAVIGATION_ROOTS = new Set([
   'rooms',
   'security',
   'settings',
+  'support',
 ]);
 
 function hasSimpleRoute(
@@ -142,6 +143,10 @@ function hasNestedDashboardRoute(segments: readonly string[]) {
 export function isNestedDashboardNavigationTarget(path: string) {
   const target = parseNavigationTarget(path);
   if (!target) return false;
+
+  if (hasSimpleRoute(target, ['support'])) {
+    return true;
+  }
 
   if (
     hasNestedDashboardRoute(target.pathSegments) ||
@@ -278,7 +283,7 @@ export function resolveProfileFromLocation() {
 export function isSettingsNavigationTarget(path: string) {
   const target = parseNavigationTarget(path);
   return target
-    ? hasSimpleRoute(target, ['settings', 'impostazioni'])
+    ? hasSimpleRoute(target, ['settings', 'impostazioni', 'support'])
     : false;
 }
 

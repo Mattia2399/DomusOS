@@ -124,4 +124,14 @@ describe('ModernProfilePage', () => {
     );
     expect(screen.getByRole('heading', { name: 'I miei dispositivi' })).toBeTruthy();
   });
+
+  it('opens the support center from the profile overview', () => {
+    const onNavigate = vi.fn();
+    render(
+      <ModernProfilePage {...baseProps} navigationRoute="/profile" onNavigate={onNavigate} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Supporto e feedback/ }));
+    expect(onNavigate).toHaveBeenCalledWith('/support');
+  });
 });

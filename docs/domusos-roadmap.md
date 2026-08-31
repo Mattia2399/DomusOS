@@ -62,7 +62,7 @@ I tre test unitari rossi riguardano:
 | P6 - Architettura e performance | In corso avanzato | Route secondarie, Profilo, Builder, pannelli contestuali e overlay rari sono caricati su richiesta; la separazione Profilo/Impostazioni e completata e il pannello ibrido e stato eliminato. Restano gli orchestratori della griglia e i warning di budget complessivo/CSS. |
 | P7 - Accessibilita e design system | Completato per la baseline beta | Lingua e metadati, focus, target touch primari, reduced motion, contrasto semantico, annunci live e modifica canvas/stack da tastiera sono coperti; la riduzione ulteriore del CSS arbitrario prosegue come manutenzione del design system. |
 | P8 - Domus UI | In corso | P8.1 Centro Attenzione e P8.2 inventario Dispositivi health-aware implementati; aggiunto il blocco P8.3 di rifinitura navigazione, notifiche ed Edit Mode prima della prossima release. |
-| P9 - Distribuzione | In corso finale | Integrazione e pacchetto HACS, workflow release, README con screenshot e stato funzionalità completati; mancano collaudo HACS reale, licenza, canale feedback e materiali commerciali definitivi. |
+| P9 - Distribuzione | In corso finale | Integrazione e pacchetto HACS, workflow release, README, licenza e centro feedback completati; restano il collaudo finale HACS e i materiali commerciali definitivi. |
 
 ### Gate tecnico verificato
 
@@ -514,7 +514,7 @@ Azioni:
 - app ufficiale come secondo canale futuro;
 - landing page, tabella metodi di installazione e pagina Security & Privacy;
 - changelog, versionamento, procedura di aggiornamento e rollback;
-- canale feedback e raccolta errori opt-in;
+- [x] centro Supporto e feedback nativo, Issue Form guidato, Discussions e segnalazione privata di sicurezza;
 - [x] diagnostica esportabile senza segreti, nomi o stati della casa;
 - matrice pubblica di card, capability e limitazioni supportate.
 

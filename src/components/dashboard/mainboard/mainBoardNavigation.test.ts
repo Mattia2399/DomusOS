@@ -22,6 +22,7 @@ describe('mainBoardNavigation', () => {
     expect(isAppGalleryNavigationTarget('/appgalley')).toBe(true);
     expect(isProfileNavigationTarget('/profilo')).toBe(true);
     expect(isSettingsNavigationTarget('/?view=impostazioni')).toBe(true);
+    expect(isSettingsNavigationTarget('/support')).toBe(true);
   });
 
   it('keeps security and camera detail routes distinct', () => {
@@ -55,6 +56,7 @@ describe('mainBoardNavigation', () => {
     expect(isNestedDashboardNavigationTarget('/security/cameras')).toBe(true);
     expect(isNestedDashboardNavigationTarget('/appgallery/irrigation')).toBe(true);
     expect(isNestedDashboardNavigationTarget('/appgallery')).toBe(false);
+    expect(isNestedDashboardNavigationTarget('/support')).toBe(true);
   });
 
   it('recognizes nested routes in embedded and query-based navigation', () => {

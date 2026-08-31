@@ -9,7 +9,7 @@ import type { MockEntityStateMap } from '../types/ha';
 import type { DeviceHealthSnapshot } from '../components/settings/deviceHealthModel';
 import { summarizeDeviceHealth } from '../components/settings/deviceHealthModel';
 
-const SUPPORT_DIAGNOSTICS_SCHEMA = 'home-premium-support-diagnostics';
+const SUPPORT_DIAGNOSTICS_SCHEMA = 'domus-ui-support-diagnostics';
 const SUPPORT_DIAGNOSTICS_VERSION = 1;
 
 type SupportRole = 'owner' | 'admin' | 'limited' | 'demo' | 'unverified';
@@ -171,5 +171,5 @@ export function serializeSupportDiagnostics(report: SupportDiagnosticsReport) {
 
 export function createSupportDiagnosticsFilename(generatedAt: string) {
   const safeTimestamp = generatedAt.replace(/[:.]/g, '-');
-  return `home-premium-diagnostics-${safeTimestamp}.json`;
+  return `domus-ui-diagnostics-${safeTimestamp}.json`;
 }

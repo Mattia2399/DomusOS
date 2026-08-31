@@ -35,6 +35,7 @@ test('secondary workspaces load on demand without replacing the dashboard shell'
     { path: '/automations', heading: 'Costruttore Automazioni' },
     { path: '/appgallery', heading: 'App Library' },
     { path: '/settings', heading: 'Impostazioni Casa' },
+    { path: '/support', heading: 'Supporto e feedback' },
   ];
 
   for (const workspace of workspaces) {

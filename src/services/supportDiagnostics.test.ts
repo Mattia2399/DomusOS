@@ -54,7 +54,7 @@ describe('supportDiagnostics', () => {
     const serialized = serializeSupportDiagnostics(report);
 
     expect(report).toMatchObject({
-      schema: 'home-premium-support-diagnostics',
+      schema: 'domus-ui-support-diagnostics',
       version: 1,
       connection: {
         status: 'connected',
@@ -87,7 +87,7 @@ describe('supportDiagnostics', () => {
 
   it('creates a filesystem-safe timestamped filename', () => {
     expect(createSupportDiagnosticsFilename('2026-07-30T12:00:00.000Z')).toBe(
-      'home-premium-diagnostics-2026-07-30T12-00-00-000Z.json',
+      'domus-ui-diagnostics-2026-07-30T12-00-00-000Z.json',
     );
   });
 });

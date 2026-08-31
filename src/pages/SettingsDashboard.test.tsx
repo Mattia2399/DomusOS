@@ -260,4 +260,40 @@ describe('SettingsDashboard', () => {
       screen.getByText(/Diagnostica scaricata/),
     ).toBeTruthy();
   });
+
+  it('renders the routed support center with separate public and private channels', () => {
+    const onNavigate = vi.fn();
+    const createObjectURL = vi.fn(() => 'blob:support-diagnostics');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(
+      <DashboardSecurityProvider value={security}>
+        <SettingsDashboard
+          {...baseProps}
+          navigationRoute="/support"
+          onNavigate={onNavigate}
+        />
+      </DashboardSecurityProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Supporto e feedback' })).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /Apri una segnalazione/ }).getAttribute('href'),
+    ).toContain('bug_report.yml');
+    expect(
+      screen.getByRole('link', { name: /Proponi un’idea/ }).getAttribute('href'),
+    ).toContain('/discussions/new?category=ideas');
+    expect(
+      screen.getByRole('link', { name: /Segnala in privato/ }).getAttribute('href'),
+    ).toContain('/security/advisories/new');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scarica diagnostica' }));
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(screen.getByText(/non viene inviato automaticamente/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Indietro' }));
+    expect(onNavigate).toHaveBeenCalledWith('/profile');
+  });
 });

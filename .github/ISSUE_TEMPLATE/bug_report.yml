@@ -3,22 +3,27 @@ description: Segnala un comportamento riproducibile di Domus UI
 title: "[Bug]: "
 labels:
   - bug
+  - needs-triage
 body:
   - type: markdown
     attributes:
       value: |
         Non inserire token, PIN, URL privati o dati della casa. Per vulnerabilità usa la segnalazione privata descritta in SECURITY.md.
   - type: input
-    id: domusos_version
+    id: domus_ui_version
     attributes:
       label: Versione Domus UI
-      placeholder: 0.1.0-beta.8
+      description: La trovi in Supporto e feedback o in Impostazioni > Avanzate.
+      placeholder: 0.1.0-beta.12
     validations:
       required: true
   - type: input
     id: home_assistant_version
     attributes:
       label: Versione Home Assistant
+      placeholder: 2026.8.x
+    validations:
+      required: true
   - type: dropdown
     id: installation
     attributes:
@@ -29,11 +34,43 @@ body:
         - Installazione legacy
     validations:
       required: true
+  - type: dropdown
+    id: device_class
+    attributes:
+      label: Dispositivo
+      options:
+        - Desktop
+        - Tablet
+        - Smartphone
+    validations:
+      required: true
+  - type: input
+    id: route
+    attributes:
+      label: Pagina interessata
+      description: Indica la sezione senza riportare l'indirizzo privato del tuo server.
+      placeholder: /home, /rooms, /security, /settings…
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser o app
+      placeholder: Chrome 140, Safari iOS, Home Assistant Companion…
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
       label: Cosa succede
-      description: Descrivi risultato attuale e risultato atteso.
+      description: Descrivi il comportamento osservato.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Cosa ti aspettavi
+      description: Descrivi il risultato corretto atteso.
     validations:
       required: true
   - type: textarea
@@ -46,11 +83,27 @@ body:
         3. Osserva…
     validations:
       required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequenza
+      options:
+        - Sempre
+        - Spesso
+        - A volte
+        - Una sola volta
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshot o video
+      description: Trascina qui gli allegati dopo aver nascosto nomi, indirizzi e dati della casa.
   - type: textarea
     id: diagnostics
     attributes:
       label: Diagnostica ripulita
-      description: Allega solo log o screenshot privi di segreti e dati personali.
+      description: Allega, se possibile, il file creato da Domus UI > Profilo > Supporto e feedback.
   - type: checkboxes
     id: checks
     attributes:

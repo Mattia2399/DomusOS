@@ -52,7 +52,7 @@ npm run release:gate
 - [x] Diagnostica supporto aggregata e priva di segreti.
 - [x] Licenza GPL-3.0 OSI compatibile con HACS.
 - [ ] Condizioni commerciali/Early Access.
-- [ ] Canale supporto e feedback.
+- [x] Canale supporto e feedback con Issues, Discussions, advisory privata e diagnostica locale.
 - [x] Screenshot desktop/mobile reali nel README.
 - [ ] Video e landing page definitivi.
 

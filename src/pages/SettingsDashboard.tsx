@@ -71,6 +71,7 @@ import {
   serializeSupportDiagnostics,
 } from '../services/supportDiagnostics';
 import SettingsLayoutVersionsSection from '../components/settings/SettingsLayoutVersionsSection';
+import SupportFeedbackSection from '../components/settings/SupportFeedbackSection';
 import type {
   DashboardRevisionHistoryStatus,
   DashboardRevisionRecord,
@@ -817,11 +818,13 @@ function SettingsDetailShell({
   title,
   subtitle,
   onBack,
+  backLabel = 'Impostazioni',
   children,
 }: {
   title: string;
   subtitle: string;
   onBack: () => void;
+  backLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -829,7 +832,7 @@ function SettingsDetailShell({
       <NestedPageHeader
         title={title}
         subtitle={subtitle}
-        backLabel="Impostazioni"
+        backLabel={backLabel}
         onBack={onBack}
         contentClassName="lg:!px-10"
       />
@@ -1181,6 +1184,26 @@ export default function SettingsDashboard({
     ([, entity]) => normalizeLower(entity.state) === 'locked',
   ).length;
   const canConfigureDashboard = security.can('edit_dashboard');
+
+  if (settingsPath === '/support') {
+    return (
+      <SettingsDetailShell
+        title="Supporto e feedback"
+        subtitle="Segnala problemi, condividi idee e prepara una diagnostica sicura."
+        onBack={() => navigateTo('/profile')}
+        backLabel="Profilo"
+      >
+        <SupportFeedbackSection
+          appVersion={__APP_VERSION__}
+          haStatus={haStatus}
+          onDownloadDiagnostics={handleDownloadSupportDiagnostics}
+          diagnosticsFeedback={
+            actionFeedback.startsWith('Diagnostica') ? actionFeedback : undefined
+          }
+        />
+      </SettingsDetailShell>
+    );
+  }
 
   if (settingsPath === '/settings') {
     return (

@@ -8,6 +8,7 @@ const primaryRoutes = [
   '/appgallery',
   '/settings',
   '/profile',
+  '/support',
 ];
 
 const nestedRoutes = [

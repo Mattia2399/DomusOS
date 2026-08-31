@@ -10,6 +10,7 @@ import {
   Home,
   KeyRound,
   Laptop,
+  LifeBuoy,
   MapPin,
   MonitorSmartphone,
   Route,
@@ -630,6 +631,15 @@ export function ModernProfilePage({
                 value={deviceAuth.isEnrolled ? 'Attiva' : undefined}
                 onClick={() => openView('security')}
                 tone={deviceAuth.isEnrolled ? 'success' : 'default'}
+              />
+            </ProfileGroup>
+
+            <ProfileGroup title="Aiuto">
+              <ProfileRow
+                icon={LifeBuoy}
+                title="Supporto e feedback"
+                subtitle="Segnala problemi, proponi idee o scarica la diagnostica"
+                onClick={() => onNavigate?.('/support')}
               />
             </ProfileGroup>
 
