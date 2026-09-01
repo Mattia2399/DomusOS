@@ -126,7 +126,7 @@ import {
   resolveGridBreakpointNow,
   type DashboardViewportPreviewMode,
 } from './dashboardViewport';
-import { resolveFavoriteGridTargetSectionId } from './favoriteGridPlacement';
+import { hasFavoriteGridProjection, resolveFavoriteGridTargetSectionId } from './favoriteGridPlacement';
 import { LayoutDashboard, Lightbulb, Menu, MousePointerClick, PanelRightOpen, PencilRuler, Plus, Settings2, X } from 'lucide-react';
 import {
   normalizeWidgetTypeLayoutOverrides,
@@ -3442,7 +3442,6 @@ export function MainBoard() {
 
       const targetSection = favoriteSectionById.get(fallbackSection.id) ?? fallbackSection;
       const stackCols = resolveStackColumns(targetSection);
-      const existingWidgetEntityIds = new Set(nextAfterMoves.map((widget) => widget.entityId));
       const sectionOccupied =
         occupiedBySection.get(targetSection.id) ??
         nextAfterMoves
@@ -3461,7 +3460,10 @@ export function MainBoard() {
       const additions: Widget[] = [];
 
       sortedFavoriteEntityIds.forEach((entityId) => {
-        if (existingWidgetEntityIds.has(entityId)) {
+        // Preferiti is a projection, not a move operation. A manually placed
+        // card may remain on the root canvas while an automatically managed
+        // card for the same HA entity is shown in the favorites grid.
+        if (hasFavoriteGridProjection([...nextAfterMoves, ...additions], entityId, favoriteSectionIds)) {
           return;
         }
         const kind = resolveWidgetKindFromEntityId(entityId);
@@ -3566,7 +3568,6 @@ export function MainBoard() {
         };
 
         additions.push(newWidget);
-        existingWidgetEntityIds.add(entityId);
         sectionOccupied.push({
           x: normalizedLayout.x,
           y: normalizedLayout.y,

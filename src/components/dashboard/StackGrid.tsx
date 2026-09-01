@@ -1835,6 +1835,16 @@ function StackGridComponent({
       ) : null}
       {sectionsMounted ? (
         <div ref={stackHostRef} className="relative h-full w-full min-h-0">
+          {isGridStack && (section.stackUseFavoritesGrid ?? false) && stackWidgets.length === 0 ? (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5 text-center">
+              <div className="max-w-sm">
+                <p className="text-sm font-semibold text-[color:var(--ui-text-primary)]">Nessun preferito</p>
+                <p className="mt-1 text-xs leading-relaxed text-[color:var(--ui-text-tertiary)]">
+                  Assegna in Home Assistant la label Preferiti oppure aggiungi qui una card dal Catalogo.
+                </p>
+              </div>
+            </div>
+          ) : null}
           {!isEditMode ? (
             <div
               className="grid h-full min-h-0 min-w-0"

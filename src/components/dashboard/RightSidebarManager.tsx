@@ -3299,7 +3299,7 @@ export function RightSidebarManager({
                 </div>
                 {selectedSection.kind === 'stack-grid' ? (
                   <p className="text-[11px] text-[color:var(--ui-text-tertiary)]">
-                    Quando attivo, lo stack mostra automaticamente le entita con label Home Assistant "preferiti/favorites" (fallback al flag locale se assente).
+                    Crea una vista automatica delle entita con label Home Assistant "preferiti/favorites", senza spostare le card gia presenti nel canvas.
                   </p>
                 ) : null}
                 <p className="text-[11px] text-[color:var(--ui-text-tertiary)]">

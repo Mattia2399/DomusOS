@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Widget } from '../../types/dashboardModels';
-import { resolveFavoriteGridTargetSectionId } from './favoriteGridPlacement';
+import { hasFavoriteGridProjection, resolveFavoriteGridTargetSectionId } from './favoriteGridPlacement';
 
 function buildWidget(overrides: Partial<Widget> = {}): Widget {
   return {
@@ -49,5 +49,25 @@ describe('favorite grid placement', () => {
     });
 
     expect(target).toBe('section-favorites');
+  });
+
+  it('allows a favorite projection when the same entity only exists on the root canvas', () => {
+    expect(
+      hasFavoriteGridProjection(
+        [buildWidget({ placementPolicy: 'manual', isFavorite: true })],
+        'light.test',
+        favoriteSectionIds,
+      ),
+    ).toBe(false);
+  });
+
+  it('prevents duplicate projections inside a favorites grid', () => {
+    expect(
+      hasFavoriteGridProjection(
+        [buildWidget({ parentSectionId: 'section-favorites', placementPolicy: 'favorites-auto' })],
+        'light.test',
+        favoriteSectionIds,
+      ),
+    ).toBe(true);
   });
 });
