@@ -52,6 +52,10 @@ L'integrazione registra automaticamente il pannello e i file frontend. Non devi 
 
 HACS usa le GitHub Release pubblicate, non i soli tag Git. Il workflow `Publish release` genera e allega automaticamente `domusos.zip` quando viene pubblicato un tag corrispondente alla versione del `package.json`.
 
+Le beta pubbliche mantengono il suffisso SemVer `-beta.N`, ma vengono esposte
+come release GitHub ordinarie: in questo modo HACS seleziona il pacchetto
+`domusos.zip` e non tenta di installare il commit del branch predefinito.
+
 ## Rollback
 
 Da HACS apri Domus UI, seleziona una delle release precedenti e reinstalla. Dopo il riavvio verifica che la versione del layout sia ancora leggibile. Il rollback dell'integrazione non sostituisce il ripristino di una versione layout.
