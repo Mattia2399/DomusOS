@@ -2,6 +2,9 @@ const { test, expect } = require('@playwright/test');
 
 const STORAGE_KEY = 'ha.dashboard.demo.builder.layout.v1';
 const RUNTIME_KEY = 'ha.dashboard.runtimeMode.v1';
+// Chromium can round the nested grid border to a different device pixel on
+// Windows and Linux. Two pixels still represents a flush, unclipped edge.
+const STACK_EDGE_TOLERANCE_PX = 2;
 
 const seededLayout = {
   version: 14,
@@ -84,8 +87,8 @@ async function expectContainedAndFitted(page, { title = 'Stack automatico', card
   const contentRight = Math.max(...geometry.cards.map((card) => card.right));
   expect(Math.abs(contentRight - geometry.stack.right)).toBeLessThanOrEqual(3);
   for (const card of geometry.cards) {
-    expect(card.right).toBeLessThanOrEqual(geometry.stack.right + 1);
-    expect(card.bottom).toBeLessThanOrEqual(geometry.stack.bottom + 1);
+    expect(card.right).toBeLessThanOrEqual(geometry.stack.right + STACK_EDGE_TOLERANCE_PX);
+    expect(card.bottom).toBeLessThanOrEqual(geometry.stack.bottom + STACK_EDGE_TOLERANCE_PX);
   }
 }
 
@@ -343,7 +346,7 @@ test('Builder switches a stack live between automatic and manual width', async (
   await expect.poll(async () => {
     const geometry = await readGeometry(page);
     return Math.ceil(Math.max(...geometry.cards.map((card) => card.right)) - geometry.stack.right);
-  }).toBeLessThanOrEqual(1);
+  }).toBeLessThanOrEqual(STACK_EDGE_TOLERANCE_PX);
 
   await page.locator('aside.builder-sidebar button').filter({ hasText: '3 colonne' }).click();
   await page.getByRole('option', { name: 'Auto (da contenuto)' }).click();
@@ -354,5 +357,5 @@ test('Builder switches a stack live between automatic and manual width', async (
   await expect.poll(async () => {
     const geometry = await readGeometry(page);
     return Math.ceil(Math.max(...geometry.cards.map((card) => card.right)) - geometry.stack.right);
-  }).toBeLessThanOrEqual(1);
+  }).toBeLessThanOrEqual(STACK_EDGE_TOLERANCE_PX);
 });
