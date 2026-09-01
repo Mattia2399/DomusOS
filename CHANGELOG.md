@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.1.0-beta.13 — 2026-09-01
+
+### Aggiunto
+
+- centro Supporto e feedback integrato in Domus UI, con accesso diretto a
+  segnalazioni bug, richieste di funzionalità, discussioni e diagnostica locale;
+- guida contestuale nelle liste dispositivi di Rooms per spiegare selezione,
+  pressione prolungata e personalizzazione delle sezioni;
+- scelta esplicita durante la rimozione di uno stack: conservare le card nel
+  canvas, eliminarle insieme allo stack oppure annullare l'operazione.
+
+### Migliorato
+
+- sidebar desktop e tablet più compatta e completa sui viewport intermedi;
+- header di Rooms più fluido durante lo scorrimento e compatibile con le
+  interazioni touch di trascinamento;
+- stack Grid e orizzontali con larghezza automatica derivata dal contenuto e
+  larghezza manuale coerente con il numero di colonne configurato;
+- stack Preferiti popolato automaticamente senza sottrarre dal canvas le card
+  già configurate manualmente;
+- asset e documentazione del repository pubblico ripuliti e allineati al
+  marchio Domus UI e alla visualizzazione HACS.
+
+### Corretto
+
+- apertura della sezione Sistema sempre dall'inizio della pagina;
+- immagini README compatibili con il renderer informativo di HACS;
+- card in fondo agli stack non più tagliate e spazio orizzontale non più
+  lasciato inutilizzato nei layout automatici;
+- rimozione degli stack protetta da una decisione esplicita, senza perdita
+  involontaria delle card contenute.
+
 ## 0.1.0-beta.12 — 2026-08-31
 
 ### Modificato
