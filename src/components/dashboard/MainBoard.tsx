@@ -2736,10 +2736,10 @@ export function MainBoard() {
     if (section.kind === 'stack-vertical') {
       return 1;
     }
-    if (section.kind === 'stack-grid') {
+    if (section.kind === 'stack-grid' && section.stackColumnsMode !== 'manual') {
       return Math.max(1, Math.round(section.layout.w));
     }
-    return Math.max(1, Math.round(section.layout.w));
+    return Math.max(1, Math.round(section.stackColumns ?? section.layout.w));
   };
   const normalizeLayoutForStack = (section: DashboardSection, layout: GridItem): GridItem => {
     const cols = resolveStackColumns(section);

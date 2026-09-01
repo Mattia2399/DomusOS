@@ -1344,7 +1344,7 @@ export function RightSidebarManager({
   );
   const isStackGridSection = selectedSection?.kind === 'stack-grid';
   const activeCanvasCols = Math.max(1, Math.round(GRID_ENGINE_COLS[activeGridBreakpoint] ?? 1));
-  const stackColumnOptionMax = ROOT_CANVAS_COLS;
+  const stackColumnOptionMax = activeCanvasCols;
   const stackManualColumnOptions = Array.from({ length: stackColumnOptionMax - STACK_SECTION_MIN_COLUMNS + 1 }, (_, index) => {
     const option = STACK_SECTION_MIN_COLUMNS + index;
     return {
@@ -1383,7 +1383,13 @@ export function RightSidebarManager({
   const stackCanvasColumns =
     selectedSection?.kind === 'stack-vertical' || !selectedSection
       ? 1
-      : Math.max(STACK_SECTION_MIN_COLUMNS, Math.min(stackColumnOptionMax, Math.round(selectedSection.layout.w)));
+      : Math.max(
+          STACK_SECTION_MIN_COLUMNS,
+          Math.min(
+            stackColumnOptionMax,
+            Math.round(selectedSection.stackColumns ?? selectedSection.layout.w),
+          ),
+        );
   const stackCanvasColumnSelectionId =
     selectedSection?.kind === 'stack-vertical' || !selectedSection
       ? '1'
@@ -3195,10 +3201,10 @@ export function RightSidebarManager({
                           const maxX = Math.max(0, ROOT_CANVAS_COLS - safeW);
                           return {
                             ...section,
+                            stackColumns: safeW,
                             ...(section.kind === 'stack-grid'
                               ? {
                                   stackColumnsMode: 'manual' as const,
-                                  stackColumns: safeW,
                                 }
                               : {}),
                             layout: {

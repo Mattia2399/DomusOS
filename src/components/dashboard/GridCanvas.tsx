@@ -1756,8 +1756,16 @@ export function GridCanvas({
     () => new Set(sections.filter((section) => section.kind === 'scenes').map((section) => section.id)),
     [sections],
   );
-  const gridStackSectionIds = useMemo(
-    () => new Set(sections.filter((section) => section.kind === 'stack-grid').map((section) => section.id)),
+  const stackSectionsById = useMemo(
+    () => new Map(
+      sections
+        .filter((section) =>
+          section.kind === 'stack-vertical' ||
+          section.kind === 'stack-horizontal' ||
+          section.kind === 'stack-grid'
+        )
+        .map((section) => [section.id, section] as const),
+    ),
     [sections],
   );
   const desktopLayout = useMemo<GridItem[]>(
@@ -1905,7 +1913,19 @@ export function GridCanvas({
           if (!currentItem) {
             return derivedItem;
           }
-          const preserveRuntimeStackSpan = gridStackSectionIds.has(derivedItem.i);
+          const stackSection = stackSectionsById.get(derivedItem.i);
+          const preserveRuntimeStackSpan = stackSection?.kind === 'stack-grid' && stackSection.stackColumnsMode !== 'manual';
+          const configuredStackWidth = stackSection && !preserveRuntimeStackSpan
+            ? Math.max(
+                1,
+                Math.min(
+                  cols,
+                  stackSection.kind === 'stack-vertical'
+                    ? 1
+                    : Math.round(stackSection.stackColumns ?? stackSection.layout.w),
+                ),
+              )
+            : null;
           const mergedItem: GridItem = {
             ...currentItem,
             // Keep user positioning for this breakpoint, but always consume the
@@ -1913,7 +1933,7 @@ export function GridCanvas({
             // Grid stacks are the exception: their live span is calculated from
             // the inner grid. Replacing it here with the derived XL span creates
             // a resize loop and can collapse a 2xl stack before it is persisted.
-            w: preserveRuntimeStackSpan ? currentItem.w : derivedItem.w,
+            w: configuredStackWidth ?? (preserveRuntimeStackSpan ? currentItem.w : derivedItem.w),
             h: preserveRuntimeStackSpan ? currentItem.h : derivedItem.h,
           };
           if (rootScenesSectionIds.has(derivedItem.i)) {
@@ -1931,7 +1951,7 @@ export function GridCanvas({
 
       return changed ? next : current;
     });
-  }, [derivedGridEngineLayouts, gridStackSectionIds, normalizeRootLayoutForBreakpoint]);
+  }, [derivedGridEngineLayouts, normalizeRootLayoutForBreakpoint, stackSectionsById]);
   const liveGridEngineLayouts = useMemo<GridLayouts>(() => {
     const merged: GridLayouts = {};
     GRID_ENGINE_BREAKPOINT_ORDER.forEach((breakpoint) => {
@@ -2622,9 +2642,17 @@ export function GridCanvas({
                 widgetLayoutOverrides={widgetLayoutOverrides}
                 responsiveLayouts={responsiveLayouts.stacks?.[section.id]}
                 sectionCanvasCols={sectionCanvasCols}
+                availableCanvasCols={gridEngineActiveCols}
                 stackWidgets={stackWidgets}
                 isSelected={isEditMode && selectedSectionId === section.id}
                 stackWidth={Math.max(stackWidth, 1)}
+                availableStackWidth={Math.max(
+                  1,
+                  Math.round(
+                    gridEngineColumnWidth * gridEngineActiveCols +
+                      GRID_ENGINE_GAP_PX * Math.max(0, gridEngineActiveCols - 1),
+                  ),
+                )}
                 rootRowHeight={stackRowHeight}
                 rootMargin={stackMargin}
                 selectedWidgetId={selectedWidgetId}
@@ -2702,7 +2730,9 @@ export function GridCanvas({
       haConnected,
       haStates,
       sensorHistoryByEntity,
+      gridEngineActiveCols,
       gridEngineActiveBreakpoint,
+      gridEngineColumnWidth,
       houseMembers,
       isCompactEditCardMenuMode,
       isEditMode,

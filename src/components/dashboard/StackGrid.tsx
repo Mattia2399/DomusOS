@@ -711,9 +711,11 @@ type StackGridProps = {
   widgetLayoutOverrides: WidgetLayoutOverrides;
   responsiveLayouts?: DashboardBreakpointLayouts;
   sectionCanvasCols: number;
+  availableCanvasCols: number;
   stackWidgets: Widget[];
   isSelected: boolean;
   stackWidth: number;
+  availableStackWidth: number;
   rootRowHeight: number;
   rootMargin: number;
   selectedWidgetId: string | null;
@@ -780,9 +782,11 @@ function StackGridComponent({
   widgetLayoutOverrides,
   responsiveLayouts,
   sectionCanvasCols,
+  availableCanvasCols,
   stackWidgets,
   isSelected,
   stackWidth,
+  availableStackWidth,
   rootRowHeight,
   rootMargin,
   selectedWidgetId,
@@ -856,14 +860,25 @@ function StackGridComponent({
   const gridStackWidthMode = section.stackColumnsMode === 'manual' ? 'manual' : 'auto';
   const isCompactEditCardMenuMode = isEditMode && (gridBreakpoint === 'xs' || gridBreakpoint === 'sm');
   const canvasLinkedCols = section.kind === 'stack-vertical' ? 1 : Math.max(1, Math.round(sectionCanvasCols));
+  // Auto width is measured against the whole parent canvas. Measuring only
+  // against the current outer span lets a stack shrink, but makes it
+  // impossible for it to grow again when its content changes.
+  const layoutCols = isGridStack && gridStackWidthMode === 'auto'
+    ? Math.max(canvasLinkedCols, Math.round(availableCanvasCols))
+    : canvasLinkedCols;
   const canonicalCols = isGridStack
-    ? canvasLinkedCols
+    ? layoutCols
     : section.kind === 'stack-vertical'
       ? 1
       : Math.max(1, Math.round(section.layout.w));
-  const renderedCols = canvasLinkedCols;
   const overlayCompactType = 'vertical';
   const innerWidth = Math.max(measuredStackWidth || Math.round(stackWidth), 1);
+  const measurementWidth = Math.max(
+    gridStackWidthMode === 'auto'
+      ? Math.round(availableStackWidth)
+      : innerWidth,
+    1,
+  );
   const marginX = rootMargin;
   const marginY = rootMargin;
   const stackInsetX = 0;
@@ -875,17 +890,17 @@ function StackGridComponent({
       ),
     [stackWidgets],
   );
-  const cols = isHorizontalStack ? horizontalContentCols : Math.max(1, renderedCols);
+  const measurementCols = isHorizontalStack ? horizontalContentCols : Math.max(1, layoutCols);
   const horizontalCardWidth = Math.max(170, Math.min(320, Math.round(innerWidth / Math.max(1, Math.min(3, stackWidgets.length || 1)))));
   const gridWidth = isHorizontalStack
     ? Math.max(
         innerWidth,
-        cols * horizontalCardWidth + Math.max(0, cols - 1) * marginX + stackInsetX * 2,
+        measurementCols * horizontalCardWidth + Math.max(0, measurementCols - 1) * marginX + stackInsetX * 2,
       )
     : innerWidth;
   const stackColWidth = Math.max(
     1,
-    (Math.max(1, gridWidth - stackInsetX * 2) - Math.max(0, cols - 1) * marginX) / Math.max(1, cols),
+    (Math.max(1, measurementWidth - stackInsetX * 2) - Math.max(0, measurementCols - 1) * marginX) / Math.max(1, measurementCols),
   );
   const rowHeight = Math.max(1, Math.round(rootRowHeight));
   const clearXsLongPressTimer = useCallback(() => {
@@ -1306,7 +1321,15 @@ function StackGridComponent({
         }
         const sourceCols =
           responsiveSource.breakpoint === gridBreakpoint
-            ? cols
+            ? isGridStack && gridStackWidthMode === 'auto'
+              ? Math.max(
+                  1,
+                  responsiveSource.layout.reduce(
+                    (max, item) => Math.max(max, Math.round(item.x) + Math.max(1, Math.round(item.w))),
+                    1,
+                  ),
+                )
+              : measurementCols
             : Math.max(
                 1,
                 responsiveSource.layout.reduce(
@@ -1316,12 +1339,12 @@ function StackGridComponent({
                 ),
               );
         const scaledSource =
-          responsiveSource.breakpoint === gridBreakpoint
+          responsiveSource.breakpoint === gridBreakpoint && sourceCols === measurementCols
             ? responsiveSource.layout
             : responsiveSource.layout.map((item) =>
-                scaleLayoutColumns(item, sourceCols, cols, { preserveSingleWidthCell: true }),
+                scaleLayoutColumns(item, sourceCols, measurementCols, { preserveSingleWidthCell: true }),
               );
-        const sourceById = new Map(scaledSource.map((item) => [item.i, clampLayoutToColumns(item, cols)]));
+        const sourceById = new Map(scaledSource.map((item) => [item.i, clampLayoutToColumns(item, measurementCols)]));
         const merged = fallback.map((fallbackItem) => sourceById.get(fallbackItem.i) ?? fallbackItem);
         if (!isGridStack) {
           if (section.kind === 'stack-vertical') {
@@ -1339,7 +1362,7 @@ function StackGridComponent({
           enforceGridStackWidgetSpans(
             merged,
             gridBreakpoint,
-            cols,
+            measurementCols,
             stackLightWidgetStateById,
             Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
             widgetTypeLayoutOverrides,
@@ -1355,7 +1378,7 @@ function StackGridComponent({
             stackLockWidgetIds,
             stackCoverWidgetIds,
           ),
-          cols,
+          measurementCols,
         );
       };
       if (isHorizontalStack) {
@@ -1399,7 +1422,7 @@ function StackGridComponent({
             h: Math.max(1, Math.round(widget.layout.h)),
           })),
           gridBreakpoint,
-          cols,
+          measurementCols,
           stackLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
           widgetTypeLayoutOverrides,
@@ -1416,11 +1439,11 @@ function StackGridComponent({
           stackCoverWidgetIds,
         );
         if (!ENABLE_STACK_ADAPTIVE_MIN_WIDTH || !isAdaptiveSpanEnabled) {
-          return applyResponsiveLayout(compactAndResolveLayout(baseLayouts, cols));
+          return applyResponsiveLayout(compactAndResolveLayout(baseLayouts, measurementCols));
         }
         const adaptedLayouts = adaptLayoutsToMinWidth(
           baseLayouts,
-          cols,
+          measurementCols,
           stackColWidth,
           marginX,
           stackWidgetMinWidthById,
@@ -1428,7 +1451,7 @@ function StackGridComponent({
         const enforcedAdaptedLayouts = enforceGridStackWidgetSpans(
           adaptedLayouts,
           gridBreakpoint,
-          cols,
+          measurementCols,
           stackLightWidgetStateById,
           Boolean(widgetTypeLayoutOverrides.light?.[gridBreakpoint]),
           widgetTypeLayoutOverrides,
@@ -1444,7 +1467,7 @@ function StackGridComponent({
           stackLockWidgetIds,
           stackCoverWidgetIds,
         );
-        return applyResponsiveLayout(compactAndResolveLayout(enforcedAdaptedLayouts, cols));
+        return applyResponsiveLayout(compactAndResolveLayout(enforcedAdaptedLayouts, measurementCols));
       }
       const baseLayout = stackWidgets.map((widget) => {
         let next: GridItem = {
@@ -1463,10 +1486,10 @@ function StackGridComponent({
           };
         }
 
-        next = scaleLayoutColumns(next, canonicalCols, cols, { preserveSingleWidthCell: true });
+        next = scaleLayoutColumns(next, canonicalCols, measurementCols, { preserveSingleWidthCell: true });
 
-        const safeW = Math.min(next.w, cols);
-        const maxX = Math.max(0, cols - safeW);
+        const safeW = Math.min(next.w, measurementCols);
+        const maxX = Math.max(0, measurementCols - safeW);
         return {
           ...next,
           w: safeW,
@@ -1477,8 +1500,9 @@ function StackGridComponent({
     },
     [
       canonicalCols,
-      cols,
+      measurementCols,
       gridBreakpoint,
+      gridStackWidthMode,
       responsiveLayouts,
       widgetTypeLayoutOverrides,
       widgetLayoutOverrides,
@@ -1505,9 +1529,12 @@ function StackGridComponent({
   );
 
   const gridStackSolution = useMemo(
-    () => solveGridStackLayout(baseStackLayout, cols, gridStackWidthMode),
-    [baseStackLayout, cols, gridStackWidthMode],
+    () => solveGridStackLayout(baseStackLayout, measurementCols, gridStackWidthMode),
+    [baseStackLayout, measurementCols, gridStackWidthMode],
   );
+  const cols = isGridStack && gridStackWidthMode === 'auto'
+    ? gridStackSolution.usedCols
+    : measurementCols;
   const stackLayout = isGridStack ? gridStackSolution.layout : baseStackLayout;
 
   const stackLayoutMap = useMemo(

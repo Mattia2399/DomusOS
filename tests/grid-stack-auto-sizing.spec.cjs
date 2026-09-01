@@ -89,6 +89,13 @@ async function expectContainedAndFitted(page, { title = 'Stack automatico', card
   }
 }
 
+async function enterEditMode(page) {
+  const editButton = page.locator('button[aria-label="Toggle edit mode"]:visible').first();
+  await editButton.click();
+  await page.getByRole('button', { name: 'Attiva', exact: true }).click();
+  await page.waitForSelector('.sections-grid.is-editing');
+}
+
 test('Stack Grid auto fits sparse content without clipping across breakpoints and reload', async ({ page }) => {
   const consoleErrors = [];
   page.on('console', (message) => {
@@ -214,4 +221,138 @@ test('Canvas and nested stack follow an in-app width change without a window res
     return Math.ceil(Math.max(...items.map((item) => item.getBoundingClientRect().right)) - hostRight);
   })).toBeLessThanOrEqual(1);
   await expectContainedAndFitted(page);
+});
+
+test('Stack Grid auto can grow again from a previously narrow outer span', async ({ page }) => {
+  const narrowSeed = structuredClone(seededLayout);
+  narrowSeed.sections[0].layout.w = 2;
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.addInitScript(
+    ({ key, value, runtimeKey }) => {
+      localStorage.clear();
+      localStorage.setItem(runtimeKey, 'demo');
+      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem('ha.dashboard.onboarding.welcome.v1', 'done');
+      localStorage.setItem('ha.dashboard.onboarding.context.v1', 'done');
+    },
+    { key: STORAGE_KEY, value: narrowSeed, runtimeKey: RUNTIME_KEY },
+  );
+
+  await page.goto('/?view=home');
+  await expectContainedAndFitted(page);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeGreaterThan(0.6);
+});
+
+test('Stack Grid manual mode respects its configured canvas columns', async ({ page }) => {
+  const manualSeed = structuredClone(seededLayout);
+  manualSeed.sections[0] = {
+    ...manualSeed.sections[0],
+    title: 'Stack manuale',
+    stackColumnsMode: 'manual',
+    stackColumns: 3,
+  };
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.addInitScript(
+    ({ key, value, runtimeKey }) => {
+      localStorage.clear();
+      localStorage.setItem(runtimeKey, 'demo');
+      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem('ha.dashboard.onboarding.welcome.v1', 'done');
+      localStorage.setItem('ha.dashboard.onboarding.context.v1', 'done');
+    },
+    { key: STORAGE_KEY, value: manualSeed, runtimeKey: RUNTIME_KEY },
+  );
+
+  await page.goto('/?view=home');
+  await page.waitForSelector('.sections-grid');
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page, 'Stack manuale');
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeGreaterThan(0.45);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page, 'Stack manuale');
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeLessThan(0.55);
+});
+
+test('Horizontal Stack respects the same manual canvas column contract', async ({ page }) => {
+  const horizontalSeed = structuredClone(seededLayout);
+  horizontalSeed.sections[0] = {
+    ...horizontalSeed.sections[0],
+    kind: 'stack-horizontal',
+    title: 'Stack orizzontale',
+    stackColumns: 3,
+  };
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.addInitScript(
+    ({ key, value, runtimeKey }) => {
+      localStorage.clear();
+      localStorage.setItem(runtimeKey, 'demo');
+      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem('ha.dashboard.onboarding.welcome.v1', 'done');
+      localStorage.setItem('ha.dashboard.onboarding.context.v1', 'done');
+    },
+    { key: STORAGE_KEY, value: horizontalSeed, runtimeKey: RUNTIME_KEY },
+  );
+
+  await page.goto('/?view=home');
+  await page.waitForSelector('.sections-grid');
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page, 'Stack orizzontale');
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeGreaterThan(0.45);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page, 'Stack orizzontale');
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeLessThan(0.55);
+});
+
+test('Builder switches a stack live between automatic and manual width', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.addInitScript(
+    ({ key, value, runtimeKey }) => {
+      localStorage.clear();
+      localStorage.setItem(runtimeKey, 'demo');
+      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem('ha.dashboard.onboarding.welcome.v1', 'done');
+      localStorage.setItem('ha.dashboard.onboarding.context.v1', 'done');
+    },
+    { key: STORAGE_KEY, value: seededLayout, runtimeKey: RUNTIME_KEY },
+  );
+
+  await page.goto('/?view=home');
+  await enterEditMode(page);
+  await page.getByRole('group', { name: 'Sezione Stack automatico' }).click({ position: { x: 20, y: 20 } });
+
+  await page.locator('aside.builder-sidebar button').filter({ hasText: 'Auto (da contenuto)' }).click();
+  await page.getByRole('option', { name: '3 colonne' }).click();
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeGreaterThan(0.45);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeLessThan(0.55);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return Math.ceil(Math.max(...geometry.cards.map((card) => card.right)) - geometry.stack.right);
+  }).toBeLessThanOrEqual(1);
+
+  await page.locator('aside.builder-sidebar button').filter({ hasText: '3 colonne' }).click();
+  await page.getByRole('option', { name: 'Auto (da contenuto)' }).click();
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return geometry.stack.width / geometry.canvasWidth;
+  }).toBeGreaterThan(0.6);
+  await expect.poll(async () => {
+    const geometry = await readGeometry(page);
+    return Math.ceil(Math.max(...geometry.cards.map((card) => card.right)) - geometry.stack.right);
+  }).toBeLessThanOrEqual(1);
 });
