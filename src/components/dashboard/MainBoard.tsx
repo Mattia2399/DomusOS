@@ -2444,6 +2444,7 @@ export function MainBoard() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [profileInitialSection, setProfileInitialSection] = useState<ProfileSectionId>('members');
   const [editConfirm, setEditConfirm] = useState<'enter' | 'exit' | 'refresh' | null>(null);
+  const [pendingStackRemovalId, setPendingStackRemovalId] = useState<string | null>(null);
   const [isConsumptionView, setIsConsumptionView] = useState(resolveConsumptionFromLocation);
   const [isConsumptionDetailView, setIsConsumptionDetailView] = useState(resolveConsumptionDetailFromLocation);
   const [isAutomationView, setIsAutomationView] = useState(resolveAutomationFromLocation);
@@ -2706,6 +2707,16 @@ export function MainBoard() {
     () => sections.find((section) => section.id === selectedSectionId) ?? null,
     [sections, selectedSectionId],
   );
+
+  const pendingStackRemoval = useMemo(() => {
+    if (!pendingStackRemovalId) return null;
+    const section = sections.find((candidate) => candidate.id === pendingStackRemovalId);
+    if (!section || !['stack-grid', 'stack-horizontal', 'stack-vertical'].includes(section.kind)) return null;
+    return {
+      section,
+      cardCount: widgets.filter((widget) => widget.parentSectionId === pendingStackRemovalId).length,
+    };
+  }, [pendingStackRemovalId, sections, widgets]);
 
   const selectedSidebarPath = useMemo(
     () => visibleSidebarPaths.find((entry) => entry.id === selectedSidebarPathId) ?? null,
@@ -9994,12 +10005,12 @@ export function MainBoard() {
     return id;
   };
 
-  const removeSection = (id: string) => {
+  const executeSectionRemoval = (id: string, stackCardAction: 'move-to-canvas' | 'delete' = 'delete') => {
     beginDashboardEditorMutation();
     const removedSection = sections.find((section) => section.id === id) ?? null;
     const remainingSections = sections.filter((section) => section.id !== id);
     const nextWidgets =
-      removedSection?.kind === 'stack-grid' && (removedSection.stackUseFavoritesGrid ?? false)
+      removedSection && isStackSection(removedSection) && stackCardAction === 'move-to-canvas'
         ? (() => {
             const rootOccupied: Array<Pick<GridItem, 'x' | 'y' | 'w' | 'h'>> = [
               ...remainingSections.map((section) => ({
@@ -10070,6 +10081,22 @@ export function MainBoard() {
     const compacted = compactRootCanvasLayout(remainingSections, nextWidgets);
     setSections(compacted.sections);
     setWidgets(compacted.widgets);
+  };
+
+  const removeSection = (id: string) => {
+    const section = sections.find((candidate) => candidate.id === id);
+    const hasStackCards = Boolean(
+      section
+      && isStackSection(section)
+      && widgets.some((widget) => widget.parentSectionId === id),
+    );
+
+    if (hasStackCards) {
+      setPendingStackRemovalId(id);
+      return;
+    }
+
+    executeSectionRemoval(id);
   };
 
   const removeSelectedWidget = () => {
@@ -11632,6 +11659,58 @@ export function MainBoard() {
           />
         </React.Suspense>
       ) : null}
+
+      <GlassModal
+        isOpen={Boolean(pendingStackRemoval)}
+        onClose={() => setPendingStackRemovalId(null)}
+        eyebrow="Rimozione stack"
+        title={`Rimuovere “${pendingStackRemoval?.section.title || 'Stack'}”?`}
+        description={pendingStackRemoval
+          ? `Lo stack contiene ${pendingStackRemoval.cardCount} card. Scegli se conservarle nel canvas oppure eliminarle insieme allo stack.`
+          : undefined}
+        variant="responsive"
+        size="md"
+        zIndex={230}
+        showCloseButton={false}
+        backdropClassName="bg-black/60 backdrop-blur-3xl"
+        bodyClassName="hidden"
+        footerClassName="flex-col-reverse items-stretch sm:flex-row sm:items-center"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setPendingStackRemovalId(null)}
+              className="glass-button w-full rounded-xl px-4 py-2.5 text-sm text-[color:var(--ui-text-secondary)] sm:w-auto"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!pendingStackRemovalId) return;
+                const sectionId = pendingStackRemovalId;
+                setPendingStackRemovalId(null);
+                executeSectionRemoval(sectionId, 'delete');
+              }}
+              className="glass-button w-full rounded-xl border-rose-300/45 bg-rose-500/16 px-4 py-2.5 text-sm font-semibold text-rose-100 hover:bg-rose-500/26 sm:w-auto"
+            >
+              Elimina anche le card
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!pendingStackRemovalId) return;
+                const sectionId = pendingStackRemovalId;
+                setPendingStackRemovalId(null);
+                executeSectionRemoval(sectionId, 'move-to-canvas');
+              }}
+              className="glass-button w-full rounded-xl border-blue-300/45 bg-blue-500/16 px-4 py-2.5 text-sm font-semibold text-blue-100 hover:bg-blue-500/26 sm:w-auto"
+            >
+              Sposta le card nel canvas
+            </button>
+          </>
+        }
+      />
 
       <GlassModal
         isOpen={Boolean(editConfirm)}
