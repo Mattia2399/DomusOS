@@ -123,7 +123,7 @@ Il packaging produce sia l'archivio diagnostico della web app sia `release-artif
 
 - [Installazione HACS](docs/installation-beta.md)
 - [Aggiornamento e rollback](docs/update-and-rollback.md)
-- [Roadmap](docs/domusos-roadmap.md)
+- [Roadmap](docs/roadmap.md)
 - [Checklist di rilascio](docs/release-checklist.md)
 - [Changelog](CHANGELOG.md)
 

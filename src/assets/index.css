@@ -3,241 +3,25 @@
 
 @font-face {
   font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-light.woff2") format("woff2");
+  src:
+    local("SF Pro Text"),
+    local("Segoe UI Variable Text"),
+    local("Segoe UI"),
+    local("Roboto");
   font-style: normal;
-  font-weight: 300;
+  font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-lightitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 300;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-regular.woff2") format("woff2");
+  font-family: "SF Pro Display";
+  src:
+    local("SF Pro Display"),
+    local("Segoe UI Variable Display"),
+    local("Segoe UI"),
+    local("Roboto");
   font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-regularitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-medium.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-mediumitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-semibold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-semibolditalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-bolditalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-heavy.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 800;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Text";
-  src: url("/fonts/sf-pro/sf-pro-text-heavyitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 800;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-thin.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 100;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-thinitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 100;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-ultralight.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 200;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-ultralightitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 200;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-light.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-lightitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 300;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-regularitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-medium.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-mediumitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-semibold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-semibolditalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-bolditalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-heavy.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 800;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-heavyitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 800;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-black.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "SF Pro Display";
-  src: url("/fonts/sf-pro/sf-pro-display-blackitalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 900;
+  font-weight: 100 900;
   font-display: swap;
 }
 
