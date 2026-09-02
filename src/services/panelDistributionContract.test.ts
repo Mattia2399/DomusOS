@@ -17,7 +17,7 @@ describe('Home Assistant panel distribution contract', () => {
     const hacsManifest = JSON.parse(readProjectFile('hacs.json')) as Record<string, unknown>;
     const viteConfig = readProjectFile('vite.config.ts');
 
-    expect(installation).toContain('Non devi modificare `configuration.yaml`');
+    expect(installation).toContain('You do not need to edit `configuration.yaml`');
     expect(integrationConstants).toContain(`PANEL_WEB_COMPONENT = "${PANEL_ELEMENT_NAME}"`);
     expect(integrationSetup).toContain('await panel_custom.async_register_panel(');
     expect(integrationSetup).toContain('"app_url": f"{STATIC_URL_PATH}/index.html?v={VERSION}"');
