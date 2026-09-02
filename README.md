@@ -1,134 +1,135 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/brand/icon.png" width="112" alt="Logo Domus UI" />
+  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/brand/icon.png" width="112" alt="Domus UI logo" />
   <h1>Domus UI</h1>
-  <p><strong>Una nuova esperienza Home Assistant, progettata per desktop, tablet e smartphone.</strong></p>
-  <p>Dashboard reattiva, builder visuale e controlli avanzati con un'interfaccia coerente e premium.</p>
+  <p><strong>A new Home Assistant experience, designed for desktop, tablet, and mobile.</strong></p>
+  <p>A responsive dashboard, visual builder, and advanced controls in one consistent, premium interface.</p>
 
-  [![Release](https://img.shields.io/github/v/release/Mattia2399/DomusUI?include_prereleases&style=flat-square)](https://github.com/Mattia2399/DomusUI/releases)
-  [![Release gate](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/release-gate.yml?branch=main&label=release%20gate&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/release-gate.yml)
-  [![HACS validation](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/hacs.yml?branch=main&label=HACS&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/hacs.yml)
-  ![Beta](https://img.shields.io/badge/status-public%20beta-f5a623?style=flat-square)
-  ![Responsive](https://img.shields.io/badge/desktop%20%C2%B7%20tablet%20%C2%B7%20mobile-responsive-1473e6?style=flat-square)
-  [![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f855a?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Mattia2399/DomusUI?include_prereleases&style=flat-square)](https://github.com/Mattia2399/DomusUI/releases)
+[![Release gate](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/release-gate.yml?branch=main&label=release%20gate&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/release-gate.yml)
+[![HACS validation](https://img.shields.io/github/actions/workflow/status/Mattia2399/DomusUI/hacs.yml?branch=main&label=HACS&style=flat-square)](https://github.com/Mattia2399/DomusUI/actions/workflows/hacs.yml)
+![Beta](https://img.shields.io/badge/status-public%20beta-f5a623?style=flat-square)
+![Responsive](https://img.shields.io/badge/desktop%20%C2%B7%20tablet%20%C2%B7%20mobile-responsive-1473e6?style=flat-square)
+[![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-2f855a?style=flat-square)](LICENSE)
 </div>
 
-![Domus UI su desktop, tablet e smartphone](https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-showcase.png)
+![Domus UI on desktop, tablet, and mobile](https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-showcase.png)
 
-## La casa, in un'unica esperienza
+## Your home, one experience
 
-| 🧩 Builder visuale | 📱 Layout realmente responsive | 🏠 Integrato in Home Assistant |
-| --- | --- | --- |
-| Card, stack, drag and drop, dimensioni e configurazione senza scrivere YAML. | Griglie dedicate a desktop, tablet e smartphone, sincronizzate nella stessa casa. | Installazione HACS, sessione HA, permessi e comandi autorizzati dal server. |
+| Visual builder                                                                | Truly responsive layouts                                                        | Home Assistant native                                                               |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Cards, stacks, drag and drop, sizing, and configuration without writing YAML. | Dedicated desktop, tablet, and mobile grids, synchronized across the same home. | HACS installation, HA sessions, permissions, and commands authorized by the server. |
 
-| 🔒 Sicurezza esplicita | 🎨 Esperienza coerente | 🛠️ Diagnostica e ripristino |
-| --- | --- | --- |
-| Demo isolata, segreti esclusi dai layout e azioni sensibili protette. | Temi chiari e scuri, superfici glass e controlli ottimizzati per touch. | Versioni del layout, backup sanitizzati, rollback e report senza dati personali. |
+| Explicit security                                                                   | Consistent experience                                               | Diagnostics and recovery                                               |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Isolated Demo mode, secrets excluded from layouts, and protected sensitive actions. | Light and dark themes, glass surfaces, and touch-friendly controls. | Layout history, sanitized backups, rollback, and privacy-safe reports. |
 
-## Perché Domus UI
+## Why Domus UI
 
-- Layout condiviso dalla casa e sincronizzato tra i dispositivi.
-- Reset autorevole condiviso: nessun browser puo ripristinare accidentalmente un layout eliminato usando una cache precedente.
-- Griglie diverse per desktop, tablet e mobile, con drag and drop e undo/redo.
-- Card responsive e pannelli contestuali per le principali entità Home Assistant.
-- Onboarding guidato, Demo isolata e connessione tramite la sessione Home Assistant.
-- Builder visuale con catalogo, stack, dimensioni per breakpoint e configurazione correlati.
-- Temi chiari e scuri, superfici glass e controlli ottimizzati per touch.
-- Permessi centralizzati: Home Assistant resta l'autorità per identità, ruoli e comandi.
+- One home layout shared and synchronized across devices.
+- Authoritative shared reset: an old browser cache cannot accidentally restore a deleted layout.
+- Separate desktop, tablet, and mobile grids with drag and drop and undo/redo.
+- Responsive cards and contextual panels for the main Home Assistant entity domains.
+- Guided onboarding, isolated Demo mode, and connection through the authenticated Home Assistant session.
+- A visual builder with catalog, stacks, breakpoint-aware sizing, and related-device configuration.
+- Light and dark themes, glass surfaces, and touch-friendly controls.
+- Centralized permissions: Home Assistant remains the authority for identity, roles, and commands.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-mobile.jpg" width="390" alt="Domus UI su smartphone" />
+  <img src="https://raw.githubusercontent.com/Mattia2399/DomusUI/main/docs/images/domusos-mobile.jpg" width="390" alt="Domus UI on a smartphone" />
 </div>
 
-## Installazione con HACS
+## Install with HACS
 
-HACS è l'unico metodo di installazione distribuito per la beta. La futura app ufficiale sarà il secondo canale supportato.
+HACS is the only distributed installation method for the public beta. The future official app will become the second supported channel.
 
-[![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
+[![Open the repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
 
-1. Installa e configura [HACS](https://www.hacs.xyz/) in Home Assistant.
-2. Apri il collegamento qui sopra oppure aggiungi `Mattia2399/DomusUI` come repository personalizzato di tipo **Integration**.
-3. Scarica **Domus UI** e riavvia Home Assistant.
-4. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
-5. Cerca **Domus UI**, conferma e apri la nuova voce nella barra laterale.
+1. Install and configure [HACS](https://www.hacs.xyz/) in Home Assistant.
+2. Open the link above, or add `Mattia2399/DomusUI` as a custom **Integration** repository.
+3. Download **Domus UI** and restart Home Assistant.
+4. Go to **Settings -> Devices & services -> Add integration**.
+5. Search for **Domus UI**, confirm, and open the new sidebar entry.
 
-Non servono modifiche a `configuration.yaml`, token manuali o copie dentro `/www`. Consulta la [guida completa](docs/installation-beta.md) per aggiornamento, rollback e risoluzione problemi.
+No `configuration.yaml` changes, manual tokens, or `/www` copies are required. See the [complete installation guide](docs/installation-beta.md) for updates, rollback, and troubleshooting.
 
-> Una release HACS deve contenere l'asset `domusos.zip`. I tag Git senza una GitHub Release pubblicata non sono installabili da HACS.
+> A HACS release must contain the `domusos.zip` asset. Git tags without a published GitHub Release cannot be installed by HACS.
 
-## Stato delle funzioni
+## Feature status
 
-| Area | Stato beta | Note |
-| --- | --- | --- |
-| Home e Builder | Operativa | Layout condiviso, edit mode, catalogo, stack, versioni e ripristino |
-| Stanze | Operativa | Piani, stanze, dispositivi e controlli autorizzati da HA |
-| Sicurezza | Operativa | Alarm, camere e sensori; non sostituisce un sistema certificato |
-| Consumi | Operativa | Riepiloghi e dati disponibili dalle entità HA |
-| Profilo e Impostazioni | Operativa | Preferenze personali separate dalla configurazione della casa |
-| App Gallery | Parziale | Irrigazione in beta; Locale Tecnico e Piscina & Spa in preparazione |
-| Automazioni | Prossimamente | L'interfaccia incompleta non è esposta come funzione utilizzabile |
-| Calendar, Mappa e Liste | Pianificata | Previste dopo la prima beta |
+| Area                     | Beta status  | Notes                                                                          |
+| ------------------------ | ------------ | ------------------------------------------------------------------------------ |
+| Home and Builder         | Operational  | Shared layout, Edit Mode, catalog, stacks, versions, and recovery              |
+| Rooms                    | Operational  | Floors, rooms, devices, and controls authorized by HA                          |
+| Security                 | Operational  | Alarm, cameras, and sensors; not a replacement for a certified security system |
+| Consumption              | Operational  | Summaries based on data exposed by HA entities                                 |
+| Profile and Settings     | Operational  | Personal preferences separated from home-wide configuration                    |
+| App Gallery              | Partial      | Irrigation is in beta; Utility Room and Pool & Spa are in development          |
+| Automations              | Coming later | The incomplete interface is not exposed as a usable feature                    |
+| Calendar, Map, and Lists | Planned      | Scheduled after the first beta cycle                                           |
 
-Lo stato dettagliato e i limiti hardware verificati sono mantenuti in [Stato funzionalità](docs/feature-status.md).
+Detailed status and verified hardware limitations are documented in [Feature status](docs/feature-status.md).
 
-> **Irrigazione:** panoramica, configurazione, calendario, consumi e comandi
-> supervisionati sono disponibili. Il motore server-side con watchdog e
-> ripristino dopo riavvio e pianificato nel prossimo ciclo: fino ad allora non
-> usare la programmazione beta come unica protezione per irrigazioni non
-> presidiate.
+> **Irrigation:** overview, configuration, calendar, consumption, and supervised
+> commands are available. The server-side engine with watchdog and restart
+> recovery is planned for the next development cycle. Until then, do not use
+> beta scheduling as the only safeguard for unattended irrigation.
 
-## Card disponibili
+## Available cards
 
-Sensor, Light, Switch, Climate, Alarm, Lock, Cover, Camera, Media Player, Vacuum e Members. Le card usano dimensioni e contenuti adattivi; alcune capability dipendono dagli attributi e dai servizi realmente esposti dall'integrazione Home Assistant del dispositivo.
+Sensor, Light, Switch, Climate, Alarm, Lock, Cover, Camera, Media Player, Vacuum, and Members. Cards adapt their content and layout to the available size. Some capabilities depend on the attributes and services actually exposed by the device's Home Assistant integration.
 
-## Sicurezza e privacy
+## Security and privacy
 
-- Token, PIN, codici Alarm/Lock e passkey non entrano in layout, backup o sincronizzazione.
-- Demo e casa reale usano spazi separati.
-- Le modifiche strutturali sono riservate a Owner/Admin e funzionano in modalità fail-closed.
-- I comandi finali vengono comunque autorizzati dal server Home Assistant.
-- La conferma dispositivo WebAuthn è una protezione locale, non un secondo fattore server certificato.
-- Domus UI beta non è un sistema di allarme, sicurezza o safety certificato.
+- Tokens, PINs, Alarm/Lock codes, and passkeys are excluded from layouts, backups, and synchronization.
+- Demo mode and the real home use separate storage spaces.
+- Structural changes are restricted to Owner/Admin users and fail closed.
+- Home Assistant still performs final server-side authorization for commands.
+- WebAuthn device confirmation is a local safeguard, not a certified server-side second factor.
+- Domus UI beta is not a certified alarm, security, or safety system.
 
-Leggi [Sicurezza e privacy](docs/security-and-privacy.md) e la [checklist beta](docs/security-beta-checklist.md) prima dell'uso su una casa reale.
+Read [Security and privacy](docs/security-and-privacy.md) and the [beta security checklist](docs/security-beta-checklist.md) before using Domus UI in a real home.
 
-## Supporto e feedback
+## Support and feedback
 
-Domus UI include una pagina nativa **Profilo > Supporto e feedback**. Da lì puoi scaricare una diagnostica locale ripulita e scegliere il canale corretto:
+Domus UI includes **Profile > Support & feedback**. From there, you can download a sanitized local diagnostic report and choose the appropriate channel:
 
-- [segnala un bug riproducibile](https://github.com/Mattia2399/DomusUI/issues/new?template=bug_report.yml);
-- [proponi un'idea o fai una domanda](https://github.com/Mattia2399/DomusUI/discussions);
-- [invia privatamente una vulnerabilità](https://github.com/Mattia2399/DomusUI/security/advisories/new).
+- [report a reproducible bug](https://github.com/Mattia2399/DomusUI/issues/new?template=bug_report.yml);
+- [suggest an idea or ask a question](https://github.com/Mattia2399/DomusUI/discussions);
+- [privately report a vulnerability](https://github.com/Mattia2399/DomusUI/security/advisories/new).
 
-La diagnostica non viene inviata automaticamente e non contiene token, PIN, URL, nomi di entità, stanze o valori della casa. Prima di pubblicare screenshot o log, verifica comunque che non mostrino informazioni personali.
+Diagnostics are never sent automatically and exclude tokens, PINs, URLs, entity or room names, and home state values. Before publishing screenshots or logs, always verify that they do not reveal personal information.
 
-## Sviluppo
+## Development
 
-Richiede Node.js 22.22.0 o superiore.
+Node.js 22.22.0 or newer is required.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Verifica completa prima di una release:
+Run the complete verification suite before a release:
 
 ```bash
 npm run release:gate
 npm run release:package
 ```
 
-Il packaging produce sia l'archivio diagnostico della web app sia `release-artifacts/domusos.zip`, pronto per una GitHub Release HACS.
+Packaging creates both the diagnostic web-app archive and `release-artifacts/domusos.zip`, ready for a HACS GitHub Release.
 
-## Documentazione
+## Documentation
 
-- [Installazione HACS](docs/installation-beta.md)
-- [Aggiornamento e rollback](docs/update-and-rollback.md)
+- [HACS installation](docs/installation-beta.md)
+- [Updates and rollback](docs/update-and-rollback.md)
+- [Feature status](docs/feature-status.md)
+- [Security and privacy](docs/security-and-privacy.md)
 - [Roadmap](docs/roadmap.md)
-- [Checklist di rilascio](docs/release-checklist.md)
+- [Release checklist](docs/release-checklist.md)
 - [Changelog](CHANGELOG.md)
 
-## Licenza e supporto
+## License and support
 
-Domus UI è distribuito con licenza [GNU GPL-3.0](LICENSE). Può essere usato, studiato, modificato e ridistribuito nel rispetto della licenza. L'app ufficiale, eventuali servizi ospitati e il supporto commerciale potranno essere offerti separatamente.
+Domus UI is released under the [GNU GPL-3.0](LICENSE). You may use, study, modify, and redistribute it under the terms of that license. The official app, hosted services, and commercial support may be offered separately in the future.
 
-Per contribuire consulta [CONTRIBUTING.md](CONTRIBUTING.md). Le vulnerabilità devono essere inviate tramite il canale privato descritto in [SECURITY.md](SECURITY.md), mai tramite issue pubbliche.
+See [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Vulnerabilities must be reported through the private channel described in [SECURITY.md](SECURITY.md), never through public issues.

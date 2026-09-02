@@ -1,90 +1,90 @@
-# Sicurezza e privacy
+# Security and privacy
 
-Aggiornata: 2026-08-03
+Updated: 2026-09-02
 
-Domus UI è un’interfaccia client per Home Assistant. Non è un sistema di allarme certificato, non sostituisce Home Assistant e non costituisce una barriera server-side autonoma.
+Domus UI is a client interface for Home Assistant. It is not a certified alarm system, does not replace Home Assistant, and is not an independent server-side security boundary.
 
-## Autorità e permessi
+## Authority and permissions
 
-- Home Assistant determina identità, ruolo e autorizzazione finale dei comandi.
-- Owner e Admin possono modificare la struttura della dashboard.
-- Gli utenti limitati possono usare soltanto le funzioni consentite dalla policy centrale e da Home Assistant.
-- Se identità o connessione non sono verificabili, la modalità reale passa in sola lettura e blocca comandi e autosave.
+- Home Assistant determines identity, role, and final command authorization.
+- Owner and Admin users can modify the dashboard structure.
+- Limited users can use only the features allowed by the centralized policy and Home Assistant.
+- If identity or connection cannot be verified, real mode becomes read-only and blocks commands and autosave.
 
-## Dati nel browser
+## Data stored in the browser
 
-Il layout, le preferenze e parte della configurazione vivono nello storage locale del browser. Demo e casa reale usano spazi separati.
+Some preferences and runtime data live in browser storage. Demo mode and the real home use separate spaces. Shared dashboard configuration is persisted through Home Assistant when the installed panel supports it.
 
-PIN e codici Alarm/Lock:
+Alarm and Lock PINs/codes:
 
-- restano in memoria per impostazione predefinita;
-- possono essere ricordati sul dispositivo soltanto con consenso esplicito;
-- non sono protetti da un vault certificato;
-- non vengono inclusi in backup, sync, log o diagnostica.
+- remain in memory by default;
+- can be remembered on the device only after explicit consent;
+- are not protected by a certified vault;
+- are excluded from backups, synchronization, logs, and diagnostics.
 
-La conferma dispositivo WebAuthn è una conferma locale di presenza. Non è un secondo fattore server Home Assistant.
+WebAuthn device confirmation is a local presence check. It is not a Home Assistant server-side second factor.
 
-## Comandi Alarm e pagina Security
+## Alarm commands and the Security page
 
-Card Alarm, pannello contestuale e `/security` condividono la stessa policy. Quando configurata, la conferma dispositivo viene tentata prima del tastierino; un annullamento o un timeout non autorizzano il comando. Se è presente un codice extra locale, il browser verifica la combinazione ma invia a Home Assistant esclusivamente il PIN HA.
+Alarm cards, contextual panels, and `/security` share the same policy. When configured, device confirmation is attempted before the keypad; cancellation or timeout never authorizes the command. When an additional local code is configured, the browser verifies the combination but sends only the Home Assistant PIN to Home Assistant.
 
-La pagina `/security` mostra soltanto le modalità dichiarate da `supported_features`. In modalità reale offline i comandi sono bloccati e nessuno stato viene simulato localmente. Dopo l'invio, il nuovo stato è presentato come confermato soltanto quando compare negli stati Home Assistant. Il comando SOS compare solo per entità che supportano `alarm_trigger`, richiede una conferma di pericolo esplicita e attraversa lo stesso gate di autenticazione degli altri comandi.
+The `/security` page shows only modes declared by `supported_features`. In real mode while offline, commands are blocked and no state is simulated locally. After submission, a state is shown as confirmed only when it appears in Home Assistant states. SOS is available only for entities supporting `alarm_trigger`, requires explicit danger confirmation, and uses the same authentication gate as other alarm commands.
 
-## Token
+## Tokens
 
-- l'integrazione HACS registra un panel same-origin che riusa la sessione HA già autenticata;
-- OAuth usa token revocabili e non inserisce password HA nella dashboard;
-- il token manuale resta solo un percorso avanzato interno e, se ricordato, deve essere considerato sensibile;
-- token OAuth e manuali sono esclusi da backup e diagnostica.
+- The HACS integration registers a same-origin panel that reuses the authenticated HA session.
+- OAuth uses revocable tokens and never asks Domus UI to store the HA password.
+- Manual tokens remain an advanced internal path and must be treated as sensitive if remembered.
+- OAuth and manual tokens are excluded from backups and diagnostics.
 
-## Backup
+## Backups
 
-Il backup include configurazione e preferenze ripristinabili, ma esclude:
+Backups include restorable configuration and preferences but exclude:
 
-- token OAuth e manuali;
-- PIN e codici widget;
-- credential/passkey locali;
-- snapshot di recupero dell’editor;
-- stato runtime Demo/Reale.
+- OAuth and manual tokens;
+- PINs and widget codes;
+- local credentials/passkeys;
+- editor recovery snapshots;
+- Demo/real runtime state.
 
-Un restore sanitizza anche backup legacy o manipolati prima di scrivere nello storage.
+Restore also sanitizes legacy or manipulated backups before writing any data.
 
-## Contenuti dinamici
+## Dynamic content
 
-URL di immagini, media, iframe e server HA passano attraverso validazione condivisa. La build applica una Content Security Policy senza `unsafe-eval`; gli header del server di produzione devono mantenere una policy equivalente.
+Image, media, iframe, and Home Assistant server URLs pass through shared validation. Production builds apply a Content Security Policy without `unsafe-eval`; production server headers must preserve an equivalent policy.
 
-Camera, media e mappe possono comunque mostrare dati personali provenienti dalla casa. La beta non invia telemetria di prodotto per impostazione predefinita.
+Cameras, media, and maps may still display personal data supplied by the home. The beta does not send product telemetry by default.
 
-## Diagnostica per il supporto
+## Support diagnostics
 
-Il report viene creato soltanto quando l’utente seleziona `Scarica diagnostica`. Contiene versione applicativa, modalità runtime, stato della connessione, dimensioni del viewport e conteggi aggregati di entità, domini, dispositivi, stanze, card e Device Health.
+A report is generated only when the user selects **Download diagnostics**. It contains the app version, runtime mode, connection status, viewport dimensions, and aggregate counts for entities, domains, devices, rooms, cards, and Device Health.
 
-Il generatore non legge il `localStorage` e non esporta:
+The generator does not read all of `localStorage` and does not export:
 
-- URL o token Home Assistant;
-- PIN, codici o credential WebAuthn;
-- identificativi, nomi o valori delle entità;
-- nomi di dispositivi, persone o stanze;
-- coordinate, immagini o contenuti multimediali;
-- messaggi completi di errore.
+- Home Assistant URLs or tokens;
+- PINs, codes, or WebAuthn credentials;
+- entity identifiers, names, or values;
+- device, person, or room names;
+- coordinates, images, or media content;
+- complete error messages.
 
-## Limiti noti
+## Known limitations
 
-- rate limit e audit locali possono essere aggirati da chi controlla il browser;
-- una persona con accesso fisico a un browser sbloccato può leggere configurazioni locali;
-- la sicurezza reale di Alarm e Lock dipende dall’entità, dall’integrazione e dai permessi configurati in Home Assistant;
-- un audit immutabile o un rate limit realmente protettivo richiedono un futuro backend/integration HA.
+- Browser-local rate limits and audit data can be bypassed by someone controlling the browser.
+- Someone with physical access to an unlocked browser may read local configuration.
+- Real Alarm and Lock security depends on the entity, integration, and permissions configured in Home Assistant.
+- An immutable audit log or protective rate limit requires a future Home Assistant backend/integration.
 
-## Segnalare un problema
+## Reporting a problem
 
-Non allegare token, PIN, backup non verificati o dump completi di `localStorage`.
+Never attach tokens, PINs, unverified backups, or complete `localStorage` dumps.
 
-Fornisci:
+Provide:
 
-- il report creato da `Impostazioni > Avanzate > Scarica diagnostica`;
-- versione dell’app;
-- metodo di installazione;
-- versione Home Assistant;
-- browser e sistema operativo;
-- passaggi riproducibili;
-- messaggi della console dopo aver rimosso dati personali.
+- the report generated by **Settings > Advanced > Download diagnostics**;
+- the Domus UI version;
+- the installation method;
+- the Home Assistant version;
+- browser and operating system;
+- reproducible steps;
+- console messages after removing personal data.

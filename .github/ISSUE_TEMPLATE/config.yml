@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Idee, domande e proposte
+  - name: Ideas, questions, and feature requests
     url: https://github.com/Mattia2399/DomusUI/discussions
-    about: Usa Discussions per proporre funzioni, chiedere aiuto e confrontarti con la community.
-  - name: Segnalazione privata di sicurezza
+    about: Use Discussions to suggest features, ask for help, and talk with the community.
+  - name: Private security report
     url: https://github.com/Mattia2399/DomusUI/security/advisories/new
-    about: Usa questo canale per vulnerabilità e dati sensibili.
+    about: Use this private channel for vulnerabilities and sensitive data.

@@ -1,35 +1,35 @@
-# Sicurezza di Domus UI
+# Domus UI security policy
 
-Domus UI è in beta pubblica. Non è un sistema di allarme, sicurezza o safety certificato e Home Assistant resta l'autorità finale per identità, permessi e comandi.
+Domus UI is in public beta. It is not a certified alarm, security, or safety system, and Home Assistant remains the final authority for identity, permissions, and commands.
 
-## Versioni supportate
+## Supported versions
 
-Le correzioni di sicurezza vengono applicate esclusivamente all'ultima release beta pubblicata. Prima di segnalare un problema, verifica che sia ancora riproducibile sulla versione più recente.
+Security fixes are applied only to the latest public beta release. Before reporting a problem, confirm that it is still reproducible on the latest version.
 
-## Segnalare una vulnerabilità
+## Reporting a vulnerability
 
-Non aprire una issue pubblica per vulnerabilità, token, PIN, URL privati o dati della casa.
+Do not open a public issue for vulnerabilities, tokens, PINs, private URLs, or household data.
 
-Usa **Security → Report a vulnerability** nel repository GitHub. Includi:
+Use **Security -> Report a vulnerability** in this GitHub repository. Include:
 
-- versione Domus UI e Home Assistant;
-- metodo di installazione;
-- impatto e prerequisiti;
-- passaggi minimi per riprodurre il problema;
-- eventuale proposta di correzione;
-- log già ripuliti da token, PIN, indirizzi, nomi e identificativi.
+- the Domus UI and Home Assistant versions;
+- the installation method;
+- impact and prerequisites;
+- the minimum steps needed to reproduce the issue;
+- a suggested fix, if available;
+- logs already stripped of tokens, PINs, addresses, names, and identifiers.
 
-Cercheremo di confermare la ricezione entro 72 ore e comunicheremo in privato stato, correzione e pubblicazione coordinata. Non possiamo garantire ricompense economiche.
+We aim to acknowledge reports within 72 hours and will coordinate status, remediation, and disclosure privately. We cannot guarantee financial rewards.
 
-## Ambito
+## Scope
 
-Sono particolarmente rilevanti:
+Reports are especially relevant when they involve:
 
-- bypass di ruoli o capability Home Assistant;
-- esposizione di token, PIN, passkey o dati sensibili;
-- esecuzione di comandi senza conferma o autorizzazione;
-- injection, XSS, URL o messaggi panel bridge non validati;
-- contaminazione tra Demo e casa reale;
-- segreti inclusi in backup, sincronizzazione o diagnostica.
+- bypassing Home Assistant roles or capabilities;
+- exposure of tokens, PINs, passkeys, or sensitive data;
+- commands executed without confirmation or authorization;
+- injection, XSS, unsafe URLs, or unvalidated panel-bridge messages;
+- contamination between Demo mode and a real home;
+- secrets included in backups, synchronization, or diagnostics.
 
-Rate limit e audit locali al browser sono protezioni UX e non controlli server immutabili. Consulta [Sicurezza e privacy](docs/security-and-privacy.md) per il modello di sicurezza completo.
+Browser-local rate limits and audit records are UX safeguards, not immutable server-side controls. See [Security and privacy](docs/security-and-privacy.md) for the complete security model.

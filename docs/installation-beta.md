@@ -1,103 +1,101 @@
-# Installazione HACS
+# HACS installation
 
-Aggiornata: 2026-08-25
+Updated: 2026-09-02
 
-HACS è il solo canale di installazione distribuito per Domus UI beta. La futura app ufficiale sarà il secondo metodo supportato. Le precedenti installazioni manuali tramite `/www` e `panel_custom` sono considerate legacy e non fanno parte del percorso pubblico.
+HACS is the only distributed installation channel for the Domus UI public beta. The future official app will become the second supported method. Previous manual `/www` and `panel_custom` installations are considered legacy and are not part of the public installation path.
 
-## Requisiti
+## Requirements
 
-- Home Assistant 2025.1.0 o successivo;
-- HACS configurato;
-- accesso Owner/Admin per installare e aggiungere l'integrazione;
-- backup recente della configurazione Home Assistant;
-- una GitHub Release di Domus UI contenente `domusos.zip`.
+- Home Assistant 2025.1.0 or newer;
+- HACS configured;
+- Owner/Admin access to install and add the integration;
+- a recent Home Assistant backup;
+- a Domus UI GitHub Release containing `domusos.zip`.
 
-## Installazione
+## Installation
 
-1. Apri il repository direttamente in HACS:
+1. Open the repository directly in HACS:
 
-   [![Apri il repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
+   [![Open the repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mattia2399&repository=DomusUI&category=integration)
 
-2. Se il collegamento non importa il repository, in HACS apri il menu dei repository personalizzati e aggiungi:
+2. If the link does not import the repository, open the custom repositories menu in HACS and add:
 
    ```text
    https://github.com/Mattia2399/DomusUI
    ```
 
-   Categoria: `Integration`.
+   Category: `Integration`.
 
-3. Scarica l'ultima release di **Domus UI**.
-4. Riavvia Home Assistant.
-5. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
-6. Cerca **Domus UI** e conferma il modulo.
-7. Apri **Domus UI** dalla barra laterale e completa il primo avvio.
+3. Download the latest **Domus UI** release.
+4. Restart Home Assistant.
+5. Go to **Settings -> Devices & services -> Add integration**.
+6. Search for **Domus UI** and confirm.
+7. Open **Domus UI** from the sidebar and complete onboarding.
 
-L'integrazione registra automaticamente il pannello e i file frontend. Non devi modificare `configuration.yaml`, creare token o copiare file in `/config/www`.
+The integration registers the panel and frontend files automatically. You do not need to edit `configuration.yaml`, create a token, or copy files to `/config/www`.
 
-## Primo avvio
+## First launch
 
-1. Deve comparire la schermata di benvenuto con `Inizia ora`.
-2. Scegli tra Demo e collegamento della casa.
-3. Nel panel HACS la casa viene rilevata attraverso la sessione Home Assistant già autenticata.
-4. Anche quando la casa viene trovata automaticamente, completa Analisi, Layout e Organizza.
-5. Al termine scegli se mantenere il layout dimostrativo o iniziare con un canvas vuoto quando l'opzione sarà disponibile nella release installata.
+1. The welcome screen with `Get started` must appear.
+2. Choose between Demo mode and connecting your home.
+3. In the HACS panel, Domus UI discovers the home through the already authenticated Home Assistant session.
+4. Even when the home is detected automatically, complete Analysis, Layout, and Organize.
+5. At the end, choose whether to keep the guided-demo layout or start from an empty canvas when that option is available in the installed release.
 
-## Aggiornamento
+## Updating
 
-1. Crea un backup dalla sezione Domus UI e un backup Home Assistant.
-2. Installa l'aggiornamento proposto da HACS.
-3. Riavvia Home Assistant se HACS lo richiede.
-4. Ricarica completamente il browser o chiudi e riapri l'app Home Assistant.
-5. Verifica la versione in Impostazioni e controlla Home, Stanze e Sicurezza.
+1. Create a Domus UI dashboard backup and a Home Assistant backup.
+2. Install the update offered by HACS.
+3. Restart Home Assistant if HACS requests it.
+4. Hard-refresh the browser, or fully close and reopen the Home Assistant app.
+5. Check the version in Settings, then verify Home, Rooms, and Security.
 
-HACS usa le GitHub Release pubblicate, non i soli tag Git. Il workflow `Publish release` genera e allega automaticamente `domusos.zip` quando viene pubblicato un tag corrispondente alla versione del `package.json`.
+HACS installs published GitHub Releases, not standalone Git tags. The `Publish release` workflow generates and attaches `domusos.zip` when a tag matching the version in `package.json` is published.
 
-Le beta pubbliche mantengono il suffisso SemVer `-beta.N`, ma vengono esposte
-come release GitHub ordinarie: in questo modo HACS seleziona il pacchetto
-`domusos.zip` e non tenta di installare il commit del branch predefinito.
+Public beta versions keep the SemVer `-beta.N` suffix but are published as standard GitHub Releases. This lets HACS select `domusos.zip` instead of attempting to install a commit from the default branch.
 
 ## Rollback
 
-Da HACS apri Domus UI, seleziona una delle release precedenti e reinstalla. Dopo il riavvio verifica che la versione del layout sia ancora leggibile. Il rollback dell'integrazione non sostituisce il ripristino di una versione layout.
+Open Domus UI in HACS, select one of the available previous releases, and reinstall it. After restarting, verify that the existing layout format is still supported. Rolling back the integration does not restore an older layout by itself.
 
-Consulta anche [Aggiornamento e rollback](update-and-rollback.md).
+See [Updates and rollback](update-and-rollback.md) for the complete procedure.
 
-## Risoluzione problemi
+## Troubleshooting
 
-### Domus UI non appare tra le integrazioni
+### Domus UI does not appear in the integrations list
 
-- riavvia Home Assistant dopo l'installazione HACS;
-- svuota la cache del browser;
-- controlla che esista `/config/custom_components/domusos/manifest.json`;
-- verifica nei log HA eventuali errori `domusos`.
+- Restart Home Assistant after installing through HACS.
+- Clear the browser cache.
+- Confirm that `/config/custom_components/domusos/manifest.json` exists.
+- Check Home Assistant logs for `domusos` errors.
 
-### Il pannello è nero o non si carica
+### The panel is black or does not load
 
-- reinstalla la release da HACS per ripristinare la cartella `frontend` inclusa nello ZIP;
-- verifica che `domusos.zip` appartenga alla stessa versione mostrata dalla release;
-- esegui un hard refresh del browser;
-- controlla la console per richieste fallite sotto `/domusos_static/`.
+- Reinstall the release from HACS to restore the `frontend` directory included in the ZIP.
+- Confirm that `domusos.zip` belongs to the version shown by the release.
+- Hard-refresh the browser.
+- Check the browser console for failed requests under `/domusos_static/`.
 
-### La modifica del layout non è disponibile
+### Edit Mode is unavailable
 
-- controlla che l'identità HA sia Owner/Admin;
-- verifica lo stato della connessione nel pannello;
-- attendi il completamento del caricamento della configurazione condivisa;
-- non usare entità mock per inviare servizi Home Assistant.
+- Confirm that the Home Assistant identity is Owner/Admin.
+- Check the connection status shown by Domus UI.
+- Wait for shared configuration hydration to finish.
+- Do not use mock entities to send Home Assistant services.
 
-## Verifica minima dopo l'installazione
+## Minimum post-installation verification
 
-- welcome e onboarding compaiono al primo accesso;
-- il ruolo Home Assistant mostrato è corretto;
-- un utente limitato non può entrare in Edit Mode;
-- il layout si salva su Home Assistant e viene letto da un secondo dispositivo;
-- Home e Stanze navigano senza ricaricare il documento;
-- i comandi reali vengono bloccati quando la connessione è offline;
-- backup e versioni non espongono token, PIN o codici.
+- Welcome and onboarding appear on first launch.
+- The displayed Home Assistant role is correct.
+- A limited user cannot enter Edit Mode.
+- The layout is saved to Home Assistant and loaded by a second device.
+- Home and Rooms navigate without reloading the document.
+- Real commands are blocked while the connection is offline.
+- Backups and layout versions do not expose tokens, PINs, or codes.
 
-## Distribuzione da sorgente
+## Building from source
 
-Per i maintainer:
+For maintainers:
 
 ```bash
 npm ci
@@ -105,8 +103,8 @@ npm run release:gate
 npm run release:package
 ```
 
-Il comando produce:
+The packaging command creates:
 
-- `release-artifacts/domusos.zip` per HACS;
-- l'archivio web diagnostico;
+- `release-artifacts/domusos.zip` for HACS;
+- the diagnostic web archive;
 - `release-artifacts/SHA256SUMS`.

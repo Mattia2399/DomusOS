@@ -1,48 +1,39 @@
-# Icona HACS e Home Assistant
+# HACS and Home Assistant branding
 
-Da Home Assistant 2026.3 le custom integration possono distribuire direttamente
-i propri asset del brand. Domus UI include quindi le icone in
-`custom_components/domusos/brand`, senza dipendere dal catalogo centralizzato
-Home Assistant Brands.
+Starting with Home Assistant 2026.3, custom integrations can distribute their own brand assets. Domus UI therefore includes its icons in `custom_components/domusos/brand` without depending on the centralized Home Assistant Brands catalog.
 
-## Asset pronti
+## Included assets
 
 - `brand/icon.png`: 256 x 256 px;
 - `brand/icon@2x.png`: 512 x 512 px;
-- gli stessi file sono inclusi in `custom_components/domusos/brand` e nel
-  pacchetto `domusos.zip`.
+- the same files are included in `custom_components/domusos/brand` and in `domusos.zip`.
 
-Il comando che rigenera gli asset dal vettoriale sorgente e:
+Regenerate the assets from the vector source with:
 
 ```bash
 node scripts/generate-brand-assets.mjs
 ```
 
-## Verifica della policy
+## Policy verification
 
-La pull request di verifica aperta il 31 agosto 2026 e stata chiusa
-automaticamente perché il repository non accetta più icone per nuove custom
-integration:
+The verification pull request opened on August 31, 2026 was closed automatically because the repository no longer accepts icons for new custom integrations:
 
 - <https://github.com/home-assistant/brands/pull/11076>
 
-La sorgente ufficiale indicata dal bot Home Assistant e:
+The official source referenced by the Home Assistant bot is:
 
 - <https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api>
 
-Per verificare una release e sufficiente controllare che `domusos.zip`
-contenga entrambi gli asset nella cartella `brand/`.
+To verify a release, confirm that `domusos.zip` contains both assets in the `brand/` directory.
 
-Il nome della cartella deve restare uguale al dominio tecnico dichiarato nel
-manifest (`domusos`), anche se il nome visualizzato dall'integrazione cambia.
+The directory name must continue to match the technical domain declared by the manifest (`domusos`), even when the integration's display name changes.
 
-## Metadati GitHub consigliati
+## Recommended GitHub metadata
 
-Descrizione:
+Description:
 
 > Premium responsive dashboard and visual builder for Home Assistant - desktop, tablet and mobile.
 
-Topic:
+Topics:
 
-`home-assistant`, `hacs`, `dashboard`, `smart-home`, `home-automation`,
-`react`, `responsive-design`, `custom-integration`.
+`home-assistant`, `hacs`, `dashboard`, `smart-home`, `home-automation`, `react`, `responsive-design`, `custom-integration`, `domus-ui`.

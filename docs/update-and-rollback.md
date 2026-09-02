@@ -1,52 +1,52 @@
-# Aggiornamento e rollback
+# Updates and rollback
 
-Aggiornata: 2026-08-25
+Updated: 2026-09-02
 
-## Prima di aggiornare
+## Before updating
 
-1. Scarica un backup della dashboard da Domus UI.
-2. Crea un backup Home Assistant.
-3. Leggi il `CHANGELOG.md` della nuova release.
-4. Verifica che la release GitHub contenga `domusos.zip` e `SHA256SUMS`.
-5. Ricorda che backup e sync non contengono token, PIN, codici o passkey.
+1. Download a dashboard backup from Domus UI.
+2. Create a Home Assistant backup.
+3. Read the new release notes in `CHANGELOG.md`.
+4. Confirm that the GitHub Release contains `domusos.zip` and `SHA256SUMS`.
+5. Remember that backups and synchronization exclude tokens, PINs, codes, and passkeys.
 
-## Aggiornamento tramite HACS
+## Update through HACS
 
-1. Apri HACS e seleziona Domus UI.
-2. Installa la release proposta.
-3. Riavvia Home Assistant quando richiesto.
-4. Fai un hard refresh del browser o riapri completamente l'app HA.
-5. Verifica la versione in Impostazioni e controlla Home, Stanze e Sicurezza.
+1. Open HACS and select Domus UI.
+2. Install the offered release.
+3. Restart Home Assistant when requested.
+4. Hard-refresh the browser or fully reopen the Home Assistant app.
+5. Check the version in Settings, then verify Home, Rooms, and Security.
 
-HACS aggiorna insieme integrazione, bridge e frontend. Non sovrascrivere manualmente singoli file: un mix tra release può produrre una pagina nera o protocolli non compatibili.
+HACS updates the integration, bridge, and frontend together. Do not manually overwrite individual files: mixing files from different releases can cause a black page or incompatible bridge protocols.
 
-## Verifica post-aggiornamento
+## Post-update checks
 
-- apertura del panel e completamento del caricamento;
-- connessione e ruolo HA corretti;
-- layout invariato su desktop, tablet e mobile;
-- navigazione Home/Stanze;
-- modifica e salvataggio di una card non critica;
-- comando Light o Switch;
-- download di un nuovo backup;
-- assenza di errori bloccanti nella console e nei log Home Assistant.
+- The panel opens and finishes loading.
+- The Home Assistant connection and role are correct.
+- The layout is unchanged on desktop, tablet, and mobile.
+- Home and Rooms navigation works.
+- A non-critical card can be edited and saved.
+- A Light or Switch command works.
+- A new backup can be downloaded.
+- No blocking errors appear in the browser console or Home Assistant logs.
 
-## Rollback dell'integrazione
+## Roll back the integration
 
-1. In HACS apri Domus UI.
-2. Dal menu di download seleziona una release precedente tra quelle disponibili.
-3. Reinstalla e riavvia Home Assistant.
-4. Ricarica completamente il browser.
-5. Se la nuova versione aveva modificato la configurazione condivisa, usa una versione layout o il backup creato prima dell'aggiornamento.
+1. Open Domus UI in HACS.
+2. From the download menu, select one of the available previous releases.
+3. Reinstall it and restart Home Assistant.
+4. Hard-refresh the browser.
+5. If the newer version changed the shared configuration, restore a layout version or the backup created before updating.
 
-Il rollback HACS e il ripristino del layout sono operazioni diverse: il primo cambia il codice, il secondo cambia la configurazione della dashboard.
+HACS rollback and layout restore are separate operations: the first changes application code, while the second changes dashboard configuration.
 
-## Ripristino di emergenza
+## Emergency recovery
 
-Se Domus UI non si apre:
+If Domus UI does not open:
 
-- usa la dashboard standard Home Assistant;
-- disabilita o rimuovi temporaneamente l'integrazione Domus UI;
-- reinstalla da HACS una release nota e riavvia HA;
-- conserva versione installata, browser, sistema operativo e messaggi `domusos` dei log;
-- non condividere token, PIN o file di storage completi nei ticket.
+- use the standard Home Assistant dashboard;
+- temporarily disable or remove the Domus UI integration;
+- reinstall a known release from HACS and restart Home Assistant;
+- record the installed version, browser, operating system, and `domusos` log messages;
+- never share tokens, PINs, or complete storage files in support tickets.

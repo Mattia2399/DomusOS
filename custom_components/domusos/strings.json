@@ -3,12 +3,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Configura Domus UI",
-        "description": "Aggiungi Domus UI alla barra laterale. Userà l'account Home Assistant attuale per identità, permessi e comandi."
+        "title": "Set up Domus UI",
+        "description": "Add Domus UI to the sidebar. It uses the current Home Assistant account for identity, permissions, and commands."
       }
     },
     "abort": {
-      "single_instance_allowed": "Domus UI è già configurato."
+      "single_instance_allowed": "Domus UI is already configured."
     }
   }
 }

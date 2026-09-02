@@ -1,42 +1,42 @@
-# Stato delle funzionalità
+# Feature status
 
-Aggiornato: 2026-08-25
+Updated: 2026-09-02
 
-Questa pagina distingue ciò che è utilizzabile nella beta dalle funzioni in anteprima. “Operativa” indica che il percorso principale è implementato e coperto dai test del progetto; non garantisce la compatibilità con ogni integrazione hardware Home Assistant.
+This page distinguishes usable beta functionality from previews and planned work. **Operational** means that the primary path is implemented and covered by project tests; it does not guarantee compatibility with every Home Assistant hardware integration.
 
-## Pagine
+## Pages
 
-| Pagina | Stato | Esperienza esposta |
-| --- | --- | --- |
-| Home | Operativa beta | Dashboard, card, pannelli contestuali, builder, stack, versioni e layout condiviso |
-| Stanze | Operativa beta | Esplorazione per piano/stanza e controllo delle entità consentite da HA |
-| Sicurezza | Operativa beta | Hub Alarm, camere, sensori selezionabili e autorizzazione condivisa |
-| Consumi | Operativa beta | Visualizzazioni basate sui dati realmente disponibili in HA |
-| Profilo | Operativa beta | Preferenze personali e tema del dispositivo |
-| Impostazioni | Operativa beta | Casa, entità, persone, sistema, backup, versioni e attenzione |
-| App Gallery | Parziale | Launcher e Irrigazione beta disponibili; Locale Tecnico e Piscina & Spa mostrano uno stato “Prossimamente” |
-| Automazioni | Prossimamente | Il vecchio workspace resta disattivato finché il flusso non sarà pronto per la beta |
+| Page        | Status           | Available experience                                                                               |
+| ----------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| Home        | Beta operational | Dashboard, cards, contextual panels, builder, stacks, versions, and shared layout                  |
+| Rooms       | Beta operational | Floor/room browsing and controls for entities authorized by HA                                     |
+| Security    | Beta operational | Alarm hub, cameras, selectable sensors, and shared authorization                                   |
+| Consumption | Beta operational | Views based on data actually available in HA                                                       |
+| Profile     | Beta operational | Personal preferences and device theme                                                              |
+| Settings    | Beta operational | Home, entities, people, system, backups, versions, and attention preferences                       |
+| App Gallery | Partial          | Launcher and Irrigation beta are available; Utility Room and Pool & Spa are marked as coming later |
+| Automations | Coming later     | The old workspace remains disabled until its workflow is ready for beta use                        |
 
-## Card e controlli
+## Cards and controls
 
-| Famiglia | Stato | Limiti da comunicare |
-| --- | --- | --- |
-| Sensor, Light, Switch | Verificata | Percorsi principali testati anche con entità reali |
-| Alarm, Lock | Verificata con limiti | L'autorizzazione finale resta di HA; la beta non è un sistema certificato |
-| Camera, Media Player | Operativa beta | Funzioni avanzate dipendono dalle feature dichiarate dall'entità/dispositivo |
-| Climate, Cover, Vacuum | Operativa, hardware parziale | Non tutte le combinazioni sono state collaudate su hardware reale |
-| Members | Operativa beta | Dipende dalle entità persona/device tracker disponibili |
+| Family                 | Status                                 | Known limitations                                                                         |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Sensor, Light, Switch  | Verified                               | Primary paths tested with real entities                                                   |
+| Alarm, Lock            | Verified with limitations              | HA remains the final authorization authority; the beta is not a certified security system |
+| Camera, Media Player   | Beta operational                       | Advanced features depend on capabilities exposed by the entity/device                     |
+| Climate, Cover, Vacuum | Operational, partially hardware-tested | Not every hardware and feature combination has been tested                                |
+| Members                | Beta operational                       | Depends on the available person/device-tracker entities                                   |
 
-## Pianificato dopo la beta
+## Planned after the beta
 
-- Calendar e relativa card;
-- mappa e gestione della posizione;
-- lista spesa/Todo;
-- plance Locale Tecnico e Piscina & Spa;
-- nuovo Costruttore Automazioni;
-- sincronizzazione layout mobile progettata da desktop;
-- notifiche evolute e snackbar contestuali;
-- condivisione configurazione via QR code;
-- app ufficiale.
+- Calendar and Calendar card;
+- map and location management;
+- shopping/Todo lists;
+- Utility Room and Pool & Spa apps;
+- redesigned Automation Builder;
+- desktop editing of layouts later used on mobile;
+- richer notifications and contextual snackbars;
+- configuration sharing through QR codes;
+- official app.
 
-Le pagine o plance non pronte devono usare `FeatureAvailabilityPage`: nessuna funzione incompleta va presentata come operativa o lasciata in uno stato ambiguo.
+Unavailable pages and apps must use `FeatureAvailabilityPage`. Incomplete functionality must never be presented as operational or left in an ambiguous state.

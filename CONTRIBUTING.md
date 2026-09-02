@@ -1,27 +1,27 @@
-# Contribuire a Domus UI
+# Contributing to Domus UI
 
-Grazie per voler migliorare Domus UI. Prima di iniziare una modifica ampia, apri una discussione o una issue per concordare obiettivo e compatibilità con la roadmap.
+Thank you for helping improve Domus UI. Before starting a substantial change, open a Discussion or an issue so its goal and compatibility with the roadmap can be agreed upon.
 
-## Preparazione
+## Development setup
 
-Richiede Node.js 22.22.0 o superiore.
+Node.js 22.22.0 or newer is required.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-## Pull request
+## Pull requests
 
-- mantieni ogni PR focalizzata su un solo problema;
-- non includere token, PIN, URL Home Assistant, dati reali o screenshot personali;
-- preserva accessibilità, temi Light/Dark e breakpoint supportati;
-- aggiungi o aggiorna i test relativi al comportamento modificato;
-- documenta cambiamenti visibili, migrazioni e limiti hardware;
-- esegui `npm run release:gate` prima della richiesta di revisione.
+- Keep each pull request focused on one problem.
+- Never include tokens, PINs, Home Assistant URLs, real household data, or personal screenshots.
+- Preserve accessibility, Light/Dark themes, and supported breakpoints.
+- Add or update tests for the behavior you change.
+- Document visible changes, migrations, and hardware limitations.
+- Run `npm run release:gate` before requesting review.
 
-Le contribuzioni inviate al repository vengono distribuite secondo la licenza GPL-3.0 del progetto. Inviando una PR dichiari di poter concedere tali diritti sul codice proposto.
+Contributions submitted to this repository are distributed under the project's GPL-3.0 license. By opening a pull request, you confirm that you have the right to license the submitted code under those terms.
 
-## Sicurezza
+## Security
 
-Non usare issue o pull request pubbliche per vulnerabilità. Segui [SECURITY.md](SECURITY.md).
+Do not use public issues or pull requests for vulnerabilities. Follow [SECURITY.md](SECURITY.md).

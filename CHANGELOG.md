@@ -1,239 +1,264 @@
 # Changelog
 
-## 0.1.0-beta.13 — 2026-09-01
-
-### Aggiunto
-
-- centro Supporto e feedback integrato in Domus UI, con accesso diretto a
-  segnalazioni bug, richieste di funzionalità, discussioni e diagnostica locale;
-- guida contestuale nelle liste dispositivi di Rooms per spiegare selezione,
-  pressione prolungata e personalizzazione delle sezioni;
-- scelta esplicita durante la rimozione di uno stack: conservare le card nel
-  canvas, eliminarle insieme allo stack oppure annullare l'operazione.
-
-### Migliorato
-
-- sidebar desktop e tablet più compatta e completa sui viewport intermedi;
-- header di Rooms più fluido durante lo scorrimento e compatibile con le
-  interazioni touch di trascinamento;
-- stack Grid e orizzontali con larghezza automatica derivata dal contenuto e
-  larghezza manuale coerente con il numero di colonne configurato;
-- stack Preferiti popolato automaticamente senza sottrarre dal canvas le card
-  già configurate manualmente;
-- asset e documentazione del repository pubblico ripuliti e allineati al
-  marchio Domus UI e alla visualizzazione HACS.
-
-### Corretto
-
-- apertura della sezione Sistema sempre dall'inizio della pagina;
-- immagini README compatibili con il renderer informativo di HACS;
-- card in fondo agli stack non più tagliate e spazio orizzontale non più
-  lasciato inutilizzato nei layout automatici;
-- rimozione degli stack protetta da una decisione esplicita, senza perdita
-  involontaria delle card contenute.
-
-## 0.1.0-beta.12 — 2026-08-31
-
-### Modificato
-
-- il nome pubblico del prodotto diventa **Domus UI**, più aderente al ruolo di
-  dashboard e builder per Home Assistant;
-- repository pubblico rinominato in `Mattia2399/DomusUI`, con redirect GitHub
-  mantenuto dal precedente indirizzo;
-- titolo del pannello, Config Flow, HACS, onboarding, documentazione e messaggi
-  utente uniformati al nuovo marchio;
-- `domusos` resta il dominio tecnico compatibile per integrazione, storage,
-  URL interni e pacchetto HACS; nessun layout esistente deve essere migrato;
-- preparate icone 256/512 px e documentazione per Home Assistant Brands.
+## 0.1.0-beta.13 - 2026-09-01
+
+### Added
+
+- Integrated Support & feedback center with direct access to bug reports,
+  feature requests, Discussions, and local diagnostics.
+- Contextual help in Rooms device lists explaining selection, long press, and
+  section customization.
+- Explicit choice when removing a stack: keep its cards on the canvas, remove
+  them with the stack, or cancel.
+
+### Improved
+
+- More compact and complete desktop/tablet sidebar on intermediate viewports.
+- Smoother Rooms header while scrolling, compatible with touch dragging.
+- Grid and horizontal stacks now derive automatic width from their content and
+  respect the configured column count in manual mode.
+- Favorites stacks populate automatically without removing cards that were
+  already placed manually on the canvas.
+- Public repository assets and documentation aligned with the Domus UI brand
+  and the HACS information view.
+
+### Fixed
+
+- The System section now always opens at the top of the page.
+- README images render correctly in the HACS information view.
+- Cards at the bottom of stacks are no longer clipped, and automatic layouts
+  no longer leave unused horizontal space.
+- Stack removal now requires an explicit decision, preventing accidental loss
+  of contained cards.
+
+## 0.1.0-beta.12 - 2026-08-31
+
+### Changed
+
+- The public product name is now **Domus UI**, better reflecting its role as a
+  Home Assistant dashboard and builder.
+- The public repository was renamed to `Mattia2399/DomusUI`; GitHub preserves a
+  redirect from the previous address.
+- Panel title, Config Flow, HACS, onboarding, documentation, and user-facing
+  messages now use the new brand consistently.
+- `domusos` remains the compatible technical domain for the integration,
+  storage, internal URLs, and HACS package; existing layouts require no
+  migration.
+- Added 256/512 px icons and documentation for Home Assistant brand assets.
+
+## 0.1.0-beta.11 - 2026-08-28
+
+### Improved
+
+- New responsive promotional image for the GitHub repository and HACS page.
+- Complete separation between Demo fixtures and real data: cards, catalog, and
+  panels no longer use simulated values in a Home Assistant session.
+- Rooms keeps separate preferences for Demo and real homes and no longer
+  invents rooms when Home Assistant exposes no areas.
+- Nested Consumption pages now use the shared nested-page header.
+- Security logs are empty in real homes and explicitly marked as demonstrative
+  in Demo mode.
+
+### Fixed
+
+- Stacks preserve their configured width when a Light changes state. Automatic
+  expansion can use more rows without resizing adjacent cards or changing the
+  persisted layout.
+- Light panel no longer crashes for entities without `hs_color`.
+- Real cards no longer inherit capabilities or fallback values from Demo mock
+  entities.
+- Minor responsive alignment fixes for Light, Climate, Consumption, and App
+  Library.
+
+## 0.1.0-beta.10 - 2026-08-28
+
+### Added
+
+- Irrigation redesigned as an independent responsive workspace with Overview,
+  Zones, Calendar, Consumption, and shared home configuration.
+- Guided setup for valves, weather sensors, soil sensors, and meters, with
+  suggestions based on available Home Assistant entities.
+- Real consumption history for 7 days, 30 days, and 12 months, including data
+  caching and refreshes that preserve existing values instead of showing `N/A`.
+- Clearly separated Demo mockups for Utility Room and Pool & Spa.
+- Recognition of an existing shared Domus UI configuration from a new origin,
+  including `localhost`, avoiding repeated setup for the same home.
+- Roadmap for a server-side irrigation engine with scheduler, watchdog, safe
+  recovery, and fail-closed controls in the HACS integration.
+
+### Improved
 
-## 0.1.0-beta.11 — 2026-08-28
+- Panel/iframe onboarding now distinguishes a new home from an existing Domus
+  UI installation.
+- Mobile and desktop App Library layouts, contextual navigation, and immersive
+  pages.
+- Irrigation sensor formatting with consistent rounding and readable units.
+- App configuration is shared through Home Assistant while the browser remains
+  a local cache.
 
-### Migliorato
-
-- nuova immagine di presentazione responsive usata nel repository GitHub e
-  nella scheda informativa HACS;
-- separazione completa tra fixture Demo e dati reali: card, catalogo e pannelli
-  non usano più valori simulati durante una sessione Home Assistant;
-- Rooms conserva preferenze distinte per Demo e casa reale e non genera più
-  stanze fittizie quando Home Assistant non espone aree;
-- pagine secondarie di Consumi uniformate all'header nidificato condiviso;
-- log di Security vuoto nelle case reali e chiaramente identificato come
-  dimostrativo nella Demo.
+### Fixed
 
-### Corretto
+- Scenario card removal from the Builder.
+- Shared configuration recovery and panel-bridge allowlist for new
+  initialization and reset flows.
+- Mobile padding, loading states, and Consumption card updates.
 
-- gli stack mantengono la larghezza configurata quando una Light cambia stato:
-  l'espansione automatica può usare più righe senza ridimensionare le card
-  vicine o modificare il layout persistente;
-- pannello Light resiliente alle entità che non espongono `hs_color`;
-- comandi e fallback delle card reali non ereditano più capacità o valori dalle
-  entità mock della Demo;
-- piccoli allineamenti responsive di Light, Climate, Consumi e App Library.
+### Known limitations
 
-## 0.1.0-beta.10 — 2026-08-28
+- Irrigation beta does not yet replace an autonomous controller with a
+  server-side watchdog. Manual commands must be supervised, and beta scheduling
+  must not be the only safeguard for a real installation.
 
-### Aggiunto
+## 0.1.0-beta.9 - 2026-08-25
 
-- App Irrigazione ridisegnata come workspace indipendente e responsive, con
-  Panoramica, Zone, Calendario, Consumi e configurazione condivisa della casa;
-- configurazione guidata di valvole, sensori meteo, terreno e contatori con
-  suggerimenti basati sulle entità disponibili in Home Assistant;
-- storico consumi reale con periodi 7 giorni, 30 giorni e 12 mesi, cache dei
-  dati e aggiornamento senza sostituire i valori disponibili con `N/D`;
-- mockup dimostrativi di Locale Tecnico e Piscina & Spa, chiaramente separati
-  dalle funzioni interattive;
-- riconoscimento della configurazione condivisa DomusOS da una nuova origine,
-  incluso `localhost`, per evitare di ripetere il setup di una casa esistente;
-- roadmap del motore Irrigazione server-side, con scheduler, watchdog,
-  ripristino sicuro e controlli fail-closed nell'integrazione HACS.
+### Added
 
-### Migliorato
+- Authoritative shared reset with blocking progress and Home Assistant storage
+  verification.
+- Synchronized reset tombstone preventing secondary browsers and devices from
+  republishing obsolete layouts.
+- Local reset recognition preventing loops in the new onboarding flow.
 
-- onboarding panel/iframe distinto tra casa nuova e installazione DomusOS già
-  configurata;
-- layout mobile e desktop dell'App Library, navigazione contestuale e pagine
-  immersive;
-- gestione numerica dei sensori Irrigazione con arrotondamento coerente e unità
-  di misura leggibili;
-- persistenza della configurazione delle app condivisa tramite Home Assistant,
-  mantenendo il browser come cache locale.
+### Fixed
 
-### Corretto
+- Reset removes layouts, history, caches, drafts, and card secrets without
+  treating an intentionally cleared store as a first migration.
+- Secondary devices keep Home Assistant credentials, passkeys, and personal
+  preferences when applying a global reset.
+- Panel bridge now validates the reset marker through a strict schema and
+  allowlist.
 
-- rimozione della card Scenari dal Builder;
-- recupero della configurazione condivisa e allowlist del panel bridge per i
-  nuovi flussi di inizializzazione e reset;
-- padding mobile, stati di caricamento e aggiornamento delle card Consumi.
+## 0.1.0-beta.8 - 2026-08-25
 
-### Limitazioni note
+### Fixed
 
-- l'attuale Irrigazione beta non sostituisce ancora un controller autonomo con
-  watchdog server-side; i comandi manuali devono essere supervisionati e la
-  programmazione non deve essere l'unica protezione di un impianto reale.
+- Panel registration is compatible with current and future Home Assistant APIs.
+- `handle_safe_area` is passed only when supported by the installed Home
+  Assistant version.
 
-## 0.1.0-beta.9 — 2026-08-25
+## 0.1.0-beta.7 - 2026-08-25
 
-### Aggiunto
+### Fixed
 
-- reset autorevole condiviso con avanzamento bloccante e verifica dello storage Home Assistant;
-- tombstone di reset sincronizzato per impedire a browser e dispositivi secondari di ripubblicare layout obsoleti;
-- riconoscimento locale del reset per evitare loop nel nuovo onboarding.
+- Home Assistant manifest aligned with Hassfest, including local-push IoT class
+  and ordered keys.
+- YAML configuration explicitly excluded for the Config Flow-only integration.
+- Added the Hassfest workflow required for submission to the public HACS store.
 
-### Corretto
+## 0.1.0-beta.6 - 2026-08-25
 
-- il reset elimina layout, cronologia, cache, bozze e segreti delle card senza confondere uno store azzerato con una prima migrazione;
-- i dispositivi secondari mantengono credenziali Home Assistant, passkey e preferenze personali quando recepiscono il reset globale;
-- panel bridge aggiornato con schema e allowlist stretti per il marcatore di reset.
+### Added
 
-## 0.1.0-beta.8 — 2026-08-25
+- Public **DomusOS** identity applied to the app, GitHub project, Home Assistant
+  panel, and HACS distribution.
+- HACS integration with Config Flow and automatic panel registration.
+- `domusos.zip` release package, HACS validation, and tag-based automated
+  publishing.
+- Complete GitHub README with real screenshots, page matrix, and HACS
+  installation.
+- Shared `Coming later` state for unfinished features.
 
-### Corretto
+### Fixed
 
-- registrazione del pannello compatibile con le API Home Assistant correnti e future;
-- `handle_safe_area` viene inviato solo quando la versione installata di Home Assistant lo supporta.
+- The `dist` build now includes `ha-dashboard-builder-panel.js`, preventing
+  partial updates between the app and iframe bridge.
+- App and bridge declare protocol and persistence capabilities so mismatched
+  versions can be diagnosed.
+- Edit Mode reports specific errors for outdated bridges, insufficient
+  permissions, conflicts, or unavailable HA storage.
+- Updated `js-yaml` and `nanoid` to versions resolving release-gate advisories.
 
-## 0.1.0-beta.7 — 2026-08-25
+## 0.1.0-beta.5 - in preparation
 
-### Corretto
+### Improved
 
-- manifest Home Assistant allineato a Hassfest con classe IoT locale push e chiavi ordinate;
-- configurazione YAML esclusa esplicitamente per l’integrazione basata esclusivamente su Config Flow;
-- aggiunto il workflow Hassfest richiesto per la candidatura al catalogo HACS pubblico.
+- Greeting is now a stable home summary without duplicating weather and values
+  from individual cards.
+- Mock weather is restricted to Demo mode and explicit mockups.
+- Separate states for unconfigured weather and Home Assistant offline.
 
-## 0.1.0-beta.6 — 2026-08-25
+### Fixed
 
-### Aggiunto
+- Removed artificial forecasts when Home Assistant returns no forecast data.
+- Weather card and panel now show explicit unconfigured, offline, and forecast
+  unavailable states.
 
-- identità pubblica **DomusOS** applicata ad app, progetto GitHub, pannello Home Assistant e distribuzione HACS;
-- integrazione HACS con Config Flow e registrazione automatica del pannello DomusOS;
-- pacchetto release `domusos.zip`, validazione HACS e pubblicazione automatica su tag;
-- README GitHub completo con screenshot reali, matrice delle pagine e installazione HACS;
-- componente condiviso per gli stati `Prossimamente` delle funzioni non ancora pronte.
+## 0.1.0-beta.4 - in preparation
 
-### Corretto
+### Fixed
 
-- la build `dist` include ora anche `ha-dashboard-builder-panel.js`, evitando aggiornamenti parziali tra app e bridge iframe;
-- app e bridge dichiarano protocollo e capability di persistenza per rendere diagnosticabile un disallineamento;
-- l’accesso all’Edit Mode mostra un errore specifico per bridge obsoleto, permessi insufficienti, conflitto o archivio HA non disponibile.
-- aggiornati `js-yaml` e `nanoid` alle versioni che risolvono le advisory bloccanti del gate.
+- Correct active state for desktop navigation, mobile drawer, and bottom bar
+  while running inside the iframe panel.
+- Explicit initial Home route for internal panel navigation.
+- Nested route matching now uses the effective React route rather than the
+  iframe's static URL.
 
-## 0.1.0-beta.5 — in preparazione
+## 0.1.0-beta.3 - in preparation
 
-### Migliorato
+### Fixed
 
-- Greeting trasformata in una sintesi stabile della casa, senza duplicare meteo e valori delle singole card;
-- meteo mock confinato alla Demo e ai mockup espliciti;
-- stati distinti per meteo non configurato e Home Assistant offline.
+- Added `config/area_registry/list` to app and panel-bridge allowlists.
+- Organize can once again read the area registry through the panel.
+- App and bridge are distributed together in one versioned directory for
+  atomic updates and rollback.
 
-### Corretto
+## 0.1.0-beta.2 - in preparation
 
-- rimosse le previsioni artificiali generate quando Home Assistant non restituisce forecast;
-- card e pannello meteo mostrano ora stati espliciti non configurato, offline e previsioni non disponibili.
+### Added
 
-## 0.1.0-beta.4 — in preparazione
+- Mandatory welcome screen for every new installation, including the Home
+  Assistant panel.
+- Automatic Home Assistant session detection after choosing to connect a home.
+- Timed fallback to classic setup when no home is detected.
 
-### Corretto
+### Fixed
 
-- stato attivo della navigazione desktop, drawer mobile e bottom bar durante l’esecuzione nel pannello iframe;
-- route Home iniziale esplicita per la navigazione interna del pannello;
-- matching delle route annidate basato sulla route React effettiva invece che sull’URL statico dell’iframe.
+- Migration for panel installations left in the old intermediate `detected`
+  state.
+- Responsive tests updated for the new connection flow.
 
-## 0.1.0-beta.3 — in preparazione
+## 0.1.0-beta.1 - technical baseline
 
-### Corretto
+### Added
 
-- aggiunta `config/area_registry/list` alle allowlist dell’app e del panel bridge;
-- fase Organizza nuovamente in grado di leggere il registro delle stanze tramite panel;
-- app e bridge distribuiti insieme nella directory versionata per aggiornamenti e rollback atomici.
+- Initial onboarding with isolated Demo mode, OAuth, and panel-bridge detection.
+- Explicit confirmation of the home detected inside iframe/panel installations.
+- Centralized permissions, fail-closed behavior, and local confirmation for
+  sensitive actions.
+- Backups, restore, reset, and recovery snapshots without secrets.
+- Shared command coordinator with pending, confirmation, timeout, and rollback.
+- Undo/redo, responsive preview, and editor save status.
+- Shared Glass components and semantic theme system.
+- Installation, update, rollback, and security documentation.
+- Versioned distribution package with manifest and SHA-256 checksums.
 
-## 0.1.0-beta.2 — in preparazione
+### Changed
 
-### Aggiunto
+- Updated React and React DOM to 19.2.8.
+- Updated React Router to 8.3.0.
+- Aligned the `panel_custom` name with the Web Component registered by the
+  bridge.
+- Made application routes immutable through a central registry.
+- Reduced MainBoard and split responsibilities into dedicated controllers and
+  services.
+- Migrated Sensor, Light, and Switch to the first container-owned phase.
 
-- welcome obbligatoria per ogni nuova installazione, incluso il panel Home Assistant;
-- ricerca automatica della sessione Home Assistant dopo la scelta `Collega la tua casa`;
-- fallback temporizzato alla configurazione classica quando non viene rilevata una casa.
+### Security
 
-### Corretto
+- Tokens, PINs, codes, passkeys, and local snapshots are excluded from backups
+  and synchronization.
+- One-time OAuth state with expiration and same-origin return URL.
+- Same-origin panel bridge with allowlist and request/response correlation.
+- Production CSP without `unsafe-eval`.
+- Alarm and Lock share one gate and do not display negative validation before
+  submitting a command.
 
-- migrazione delle installazioni panel rimaste nel vecchio stato intermedio `detected`;
-- test responsive aggiornati al nuovo percorso di collegamento.
+### Known limitations
 
-## 0.1.0-beta.1 — baseline tecnica
-
-### Aggiunto
-
-- onboarding iniziale con Demo isolata, OAuth e rilevamento panel bridge;
-- conferma esplicita della casa rilevata dentro iframe/panel;
-- permessi centralizzati, fail-closed e conferma locale delle azioni sensibili;
-- backup, restore, reset e snapshot di recupero senza segreti;
-- command coordinator condiviso con pending, conferma, timeout e rollback;
-- undo/redo, preview responsive e stato di salvataggio dell’editor;
-- componenti Glass condivisi e sistema temi semantico;
-- documentazione di installazione, aggiornamento, rollback e sicurezza.
-- pacchetto di distribuzione versionato con manifest e checksum SHA-256.
-
-### Modificato
-
-- React e React DOM aggiornati a 19.2.8;
-- React Router aggiornato a 8.3.0;
-- nome `panel_custom` allineato al Web Component registrato dal bridge;
-- route applicative rese immutabili tramite registry centrale;
-- MainBoard ridotto e suddiviso in controller/servizi dedicati;
-- Sensor, Light e Switch migrati alla prima fase container-owned.
-
-### Sicurezza
-
-- token, PIN, codici, passkey e snapshot locali esclusi da backup e sync;
-- OAuth state monouso con scadenza e return URL same-origin;
-- panel bridge same-origin con allowlist e correlazione request/response;
-- CSP di produzione senza `unsafe-eval`;
-- Alarm e Lock riutilizzano un gate condiviso e non mostrano validazione negativa prima dell’invio.
-
-### Limitazioni note
-
-- la beta non è un sistema di sicurezza certificato;
-- Calendar, Mappa, Liste e app ufficiale non sono ancora disponibili;
-- test hardware avanzati Climate, Cover, Vacuum e alcune capability Lock/Alarm restano da completare;
-- il bundle rispetta il limite bloccante ma richiede ulteriore code splitting;
-- la matrice finale anti-clipping riprenderà dopo la pausa delle container query.
+- The beta is not a certified security system.
+- Calendar, Map, Lists, and the official app are not yet available.
+- Advanced hardware testing for Climate, Cover, Vacuum, and some Lock/Alarm
+  capabilities is still incomplete.
+- The bundle remains within the blocking limit but needs additional code
+  splitting.
+- The final anti-clipping matrix will resume after the container-query pause.
